@@ -22,13 +22,26 @@ function Home() {
     const fetchData = async () => {
       if (!accounts[0]) return;
 
+      let tokenResponse;
       try {
-        // Acquire token
-        const tokenResponse = await instance.acquireTokenSilent({
+        // Try silent token first
+        tokenResponse = await instance.acquireTokenSilent({
           scopes: ['User.Read', 'GroupMember.Read.All'],
           account: accounts[0]
         });
+      } catch (error) {
+        if (error.name === "InteractionRequiredAuthError") {
+          // Fallback to interactive popup login
+          tokenResponse = await instance.acquireTokenPopup({
+            scopes: ['User.Read', 'GroupMember.Read.All']
+          });
+        } else {
+          console.error('Token acquisition failed:', error);
+          return;
+        }
+      }
 
+      try {
         // Get user displayName
         const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
@@ -50,9 +63,8 @@ function Home() {
 
         const ticketsRes = await axios.get(endpoint);
         setTickets(ticketsRes.data.reverse()); // Latest first
-
       } catch (err) {
-        console.error('Error:', err);
+        console.error('Error fetching tickets:', err);
       }
     };
 

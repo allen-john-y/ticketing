@@ -12,6 +12,7 @@
     "jsonwebtoken": "^9.0.0",
     "jwks-rsa": "^3.0.0",
     "mongoose": "^7.0.0",
+    "node-fetch": "^2.7.0",
     "nodemailer": "^7.0.9"
   }
 }

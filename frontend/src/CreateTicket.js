@@ -3,11 +3,74 @@ import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+// Password Popup Component
+function PasswordPopup({ password, onClose }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(password);
+    setCopied(true);
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0, left: 0, right: 0, bottom: 0,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex', justifyContent: 'center', alignItems: 'center',
+      zIndex: 9999
+    }}>
+      <div style={{
+        background: 'white',
+        padding: '2rem',
+        borderRadius: '10px',
+        textAlign: 'center',
+        width: '400px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+        position: 'relative'
+      }}>
+        <h2 style={{ marginBottom: '1rem' }}>🎉 Ticket Created!</h2>
+        <p><strong>Your new password:</strong></p>
+        <p style={{
+          fontFamily: 'monospace',
+          fontSize: '1.2rem',
+          background: '#f1f1f1',
+          padding: '10px',
+          borderRadius: '6px'
+        }}>{password}</p>
+        <button onClick={handleCopy} style={{
+          marginTop: '1rem',
+          background: '#3498db',
+          color: 'white',
+          padding: '8px 16px',
+          border: 'none',
+          borderRadius: '6px',
+          cursor: 'pointer'
+        }}>
+          Copy Password
+        </button>
+        {copied && <p style={{ color: 'green', marginTop: '0.5rem' }}>Copied!</p>}
+        <button onClick={onClose} style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          background: 'transparent',
+          border: 'none',
+          fontSize: '1.2rem',
+          cursor: 'pointer'
+        }}>✖</button>
+      </div>
+    </div>
+  );
+}
+
 function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium' });
   const [loading, setLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,25 +85,35 @@ function CreateTicket() {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
       const displayName = userRes.data.displayName || 'User';
+      const userEmail = userRes.data.mail || userRes.data.userPrincipalName;
 
-      // Prepare ticket data (remove createdAt — backend will handle)
+      // Prepare ticket data
       const ticketData = {
         category: formData.category,
         description: formData.description,
         priority: formData.priority,
         userId: accounts[0]?.localAccountId,
         userName: displayName,
+        userEmail,
         status: 'Open'
       };
 
       // Post ticket to backend
-      await axios.post('http://localhost:5000/tickets', ticketData, {
+      const response = await axios.post('http://localhost:5000/tickets', ticketData, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
       alert('✅ Ticket created successfully!');
-      // Refresh home page to fetch latest tickets (sorted by createdAt descending)
+
+      // If password reset, show popup with new password
+      if (formData.category === 'Password Reset' && response.data.newPassword) {
+        setNewPassword(response.data.newPassword);
+        setShowPasswordPopup(true);
+      }
+
+      // Refresh home page to fetch latest tickets
       navigate('/', { state: { refresh: true } });
+
     } catch (error) {
       console.error('Error creating ticket:', error);
       alert('⚠️ Failed to create ticket.');
@@ -106,6 +179,13 @@ function CreateTicket() {
           </button>
         </form>
       </div>
+
+      {showPasswordPopup &&
+        <PasswordPopup
+          password={newPassword}
+          onClose={() => setShowPasswordPopup(false)}
+        />
+      }
     </div>
   );
 }
