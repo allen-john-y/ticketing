@@ -1,0 +1,19 @@
+[
+  {
+    "category": "Password Reset",
+    "description": "Issue",
+    "priority": "Medium",
+    "userId": "627f9bd0-fc7f-439e-a06d-61f7badca9e7",
+    "status": "Open",
+    "_id": "1760698628796",
+    "createdAt": "2025-10-17T10:57:08.796Z"
+  },
+  {
+    "category": "Admin Access",
+    "description": "sad",
+    "priority": "Medium",
+    "userId": "627f9bd0-fc7f-439e-a06d-61f7badca9e7",
+    "status": "Open",
+    "_id": "1760699568198"
+  }
+]
