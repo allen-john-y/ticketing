@@ -35,7 +35,7 @@ function TicketDetails() {
     fetchAuthority();
   }, [accounts, instance]);
 
-  const backendBase = "https://p6wpknjs-5000.inc1.devtunnels.ms/";
+  const backendBase = "https://ticketing-hn59.onrender.com";
 
   useEffect(() => {
     const fetchTicket = async () => {
