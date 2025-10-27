@@ -101,9 +101,11 @@ function CreateTicket() {
       };
 
       // Post ticket to backend
-      const response = await axios.post('http://localhost:5000/tickets', ticketData, {
-        headers: { Authorization: `Bearer ${token.accessToken}` }
-      });
+      // Post ticket to backend
+const response = await axios.post('https://ticketing-hn59.onrender.com/tickets', ticketData, {
+  headers: { Authorization: `Bearer ${token.accessToken}` }
+});
+
 
       alert('✅ Ticket created successfully!');
 

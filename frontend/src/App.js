@@ -12,7 +12,7 @@ const pca = new PublicClientApplication({
   auth: {
     clientId: '6541d73a-dbbd-4f74-9465-38a0eb03ec6b',
     authority: 'https://login.microsoftonline.com/11909ab3-5ecc-48e0-b898-acf7203a1ad7',
-    redirectUri: 'http://localhost:3000',
+    redirectUri: 'https://ticketing-psi-tawny.vercel.app/',
   },
   cache: { cacheLocation: 'localStorage' },
 });

@@ -124,25 +124,60 @@
 // // Listen on all interfaces for local network access
 // app.listen(5000, '0.0.0.0', () => console.log('🚀 Backend running on port 5000'));
 
+/********************************************************************
+ *  Sandeza Inc – IT Ticket Portal – Production-ready server.js
+ *  ------------------------------------------------------------
+ *  • Runs on Render (port from env)
+ *  • CORS for Vercel front-end
+ *  • Optional security middle-wares
+ ********************************************************************/
+
+/********************************************************************
+ *  Sandeza Inc – IT Ticket Portal – Production-ready server.js
+ *  ------------------------------------------------------------
+ *  • Runs on Render (port from env)
+ *  • CORS for Vercel front-end
+ *  • Optional security middle-wares
+ ********************************************************************/
+
 const express = require('express');
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
-const fetch = require('node-fetch'); // Required for Node < 22 stable
+const fetch = require('node-fetch');   // Node < 22
 require('dotenv').config();
 
+// ---- Optional security -------------------------------------------------
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
+// ---- App ----------------------------------------------------------------
 const app = express();
+
+// Basic JSON body parser
 app.use(express.json());
 
-// CORS
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
+// Helmet (secure HTTP headers)
+app.use(helmet());
 
-// --------------------
-// MongoDB Connection
-// --------------------
+// Rate-limit (prevent brute-force on /tickets)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,                 // limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/tickets', limiter);
+
+// CORS – allow only your Vercel front-end
+app.use(
+  cors({
+    origin: 'https://ticketing-psi-tawny.vercel.app',
+    credentials: true,
+  })
+);
+
+// ---- MongoDB ------------------------------------------------------------
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
@@ -157,29 +192,28 @@ const connectDB = async () => {
 };
 connectDB();
 
-// --------------------
-// Ticket Schema
-// --------------------
-const ticketSchema = new mongoose.Schema({
-  ticketNumber: { type: Number, unique: true },
-  userId: String,
-  userName: String,
-  userEmail: String, // Added to track ticket creator email
-  category: String,
-  description: String,
-  priority: String,
-  status: String
-},{ timestamps: true });
+// ---- Ticket Schema ------------------------------------------------------
+const ticketSchema = new mongoose.Schema(
+  {
+    ticketNumber: { type: Number, unique: true },
+    userId: String,
+   userName: String,
+    userEmail: String,
+    category: String,
+    description: String,
+    priority: String,
+    status: String,
+  },
+  { timestamps: true }
+);
 const Ticket = mongoose.model('Ticket', ticketSchema);
 
-// --------------------
-// TICKET COUNTER (GLOBAL)
-// --------------------
+// ---- Global Ticket Counter -----------------------------------------------
 let ticketCounter = 0;
 const loadCounter = async () => {
   try {
-    const lastTicket = await Ticket.findOne().sort({ ticketNumber: -1 });
-    ticketCounter = lastTicket ? lastTicket.ticketNumber : 0;
+    const last = await Ticket.findOne().sort({ ticketNumber: -1 });
+    ticketCounter = last ? last.ticketNumber : 0;
     console.log('Ticket counter loaded:', ticketCounter);
   } catch (err) {
     console.error('Error loading ticket counter:', err);
@@ -187,9 +221,7 @@ const loadCounter = async () => {
 };
 loadCounter();
 
-// --------------------
-// Email Transporter
-// --------------------
+// ---- Nodemailer ---------------------------------------------------------
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -202,11 +234,9 @@ transporter.verify((error) => {
   else console.log('Email config OK');
 });
 
-// --------------------
-// Department Emails
-// --------------------
+// ---- Department Emails ---------------------------------------------------
 const deptEmails = {
-  'Password Reset': 'allenj@sandeza-inc.com', // IT contact
+  'Password Reset': 'allenj@sandeza-inc.com',
   'Admin Access': 'vigneshm@sandeza-inc.com',
   'Payroll Issue': 'kishorekumars@sandeza-inc.com',
   'Expense Reimbursement': 'kishorekumars@sandeza-inc.com',
@@ -214,9 +244,7 @@ const deptEmails = {
   'Employee Onboarding': 'allenj@sandeza-inc.com',
 };
 
-// --------------------
-// Azure Graph Helper Functions
-// --------------------
+// ---- Azure Graph Helpers ------------------------------------------------
 const getAccessToken = async () => {
   const url = `${process.env.AZURE_AUTHORITY}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
@@ -232,42 +260,33 @@ const getAccessToken = async () => {
 };
 
 const resetAzurePassword = async (userId) => {
-  try {
-    const token = await getAccessToken();
+  const token = await getAccessToken();
+  const newPassword = Math.random().toString(36).slice(-10) + 'A1!';
 
-    // New random password generated by Azure (can be fixed if needed)
-    const newPassword = Math.random().toString(36).slice(-10) + 'A1!'; 
-
-    const res = await fetch(`https://graph.microsoft.com/v1.0/users/${userId}`, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${userId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      passwordProfile: {
+        forceChangePasswordNextSignIn: true,
+        password: newPassword,
       },
-      body: JSON.stringify({
-        passwordProfile: {
-          forceChangePasswordNextSignIn: true,
-          password: newPassword
-        }
-      })
-    });
+    }),
+  });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(`Azure reset failed: ${JSON.stringify(err)}`);
-    }
-
-    return newPassword;
-  } catch (err) {
-    throw err;
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(`Azure reset failed: ${JSON.stringify(err)}`);
   }
+  return newPassword;
 };
 
-// --------------------
-// API ROUTES
-// --------------------
+// --------------------- API ROUTES ---------------------------------------
 
-// GET all tickets or filter by userId
+// GET all tickets (optionally filtered by userId)
 app.get('/tickets', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -276,7 +295,7 @@ app.get('/tickets', async (req, res) => {
     res.json(tickets);
   } catch (err) {
     console.error('Error fetching tickets:', err);
-    res.status(500).send('Server error');
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -287,43 +306,41 @@ app.get('/tickets/:id', async (req, res) => {
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
     res.json(ticket);
   } catch (err) {
-    console.error('Error:', err);
-    res.status(500).send('Server error');
+    console.error('Error fetching ticket:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// POST: Create ticket + increment number
+// POST – create ticket
 app.post('/tickets', async (req, res) => {
   try {
-    const { category, description, priority, userId, userName, userEmail } = req.body;
+    const { category, description, priority, userId, userName, userEmail } =
+      req.body;
 
-    if (!deptEmails[category]) {
+    if (!deptEmails[category])
       return res.status(400).json({ error: 'Invalid category' });
-    }
 
-    ticketCounter++; // GLOBAL INCREMENT
-
+    // ---- Increment global counter ------------------------------------
+    ticketCounter++;
     const ticket = new Ticket({
       ticketNumber: ticketCounter,
       userId,
       userName,
-      userEmail, // store ticket creator email
+      userEmail,
       category,
       description,
       priority,
-      status: 'Open'
+      status: 'Open',
     });
-
     await ticket.save();
 
-
-    // Send confirmation to ticket creator
-if (userEmail) {
-  const confirmMail = {
-    from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
-    to: userEmail,
-    subject: `Your ticket #${ticketCounter} has been created`,
-    text: `
+    // ---- Confirmation email to creator -------------------------------
+    if (userEmail) {
+      const confirmMail = {
+        from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
+        to: userEmail,
+        subject: `Your ticket #${ticketCounter} has been created`,
+        text: `
 Hello ${userName},
 
 Your support ticket has been successfully created.
@@ -338,17 +355,19 @@ Our IT team will get back to you soon.
 
 Regards,
 IT Support Team
-    `.trim()
-  };
+        `.trim(),
+      };
+      transporter
+        .sendMail(confirmMail)
+        .then(() => console.log(`Confirmation email → ${userEmail}`))
+        .catch((e) =>
+          console.error(`Confirmation email failed → ${userEmail}:`, e.message)
+        );
+    }
 
-  transporter.sendMail(confirmMail)
-    .then(() => console.log(`✅ Confirmation email sent to ${userEmail}`))
-    .catch(err => console.error(`❌ Failed to send confirmation email to ${userEmail}:`, err.message));
-}
-
-
+    // ---- Email to department -----------------------------------------
     const toEmail = deptEmails[category];
-    const mailOptions = {
+    const deptMail = {
       from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
       to: toEmail,
       subject: `[TICKET #${ticketCounter}] ${category}`,
@@ -363,27 +382,19 @@ Description: ${description}
 Reply to resolve.
       `.trim(),
     };
+    transporter
+      .sendMail(deptMail)
+      .then(() => console.log(`Dept email → ${toEmail}`))
+      .catch((e) => console.error('Dept email failed:', e.message));
 
-    transporter.sendMail(mailOptions)
-      .then(() => console.log(`Ticket creation email sent to ${toEmail}`))
-      .catch(err => console.error('Email failed:', err.message));
-
-    console.log(`Ticket creation email sent to ${userEmail}`);
-    console.log(`To MAIL: ${toEmail}`);
-
+    // ---- Password-Reset automation ------------------------------------
     let newPasswordToSend = null;
-
-    // --------------------
-    // Password Reset Automation (only for Password Reset category)
-    // --------------------
     if (category === 'Password Reset') {
       try {
         const newPassword = await resetAzurePassword(userId);
-        newPasswordToSend = newPassword; // <-- send to frontend
+        newPasswordToSend = newPassword;
 
-        console.log(`✅ Password reset automation success for ${userId}`);
-
-        // Email ticket creator with new password
+        // Notify user
         if (userEmail) {
           const userMail = {
             from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
@@ -392,7 +403,7 @@ Reply to resolve.
             text: `Hello ${userName},\n\nYour password has been reset.\nNew Password: ${newPassword}\nPlease change it on next login.\n\nYour ticket #${ticketCounter} has been closed.\n\nRegards,\nIT Support Team`,
           };
           await transporter.sendMail(userMail);
-          console.log(`Password sent to ticket creator: ${userEmail}`);
+          console.log(`Password sent → ${userEmail}`);
         }
 
         // Notify IT
@@ -400,37 +411,36 @@ Reply to resolve.
           from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
           to: deptEmails[category],
           subject: `Password reset completed for ${userName}`,
-          text: `The password for user ${userName} has been successfully reset.\n\nTHE New Password: ${newPassword}\n\nTicket #${ticketCounter} has been automatically closed.`,
+          text: `The password for user ${userName} has been successfully reset.\n\nNew Password: ${newPassword}\n\nTicket #${ticketCounter} has been automatically closed.`,
         };
         await transporter.sendMail(itMail);
         console.log(`IT notified for password reset`);
 
-        // Close ticket automatically
+        // Close ticket
         ticket.status = 'Closed';
         await ticket.save();
-        console.log(`Ticket #${ticketCounter} automatically closed`);
+        console.log(`Ticket #${ticketCounter} auto-closed`);
       } catch (err) {
-        console.error(`Password reset for ${userId} failed.`, err.message);
+        console.error(`Password reset failed for ${userId}:`, err.message);
       }
     }
 
-    // Send ticket info back including newPassword if any
+    // ---- Response ----------------------------------------------------
     res.status(201).json({
       ...ticket.toObject(),
-      newPassword: newPasswordToSend // <-- frontend can now display popup
+      newPassword: newPasswordToSend,
     });
   } catch (err) {
     console.error('Error creating ticket:', err);
-    res.status(500).send('Server error');
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// --------------------
-// Start Server
-// --------------------
-const PORT = 5000;
+// ---- Health check (Render expects /) ------------------------------------
+app.get('/', (req, res) => res.send('Sandeza IT Ticket API – OK'));
+
+// ---- Start server --------------------------------------------------------
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend running at http://localhost:${PORT}`);
+  console.log(`Backend listening on port ${PORT}`);
 });
-
-

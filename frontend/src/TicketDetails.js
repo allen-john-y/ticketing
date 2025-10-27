@@ -35,10 +35,12 @@ function TicketDetails() {
     fetchAuthority();
   }, [accounts, instance]);
 
+  const backendBase = "https://ticketing-hn59.onrender.com";
+
   useEffect(() => {
     const fetchTicket = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/tickets/${id}`);
+        const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
       } catch (err) {
         console.error(err);
@@ -51,7 +53,7 @@ function TicketDetails() {
     if (!window.confirm('Are you sure you want to close this ticket?')) return;
     setLoading(true);
     try {
-      await axios.put(`http://localhost:5000/tickets/${id}/close`);
+      await axios.put(`${backendBase}/tickets/${id}/close`);
       alert('✅ Ticket closed successfully');
       navigate('/', { state: { refresh: true } });
     } catch (err) {

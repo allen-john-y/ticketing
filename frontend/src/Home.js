@@ -58,9 +58,12 @@ function Home() {
         const isAdmin = groups.includes('GS_Fortingate_VPN');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
-        const endpoint = isAdmin
-          ? `http://localhost:5000/tickets`
-          : `http://localhost:5000/tickets?userId=${accounts[0].localAccountId}`;
+        const backendBase = "https://ticketing-hn59.onrender.com";
+
+const endpoint = isAdmin
+  ? `${backendBase}/tickets`
+  : `${backendBase}/tickets?userId=${accounts[0].localAccountId}`;
+
 
         const ticketsRes = await axios.get(endpoint);
         const allTickets = ticketsRes.data.reverse();
