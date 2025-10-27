@@ -141,6 +141,7 @@
  ********************************************************************/
 
 const express = require('express');
+app.set('trust proxy', 1);
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const cors = require('cors');
