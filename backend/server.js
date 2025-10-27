@@ -316,6 +316,37 @@ app.post('/tickets', async (req, res) => {
 
     await ticket.save();
 
+
+    // Send confirmation to ticket creator
+if (userEmail) {
+  const confirmMail = {
+    from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
+    to: userEmail,
+    subject: `Your ticket #${ticketCounter} has been created`,
+    text: `
+Hello ${userName},
+
+Your support ticket has been successfully created.
+
+Ticket Details:
+- Ticket Number: ${ticketCounter}
+- Category: ${category}
+- Priority: ${priority}
+- Description: ${description}
+
+Our IT team will get back to you soon.
+
+Regards,
+IT Support Team
+    `.trim()
+  };
+
+  transporter.sendMail(confirmMail)
+    .then(() => console.log(`✅ Confirmation email sent to ${userEmail}`))
+    .catch(err => console.error(`❌ Failed to send confirmation email to ${userEmail}:`, err.message));
+}
+
+
     const toEmail = deptEmails[category];
     const mailOptions = {
       from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,

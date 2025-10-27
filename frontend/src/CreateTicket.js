@@ -85,7 +85,9 @@ function CreateTicket() {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
       const displayName = userRes.data.displayName || 'User';
-      const userEmail = userRes.data.mail || userRes.data.userPrincipalName;
+      const userEmail = userRes.data.mail?.trim() ||
+  userRes.data.userPrincipalName?.trim() ||
+  accounts[0]?.username?.trim();
 
       // Prepare ticket data
       const ticketData = {

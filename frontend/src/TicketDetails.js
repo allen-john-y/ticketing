@@ -74,6 +74,7 @@ function TicketDetails() {
     }}>
       <h1>{ticket.category}</h1>
       <p><strong>Created by:</strong> {ticket.userName}</p>
+      <p><strong>Email:</strong> {ticket.userEmail}</p>
       <p><strong>Description:</strong> {ticket.description}</p>
       <p><strong>Priority:</strong> {ticket.priority}</p>
       <p><strong>Status:</strong> {ticket.status}</p>
