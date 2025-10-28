@@ -16,11 +16,12 @@ app.use(express.json());
 app.use(helmet());
 
 // ---------------------- CORS ------------------------------
-// ✅ Allow both your production frontend and localhost
+// ✅ Allow your frontend + localhost + preflight OPTIONS
 const allowedOrigins = [
   'https://ticketing-psi-tawny.vercel.app', // production frontend
   'http://localhost:3000', // local testing
 ];
+
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -31,10 +32,12 @@ app.use(
         callback(new Error('Not allowed by CORS'));
       }
     },
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
   })
 );
+
+app.options('*', cors()); // ✅ handle preflight requests
 
 // ---------------------- Rate Limiter ----------------------
 const limiter = rateLimit({
@@ -156,7 +159,7 @@ const resetAzurePassword = async (userId) => {
 
 // Health check
 app.get('/', (req, res) => {
-  res.send('✅ Sandeza IT Ticket API – Running on Render Production');
+  res.send('✅ Sandeza IT Ticket API – Running on Railway Production');
 });
 
 // Get all tickets
@@ -277,5 +280,5 @@ Reply to resolve.
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () =>
-  console.log(`🚀 Server running on port ${PORT} (Render Production)`)
+  console.log(`🚀 Server running on port ${PORT} (Railway Production)`)
 );
