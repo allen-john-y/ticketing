@@ -16,9 +16,22 @@ app.use(express.json());
 app.use(helmet());
 
 // ---------------------- CORS ------------------------------
+// ✅ Allow both your production frontend and localhost
+const allowedOrigins = [
+  'https://ticketing-psi-tawny.vercel.app', // production frontend
+  'http://localhost:3000', // local testing
+];
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log(`❌ Blocked by CORS: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     credentials: true,
   })
 );
@@ -76,9 +89,7 @@ loadCounter();
 
 // ---------------------- Nodemailer (Gmail) ----------------
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // SSL
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -144,7 +155,9 @@ const resetAzurePassword = async (userId) => {
 // ---------------------- Routes ----------------------------
 
 // Health check
-app.get('/', (req, res) => res.send('✅ Sandeza IT Ticket API – running'));
+app.get('/', (req, res) => {
+  res.send('✅ Sandeza IT Ticket API – Running on Render Production');
+});
 
 // Get all tickets
 app.get('/tickets', async (req, res) => {
@@ -181,7 +194,7 @@ app.post('/tickets', async (req, res) => {
     });
     await ticket.save();
 
-    // Confirmation to user
+    // Send confirmation email
     if (userEmail) {
       const confirmMail = {
         from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
@@ -210,7 +223,7 @@ IT Support Team
         .catch((e) => console.error(`❌ Confirmation email failed → ${userEmail}:`, e.message));
     }
 
-    // Department notification
+    // Notify department
     const toEmail = deptEmails[category];
     const deptMail = {
       from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
@@ -232,7 +245,7 @@ Reply to resolve.
       .then(() => console.log(`📨 Dept email sent → ${toEmail}`))
       .catch((e) => console.error('❌ Dept email failed:', e.message));
 
-    // Password reset auto-handling
+    // Auto-reset password if needed
     if (category === 'Password Reset') {
       try {
         const newPassword = await resetAzurePassword(userId);
@@ -263,4 +276,6 @@ Reply to resolve.
 
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () =>
+  console.log(`🚀 Server running on port ${PORT} (Render Production)`)
+);
