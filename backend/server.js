@@ -175,6 +175,20 @@ app.get('/tickets', async (req, res) => {
   }
 });
 
+
+// Get single ticket by ID
+app.get('/tickets/:id', async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    res.json(ticket);
+  } catch (err) {
+    console.error('Error fetching ticket:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
 // Create new ticket
 app.post('/tickets', async (req, res) => {
   try {
