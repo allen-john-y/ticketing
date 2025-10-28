@@ -31,8 +31,8 @@ function Dashboard() {
 
         // ✅ Updated endpoints with Render URL
         const endpoint = isAdmin
-          ? `https://ticketing-hn59.onrender.com/tickets`
-          : `https://ticketing-hn59.onrender.com/tickets?userId=${accounts[0].localAccountId}`;
+          ? `https://ticketing-production-4240.up.railway.app/tickets`
+          : `https://ticketing-production-4240.up.railway.app/tickets?userId=${accounts[0].localAccountId}`;
 
         const res = await axios.get(endpoint);
         const closedTickets = res.data.filter(t => t.status === 'Closed');

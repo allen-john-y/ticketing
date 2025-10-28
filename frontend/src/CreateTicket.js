@@ -101,11 +101,9 @@ function CreateTicket() {
       };
 
       // Post ticket to backend
-      // Post ticket to backend
-const response = await axios.post('https://ticketing-hn59.onrender.com/tickets', ticketData, {
-  headers: { Authorization: `Bearer ${token.accessToken}` }
-});
-
+      const response = await axios.post('https://ticketing-production-4240.up.railway.app/tickets', ticketData, {
+        headers: { Authorization: `Bearer ${token.accessToken}` }
+      });
 
       alert('✅ Ticket created successfully!');
 
