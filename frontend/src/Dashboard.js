@@ -27,12 +27,12 @@ function Dashboard() {
         const isAdmin = groups.includes('GS_Fortingate_VPN');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
-       // const backendUrl = 'https://p6wpknjs-5000.inc1.devtunnels.ms/';
+        const backendUrl = 'ticketing-production-5334.up.railway.app';
 
         // ✅ Updated endpoints with Render URL
         const endpoint = isAdmin
-          ? `https://ticketing-production-4240.up.railway.app/tickets`
-          : `https://ticketing-production-4240.up.railway.app/tickets?userId=${accounts[0].localAccountId}`;
+          ? `https://${backendUrl}/tickets`
+          : `https://${backendUrl}/tickets?userId=${accounts[0].localAccountId}`;
 
         const res = await axios.get(endpoint);
         const closedTickets = res.data.filter(t => t.status === 'Closed');

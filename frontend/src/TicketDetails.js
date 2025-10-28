@@ -35,7 +35,7 @@ function TicketDetails() {
     fetchAuthority();
   }, [accounts, instance]);
 
-  const backendBase = "https://ticketing-production-4240.up.railway.app";
+  const backendBase = "https://ticketing-production-5334.up.railway.app";
 
   useEffect(() => {
     const fetchTicket = async () => {

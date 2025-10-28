@@ -101,7 +101,7 @@ function CreateTicket() {
       };
 
       // Post ticket to backend
-      const response = await axios.post('https://ticketing-production-4240.up.railway.app/tickets', ticketData, {
+      const response = await axios.post('https://ticketing-production-5334.up.railway.app/tickets', ticketData, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
