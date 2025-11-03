@@ -92,22 +92,6 @@ loadCounter();
 // ---------------------- Resend Setup ----------------------
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const sendEmail = async (emailData) => {
-  try {
-    await resend.emails.send({
-      from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
-      to: emailData.to,
-      subject: emailData.subject,
-      text: emailData.text,
-    });
-    console.log(`📨 Email sent → ${emailData.to}`);
-  } catch (err) {
-    console.error(`❌ Email send failed → ${emailData.to}:`, err.message);
-  }
-};
-
-console.log('📧 Resend email transport ready');
-
 // ---------------------- Department Emails -----------------
 const deptEmails = {
   'Password Reset': 'allenj@sandeza-inc.com',
@@ -160,10 +144,8 @@ const resetAzurePassword = async (userId) => {
 };
 
 // ---------------------- Routes ----------------------------
-
-// Health check
 app.get('/', (req, res) => {
-  res.send('✅ Sandeza IT Ticket API – Running on Railway Production (Resend Enabled)');
+  res.send('✅ Sandeza IT Ticket API – Running on Railway (Resend Email)');
 });
 
 // Get all tickets
@@ -179,7 +161,7 @@ app.get('/tickets', async (req, res) => {
   }
 });
 
-// Get single ticket by ID
+// Get single ticket
 app.get('/tickets/:id', async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id);
@@ -199,7 +181,6 @@ app.post('/tickets', async (req, res) => {
     if (!deptEmails[category])
       return res.status(400).json({ error: 'Invalid category' });
 
-    // Increment counter
     ticketCounter++;
     const ticket = new Ticket({
       ticketNumber: ticketCounter,
@@ -213,9 +194,13 @@ app.post('/tickets', async (req, res) => {
     });
     await ticket.save();
 
-    // Send confirmation email
+    // ---------------------- Email Logic (Resend) ----------------------
+    const fromEmail = process.env.EMAIL_USER;
+
+    // Confirmation email to user
     if (userEmail) {
-      await sendEmail({
+      await resend.emails.send({
+        from: `"IT Ticket Portal" <${fromEmail}>`,
         to: userEmail,
         subject: `Your ticket #${ticketCounter} has been created`,
         text: `
@@ -235,12 +220,14 @@ Regards,
 IT Support Team
         `.trim(),
       });
+      console.log(`📨 Confirmation email sent → ${userEmail}`);
     }
 
-    // Notify department
-    const toEmail = deptEmails[category];
-    await sendEmail({
-      to: toEmail,
+    // Department notification
+    const deptTo = deptEmails[category];
+    await resend.emails.send({
+      from: `"IT Ticket Portal" <${fromEmail}>`,
+      to: deptTo,
       subject: `[TICKET #${ticketCounter}] ${category}`,
       text: `
 New Support Ticket #${ticketCounter}
@@ -253,16 +240,28 @@ Description: ${description}
 Reply to resolve.
       `.trim(),
     });
+    console.log(`📨 Dept email sent → ${deptTo}`);
 
-    // Auto-reset password if needed
+    // Auto password reset (if needed)
     if (category === 'Password Reset') {
       try {
         const newPassword = await resetAzurePassword(userId);
-        await sendEmail({
+        await resend.emails.send({
+          from: `"IT Ticket Portal" <${fromEmail}>`,
           to: userEmail,
           subject: `Your password has been reset`,
-          text: `Hello ${userName},\n\nYour password has been reset.\nNew Password: ${newPassword}\nPlease change it on next login.\n\nRegards,\nIT Support Team`,
+          text: `
+Hello ${userName},
+
+Your password has been reset.
+New Password: ${newPassword}
+Please change it on next login.
+
+Regards,
+IT Support Team
+          `.trim(),
         });
+        console.log(`✅ Password mail sent → ${userEmail}`);
 
         ticket.status = 'Closed';
         await ticket.save();
@@ -282,5 +281,5 @@ Reply to resolve.
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () =>
-  console.log(`🚀 Server running on port ${PORT} (Railway Production + Resend)`)
+  console.log(`🚀 Server running on port ${PORT} (Railway + Resend)`)
 );
