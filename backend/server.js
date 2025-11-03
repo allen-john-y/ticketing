@@ -1,24 +1,24 @@
 // ---------------------- Imports -------------------------
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const fetch = require('node-fetch');
-const https = require('https');
-const { Resend } = require('resend');
-require('dotenv').config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const fetch = require("node-fetch");
+const https = require("https");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
 
 // ---------------------- App Setup ------------------------
 const app = express();
-app.set('trust proxy', 1);
+app.set("trust proxy", 1);
 app.use(express.json());
 app.use(helmet());
 
 // ---------------------- CORS ------------------------------
 const allowedOrigins = [
-  'https://ticketing-psi-tawny.vercel.app',
-  'http://localhost:3000',
+  "https://ticketing-psi-tawny.vercel.app",
+  "http://localhost:3000",
 ];
 
 app.use(
@@ -28,22 +28,21 @@ app.use(
         callback(null, true);
       } else {
         console.log(`Blocked by CORS: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
+        callback(new Error("Not allowed by CORS"));
       }
     },
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   })
 );
-
-app.options('*', cors());
+app.options("*", cors());
 
 // ---------------------- Rate Limiter ----------------------
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
 });
-app.use('/tickets', limiter);
+app.use("/tickets", limiter);
 
 // ---------------------- MongoDB ---------------------------
 const connectDB = async () => {
@@ -52,9 +51,9 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log('MongoDB connected');
+    console.log("MongoDB connected");
   } catch (err) {
-    console.error('MongoDB connection error:', err.message);
+    console.error("MongoDB connection error:", err.message);
     process.exit(1);
   }
 };
@@ -74,7 +73,7 @@ const ticketSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-const Ticket = mongoose.model('Ticket', ticketSchema);
+const Ticket = mongoose.model("Ticket", ticketSchema);
 
 // ---------------------- Counter ---------------------------
 let ticketCounter = 0;
@@ -82,33 +81,37 @@ const loadCounter = async () => {
   try {
     const last = await Ticket.findOne().sort({ ticketNumber: -1 });
     ticketCounter = last ? last.ticketNumber : 0;
-    console.log('Ticket counter loaded:', ticketCounter);
+    console.log("Ticket counter loaded:", ticketCounter);
   } catch (err) {
-    console.error('Error loading counter:', err.message);
+    console.error("Error loading counter:", err.message);
   }
 };
 loadCounter();
 
-// ---------------------- Resend Setup ----------------------
-const resend = new Resend(process.env.RESEND_API_KEY);
+// ---------------------- Nodemailer (Gmail OAuth2) ----------------------
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    type: "OAuth2",
+    user: process.env.EMAIL_USER,
+    clientId: process.env.GMAIL_CLIENT_ID,
+    clientSecret: process.env.GMAIL_CLIENT_SECRET,
+    refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+    accessToken: process.env.GMAIL_ACCESS_TOKEN,
+  },
+});
 
-// ---------------------- EMAIL HELPER (NEW!) ----------------------
+// ---------------------- EMAIL HELPER ----------------------
 const sendEmail = async (to, subject, text) => {
   try {
-    const { data, error } = await resend.emails.send({
+    const info = await transporter.sendMail({
       from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       text: text.trim(),
     });
-
-    if (error) {
-      console.error(`REJECTED by Resend → ${to}:`, JSON.stringify(error));
-      return { success: false, error };
-    }
-
-    console.log(`DELIVERED (ID: ${data.id}) → ${to}`);
-    return { success: true, data };
+    console.log(`DELIVERED (${info.messageId}) → ${to}`);
+    return { success: true };
   } catch (err) {
     console.error(`FAILED to send → ${to}:`, err.message);
     return { success: false, error: err.message };
@@ -117,24 +120,24 @@ const sendEmail = async (to, subject, text) => {
 
 // ---------------------- Department Emails -----------------
 const deptEmails = {
-  'Password Reset': 'allenj@sandeza-inc.com',
-  'Admin Access': 'vigneshm@sandeza-inc.com',
-  'Payroll Issue': 'kishorekumars@sandeza-inc.com',
-  'Expense Reimbursement': 'kishorekumars@sandeza-inc.com',
-  'Leave Request': 'allenj@sandeza-inc.com',
-  'Employee Onboarding': 'allenj@sandeza-inc.com',
+  "Password Reset": "allenj@sandeza-inc.com",
+  "Admin Access": "vigneshm@sandeza-inc.com",
+  "Payroll Issue": "kishorekumars@sandeza-inc.com",
+  "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
+  "Leave Request": "allenj@sandeza-inc.com",
+  "Employee Onboarding": "allenj@sandeza-inc.com",
 };
 
 // ---------------------- Azure Helpers ---------------------
 const getAccessToken = async () => {
   const url = `${process.env.AZURE_AUTHORITY}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
-  params.append('client_id', process.env.AZURE_CLIENT_ID);
-  params.append('scope', 'https://graph.microsoft.com/.default');
-  params.append('client_secret', process.env.AZURE_CLIENT_SECRET);
-  params.append('grant_type', 'client_credentials');
+  params.append("client_id", process.env.AZURE_CLIENT_ID);
+  params.append("scope", "https://graph.microsoft.com/.default");
+  params.append("client_secret", process.env.AZURE_CLIENT_SECRET);
+  params.append("grant_type", "client_credentials");
 
-  const res = await fetch(url, { method: 'POST', body: params });
+  const res = await fetch(url, { method: "POST", body: params });
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
   return data.access_token;
@@ -142,13 +145,13 @@ const getAccessToken = async () => {
 
 const resetAzurePassword = async (userId) => {
   const token = await getAccessToken();
-  const newPassword = Math.random().toString(36).slice(-10) + 'A1!';
+  const newPassword = Math.random().toString(36).slice(-10) + "A1!";
 
   const res = await fetch(`https://graph.microsoft.com/v1.0/users/${userId}`, {
-    method: 'PATCH',
+    method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       passwordProfile: {
@@ -169,42 +172,42 @@ const resetAzurePassword = async (userId) => {
 // ---------------------- Routes ----------------------------
 
 // Health check
-app.get('/', (req, res) => {
-  res.send('Sandeza IT Ticket API – Running on Railway (Resend Email)');
+app.get("/", (req, res) => {
+  res.send("Sandeza IT Ticket API – Running on Railway (Gmail OAuth2)");
 });
 
 // Get all tickets
-app.get('/tickets', async (req, res) => {
+app.get("/tickets", async (req, res) => {
   try {
     const { userId } = req.query;
     const filter = userId ? { userId } : {};
     const tickets = await Ticket.find(filter).sort({ ticketNumber: 1 });
     res.json(tickets);
   } catch (err) {
-    console.error('Error fetching tickets:', err.message);
-    res.status(500).json({ error: 'Server error' });
+    console.error("Error fetching tickets:", err.message);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
 // Get single ticket
-app.get('/tickets/:id', async (req, res) => {
+app.get("/tickets/:id", async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
     res.json(ticket);
   } catch (err) {
-    console.error('Error fetching ticket:', err.message);
-    res.status(500).json({ error: 'Server error' });
+    console.error("Error fetching ticket:", err.message);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
 // Create new ticket
-app.post('/tickets', async (req, res) => {
+app.post("/tickets", async (req, res) => {
   try {
     const { category, description, priority, userId, userName, userEmail } = req.body;
 
     if (!deptEmails[category])
-      return res.status(400).json({ error: 'Invalid category' });
+      return res.status(400).json({ error: "Invalid category" });
 
     // Increment counter
     ticketCounter++;
@@ -216,13 +219,11 @@ app.post('/tickets', async (req, res) => {
       category,
       description,
       priority,
-      status: 'Open',
+      status: "Open",
     });
     await ticket.save();
 
-    // ---------------------- Send Emails (WITH ERROR CHECK) ----------------------
-
-    // 1. Confirmation to user
+    // Send confirmation to user
     if (userEmail) {
       await sendEmail(
         userEmail,
@@ -246,7 +247,7 @@ IT Support Team
       );
     }
 
-    // 2. Notify department
+    // Notify department
     const deptTo = deptEmails[category];
     await sendEmail(
       deptTo,
@@ -263,8 +264,8 @@ Reply to resolve.
       `
     );
 
-    // 3. Auto password reset
-    if (category === 'Password Reset') {
+    // Auto password reset for specific category
+    if (category === "Password Reset") {
       try {
         const newPassword = await resetAzurePassword(userId);
 
@@ -283,7 +284,7 @@ IT Support Team
           `
         );
 
-        ticket.status = 'Closed';
+        ticket.status = "Closed";
         await ticket.save();
         console.log(`Ticket #${ticketCounter} auto-closed`);
       } catch (err) {
@@ -293,13 +294,13 @@ IT Support Team
 
     res.status(201).json(ticket);
   } catch (err) {
-    console.error('Error creating ticket:', err.message);
-    res.status(500).json({ error: 'Server error' });
+    console.error("Error creating ticket:", err.message);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () =>
-  console.log(`Server running on port ${PORT} (Railway + Resend)`)
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`Server running on port ${PORT} (Railway + Gmail OAuth2)`)
 );
