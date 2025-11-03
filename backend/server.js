@@ -1,12 +1,12 @@
 // ---------------------- Imports -------------------------
 const express = require('express');
 const mongoose = require('mongoose');
-const nodemailer = require('nodemailer');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const fetch = require('node-fetch');
 const https = require('https');
+const { Resend } = require('resend');
 require('dotenv').config();
 
 // ---------------------- App Setup ------------------------
@@ -16,7 +16,6 @@ app.use(express.json());
 app.use(helmet());
 
 // ---------------------- CORS ------------------------------
-// ✅ Allow your frontend + localhost + preflight OPTIONS
 const allowedOrigins = [
   'https://ticketing-psi-tawny.vercel.app', // production frontend
   'http://localhost:3000', // local testing
@@ -37,7 +36,7 @@ app.use(
   })
 );
 
-app.options('*', cors()); // ✅ handle preflight requests
+app.options('*', cors());
 
 // ---------------------- Rate Limiter ----------------------
 const limiter = rateLimit({
@@ -90,19 +89,24 @@ const loadCounter = async () => {
 };
 loadCounter();
 
-// ---------------------- Nodemailer (Gmail) ----------------
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// ---------------------- Resend Setup ----------------------
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-transporter.verify((error) => {
-  if (error) console.error('❌ Email config error:', error.message);
-  else console.log('📧 Email transport ready');
-});
+const sendEmail = async (emailData) => {
+  try {
+    await resend.emails.send({
+      from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
+      to: emailData.to,
+      subject: emailData.subject,
+      text: emailData.text,
+    });
+    console.log(`📨 Email sent → ${emailData.to}`);
+  } catch (err) {
+    console.error(`❌ Email send failed → ${emailData.to}:`, err.message);
+  }
+};
+
+console.log('📧 Resend email transport ready');
 
 // ---------------------- Department Emails -----------------
 const deptEmails = {
@@ -159,7 +163,7 @@ const resetAzurePassword = async (userId) => {
 
 // Health check
 app.get('/', (req, res) => {
-  res.send('✅ Sandeza IT Ticket API – Running on Railway Production');
+  res.send('✅ Sandeza IT Ticket API – Running on Railway Production (Resend Enabled)');
 });
 
 // Get all tickets
@@ -175,7 +179,6 @@ app.get('/tickets', async (req, res) => {
   }
 });
 
-
 // Get single ticket by ID
 app.get('/tickets/:id', async (req, res) => {
   try {
@@ -187,7 +190,6 @@ app.get('/tickets/:id', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
-
 
 // Create new ticket
 app.post('/tickets', async (req, res) => {
@@ -213,8 +215,7 @@ app.post('/tickets', async (req, res) => {
 
     // Send confirmation email
     if (userEmail) {
-      const confirmMail = {
-        from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
+      await sendEmail({
         to: userEmail,
         subject: `Your ticket #${ticketCounter} has been created`,
         text: `
@@ -233,17 +234,12 @@ Our IT team will get back to you soon.
 Regards,
 IT Support Team
         `.trim(),
-      };
-      transporter
-        .sendMail(confirmMail)
-        .then(() => console.log(`📨 Confirmation email sent → ${userEmail}`))
-        .catch((e) => console.error(`❌ Confirmation email failed → ${userEmail}:`, e.message));
+      });
     }
 
     // Notify department
     const toEmail = deptEmails[category];
-    const deptMail = {
-      from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
+    await sendEmail({
       to: toEmail,
       subject: `[TICKET #${ticketCounter}] ${category}`,
       text: `
@@ -256,25 +252,17 @@ Description: ${description}
 
 Reply to resolve.
       `.trim(),
-    };
-    transporter
-      .sendMail(deptMail)
-      .then(() => console.log(`📨 Dept email sent → ${toEmail}`))
-      .catch((e) => console.error('❌ Dept email failed:', e.message));
+    });
 
     // Auto-reset password if needed
     if (category === 'Password Reset') {
       try {
         const newPassword = await resetAzurePassword(userId);
-
-        const userMail = {
-          from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
+        await sendEmail({
           to: userEmail,
           subject: `Your password has been reset`,
           text: `Hello ${userName},\n\nYour password has been reset.\nNew Password: ${newPassword}\nPlease change it on next login.\n\nRegards,\nIT Support Team`,
-        };
-        await transporter.sendMail(userMail);
-        console.log(`✅ Password mail sent → ${userEmail}`);
+        });
 
         ticket.status = 'Closed';
         await ticket.save();
@@ -292,7 +280,7 @@ Reply to resolve.
 });
 
 // ---------------------- Start Server ----------------------
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () =>
-  console.log(`🚀 Server running on port ${PORT} (Railway Production)`)
+  console.log(`🚀 Server running on port ${PORT} (Railway Production + Resend)`)
 );
