@@ -15,7 +15,7 @@ function Home() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [appliedCategories, setAppliedCategories] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(''); // ✅ new state for search
+  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -121,7 +121,7 @@ function Home() {
       ? filteredTickets
       : filteredTickets.filter(t => appliedCategories.includes(t.category));
 
-  // ✅ New: Apply search filter
+  // ✅ New search filter
   const searchedTickets = categoryFilteredTickets.filter(t =>
     t.ticketNumber?.toString().includes(searchTerm.trim()) ||
     t.category?.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
@@ -138,7 +138,7 @@ function Home() {
         borderRadius: '10px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
       }}>
-
+        
         {/* Header */}
         <div style={{
           display: 'flex',
@@ -177,7 +177,7 @@ function Home() {
             )}
           </div>
 
-          {/* ✅ Filter Dropdown */}
+          {/* Filter Dropdown */}
           <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
             <button
               onClick={() => setDropdownOpen(prev => !prev)}
@@ -271,61 +271,44 @@ function Home() {
           />
         </div>
 
-        {/* Applied Filters */}
-        {appliedCategories.length > 0 && (
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-            gap: '8px',
-            marginBottom: '1rem'
-          }}>
-            {appliedCategories.map((filter) => (
-              <div
-                key={filter}
-                style={{
-                  background: '#ecf9ff',
-                  borderRadius: '20px',
-                  padding: '6px 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span style={{ color: '#2c3e50', fontWeight: '500' }}>{filter}</span>
-                <button
-                  onClick={() => removeSingleFilter(filter)}
-                  style={{
-                    background: 'transparent',
-                    color: '#e74c3c',
-                    border: 'none',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={clearFilters}
-              style={{
-                background: '#e74c3c',
-                color: 'white',
-                border: 'none',
-                borderRadius: '20px',
-                padding: '6px 14px',
-                cursor: 'pointer',
-                fontWeight: '600'
-              }}
-            >
-              Clear All
+        {/* ✅ Buttons Restored */}
+        <div style={{
+          textAlign: 'center',
+          marginBottom: '2rem',
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '1rem'
+        }}>
+          <Link to="/create" style={{ textDecoration: 'none' }}>
+            <button style={{
+              background: '#3498db',
+              color: 'white',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}>
+              Create New Ticket
             </button>
-          </div>
-        )}
+          </Link>
 
-        {/* Tickets Section */}
+          <Link to="/dashboard" style={{ textDecoration: 'none' }}>
+            <button style={{
+              background: '#9b59b6',
+              color: 'white',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}>
+              View Closed Tickets
+            </button>
+          </Link>
+        </div>
+
+        {/* Ticket list */}
         <h2 style={{ color: '#2c3e50', marginBottom: '1rem' }}>
           {authority === 'admin'
             ? showMyTickets
