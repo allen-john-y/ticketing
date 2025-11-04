@@ -12,16 +12,14 @@ function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showMyTickets, setShowMyTickets] = useState(false);
   const [categories, setCategories] = useState([]);
-  const [selectedCategories, setSelectedCategories] = useState([]);
-  const [appliedCategories, setAppliedCategories] = useState([]);
   const [users, setUsers] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [appliedCategories, setAppliedCategories] = useState([]);
   const [appliedUsers, setAppliedUsers] = useState([]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
-  const userDropdownRef = useRef(null);
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -41,7 +39,7 @@ function Home() {
           account: accounts[0]
         });
       } catch (error) {
-        if (error.name === "InteractionRequiredAuthError") {
+        if (error.name === 'InteractionRequiredAuthError') {
           tokenResponse = await instance.acquireTokenPopup({
             scopes: ['User.Read', 'GroupMember.Read.All']
           });
@@ -86,79 +84,78 @@ function Home() {
     fetchData();
   }, [accounts, instance, refreshKey]);
 
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false);
-      }
-      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target)) {
-        setUserDropdownOpen(false);
+        setDropdownOpen(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleCategoryChange = (cat) => {
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
-  };
-
-  const handleUserChange = (u) => {
-    setSelectedUsers((prev) =>
-      prev.includes(u) ? prev.filter((c) => c !== u) : [...prev, u]
-    );
-  };
-
-  const applyCategoryFilter = () => {
-    setAppliedCategories(selectedCategories);
-    setDropdownOpen(false);
-  };
-
-  const applyUserFilter = () => {
-    setAppliedUsers(selectedUsers);
-    setUserDropdownOpen(false);
-  };
-
-  const removeSingleFilter = (filter, type) => {
+  // Handle category + user filter
+  const handleSelect = (type, value) => {
     if (type === 'category') {
-      const updated = appliedCategories.filter(f => f !== filter);
+      setSelectedCategories((prev) =>
+        prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
+      );
+    } else {
+      setSelectedUsers((prev) =>
+        prev.includes(value) ? prev.filter((u) => u !== value) : [...prev, value]
+      );
+    }
+  };
+
+  const applyFilters = () => {
+    setAppliedCategories(selectedCategories);
+    setAppliedUsers(selectedUsers);
+    setDropdownOpen(null);
+  };
+
+  const removeFilter = (type, value) => {
+    if (type === 'category') {
+      const updated = appliedCategories.filter((c) => c !== value);
       setAppliedCategories(updated);
       setSelectedCategories(updated);
     } else {
-      const updated = appliedUsers.filter(f => f !== filter);
+      const updated = appliedUsers.filter((u) => u !== value);
       setAppliedUsers(updated);
       setSelectedUsers(updated);
     }
   };
 
-  const clearFilters = () => {
+  const clearAllFilters = () => {
     setSelectedCategories([]);
-    setAppliedCategories([]);
     setSelectedUsers([]);
+    setAppliedCategories([]);
     setAppliedUsers([]);
   };
 
-  let filteredTickets =
-    authority === 'admin' && showMyTickets
-      ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
-      : tickets;
+  // Filtering logic
+  const filteredTickets = authority === 'admin' && showMyTickets
+    ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
+    : tickets;
 
-  if (appliedCategories.length > 0) {
-    filteredTickets = filteredTickets.filter(t => appliedCategories.includes(t.category));
-  }
-  if (appliedUsers.length > 0) {
-    filteredTickets = filteredTickets.filter(t => appliedUsers.includes(t.userName));
-  }
+  const categoryFiltered = appliedCategories.length === 0
+    ? filteredTickets
+    : filteredTickets.filter(t => appliedCategories.includes(t.category));
 
-  const searchedTickets = filteredTickets.filter(t =>
-    t.ticketNumber?.toString().includes(searchTerm.trim()) ||
-    t.category?.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
-    t.description?.toLowerCase().includes(searchTerm.trim().toLowerCase())
-  );
+  const userFiltered = appliedUsers.length === 0
+    ? categoryFiltered
+    : categoryFiltered.filter(t => appliedUsers.includes(t.userName));
 
-  const openTickets = searchedTickets.filter(t => t.status !== 'Closed');
+  const searchFiltered = searchTerm.trim() === ''
+    ? userFiltered
+    : userFiltered.filter(
+        t =>
+          t.ticketNumber.toString().includes(searchTerm) ||
+          t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          t.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+  const openTickets = searchFiltered.filter(t => t.status !== 'Closed');
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
@@ -208,13 +205,28 @@ function Home() {
           </div>
 
           {/* Filters */}
-          <div style={{ display: 'flex', gap: '1rem', position: 'relative' }}>
-            {/* Category Filter */}
-            <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
+          <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
+            <button
+              onClick={() => setDropdownOpen(dropdownOpen === 'category' ? null : 'category')}
+              style={{
+                background: '#3498db',
+                color: 'white',
+                border: 'none',
+                padding: '10px 18px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                marginRight: '10px'
+              }}
+            >
+              Filter by Category ▾
+            </button>
+
+            {authority === 'admin' && (
               <button
-                onClick={() => setDropdownOpen(prev => !prev)}
+                onClick={() => setDropdownOpen(dropdownOpen === 'user' ? null : 'user')}
                 style={{
-                  background: '#3498db',
+                  background: '#9b59b6',
                   color: 'white',
                   border: 'none',
                   padding: '10px 18px',
@@ -223,11 +235,13 @@ function Home() {
                   fontWeight: '600'
                 }}
               >
-                Filter by Category ▾
+                Filter by User ▾
               </button>
+            )}
 
-              {dropdownOpen && (
-                <div style={{
+            {dropdownOpen && (
+              <div
+                style={{
                   position: 'absolute',
                   right: 0,
                   marginTop: '8px',
@@ -238,78 +252,97 @@ function Home() {
                   zIndex: 10,
                   minWidth: '220px',
                   padding: '10px'
-                }}>
-                  {categories.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: '#7f8c8d', margin: 0 }}>No categories</p>
-                  ) : (
-                    categories.map(cat => (
-                      <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                        <input type="checkbox" checked={selectedCategories.includes(cat)} onChange={() => handleCategoryChange(cat)} />
-                        {cat}
-                      </label>
-                    ))
-                  )}
-                  <button onClick={applyCategoryFilter} style={{
-                    background: '#27ae60', color: 'white', border: 'none', borderRadius: '6px',
-                    padding: '6px 10px', marginTop: '10px', width: '100%', cursor: 'pointer', fontWeight: '600'
-                  }}>Apply Filter</button>
-                </div>
-              )}
-            </div>
-
-            {/* ✅ User Filter (Admin Only) */}
-            {authority === 'admin' && (
-              <div ref={userDropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
+                }}
+              >
+                {(dropdownOpen === 'category' ? categories : users).map(item => (
+                  <label key={item} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        dropdownOpen === 'category'
+                          ? selectedCategories.includes(item)
+                          : selectedUsers.includes(item)
+                      }
+                      onChange={() => handleSelect(dropdownOpen, item)}
+                    />
+                    {item}
+                  </label>
+                ))}
                 <button
-                  onClick={() => setUserDropdownOpen(prev => !prev)}
+                  onClick={applyFilters}
                   style={{
-                    background: '#16a085',
+                    background: '#27ae60',
                     color: 'white',
                     border: 'none',
-                    padding: '10px 18px',
-                    borderRadius: '8px',
+                    borderRadius: '6px',
+                    padding: '6px 10px',
+                    marginTop: '10px',
+                    width: '100%',
                     cursor: 'pointer',
                     fontWeight: '600'
                   }}
                 >
-                  Filter by User ▾
+                  Apply Filter
                 </button>
-
-                {userDropdownOpen && (
-                  <div style={{
-                    position: 'absolute',
-                    right: 0,
-                    marginTop: '8px',
-                    background: 'white',
-                    border: '1px solid #ccc',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-                    zIndex: 10,
-                    minWidth: '220px',
-                    padding: '10px'
-                  }}>
-                    {users.length === 0 ? (
-                      <p style={{ textAlign: 'center', color: '#7f8c8d', margin: 0 }}>No users</p>
-                    ) : (
-                      users.map(u => (
-                        <label key={u} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                          <input type="checkbox" checked={selectedUsers.includes(u)} onChange={() => handleUserChange(u)} />
-                          {u}
-                        </label>
-                      ))
-                    )}
-                    <button onClick={applyUserFilter} style={{
-                      background: '#27ae60', color: 'white', border: 'none', borderRadius: '6px',
-                      padding: '6px 10px', marginTop: '10px', width: '100%', cursor: 'pointer', fontWeight: '600'
-                    }}>Apply Filter</button>
-                  </div>
-                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Buttons */}
+        {/* ✅ Applied Filters */}
+        {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+            gap: '8px',
+            marginBottom: '1rem'
+          }}>
+            {[...appliedCategories.map(c => ({ type: 'category', value: c })), 
+              ...appliedUsers.map(u => ({ type: 'user', value: u }))].map(({ type, value }) => (
+              <div key={value} style={{
+                background: '#ecf9ff',
+                borderRadius: '20px',
+                padding: '6px 10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span style={{ color: '#2c3e50', fontWeight: '500' }}>{value}</span>
+                <button
+                  onClick={() => removeFilter(type, value)}
+                  style={{
+                    background: 'transparent',
+                    color: '#e74c3c',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            <button
+              onClick={clearAllFilters}
+              style={{
+                background: '#e74c3c',
+                color: 'white',
+                border: 'none',
+                borderRadius: '20px',
+                padding: '6px 14px',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+
+        {/* ✅ Action Buttons */}
         <div style={{
           textAlign: 'center',
           marginBottom: '2rem',
@@ -346,24 +379,24 @@ function Home() {
           </Link>
         </div>
 
-        {/* Search Bar */}
-        <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+        {/* ✅ Search Bar */}
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <input
             type="text"
             placeholder="Search by ticket number, category, or issue..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              width: '60%',
-              padding: '10px 14px',
+              padding: '10px 15px',
               borderRadius: '8px',
               border: '1px solid #ccc',
+              width: '60%',
               fontSize: '1rem'
             }}
           />
         </div>
 
-        {/* Tickets */}
+        {/* ✅ Ticket Display */}
         <h2 style={{ color: '#2c3e50', marginBottom: '1rem' }}>
           {authority === 'admin'
             ? showMyTickets
@@ -374,13 +407,7 @@ function Home() {
 
         {openTickets.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#7f8c8d', padding: '2rem' }}>
-            {searchTerm
-              ? <h3>No results found for your search</h3>
-              : <>
-                  <h3>No open tickets</h3>
-                  <p>Create a new ticket above</p>
-                </>
-            }
+            <h3>No results found for your search</h3>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: '1rem' }}>
