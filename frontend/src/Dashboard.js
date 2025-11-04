@@ -35,9 +35,12 @@ function Dashboard() {
           : `https://${backendUrl}/tickets?userId=${accounts[0].localAccountId}`;
 
         const res = await axios.get(endpoint);
-        const closedTickets = res.data.filter(t => t.status === 'Closed');
-        setTickets(closedTickets.reverse());
-        setFilteredTickets(closedTickets.reverse());
+const closedTickets = res.data
+  .filter(t => t.status === 'Closed')
+  .sort((a, b) => b.ticketNumber - a.ticketNumber); // Sort descending by ticket number
+setTickets(closedTickets);
+setFilteredTickets(closedTickets);
+
       } catch (err) {
         console.error(err);
       }
