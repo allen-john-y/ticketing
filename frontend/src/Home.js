@@ -15,6 +15,7 @@ function Home() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [appliedCategories, setAppliedCategories] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(''); // ✅ new state for search
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -59,11 +60,9 @@ function Home() {
         setAuthority(isAdmin ? 'admin' : 'basic');
 
         const backendBase = "https://ticketing-production-5334.up.railway.app";
-
-const endpoint = isAdmin
-  ? `${backendBase}/tickets`
-  : `${backendBase}/tickets?userId=${accounts[0].localAccountId}`;
-
+        const endpoint = isAdmin
+          ? `${backendBase}/tickets`
+          : `${backendBase}/tickets?userId=${accounts[0].localAccountId}`;
 
         const ticketsRes = await axios.get(endpoint);
         const allTickets = ticketsRes.data.reverse();
@@ -122,7 +121,14 @@ const endpoint = isAdmin
       ? filteredTickets
       : filteredTickets.filter(t => appliedCategories.includes(t.category));
 
-  const openTickets = categoryFilteredTickets.filter(t => t.status !== 'Closed');
+  // ✅ New: Apply search filter
+  const searchedTickets = categoryFilteredTickets.filter(t =>
+    t.ticketNumber?.toString().includes(searchTerm.trim()) ||
+    t.category?.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
+    t.description?.toLowerCase().includes(searchTerm.trim().toLowerCase())
+  );
+
+  const openTickets = searchedTickets.filter(t => t.status !== 'Closed');
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
@@ -132,7 +138,7 @@ const endpoint = isAdmin
         borderRadius: '10px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
       }}>
-        
+
         {/* Header */}
         <div style={{
           display: 'flex',
@@ -248,7 +254,24 @@ const endpoint = isAdmin
           </div>
         </div>
 
-        {/* ✅ Applied Filters with Individual ‘×’ */}
+        {/* ✅ Search Bar */}
+        <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+          <input
+            type="text"
+            placeholder="Search by ticket number, category, or issue..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '60%',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              border: '1px solid #ccc',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+
+        {/* Applied Filters */}
         {appliedCategories.length > 0 && (
           <div style={{
             display: 'flex',
@@ -285,8 +308,6 @@ const endpoint = isAdmin
                 </button>
               </div>
             ))}
-
-            {/* Clear all */}
             <button
               onClick={clearFilters}
               style={{
@@ -304,44 +325,7 @@ const endpoint = isAdmin
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div style={{
-          textAlign: 'center',
-          marginBottom: '2rem',
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '1rem'
-        }}>
-          <Link to="/create" style={{ textDecoration: 'none' }}>
-            <button style={{
-              background: '#3498db',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '600'
-            }}>
-              Create New Ticket
-            </button>
-          </Link>
-
-          <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-            <button style={{
-              background: '#9b59b6',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '600'
-            }}>
-              View Closed Tickets
-            </button>
-          </Link>
-        </div>
-
-        {/* Ticket List */}
+        {/* Tickets Section */}
         <h2 style={{ color: '#2c3e50', marginBottom: '1rem' }}>
           {authority === 'admin'
             ? showMyTickets
@@ -352,8 +336,13 @@ const endpoint = isAdmin
 
         {openTickets.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#7f8c8d', padding: '2rem' }}>
-            <h3>No open tickets</h3>
-            <p>Create a new ticket above</p>
+            {searchTerm
+              ? <h3>No results found for your search</h3>
+              : <>
+                  <h3>No open tickets</h3>
+                  <p>Create a new ticket above</p>
+                </>
+            }
           </div>
         ) : (
           <div style={{ display: 'grid', gap: '1rem' }}>
