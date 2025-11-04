@@ -78,7 +78,6 @@ function Home() {
     fetchData();
   }, [accounts, instance, refreshKey]);
 
-  // ✅ Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -121,7 +120,6 @@ function Home() {
       ? filteredTickets
       : filteredTickets.filter(t => appliedCategories.includes(t.category));
 
-  // ✅ New search filter
   const searchedTickets = categoryFilteredTickets.filter(t =>
     t.ticketNumber?.toString().includes(searchTerm.trim()) ||
     t.category?.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
@@ -254,24 +252,7 @@ function Home() {
           </div>
         </div>
 
-        {/* ✅ Search Bar */}
-        <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
-          <input
-            type="text"
-            placeholder="Search by ticket number, category, or issue..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: '60%',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: '1px solid #ccc',
-              fontSize: '1rem'
-            }}
-          />
-        </div>
-
-        {/* ✅ Buttons Restored */}
+        {/* ✅ Buttons ABOVE Search Bar */}
         <div style={{
           textAlign: 'center',
           marginBottom: '2rem',
@@ -308,7 +289,24 @@ function Home() {
           </Link>
         </div>
 
-        {/* Ticket list */}
+        {/* ✅ Search Bar */}
+        <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+          <input
+            type="text"
+            placeholder="Search by ticket number, category, or issue..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '60%',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              border: '1px solid #ccc',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+
+        {/* Tickets */}
         <h2 style={{ color: '#2c3e50', marginBottom: '1rem' }}>
           {authority === 'admin'
             ? showMyTickets
