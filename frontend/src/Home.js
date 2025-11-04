@@ -14,9 +14,14 @@ function Home() {
   const [categories, setCategories] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [appliedCategories, setAppliedCategories] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [appliedUsers, setAppliedUsers] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
+  const userDropdownRef = useRef(null);
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -70,6 +75,9 @@ function Home() {
 
         const uniqueCategories = [...new Set(allTickets.map(t => t.category).filter(Boolean))];
         setCategories(uniqueCategories);
+
+        const uniqueUsers = [...new Set(allTickets.map(t => t.userName).filter(Boolean))];
+        setUsers(uniqueUsers);
       } catch (err) {
         console.error('Error fetching tickets:', err);
       }
@@ -83,6 +91,9 @@ function Home() {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setDropdownOpen(false);
       }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target)) {
+        setUserDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -94,33 +105,54 @@ function Home() {
     );
   };
 
-  const applyFilter = () => {
+  const handleUserChange = (u) => {
+    setSelectedUsers((prev) =>
+      prev.includes(u) ? prev.filter((c) => c !== u) : [...prev, u]
+    );
+  };
+
+  const applyCategoryFilter = () => {
     setAppliedCategories(selectedCategories);
     setDropdownOpen(false);
   };
 
-  const removeSingleFilter = (filter) => {
-    const updated = appliedCategories.filter(f => f !== filter);
-    setAppliedCategories(updated);
-    setSelectedCategories(updated);
+  const applyUserFilter = () => {
+    setAppliedUsers(selectedUsers);
+    setUserDropdownOpen(false);
+  };
+
+  const removeSingleFilter = (filter, type) => {
+    if (type === 'category') {
+      const updated = appliedCategories.filter(f => f !== filter);
+      setAppliedCategories(updated);
+      setSelectedCategories(updated);
+    } else {
+      const updated = appliedUsers.filter(f => f !== filter);
+      setAppliedUsers(updated);
+      setSelectedUsers(updated);
+    }
   };
 
   const clearFilters = () => {
     setSelectedCategories([]);
     setAppliedCategories([]);
+    setSelectedUsers([]);
+    setAppliedUsers([]);
   };
 
-  const filteredTickets =
+  let filteredTickets =
     authority === 'admin' && showMyTickets
       ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
       : tickets;
 
-  const categoryFilteredTickets =
-    appliedCategories.length === 0
-      ? filteredTickets
-      : filteredTickets.filter(t => appliedCategories.includes(t.category));
+  if (appliedCategories.length > 0) {
+    filteredTickets = filteredTickets.filter(t => appliedCategories.includes(t.category));
+  }
+  if (appliedUsers.length > 0) {
+    filteredTickets = filteredTickets.filter(t => appliedUsers.includes(t.userName));
+  }
 
-  const searchedTickets = categoryFilteredTickets.filter(t =>
+  const searchedTickets = filteredTickets.filter(t =>
     t.ticketNumber?.toString().includes(searchTerm.trim()) ||
     t.category?.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
     t.description?.toLowerCase().includes(searchTerm.trim().toLowerCase())
@@ -175,26 +207,27 @@ function Home() {
             )}
           </div>
 
-          {/* Filter Dropdown */}
-          <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
-            <button
-              onClick={() => setDropdownOpen(prev => !prev)}
-              style={{
-                background: '#3498db',
-                color: 'white',
-                border: 'none',
-                padding: '10px 18px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600'
-              }}
-            >
-              Filter by Category ▾
-            </button>
-
-            {dropdownOpen && (
-              <div
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: '1rem', position: 'relative' }}>
+            {/* Category Filter */}
+            <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
+              <button
+                onClick={() => setDropdownOpen(prev => !prev)}
                 style={{
+                  background: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Filter by Category ▾
+              </button>
+
+              {dropdownOpen && (
+                <div style={{
                   position: 'absolute',
                   right: 0,
                   marginTop: '8px',
@@ -205,54 +238,78 @@ function Home() {
                   zIndex: 10,
                   minWidth: '220px',
                   padding: '10px'
-                }}
-              >
-                {categories.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#7f8c8d', margin: 0 }}>No categories</p>
-                ) : (
-                  categories.map(cat => (
-                    <label
-                      key={cat}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        marginBottom: '6px',
-                        cursor: 'pointer',
-                        color: '#2c3e50'
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedCategories.includes(cat)}
-                        onChange={() => handleCategoryChange(cat)}
-                      />
-                      {cat}
-                    </label>
-                  ))
-                )}
+                }}>
+                  {categories.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#7f8c8d', margin: 0 }}>No categories</p>
+                  ) : (
+                    categories.map(cat => (
+                      <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <input type="checkbox" checked={selectedCategories.includes(cat)} onChange={() => handleCategoryChange(cat)} />
+                        {cat}
+                      </label>
+                    ))
+                  )}
+                  <button onClick={applyCategoryFilter} style={{
+                    background: '#27ae60', color: 'white', border: 'none', borderRadius: '6px',
+                    padding: '6px 10px', marginTop: '10px', width: '100%', cursor: 'pointer', fontWeight: '600'
+                  }}>Apply Filter</button>
+                </div>
+              )}
+            </div>
+
+            {/* ✅ User Filter (Admin Only) */}
+            {authority === 'admin' && (
+              <div ref={userDropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
                 <button
-                  onClick={applyFilter}
+                  onClick={() => setUserDropdownOpen(prev => !prev)}
                   style={{
-                    background: '#27ae60',
+                    background: '#16a085',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '6px',
-                    padding: '6px 10px',
-                    marginTop: '10px',
-                    width: '100%',
+                    padding: '10px 18px',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     fontWeight: '600'
                   }}
                 >
-                  Apply Filter
+                  Filter by User ▾
                 </button>
+
+                {userDropdownOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    right: 0,
+                    marginTop: '8px',
+                    background: 'white',
+                    border: '1px solid #ccc',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+                    zIndex: 10,
+                    minWidth: '220px',
+                    padding: '10px'
+                  }}>
+                    {users.length === 0 ? (
+                      <p style={{ textAlign: 'center', color: '#7f8c8d', margin: 0 }}>No users</p>
+                    ) : (
+                      users.map(u => (
+                        <label key={u} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <input type="checkbox" checked={selectedUsers.includes(u)} onChange={() => handleUserChange(u)} />
+                          {u}
+                        </label>
+                      ))
+                    )}
+                    <button onClick={applyUserFilter} style={{
+                      background: '#27ae60', color: 'white', border: 'none', borderRadius: '6px',
+                      padding: '6px 10px', marginTop: '10px', width: '100%', cursor: 'pointer', fontWeight: '600'
+                    }}>Apply Filter</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* ✅ Buttons ABOVE Search Bar */}
+        {/* Buttons */}
         <div style={{
           textAlign: 'center',
           marginBottom: '2rem',
@@ -289,7 +346,7 @@ function Home() {
           </Link>
         </div>
 
-        {/* ✅ Search Bar */}
+        {/* Search Bar */}
         <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
           <input
             type="text"
