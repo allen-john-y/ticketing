@@ -35,11 +35,14 @@ function Dashboard() {
           : `https://${backendUrl}/tickets?userId=${accounts[0].localAccountId}`;
 
         const res = await axios.get(endpoint);
-const closedTickets = res.data
-  .filter(t => t.status === 'Closed')
-  .sort((a, b) => b.ticketNumber - a.ticketNumber); // Sort descending by ticket number
-setTickets(closedTickets);
-setFilteredTickets(closedTickets);
+const closedTickets = res.data.filter(t => t.status === 'Closed');
+
+// Sort closed tickets in descending order for both admin and user
+const sortedClosed = closedTickets.sort((a, b) => b.ticketNumber - a.ticketNumber);
+
+setTickets(sortedClosed);
+setFilteredTickets(sortedClosed);
+
 
       } catch (err) {
         console.error(err);
