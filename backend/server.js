@@ -189,6 +189,22 @@ app.get("/tickets", async (req, res) => {
   }
 });
 
+// Revive a closed ticket
+app.put('/tickets/:id/revive', async (req, res) => {
+  try {
+    const ticket = await Ticket.findByIdAndUpdate(
+      req.params.id,
+      { status: 'Open' },
+      { new: true }
+    );
+    if (!ticket) return res.status(404).send('Ticket not found');
+    res.send(ticket);
+  } catch (err) {
+    res.status(500).send('Error reviving ticket');
+  }
+});
+
+
 // Get single ticket
 app.get("/tickets/:id", async (req, res) => {
   try {

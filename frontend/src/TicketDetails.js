@@ -11,8 +11,9 @@ function TicketDetails() {
   const [authority, setAuthority] = useState('basic'); // admin or basic
   const [loading, setLoading] = useState(false);
 
+  const backendBase = "https://ticketing-production-5334.up.railway.app";
+
   useEffect(() => {
-    // Determine if user is admin
     const fetchAuthority = async () => {
       if (!accounts[0]) return;
       try {
@@ -25,7 +26,7 @@ function TicketDetails() {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
         });
         const groups = groupsRes.data.value.map(g => g.displayName);
-        const isAdmin = groups.includes('GS_Fortingate_VPN'); // your admin group
+        const isAdmin = groups.includes('GS_Fortingate_VPN');
         setAuthority(isAdmin ? 'admin' : 'basic');
       } catch (err) {
         console.error(err);
@@ -34,8 +35,6 @@ function TicketDetails() {
 
     fetchAuthority();
   }, [accounts, instance]);
-
-  const backendBase = "https://ticketing-production-5334.up.railway.app";
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -63,6 +62,20 @@ function TicketDetails() {
     setLoading(false);
   };
 
+  const handleReviveTicket = async () => {
+    if (!window.confirm('Are you sure you want to revive this ticket?')) return;
+    setLoading(true);
+    try {
+      await axios.put(`${backendBase}/tickets/${id}/revive`);
+      alert('✅ Ticket revived successfully');
+      navigate('/', { state: { refresh: true } });
+    } catch (err) {
+      console.error(err);
+      alert('⚠️ Failed to revive ticket');
+    }
+    setLoading(false);
+  };
+
   if (!ticket) return <p>Loading...</p>;
 
   return (
@@ -81,6 +94,7 @@ function TicketDetails() {
       <p><strong>Priority:</strong> {ticket.priority}</p>
       <p><strong>Status:</strong> {ticket.status}</p>
 
+      {/* Admin can close open tickets */}
       {authority === 'admin' && ticket.status !== 'Closed' && (
         <button
           onClick={handleCloseTicket}
@@ -96,6 +110,26 @@ function TicketDetails() {
           }}
         >
           {loading ? 'Closing...' : 'Close Ticket'}
+        </button>
+      )}
+
+      {/* Both Admin & User can revive closed tickets */}
+      {ticket.status === 'Closed' && (
+        <button
+          onClick={handleReviveTicket}
+          disabled={loading}
+          style={{
+            marginTop: '1rem',
+            background: '#27ae60',
+            color: 'white',
+            padding: '12px 24px',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            marginLeft: authority === 'admin' ? '10px' : '0'
+          }}
+        >
+          {loading ? 'Reviving...' : 'Revive Ticket'}
         </button>
       )}
     </div>
