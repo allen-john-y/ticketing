@@ -88,6 +88,7 @@ function TicketDetails() {
       boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
     }}>
       <h1>{ticket.category}</h1>
+      <p><strong>Ticket Number:</strong> {ticket.ticketNumber}</p>
       <p><strong>Created by:</strong> {ticket.userName}</p>
       <p><strong>Email:</strong> {ticket.userEmail}</p>
       <p><strong>Description:</strong> {ticket.description}</p>
