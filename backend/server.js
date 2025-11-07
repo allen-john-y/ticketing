@@ -189,18 +189,21 @@ app.get("/tickets", async (req, res) => {
   }
 });
 
-// Revive a closed ticket
-app.put('/tickets/:id/revive', async (req, res) => {
+// Close ticket (accept PUT — matches frontend)
+app.put('/tickets/:id/close', async (req, res) => {
   try {
-    const ticket = await Ticket.findByIdAndUpdate(
-      req.params.id,
-      { status: 'Open' },
-      { new: true }
-    );
-    if (!ticket) return res.status(404).send('Ticket not found');
-    res.send(ticket);
-  } catch (err) {
-    res.status(500).send('Error reviving ticket');
+    console.log(`Received request to close ticket: ${req.params.id}`);
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
+
+    ticket.status = 'Closed';
+    await ticket.save();
+
+    console.log(`Ticket ${req.params.id} closed`);
+    res.json({ message: 'Ticket closed successfully' });
+  } catch (error) {
+    console.error('Error in /tickets/:id/close:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
