@@ -29,9 +29,9 @@ function Login() {
         });
       } catch (popupError) {
         console.warn('⚠️ Popup login failed, trying redirect fallback...');
-        loginResponse = await instance.loginRedirect({
-          scopes: ['User.Read'],
-        });
+        // loginResponse = await instance.loginRedirect({
+        //   scopes: ['User.Read'],
+        // });
       }
 
       console.log('✅ Login success. Accounts:', instance.getAllAccounts());
