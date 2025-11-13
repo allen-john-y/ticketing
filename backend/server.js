@@ -50,9 +50,9 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log("MongoDB connected");
+    console.log("✅ MongoDB connected");
   } catch (err) {
-    console.error("MongoDB connection error:", err.message);
+    console.error("❌ MongoDB connection error:", err.message);
     process.exit(1);
   }
 };
@@ -71,6 +71,8 @@ const ticketSchema = new mongoose.Schema(
     status: String,
     closedBy: String,
     closedAt: Date,
+    reopenedBy: String,
+    reopenedAt: Date,
   },
   { timestamps: true }
 );
@@ -118,33 +120,23 @@ const getGraphToken = async () => {
   return data.access_token;
 };
 
-/**
- * sendEmail
- * @param {string|string[]} to - single email or array of to addresses
- * @param {string} subject
- * @param {string} bodyText - plain text body (you may put HTML if you want and set contentType to "HTML")
- * @param {string|string[]} [cc] - optional cc
- */
+// ---------------------- Send Email ----------------------
 const sendEmail = async (to, subject, bodyText, cc) => {
   try {
     const token = await getGraphToken();
-
-    // normalize recipients
-    const norm = (addr) => {
+    const normalize = (addr) => {
       if (!addr) return [];
-      if (Array.isArray(addr)) return addr.map(a => ({ emailAddress: { address: a } }));
+      if (Array.isArray(addr))
+        return addr.map((a) => ({ emailAddress: { address: a } }));
       return [{ emailAddress: { address: addr } }];
     };
 
     const mailBody = {
       message: {
-        subject: subject,
-        body: {
-          contentType: "Text",
-          content: bodyText.trim(),
-        },
-        toRecipients: norm(to),
-        ccRecipients: norm(cc),
+        subject,
+        body: { contentType: "Text", content: bodyText.trim() },
+        toRecipients: normalize(to),
+        ccRecipients: normalize(cc),
       },
       saveToSentItems: "true",
     };
@@ -164,29 +156,26 @@ const sendEmail = async (to, subject, bodyText, cc) => {
     );
 
     if (res.status === 202) {
-      console.log(`✅ SENT via Graph → to: ${Array.isArray(to) ? to.join(",") : to} cc: ${cc || ""}`);
-      return { success: true };
+      console.log(`📧 Sent to: ${Array.isArray(to) ? to.join(", ") : to} | CC: ${cc || "-"}`);
+      return true;
     } else {
-      const errText = await res.text();
-      console.error(`❌ Graph send failed → ${Array.isArray(to) ? to.join(",") : to}:`, errText);
-      return { success: false, error: errText };
+      console.error("❌ Graph send failed:", await res.text());
+      return false;
     }
   } catch (err) {
-    console.error(`❌ Failed to send → ${Array.isArray(to) ? to.join(",") : to}:`, err.message);
-    return { success: false, error: err.message };
+    console.error("❌ Failed to send mail:", err.message);
+    return false;
   }
 };
 
-// ---------------------- Azure Helpers (Password Reset) ---------------------
+// ---------------------- Azure Password Reset ----------------------
 const getAccessToken = async () => {
-  // kept for other Azure operations (like user update). Uses AZURE_AUTHORITY env.
-  const url = `${process.env.AZURE_AUTHORITY || `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}`}/oauth2/v2.0/token`;
+  const url = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
   params.append("client_id", process.env.AZURE_CLIENT_ID);
   params.append("scope", "https://graph.microsoft.com/.default");
   params.append("client_secret", process.env.AZURE_CLIENT_SECRET);
   params.append("grant_type", "client_credentials");
-
   const res = await fetch(url, { method: "POST", body: params });
   const data = await res.json();
   if (!res.ok) throw new Error(JSON.stringify(data));
@@ -195,8 +184,7 @@ const getAccessToken = async () => {
 
 const resetAzurePassword = async (userId) => {
   const token = await getAccessToken();
-  const newPassword = Math.random().toString(36).slice(-10) + "A1!"; // simple generator
-
+  const newPassword = Math.random().toString(36).slice(-10) + "A1!";
   const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userId)}`, {
     method: "PATCH",
     headers: {
@@ -211,85 +199,34 @@ const resetAzurePassword = async (userId) => {
     }),
     agent: new https.Agent({ rejectUnauthorized: false }),
   });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(`Azure reset failed: ${JSON.stringify(err)}`);
-  }
+  if (!res.ok) throw new Error(`Azure reset failed: ${await res.text()}`);
   return newPassword;
 };
 
 // ---------------------- Routes ----------------------------
 
-// Health check
-app.get("/", (req, res) => {
-  res.send("Sandeza IT Ticket API – Running (Azure Graph Mail)");
-});
+// Health Check
+app.get("/", (req, res) => res.send("✅ Sandeza Helpdesk API Running"));
 
-// Get all tickets
+// Get Tickets
 app.get("/tickets", async (req, res) => {
   try {
-    const { userId } = req.query;
-    const filter = userId ? { userId } : {};
+    const filter = req.query.userId ? { userId: req.query.userId } : {};
     const tickets = await Ticket.find(filter).sort({ ticketNumber: 1 });
     res.json(tickets);
   } catch (err) {
-    console.error("Error fetching tickets:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// Close ticket (manual close)
-app.put("/tickets/:id/close", async (req, res) => {
-  try {
-    const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
-
-    const closedBy = req.body.closedBy || "IT Head"; // frontend should send closer's name
-    ticket.status = "Closed";
-    ticket.closedBy = closedBy;
-    ticket.closedAt = new Date();
-    await ticket.save();
-
-    // notify creator and closer
-    const to = ticket.userEmail;
-    const subject = `[Ticket #${ticket.ticketNumber}] Closed by ${closedBy}`;
-    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    const body = `Ticket #${ticket.ticketNumber} has been closed by ${closedBy}\nCategory: ${ticket.category}\nClosed On (IST): ${nowIST}`;
-
-    await sendEmail(to, subject, body, ticket.closedByEmail || undefined);
-
-    console.log(`Ticket ${req.params.id} closed`);
-    res.json({ message: "Ticket closed successfully" });
-  } catch (error) {
-    console.error("Error in /tickets/:id/close:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Get single ticket
-app.get("/tickets/:id", async (req, res) => {
-  try {
-    const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-    res.json(ticket);
-  } catch (err) {
-    console.error("Error fetching ticket:", err.message);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// Create new ticket
+// Create Ticket
 app.post("/tickets", async (req, res) => {
   try {
     const { category, description, priority, userId, userName, userEmail } = req.body;
+    if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
-    if (!deptEmails[category])
-      return res.status(400).json({ error: "Invalid category" });
-
-    // Increment counter
     ticketCounter++;
-    const ticket = new Ticket({
+    const ticket = await Ticket.create({
       ticketNumber: ticketCounter,
       userId,
       userName,
@@ -299,93 +236,50 @@ app.post("/tickets", async (req, res) => {
       priority,
       status: "Open",
     });
-    await ticket.save();
 
-    // Prepare common info
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    const subjectUser = `Your ticket #${ticketCounter} has been created`;
-    const bodyUser = `
-Hello ${userName},
+    const itHead = process.env.IT_HEAD_EMAIL;
 
-Your support ticket has been successfully created.
+    // Notify Ticket Creator
+    await sendEmail(
+      userEmail,
+      `Ticket #${ticketCounter} Created`,
+      `Hi ${userName},\n\nYour ticket has been created.\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}`
+    );
 
-Ticket Details:
-- Ticket Number: ${ticketCounter}
-- Category: ${category}
-- Priority: ${priority}
-- Description: ${description}
-- Created On (IST): ${nowIST}
+    // Notify Department
+    await sendEmail(
+      deptEmails[category],
+      `[TICKET #${ticketCounter}] ${category}`,
+      `New Ticket #${ticketCounter}\nCreated By: ${userName}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}`,
+      itHead
+    );
 
-Our IT team will get back to you soon.
-
-Regards,
-IT Support Team
-    `;
-
-    // Send confirmation to user
-    if (userEmail) {
-      await sendEmail(userEmail, subjectUser, bodyUser);
-    }
-
-    // Notify department + CC IT Head
-    const deptTo = deptEmails[category];
-    const subjectDept = `[TICKET #${ticketCounter}] ${category}`;
-    const bodyDept = `
-New Support Ticket #${ticketCounter}
-
-Created by: ${userName}
-Category: ${category}
-Priority: ${priority}
-Description: ${description}
-Created On (IST): ${nowIST}
-
-Reply to resolve.
-    `;
-
-    // If you have an IT head email in env, use it as CC
-    const itHeadEmail = process.env.IT_HEAD_EMAIL || undefined;
-    await sendEmail(deptTo, subjectDept, bodyDept, itHeadEmail);
-
-    // Auto password reset for specific category
+    // Auto Password Reset Handling
     if (category === "Password Reset") {
       try {
         const newPassword = await resetAzurePassword(userId);
 
-        const subjectPwd = `[TICKET #${ticketCounter}] Password Reset Completed`;
-        const bodyPwd = `
-Hello ${userName},
+        await sendEmail(
+          userEmail,
+          `[TICKET #${ticketCounter}] Password Reset Completed`,
+          `Hi ${userName},\n\nYour password has been reset.\nNew Password: ${newPassword}\nTicket: ${ticketCounter}\nTime: ${nowIST}`,
+          itHead
+        );
 
-Your password has been reset successfully.
+        await sendEmail(
+          deptEmails[category],
+          `[TICKET #${ticketCounter}] Password Reset Completed`,
+          `Password reset completed for ${userName} (${userEmail}).\nNew Password: ${newPassword}\nTime: ${nowIST}`,
+          itHead
+        );
 
-Ticket Number: ${ticketCounter}
-New Password: ${newPassword}
-Reset By: IT Automation System
-Timestamp (IST): ${nowIST}
-
-(This ticket will be automatically closed after password reset.)
-        `;
-
-        // Send email to user and CC IT head (single call using cc)
-        await sendEmail(userEmail, subjectPwd, bodyPwd, itHeadEmail);
-
-        // Also send to dept (IT team) notifying reset
-        const bodyDeptPwd = `
-Password reset completed for Ticket #${ticketCounter}
-User: ${userName} (${userEmail})
-New Password: ${newPassword}
-Timestamp (IST): ${nowIST}
-        `;
-        await sendEmail(deptTo, `[TICKET #${ticketCounter}] Password Reset Notification`, bodyDeptPwd, itHeadEmail);
-
-        // Auto-close ticket only after mails sent
         ticket.status = "Closed";
         ticket.closedBy = "IT Automation System";
         ticket.closedAt = new Date();
         await ticket.save();
-        console.log(`Ticket #${ticketCounter} auto-closed after password reset`);
       } catch (err) {
-        console.error(`Password reset failed for ${userId}:`, err.message);
-        // leave ticket open for manual handling
+        console.error("Password reset failed:", err.message);
       }
     }
 
@@ -396,8 +290,65 @@ Timestamp (IST): ${nowIST}
   }
 });
 
+// Close Ticket
+app.put("/tickets/:id/close", async (req, res) => {
+  try {
+    const { closedBy } = req.body;
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    ticket.status = "Closed";
+    ticket.closedBy = closedBy || "IT Head";
+    ticket.closedAt = new Date();
+    await ticket.save();
+
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    await sendEmail(
+      ticket.userEmail,
+      `[TICKET #${ticket.ticketNumber}] Closed`,
+      `Ticket #${ticket.ticketNumber} has been closed by ${closedBy}\nCategory: ${ticket.category}\nClosed On: ${nowIST}`,
+      itHead
+    );
+
+    res.json({ message: "Ticket closed successfully" });
+  } catch (err) {
+    console.error("Error closing ticket:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Reopen Ticket
+app.put("/tickets/:id/reopen", async (req, res) => {
+  try {
+    const { reopenedBy } = req.body;
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    ticket.status = "Reopened";
+    ticket.reopenedBy = reopenedBy;
+    ticket.reopenedAt = new Date();
+    await ticket.save();
+
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const dept = deptEmails[ticket.category];
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    const body = `Ticket #${ticket.ticketNumber} (${ticket.category}) has been reopened by ${reopenedBy}\nTime: ${nowIST}`;
+
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Reopened`, body, itHead);
+    await sendEmail(dept, `[TICKET #${ticket.ticketNumber}] Reopened`, body, itHead);
+
+    res.json({ message: "Ticket reopened successfully" });
+  } catch (err) {
+    console.error("Error reopening ticket:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`Server running on port ${PORT} (Azure Graph Mail Enabled)`)
+  console.log(`🚀 Server running on port ${PORT} (Graph Mail Enabled)`)
 );
