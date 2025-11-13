@@ -6,7 +6,6 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const fetch = require("node-fetch");
 const https = require("https");
-const nodemailer = require("nodemailer");
 require("dotenv").config();
 
 // ---------------------- App Setup ------------------------
@@ -70,6 +69,8 @@ const ticketSchema = new mongoose.Schema(
     description: String,
     priority: String,
     status: String,
+    closedBy: String,
+    closedAt: Date,
   },
   { timestamps: true }
 );
@@ -88,36 +89,6 @@ const loadCounter = async () => {
 };
 loadCounter();
 
-// ---------------------- Nodemailer (Gmail OAuth2) ----------------------
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    type: "OAuth2",
-    user: process.env.EMAIL_USER,
-    clientId: process.env.GMAIL_CLIENT_ID,
-    clientSecret: process.env.GMAIL_CLIENT_SECRET,
-    refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-    accessToken: process.env.GMAIL_ACCESS_TOKEN,
-  },
-});
-
-// ---------------------- EMAIL HELPER ----------------------
-const sendEmail = async (to, subject, text) => {
-  try {
-    const info = await transporter.sendMail({
-      from: `"IT Ticket Portal" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      text: text.trim(),
-    });
-    console.log(`DELIVERED (${info.messageId}) → ${to}`);
-    return { success: true };
-  } catch (err) {
-    console.error(`FAILED to send → ${to}:`, err.message);
-    return { success: false, error: err.message };
-  }
-};
-
 // ---------------------- Department Emails -----------------
 const deptEmails = {
   "Password Reset": "allenj@sandeza-inc.com",
@@ -128,9 +99,88 @@ const deptEmails = {
   "Employee Onboarding": "allenj@sandeza-inc.com",
 };
 
-// ---------------------- Azure Helpers ---------------------
+// ---------------------- Azure Graph: Token + Mail ----------------------
+const getGraphToken = async () => {
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const params = new URLSearchParams();
+  params.append("client_id", process.env.AZURE_CLIENT_ID);
+  params.append("scope", "https://graph.microsoft.com/.default");
+  params.append("client_secret", process.env.AZURE_CLIENT_SECRET);
+  params.append("grant_type", "client_credentials");
+
+  const res = await fetch(url, { method: "POST", body: params });
+  const data = await res.json();
+
+  if (!res.ok || !data.access_token) {
+    throw new Error(`Failed to get token: ${JSON.stringify(data)}`);
+  }
+  return data.access_token;
+};
+
+/**
+ * sendEmail
+ * @param {string|string[]} to - single email or array of to addresses
+ * @param {string} subject
+ * @param {string} bodyText - plain text body (you may put HTML if you want and set contentType to "HTML")
+ * @param {string|string[]} [cc] - optional cc
+ */
+const sendEmail = async (to, subject, bodyText, cc) => {
+  try {
+    const token = await getGraphToken();
+
+    // normalize recipients
+    const norm = (addr) => {
+      if (!addr) return [];
+      if (Array.isArray(addr)) return addr.map(a => ({ emailAddress: { address: a } }));
+      return [{ emailAddress: { address: addr } }];
+    };
+
+    const mailBody = {
+      message: {
+        subject: subject,
+        body: {
+          contentType: "Text",
+          content: bodyText.trim(),
+        },
+        toRecipients: norm(to),
+        ccRecipients: norm(cc),
+      },
+      saveToSentItems: "true",
+    };
+
+    const sender = process.env.AZURE_SENDER_EMAIL || "helpdesk@sandeza-inc.com";
+
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(mailBody),
+      }
+    );
+
+    if (res.status === 202) {
+      console.log(`✅ SENT via Graph → to: ${Array.isArray(to) ? to.join(",") : to} cc: ${cc || ""}`);
+      return { success: true };
+    } else {
+      const errText = await res.text();
+      console.error(`❌ Graph send failed → ${Array.isArray(to) ? to.join(",") : to}:`, errText);
+      return { success: false, error: errText };
+    }
+  } catch (err) {
+    console.error(`❌ Failed to send → ${Array.isArray(to) ? to.join(",") : to}:`, err.message);
+    return { success: false, error: err.message };
+  }
+};
+
+// ---------------------- Azure Helpers (Password Reset) ---------------------
 const getAccessToken = async () => {
-  const url = `${process.env.AZURE_AUTHORITY}/oauth2/v2.0/token`;
+  // kept for other Azure operations (like user update). Uses AZURE_AUTHORITY env.
+  const url = `${process.env.AZURE_AUTHORITY || `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}`}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
   params.append("client_id", process.env.AZURE_CLIENT_ID);
   params.append("scope", "https://graph.microsoft.com/.default");
@@ -145,9 +195,9 @@ const getAccessToken = async () => {
 
 const resetAzurePassword = async (userId) => {
   const token = await getAccessToken();
-  const newPassword = Math.random().toString(36).slice(-10) + "A1!";
+  const newPassword = Math.random().toString(36).slice(-10) + "A1!"; // simple generator
 
-  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${userId}`, {
+  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userId)}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -173,7 +223,7 @@ const resetAzurePassword = async (userId) => {
 
 // Health check
 app.get("/", (req, res) => {
-  res.send("Sandeza IT Ticket API – Running on Railway (Gmail OAuth2)");
+  res.send("Sandeza IT Ticket API – Running (Azure Graph Mail)");
 });
 
 // Get all tickets
@@ -189,24 +239,33 @@ app.get("/tickets", async (req, res) => {
   }
 });
 
-// Close ticket (accept PUT — matches frontend)
-app.put('/tickets/:id/close', async (req, res) => {
+// Close ticket (manual close)
+app.put("/tickets/:id/close", async (req, res) => {
   try {
-    console.log(`Received request to close ticket: ${req.params.id}`);
     const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    ticket.status = 'Closed';
+    const closedBy = req.body.closedBy || "IT Head"; // frontend should send closer's name
+    ticket.status = "Closed";
+    ticket.closedBy = closedBy;
+    ticket.closedAt = new Date();
     await ticket.save();
 
+    // notify creator and closer
+    const to = ticket.userEmail;
+    const subject = `[Ticket #${ticket.ticketNumber}] Closed by ${closedBy}`;
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const body = `Ticket #${ticket.ticketNumber} has been closed by ${closedBy}\nCategory: ${ticket.category}\nClosed On (IST): ${nowIST}`;
+
+    await sendEmail(to, subject, body, ticket.closedByEmail || undefined);
+
     console.log(`Ticket ${req.params.id} closed`);
-    res.json({ message: 'Ticket closed successfully' });
+    res.json({ message: "Ticket closed successfully" });
   } catch (error) {
-    console.error('Error in /tickets/:id/close:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error in /tickets/:id/close:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
-
 
 // Get single ticket
 app.get("/tickets/:id", async (req, res) => {
@@ -242,12 +301,10 @@ app.post("/tickets", async (req, res) => {
     });
     await ticket.save();
 
-    // Send confirmation to user
-    if (userEmail) {
-      await sendEmail(
-        userEmail,
-        `Your ticket #${ticketCounter} has been created`,
-        `
+    // Prepare common info
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const subjectUser = `Your ticket #${ticketCounter} has been created`;
+    const bodyUser = `
 Hello ${userName},
 
 Your support ticket has been successfully created.
@@ -257,57 +314,78 @@ Ticket Details:
 - Category: ${category}
 - Priority: ${priority}
 - Description: ${description}
+- Created On (IST): ${nowIST}
 
 Our IT team will get back to you soon.
 
 Regards,
 IT Support Team
-        `
-      );
+    `;
+
+    // Send confirmation to user
+    if (userEmail) {
+      await sendEmail(userEmail, subjectUser, bodyUser);
     }
 
-    // Notify department
+    // Notify department + CC IT Head
     const deptTo = deptEmails[category];
-    await sendEmail(
-      deptTo,
-      `[TICKET #${ticketCounter}] ${category}`,
-      `
+    const subjectDept = `[TICKET #${ticketCounter}] ${category}`;
+    const bodyDept = `
 New Support Ticket #${ticketCounter}
 
 Created by: ${userName}
 Category: ${category}
 Priority: ${priority}
 Description: ${description}
+Created On (IST): ${nowIST}
 
 Reply to resolve.
-      `
-    );
+    `;
+
+    // If you have an IT head email in env, use it as CC
+    const itHeadEmail = process.env.IT_HEAD_EMAIL || undefined;
+    await sendEmail(deptTo, subjectDept, bodyDept, itHeadEmail);
 
     // Auto password reset for specific category
     if (category === "Password Reset") {
       try {
         const newPassword = await resetAzurePassword(userId);
 
-        await sendEmail(
-          userEmail,
-          `Your password has been reset`,
-          `
+        const subjectPwd = `[TICKET #${ticketCounter}] Password Reset Completed`;
+        const bodyPwd = `
 Hello ${userName},
 
-Your password has been reset.
+Your password has been reset successfully.
+
+Ticket Number: ${ticketCounter}
 New Password: ${newPassword}
-Please change it on next login.
+Reset By: IT Automation System
+Timestamp (IST): ${nowIST}
 
-Regards,
-IT Support Team
-          `
-        );
+(This ticket will be automatically closed after password reset.)
+        `;
 
+        // Send email to user and CC IT head (single call using cc)
+        await sendEmail(userEmail, subjectPwd, bodyPwd, itHeadEmail);
+
+        // Also send to dept (IT team) notifying reset
+        const bodyDeptPwd = `
+Password reset completed for Ticket #${ticketCounter}
+User: ${userName} (${userEmail})
+New Password: ${newPassword}
+Timestamp (IST): ${nowIST}
+        `;
+        await sendEmail(deptTo, `[TICKET #${ticketCounter}] Password Reset Notification`, bodyDeptPwd, itHeadEmail);
+
+        // Auto-close ticket only after mails sent
         ticket.status = "Closed";
+        ticket.closedBy = "IT Automation System";
+        ticket.closedAt = new Date();
         await ticket.save();
-        console.log(`Ticket #${ticketCounter} auto-closed`);
+        console.log(`Ticket #${ticketCounter} auto-closed after password reset`);
       } catch (err) {
         console.error(`Password reset failed for ${userId}:`, err.message);
+        // leave ticket open for manual handling
       }
     }
 
@@ -321,5 +399,5 @@ IT Support Team
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`Server running on port ${PORT} (Railway + Gmail OAuth2)`)
+  console.log(`Server running on port ${PORT} (Azure Graph Mail Enabled)`)
 );
