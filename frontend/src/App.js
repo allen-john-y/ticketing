@@ -66,10 +66,14 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<CreateTicket />} />
-          <Route path="/ticket/:id" element={<TicketDetails />} />
-          <Route path="/dashboard" element={<Dashboard />} /> {/* New route */}
+
+          {/* ✔ UPDATED: now reading ticketNumber instead of MongoDB ID */}
+          <Route path="/ticket/:ticketNumber" element={<TicketDetails />} />
+
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </AuthenticatedTemplate>
+
       <UnauthenticatedTemplate>
         <Login login={handleLogin} />
       </UnauthenticatedTemplate>

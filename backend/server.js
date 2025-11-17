@@ -233,6 +233,21 @@ app.get("/tickets/:id", async (req, res) => {
 });
 
 
+// Get Ticket by Ticket Number (clean URL support)
+app.get("/tickets/number/:ticketNumber", async (req, res) => {
+  try {
+    const ticket = await Ticket.findOne({ ticketNumber: req.params.ticketNumber });
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    res.json(ticket);
+  } catch (err) {
+    console.error("Error fetching ticket by number:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+
 // Create Ticket
 app.post("/tickets", async (req, res) => {
   try {

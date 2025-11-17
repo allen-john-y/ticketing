@@ -4,7 +4,7 @@ import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 
 function TicketDetails() {
-  const { id } = useParams();
+  const { id } = useParams();   // THIS id is now ticketNumber
   const navigate = useNavigate();
   const { accounts, instance } = useMsal();
   const [ticket, setTicket] = useState(null);
@@ -42,7 +42,8 @@ function TicketDetails() {
   useEffect(() => {
     const fetchTicket = async () => {
       try {
-        const res = await axios.get(`${backendBase}/tickets/${id}`);
+        // 🔥 CLEAN URL FETCH
+        const res = await axios.get(`${backendBase}/tickets/number/${id}`);
         setTicket(res.data);
       } catch (err) {
         console.error(err);
@@ -58,9 +59,9 @@ function TicketDetails() {
 
     try {
       if (modal.action === "close") {
-        await axios.put(`${backendBase}/tickets/${id}/close`);
+        await axios.put(`${backendBase}/tickets/${ticket._id}/close`);
       } else if (modal.action === "revive") {
-        await axios.put(`${backendBase}/tickets/${id}/revive`);
+        await axios.put(`${backendBase}/tickets/${ticket._id}/revive`);
       }
 
       setModal({ open: false, action: null });

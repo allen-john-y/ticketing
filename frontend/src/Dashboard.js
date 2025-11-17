@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 function Dashboard() {
@@ -9,6 +9,7 @@ function Dashboard() {
   const [filteredTickets, setFilteredTickets] = useState([]);
   const [authority, setAuthority] = useState('basic');
   const [showOnlyMine, setShowOnlyMine] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -29,20 +30,18 @@ function Dashboard() {
 
         const backendUrl = 'https://ticketing-production-5334.up.railway.app';
 
-        // ✅ Updated endpoints with Render URL
         const endpoint = isAdmin
           ? `${backendUrl}/tickets`
           : `${backendUrl}/tickets?userId=${accounts[0].localAccountId}`;
 
         const res = await axios.get(endpoint);
-const closedTickets = res.data.filter(t => t.status === 'Closed');
 
-// Sort closed tickets in descending order for both admin and user
-const sortedClosed = closedTickets.sort((a, b) => b.ticketNumber - a.ticketNumber);
+        const closedTickets = res.data.filter(t => t.status === 'Closed');
 
-setTickets(sortedClosed);
-setFilteredTickets(sortedClosed);
+        const sortedClosed = closedTickets.sort((a, b) => b.ticketNumber - a.ticketNumber);
 
+        setTickets(sortedClosed);
+        setFilteredTickets(sortedClosed);
 
       } catch (err) {
         console.error(err);
@@ -59,6 +58,15 @@ setFilteredTickets(sortedClosed);
       setFilteredTickets(mine);
     } else {
       setFilteredTickets(tickets);
+    }
+  };
+
+  // 🔥 SHOW YES/NO ALERT BEFORE OPENING TICKET DETAILS
+  const handleTicketOpen = (e, id) => {
+    e.preventDefault(); // stop default link
+    const ok = window.confirm("Do you want to open this ticket?");
+    if (ok) {
+      navigate(`/ticket/${id}`);
     }
   };
 
@@ -87,7 +95,12 @@ setFilteredTickets(sortedClosed);
       ) : (
         <div style={{ display: 'grid', gap: '1rem' }}>
           {filteredTickets.map(ticket => (
-            <Link key={ticket._id} to={`/ticket/${ticket._id}`} style={{ textDecoration: 'none' }}>
+            <Link
+              key={ticket._id}
+              to={`/ticket/${ticket._id}`}
+              style={{ textDecoration: 'none' }}
+              onClick={(e) => handleTicketOpen(e, ticket._id)}   // <-- ALERT ADDED HERE
+            >
               <div
                 style={{
                   background: '#f8f9fa',
