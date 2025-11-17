@@ -7,6 +7,7 @@ import Home from './Home';
 import CreateTicket from './CreateTicket';
 import TicketDetails from './TicketDetails';
 import Dashboard from './Dashboard';
+import FullProfile from './FullProfile'; // ← Import the full profile modal
 
 const pca = new PublicClientApplication({
   auth: {
@@ -20,6 +21,7 @@ const pca = new PublicClientApplication({
 function Header({ logout }) {
   const { accounts } = useMsal();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [fullProfileOpen, setFullProfileOpen] = useState(false);
   const profileRef = useRef(null);
 
   useEffect(() => {
@@ -44,58 +46,63 @@ function Header({ logout }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         {/* Profile Button */}
-<div ref={profileRef} style={{ position: 'relative' }}>
-  <button
-    onClick={() => setProfileOpen(prev => !prev)}
-    style={{
-      padding: '0.6rem 1.2rem',
-      borderRadius: '5px',
-      border: 'none',
-      background: '#3498db',
-      color: 'white',
-      cursor: 'pointer',
-      fontWeight: '500',
-      whiteSpace: 'nowrap',
-      fontSize: '0.95rem' // slightly bigger button text
-    }}
-  >
-    👤 View Profile
-  </button>
+        <div ref={profileRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setProfileOpen(prev => !prev)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '0.5rem 1rem',
+              borderRadius: '5px',
+              border: 'none',
+              background: '#3498db',
+              color: 'white',
+              cursor: 'pointer',
+              fontWeight: '500',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            👤 {accounts[0]?.name || accounts[0]?.username}
+          </button>
 
-  {profileOpen && (
-    <div style={{
-      position: 'absolute',
-      right: 0,
-      marginTop: '6px',
-      background: 'white',
-      border: '1px solid #ccc',
-      borderRadius: '8px',
-      boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-      padding: '16px', // increased padding
-      width: '260px',   // increased width
-      zIndex: 10
-    }}>
-      <p style={{ margin: '6px 0', fontWeight: '600', fontSize: '0.95rem' }}>Name: {accounts[0]?.name}</p>
-      <p style={{ margin: '6px 0', fontSize: '0.9rem' }}>Email: {accounts[0]?.username}</p>
-      <button style={{
-        marginTop: '10px',
-        width: '100%',
-        padding: '8px 0',
-        background: '#3498db',
-        color: 'white',
-        border: 'none',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        fontWeight: '600',
-        fontSize: '0.95rem',
-        whiteSpace: 'nowrap'
-      }}>
-        View Full Profile
-      </button>
-    </div>
-  )}
-</div>
-
+          {profileOpen && (
+            <div style={{
+              position: 'absolute',
+              right: 0,
+              marginTop: '6px',
+              background: 'white',
+              border: '1px solid #ccc',
+              borderRadius: '8px',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+              padding: '12px',
+              width: '220px',
+              zIndex: 10
+            }}>
+              <p style={{ margin: '4px 0', fontWeight: '600' }}>Name: {accounts[0]?.name || accounts[0]?.username}</p>
+              <p style={{ margin: '4px 0' }}>Email: {accounts[0]?.username}</p>
+              <button
+                onClick={() => {
+                  setFullProfileOpen(true);
+                  setProfileOpen(false); // close small menu
+                }}
+                style={{
+                  marginTop: '8px',
+                  width: '100%',
+                  padding: '6px 0',
+                  background: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                View Full Profile
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Logout Button */}
         <button onClick={logout} style={{
@@ -105,6 +112,9 @@ function Header({ logout }) {
           🚪 Logout
         </button>
       </div>
+
+      {/* Full Profile Modal */}
+      {fullProfileOpen && <FullProfile onClose={() => setFullProfileOpen(false)} />}
     </header>
   );
 }
