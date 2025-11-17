@@ -74,10 +74,10 @@ function Header({ logout }) {
               borderRadius: '8px',
               boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
               padding: '12px',
-              width: '220px',
+              width: '260px',
               zIndex: 10
             }}>
-              <p style={{ margin: '4px 0', fontWeight: '600' }}>Name: {accounts[0]?.name || accounts[0]?.username}</p>
+              <p style={{ margin: '4px 0', fontWeight: '600' }}>Name: View Profile</p>
               <p style={{ margin: '4px 0' }}>Email: {accounts[0]?.username}</p>
               <button style={{
                 marginTop: '8px',
