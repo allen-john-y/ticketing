@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import axios from 'axios'; // For Graph API calls
+import axios from 'axios';
 import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
@@ -21,6 +21,7 @@ const pca = new PublicClientApplication({
 function Header({ logout }) {
   const { accounts, instance } = useMsal();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [fullProfileOpen, setFullProfileOpen] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const profileRef = useRef(null);
 
@@ -36,19 +37,19 @@ function Header({ logout }) {
 
   const fetchUserInfo = async () => {
     try {
-      const account = accounts[0];
+      if (!accounts[0]) return;
       const response = await instance.acquireTokenSilent({
+        account: accounts[0],
         scopes: ['User.Read.All']
       });
 
       const token = response.accessToken;
-      const res = await axios.get(`https://graph.microsoft.com/v1.0/users/${account.username}`, {
+      const res = await axios.get(`https://graph.microsoft.com/v1.0/me?$select=id,displayName,jobTitle,department,mobilePhone,mail,streetAddress,state,postalCode`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       setUserInfo(res.data);
-      setProfileOpen(true);
-
+      setFullProfileOpen(true);
     } catch (error) {
       console.error('Error fetching user info:', error);
     }
@@ -65,76 +66,138 @@ function Header({ logout }) {
   };
 
   return (
-    <header style={{
-      background: 'white', padding: '1rem 2rem', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>🏢 SANDEZA INC</h1>
-        <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '1rem' }}>IT Ticket Portal</h2>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        {/* Profile Button */}
-        <div ref={profileRef} style={{ position: 'relative' }}>
-          <button
-            onClick={fetchUserInfo}
-            style={{
-              ...buttonStyle,
-              background: '#3498db',
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}
-          >
-            👤 View Profile
-          </button>
-
-          {profileOpen && userInfo && (
-            <div style={{
-              position: 'absolute',
-              right: 0,
-              marginTop: '6px',
-              background: 'white',
-              border: '1px solid #ccc',
-              borderRadius: '8px',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-              padding: '16px',
-              width: '300px',
-              zIndex: 10
-            }}>
-              {/* Close button */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button onClick={() => setProfileOpen(false)} style={{
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}>✖</button>
-              </div>
-
-              {/* User Info */}
-              <p style={{ margin: '6px 0', fontWeight: '600' }}>Name: {userInfo.displayName}</p>
-              <p style={{ margin: '6px 0' }}>Email: {userInfo.mail || userInfo.userPrincipalName}</p>
-              <p style={{ margin: '6px 0' }}>Mobile: {userInfo.mobilePhone || 'N/A'}</p>
-              <p style={{ margin: '6px 0' }}>Department: {userInfo.department || 'N/A'}</p>
-              <p style={{ margin: '6px 0' }}>Employee ID: {userInfo.employeeId || 'N/A'}</p>
-            </div>
-          )}
+    <>
+      <header style={{
+        background: 'white', padding: '1rem 2rem', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>🏢 SANDEZA INC</h1>
+          <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '1rem' }}>IT Ticket Portal</h2>
         </div>
 
-        {/* Logout Button */}
-        <button onClick={logout} style={{
-          ...buttonStyle,
-          background: '#e74c3c',
-          color: 'white'
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {/* Profile Button */}
+          <div ref={profileRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setProfileOpen(prev => !prev)}
+              style={{
+                ...buttonStyle,
+                background: '#3498db',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              👤 View Profile
+            </button>
+
+            {profileOpen && (
+              <div style={{
+                position: 'absolute',
+                right: 0,
+                marginTop: '6px',
+                background: 'white',
+                border: '1px solid #ccc',
+                borderRadius: '8px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+                padding: '16px',
+                width: '260px',
+                zIndex: 10
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={() => setProfileOpen(false)} style={{
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}>✖</button>
+                </div>
+
+                <p style={{ margin: '6px 0', fontWeight: '600' }}>Name: {accounts[0]?.name}</p>
+                <p style={{ margin: '6px 0' }}>Email: {accounts[0]?.username}</p>
+                <p style={{ margin: '6px 0' }}>Mobile: N/A</p>
+                <p style={{ margin: '6px 0' }}>Department: N/A</p>
+                <p style={{ margin: '6px 0' }}>Employee ID: N/A</p>
+
+                <button onClick={fetchUserInfo} style={{
+                  marginTop: '10px',
+                  width: '100%',
+                  padding: '8px 0',
+                  background: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.95rem',
+                  whiteSpace: 'nowrap'
+                }}>
+                  View Full Profile
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Logout Button */}
+          <button onClick={logout} style={{
+            ...buttonStyle,
+            background: '#e74c3c',
+            color: 'white'
+          }}>
+            🚪 Logout
+          </button>
+        </div>
+      </header>
+
+      {/* Full Profile Modal */}
+      {fullProfileOpen && userInfo && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 100
         }}>
-          🚪 Logout
-        </button>
-      </div>
-    </header>
+          <div style={{
+            background: 'white',
+            padding: '24px',
+            borderRadius: '8px',
+            width: '360px',
+            position: 'relative'
+          }}>
+            <button onClick={() => setFullProfileOpen(false)} style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              background: 'transparent',
+              border: 'none',
+              fontSize: '1.2rem',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}>✖</button>
+
+            <h2 style={{ marginBottom: '12px' }}>Full Profile</h2>
+            <p><b>Full Name:</b> {userInfo.displayName}</p>
+            <p><b>Email:</b> {userInfo.mail}</p>
+            <p><b>Mobile Phone:</b> {userInfo.mobilePhone}</p>
+            <p><b>Job Title:</b> {userInfo.jobTitle}</p>
+            <p><b>Department:</b> {userInfo.department}</p>
+            <p><b>Employee ID:</b> {userInfo.id}</p>
+            <p><b>Street Address:</b> {userInfo.streetAddress || 'N/A'}</p>
+            <p><b>State:</b> {userInfo.state || 'N/A'}</p>
+            <p><b>Postal Code:</b> {userInfo.postalCode || 'N/A'}</p>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -151,6 +214,9 @@ function AppContent() {
         scopes: ['User.Read', 'User.Read.All', 'GroupMember.Read.All'],
         prompt: 'select_account'
       });
+
+      const currentAccounts = instance.getAllAccounts();
+      if (currentAccounts.length > 0) instance.setActiveAccount(currentAccounts[0]);
     } catch (err) {
       console.error('Login failed:', err);
     }
