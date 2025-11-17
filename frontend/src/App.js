@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
@@ -6,7 +6,7 @@ import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
 import TicketDetails from './TicketDetails';
-import Dashboard from './Dashboard'; // ← New import
+import Dashboard from './Dashboard';
 
 const pca = new PublicClientApplication({
   auth: {
@@ -19,6 +19,19 @@ const pca = new PublicClientApplication({
 
 function Header({ logout }) {
   const { accounts } = useMsal();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <header style={{
       background: 'white', padding: '1rem 2rem', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
@@ -28,8 +41,59 @@ function Header({ logout }) {
         <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>🏢 SANDEZA INC</h1>
         <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '1rem' }}>IT Ticket Portal</h2>
       </div>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <span style={{ color: '#2c3e50' }}>👋 {accounts[0]?.username}</span>
+        <div ref={profileRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setProfileOpen(prev => !prev)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              border: '1px solid #ccc',
+              background: 'white',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            <span>👤</span>
+            <span>View Profile</span>
+          </button>
+
+          {profileOpen && (
+            <div style={{
+              position: 'absolute',
+              right: 0,
+              marginTop: '6px',
+              background: 'white',
+              border: '1px solid #ccc',
+              borderRadius: '8px',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+              padding: '12px',
+              width: '220px',
+              zIndex: 10
+            }}>
+              <p style={{ margin: '4px 0', fontWeight: '600' }}>Name: {accounts[0]?.name || accounts[0]?.username}</p>
+              <p style={{ margin: '4px 0' }}>Email: {accounts[0]?.username}</p>
+              <button style={{
+                marginTop: '8px',
+                width: '100%',
+                padding: '6px 0',
+                background: '#3498db',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}>
+                View Full Profile
+              </button>
+            </div>
+          )}
+        </div>
+
         <button onClick={logout} style={{
           background: '#e74c3c', color: 'white', border: 'none', padding: '0.5rem 1rem',
           borderRadius: '5px', cursor: 'pointer', fontWeight: '500'
@@ -67,7 +131,7 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<CreateTicket />} />
           <Route path="/ticket/:id" element={<TicketDetails />} />
-          <Route path="/dashboard" element={<Dashboard />} /> {/* New route */}
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </AuthenticatedTemplate>
       <UnauthenticatedTemplate>
