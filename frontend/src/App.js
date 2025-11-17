@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import axios from 'axios'; // For Graph API calls
 import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
@@ -18,8 +19,9 @@ const pca = new PublicClientApplication({
 });
 
 function Header({ logout }) {
-  const { accounts } = useMsal();
+  const { accounts, instance } = useMsal();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
   const profileRef = useRef(null);
 
   useEffect(() => {
@@ -31,6 +33,26 @@ function Header({ logout }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const fetchUserInfo = async () => {
+    try {
+      const account = accounts[0];
+      const response = await instance.acquireTokenSilent({
+        scopes: ['User.Read.All']
+      });
+
+      const token = response.accessToken;
+      const res = await axios.get(`https://graph.microsoft.com/v1.0/users/${account.username}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setUserInfo(res.data);
+      setProfileOpen(true);
+
+    } catch (error) {
+      console.error('Error fetching user info:', error);
+    }
+  };
 
   const buttonStyle = {
     padding: '0.6rem 1.2rem',
@@ -56,7 +78,7 @@ function Header({ logout }) {
         {/* Profile Button */}
         <div ref={profileRef} style={{ position: 'relative' }}>
           <button
-            onClick={() => setProfileOpen(prev => !prev)}
+            onClick={fetchUserInfo}
             style={{
               ...buttonStyle,
               background: '#3498db',
@@ -69,7 +91,7 @@ function Header({ logout }) {
             👤 View Profile
           </button>
 
-          {profileOpen && (
+          {profileOpen && userInfo && (
             <div style={{
               position: 'absolute',
               right: 0,
@@ -79,7 +101,7 @@ function Header({ logout }) {
               borderRadius: '8px',
               boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
               padding: '16px',
-              width: '280px',
+              width: '300px',
               zIndex: 10
             }}>
               {/* Close button */}
@@ -94,11 +116,11 @@ function Header({ logout }) {
               </div>
 
               {/* User Info */}
-              <p style={{ margin: '6px 0', fontWeight: '600' }}>Name: {accounts[0]?.name}</p>
-              <p style={{ margin: '6px 0' }}>Email: {accounts[0]?.username}</p>
-              <p style={{ margin: '6px 0' }}>Mobile: N/A</p>
-              <p style={{ margin: '6px 0' }}>Department: N/A</p>
-              <p style={{ margin: '6px 0' }}>Employee ID: N/A</p>
+              <p style={{ margin: '6px 0', fontWeight: '600' }}>Name: {userInfo.displayName}</p>
+              <p style={{ margin: '6px 0' }}>Email: {userInfo.mail || userInfo.userPrincipalName}</p>
+              <p style={{ margin: '6px 0' }}>Mobile: {userInfo.mobilePhone || 'N/A'}</p>
+              <p style={{ margin: '6px 0' }}>Department: {userInfo.department || 'N/A'}</p>
+              <p style={{ margin: '6px 0' }}>Employee ID: {userInfo.employeeId || 'N/A'}</p>
             </div>
           )}
         </div>
@@ -126,7 +148,7 @@ function AppContent() {
   const handleLogin = async () => {
     try {
       await instance.loginRedirect({
-        scopes: ['User.Read', 'GroupMember.Read.All'],
+        scopes: ['User.Read', 'User.Read.All', 'GroupMember.Read.All'],
         prompt: 'select_account'
       });
     } catch (err) {
