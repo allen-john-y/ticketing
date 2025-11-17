@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import axios from 'axios';
 import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
 import TicketDetails from './TicketDetails';
 import Dashboard from './Dashboard';
-import axios from 'axios';
 
 const pca = new PublicClientApplication({
   auth: {
@@ -18,157 +18,37 @@ const pca = new PublicClientApplication({
   cache: { cacheLocation: 'localStorage' },
 });
 
-// ------------------------------------------------------
-// SMALL POPUP MENU (NAME + EMAIL + VIEW FULL PROFILE)
-// ------------------------------------------------------
-function SmallProfileMenu({ user, onClose, onFullProfile }) {
-  return (
-    <div style={{
-      position: 'absolute',
-      top: '70px',
-      right: '20px',
-      background: 'white',
-      padding: '1rem',
-      borderRadius: '10px',
-      boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-      width: '250px',
-      zIndex: 1000
-    }}>
-      <h3 style={{ margin: '0 0 10px 0' }}>{user?.displayName}</h3>
-      <p style={{ margin: '0 0 15px 0', color: '#555' }}>{user?.mail || user?.userPrincipalName}</p>
-
-      <button
-        onClick={onFullProfile}
-        style={{
-          background: '#3498db',
-          color: 'white',
-          padding: '8px 12px',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          width: '100%',
-          marginBottom: '8px'
-        }}
-      >
-        View Full Profile
-      </button>
-
-      <button
-        onClick={onClose}
-        style={{
-          background: '#e74c3c',
-          color: 'white',
-          padding: '8px 12px',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          width: '100%'
-        }}
-      >
-        Close
-      </button>
-    </div>
-  );
-}
-
-// ------------------------------------------------------
-// FULL PROFILE POPUP (ALL FIELDS)
-// ------------------------------------------------------
-function FullProfilePopup({ profile, onClose }) {
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 2000,
-    }}>
-      <div style={{
-        background: 'white',
-        width: '450px',
-        padding: '2rem',
-        borderRadius: '12px',
-        position: 'relative',
-        maxHeight: '90%',
-        overflowY: 'auto'
-      }}>
-
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '10px',
-            right: '10px',
-            fontSize: '1.2rem',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer'
-          }}
-        >
-          ✖
-        </button>
-
-        <h2 style={{ marginBottom: '1rem', textAlign: 'center' }}>User Profile</h2>
-
-        <p><strong>Full Name:</strong> {profile.displayName}</p>
-        <p><strong>Email:</strong> {profile.mail || profile.userPrincipalName}</p>
-        <p><strong>Mobile Phone:</strong> {profile.mobilePhone || 'N/A'}</p>
-        <p><strong>Job Title:</strong> {profile.jobTitle || 'N/A'}</p>
-        <p><strong>Department:</strong> {profile.department || 'N/A'}</p>
-        <p><strong>Employee ID:</strong> {profile.employeeId || 'N/A'}</p>
-
-        <h3 style={{ marginTop: '1rem' }}>Address</h3>
-        <p><strong>Street:</strong> {profile.streetAddress || 'N/A'}</p>
-        <p><strong>State:</strong> {profile.state || 'N/A'}</p>
-        <p><strong>Pincode:</strong> {profile.postalCode || 'N/A'}</p>
-      </div>
-    </div>
-  );
-}
-
-// ------------------------------------------------------
-// HEADER WITH PROFILE BUTTON
-// ------------------------------------------------------
 function Header({ logout }) {
   const { accounts, instance } = useMsal();
-  const [me, setMe] = useState(null);
-  const [smallMenu, setSmallMenu] = useState(false);
-  const [fullPopup, setFullPopup] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
 
-  // Fetch user profile from Graph
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const token = await instance.acquireTokenSilent({
-          scopes: ['User.Read', 'Directory.Read.All'],
-          account: accounts[0]
-        });
+  // Fetch full profile details from Microsoft Graph
+  const fetchProfile = async () => {
+    try {
+      const tokenResponse = await instance.acquireTokenSilent({
+        scopes: ['User.Read.All'],
+        account: accounts[0]
+      });
 
-        const res = await axios.get('https://graph.microsoft.com/v1.0/me', {
-          headers: { Authorization: `Bearer ${token.accessToken}` }
-        });
+      const res = await axios.get(
+        `https://graph.microsoft.com/v1.0/me?$select=displayName,mail,mobilePhone,jobTitle,department,employeeId,streetAddress,city,state,postalCode`,
+        {
+          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
+        }
+      );
 
-        setMe(res.data);
-
-      } catch (err) {
-        console.error('Failed to load profile:', err);
-      }
-    };
-
-    loadProfile();
-  }, [accounts, instance]);
+      setUserProfile(res.data);
+      setShowProfile(true);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+    }
+  };
 
   return (
     <header style={{
-      background: 'white',
-      padding: '1rem 2rem',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      position: 'relative'
+      background: 'white', padding: '1rem 2rem', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>🏢 SANDEZA INC</h1>
@@ -176,60 +56,67 @@ function Header({ logout }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-
-        {/* PROFILE BUTTON */}
         <button
-          onClick={() => setSmallMenu(true)}
+          onClick={fetchProfile}
           style={{
-            background: '#2ecc71',
-            color: 'white',
-            padding: '8px 12px',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer'
+            background: '#3498db', color: 'white', border: 'none', padding: '0.5rem 1rem',
+            borderRadius: '5px', cursor: 'pointer', fontWeight: '500'
           }}
         >
-          View Profile
+          View Full Profile
         </button>
 
-        {/* LOGOUT BUTTON */}
         <button
           onClick={logout}
           style={{
-            background: '#e74c3c',
-            color: 'white',
-            border: 'none',
-            padding: '0.5rem 1rem',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontWeight: '500'
+            background: '#e74c3c', color: 'white', border: 'none', padding: '0.5rem 1rem',
+            borderRadius: '5px', cursor: 'pointer', fontWeight: '500'
           }}
         >
           🚪 Logout
         </button>
       </div>
 
-      {/* SMALL PROFILE MENU */}
-      {smallMenu && me && (
-        <SmallProfileMenu
-          user={me}
-          onClose={() => setSmallMenu(false)}
-          onFullProfile={() => { setSmallMenu(false); setFullPopup(true); }}
-        />
-      )}
+      {/* Profile Modal */}
+      {showProfile && userProfile && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'white', padding: '2rem', borderRadius: '10px', width: '400px',
+            maxHeight: '80%', overflowY: 'auto', position: 'relative'
+          }}>
+            <button
+              onClick={() => setShowProfile(false)}
+              style={{
+                position: 'absolute', top: '10px', right: '10px', background: 'transparent',
+                border: 'none', fontSize: '1.2rem', cursor: 'pointer'
+              }}
+            >
+              ✕
+            </button>
 
-      {/* FULL PROFILE POPUP */}
-      {fullPopup && me && (
-        <FullProfilePopup
-          profile={me}
-          onClose={() => setFullPopup(false)}
-        />
+            <h2>User Profile</h2>
+            <p><strong>Full Name:</strong> {userProfile.displayName || 'N/A'}</p>
+            <p><strong>Email:</strong> {userProfile.mail || 'N/A'}</p>
+            <p><strong>Mobile Phone:</strong> {userProfile.mobilePhone || 'N/A'}</p>
+            <p><strong>Job Title:</strong> {userProfile.jobTitle || 'N/A'}</p>
+            <p><strong>Department:</strong> {userProfile.department || 'N/A'}</p>
+            <p><strong>Employee ID:</strong> {userProfile.employeeId || 'N/A'}</p>
+            <h3>Address</h3>
+            <p><strong>Street:</strong> {userProfile.streetAddress || 'N/A'}</p>
+            <p><strong>City:</strong> {userProfile.city || 'N/A'}</p>
+            <p><strong>State:</strong> {userProfile.state || 'N/A'}</p>
+            <p><strong>Pincode:</strong> {userProfile.postalCode || 'N/A'}</p>
+          </div>
+        </div>
       )}
     </header>
   );
 }
 
-// ------------------------------------------------------
 function AppContent() {
   const { instance } = useMsal();
 
@@ -240,7 +127,7 @@ function AppContent() {
   const handleLogin = async () => {
     try {
       await instance.loginRedirect({
-        scopes: ['User.Read', 'Directory.Read.All', 'GroupMember.Read.All'],
+        scopes: ['User.Read', 'GroupMember.Read.All'],
         prompt: 'select_account'
       });
     } catch (err) {
@@ -259,7 +146,6 @@ function AppContent() {
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </AuthenticatedTemplate>
-
       <UnauthenticatedTemplate>
         <Login login={handleLogin} />
       </UnauthenticatedTemplate>
