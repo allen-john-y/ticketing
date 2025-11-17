@@ -64,7 +64,8 @@ function Header({ logout }) {
       });
 
       const token = response.accessToken;
-      const graphRes = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone', {
+      // Requesting additional address fields: streetAddress, state, postalCode
+      const graphRes = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -82,6 +83,9 @@ function Header({ logout }) {
         department: data.department || '',
         employeeId: data.employeeId || '',
         mobilePhone: data.mobilePhone || '',
+        streetAddress: data.streetAddress || '',
+        state: data.state || '',
+        postalCode: data.postalCode || '',
       });
     } catch (err) {
       // If interaction required, fall back to redirect to get consent / login
@@ -213,7 +217,7 @@ function Header({ logout }) {
               borderRadius: '10px',
               padding: '20px',
               boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              width: '360px',
+              width: '420px',
               zIndex: 60,
             }}
             onClick={(e) => e.stopPropagation()}
@@ -244,7 +248,7 @@ function Header({ logout }) {
             )}
 
             {profileData && (
-              <div style={{ display: 'grid', gap: '8px' }}>
+              <div style={{ display: 'grid', gap: '10px' }}>
                 <div>
                   <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
                   <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
@@ -268,6 +272,22 @@ function Header({ logout }) {
                 <div>
                   <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Mobile</div>
                   <div style={{ fontWeight: 600 }}>{profileData.mobilePhone || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Street Address</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.streetAddress || '—'}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>State</div>
+                    <div style={{ fontWeight: 600 }}>{profileData.state || '—'}</div>
+                  </div>
+                  <div style={{ width: '120px' }}>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Pincode</div>
+                    <div style={{ fontWeight: 600 }}>{profileData.postalCode || '—'}</div>
+                  </div>
                 </div>
               </div>
             )}
@@ -293,7 +313,7 @@ function AppContent() {
 
   const handleLogin = async () => {
     try {
-      // Added User.ReadBasic.All so department / employeeId may be available.
+      // Added User.ReadBasic.All so department / employeeId / address fields may be available.
       // Note: the app may require admin consent for some attributes — see notes below.
       await instance.loginRedirect({
         scopes: ['User.Read', 'User.ReadBasic.All', 'GroupMember.Read.All'],
