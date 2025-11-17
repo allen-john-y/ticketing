@@ -52,22 +52,25 @@ function Header({ logout }) {
           </h2>
         </div>
 
-        {/* RIGHT SIDE (View Profile + Logout) */}
+        {/* RIGHT SIDE — Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {/* VIEW PROFILE BUTTON */}
           <button
             onClick={() => setShowProfileMenu(!showProfileMenu)}
             style={{
-              background: 'transparent',
+              background: '#3498db',
+              color: 'white',
               border: 'none',
-              color: '#2c3e50',
-              fontSize: '1rem',
+              padding: '0.5rem 1rem',
+              borderRadius: '5px',
               cursor: 'pointer',
-              textDecoration: 'underline'
+              fontWeight: '500'
             }}
           >
-            View Profile
+            👤 View Profile
           </button>
 
+          {/* LOGOUT */}
           <button
             onClick={logout}
             style={{
@@ -85,7 +88,7 @@ function Header({ logout }) {
         </div>
       </header>
 
-      {/* SMALL PROFILE MENU */}
+      {/* SMALL PROFILE POPUP */}
       {showProfileMenu && (
         <div
           style={{
@@ -153,6 +156,7 @@ function Header({ logout }) {
               position: 'relative'
             }}
           >
+            {/* Close button */}
             <button
               onClick={() => setShowFullProfile(false)}
               style={{
@@ -191,9 +195,8 @@ function Header({ logout }) {
 function AppContent() {
   const { instance } = useMsal();
 
-  const handleLogout = () => {
+  const handleLogout = () =>
     instance.logoutRedirect({ postLogoutRedirectUri: '/' });
-  };
 
   const handleLogin = async () => {
     try {
