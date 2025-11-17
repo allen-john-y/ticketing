@@ -44,56 +44,60 @@ function Header({ logout }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         {/* Profile Button */}
-        <div ref={profileRef} style={{ position: 'relative' }}>
-          <button
-            onClick={() => setProfileOpen(prev => !prev)}
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '5px',
-              border: 'none',
-              background: '#3498db',
-              color: 'white',
-              cursor: 'pointer',
-              fontWeight: '500',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            👤 View Profile
-          </button>
+<div ref={profileRef} style={{ position: 'relative' }}>
+  <button
+    onClick={() => setProfileOpen(prev => !prev)}
+    style={{
+      padding: '0.5rem 1rem',
+      borderRadius: '5px',
+      border: 'none',
+      background: '#3498db',
+      color: 'white',
+      cursor: 'pointer',
+      fontWeight: '500',
+      whiteSpace: 'nowrap',
+      width: 'auto', // auto width, grows with text
+      minWidth: '120px', // optional minimum
+    }}
+  >
+    👤 View Profile
+  </button>
 
-          {profileOpen && (
-            <div style={{
-              position: 'absolute',
-              right: 0,
-              marginTop: '6px',
-              background: 'white',
-              border: '1px solid #ccc',
-              borderRadius: '8px',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-              padding: '12px',
-              width: '220px',
-              zIndex: 10
-            }}>
-              <p style={{ margin: '4px 0', fontWeight: '600', fontSize: '0.85rem' }}>Name: {accounts[0]?.name}</p>
-              <p style={{ margin: '4px 0', fontSize: '0.8rem' }}>Email: {accounts[0]?.username}</p>
-              <button style={{
-                marginTop: '8px',
-                width: '100%',
-                padding: '6px 0',
-                background: '#3498db',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '0.85rem',
-                whiteSpace: 'nowrap'
-              }}>
-                View Full Profile
-              </button>
-            </div>
-          )}
-        </div>
+  {profileOpen && (
+    <div style={{
+      position: 'absolute',
+      right: 0,
+      marginTop: '6px',
+      background: 'white',
+      border: '1px solid #ccc',
+      borderRadius: '8px',
+      boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+      padding: '12px',
+      width: 'max-content', // auto width based on content
+      minWidth: '220px', // optional minimum width
+      zIndex: 10
+    }}>
+      <p style={{ margin: '4px 0', fontWeight: '600', fontSize: '0.85rem' }}>Name: {accounts[0]?.name}</p>
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}>Email: {accounts[0]?.username}</p>
+      <button style={{
+        marginTop: '8px',
+        padding: '6px 12px', // horizontal padding for longer text
+        background: '#3498db',
+        color: 'white',
+        border: 'none',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        fontWeight: '600',
+        fontSize: '0.85rem',
+        whiteSpace: 'nowrap',
+        width: 'auto' // grows with text
+      }}>
+        View Full Profile
+      </button>
+    </div>
+  )}
+</div>
+
 
         {/* Logout Button */}
         <button onClick={logout} style={{
