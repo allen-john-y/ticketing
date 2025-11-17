@@ -269,19 +269,6 @@ function Header({ logout }) {
                   <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Mobile</div>
                   <div style={{ fontWeight: 600 }}>{profileData.mobilePhone || '—'}</div>
                 </div>
-
-                <button
-                  onClick={closeFullProfile}
-                  style={{
-                    ...buttonStyle,
-                    marginTop: '8px',
-                    width: '100%',
-                    background: '#3498db',
-                    color: 'white'
-                  }}
-                >
-                  Close
-                </button>
               </div>
             )}
 
