@@ -48,9 +48,6 @@ function Header({ logout }) {
           <button
             onClick={() => setProfileOpen(prev => !prev)}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
               padding: '0.5rem 1rem',
               borderRadius: '5px',
               border: 'none',
@@ -61,7 +58,7 @@ function Header({ logout }) {
               whiteSpace: 'nowrap',
             }}
           >
-            👤 {accounts[0]?.name || accounts[0]?.username}
+            👤 View Profile
           </button>
 
           {profileOpen && (
@@ -74,11 +71,11 @@ function Header({ logout }) {
               borderRadius: '8px',
               boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
               padding: '12px',
-              width: '260px',
+              width: '220px',
               zIndex: 10
             }}>
-              <p style={{ margin: '4px 0', fontWeight: '600' }}>Name: View Profile</p>
-              <p style={{ margin: '4px 0' }}>Email: {accounts[0]?.username}</p>
+              <p style={{ margin: '4px 0', fontWeight: '600', fontSize: '0.85rem' }}>Name: {accounts[0]?.name}</p>
+              <p style={{ margin: '4px 0', fontSize: '0.8rem' }}>Email: {accounts[0]?.username}</p>
               <button style={{
                 marginTop: '8px',
                 width: '100%',
@@ -88,7 +85,9 @@ function Header({ logout }) {
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontWeight: '600'
+                fontWeight: '600',
+                fontSize: '0.85rem',
+                whiteSpace: 'nowrap'
               }}>
                 View Full Profile
               </button>
