@@ -43,6 +43,7 @@ function Header({ logout }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        {/* Profile Button */}
         <div ref={profileRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setProfileOpen(prev => !prev)}
@@ -50,16 +51,17 @@ function Header({ logout }) {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              border: '1px solid #ccc',
-              background: 'white',
+              padding: '0.5rem 1rem',
+              borderRadius: '5px',
+              border: 'none',
+              background: '#3498db',
+              color: 'white',
               cursor: 'pointer',
-              fontWeight: '500'
+              fontWeight: '500',
+              whiteSpace: 'nowrap',
             }}
           >
-            <span>👤</span>
-            <span>View Profile</span>
+            👤 {accounts[0]?.name || accounts[0]?.username}
           </button>
 
           {profileOpen && (
@@ -94,6 +96,7 @@ function Header({ logout }) {
           )}
         </div>
 
+        {/* Logout Button */}
         <button onClick={logout} style={{
           background: '#e74c3c', color: 'white', border: 'none', padding: '0.5rem 1rem',
           borderRadius: '5px', cursor: 'pointer', fontWeight: '500'
