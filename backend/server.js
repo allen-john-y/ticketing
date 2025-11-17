@@ -219,6 +219,20 @@ app.get("/tickets", async (req, res) => {
   }
 });
 
+// Get Ticket by ID (Needed for TicketDetails page)
+app.get("/tickets/:id", async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    res.json(ticket);
+  } catch (err) {
+    console.error("Error fetching ticket:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 // Create Ticket
 app.post("/tickets", async (req, res) => {
   try {
