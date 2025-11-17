@@ -1,39 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
-import { PublicClientApplication } from '@azure/msal-browser';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Login from './Login';
-import Home from './Home';
-import CreateTicket from './CreateTicket';
-import TicketDetails from './TicketDetails';
-import Dashboard from './Dashboard';
-
-const pca = new PublicClientApplication({
-  auth: {
-    clientId: '6541d73a-dbbd-4f74-9465-38a0eb03ec6b',
-    authority: 'https://login.microsoftonline.com/11909ab3-5ecc-48e0-b898-acf7203a1ad7',
-    redirectUri: 'https://ticketing-psi-tawny.vercel.app/',
-  },
-  cache: { cacheLocation: 'localStorage' },
-});
+import { useMsal } from '@azure/msal-react';
+import { Callout, DirectionalHint } from '@fluentui/react'; // Optional: for better styling
+// Or we'll use pure CSS if you don't want Fluent UI
 
 function Header({ logout }) {
-  const { accounts } = useMsal();
-  const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef(null);
+  const { accounts, instance } = useMsal();
+  const account = accounts[0];
 
-  // Close profile dropdown when clicking outside
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [fullProfileOpen, setFullProfileOpen] = useState(false);
+  const profileButtonRef = useRef(null);
+
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (profileRef.current && !profileRef.current.contains(e.target)) {
+      if (profileButtonRef.current && !profileButtonRef.current.contains(e.target)) {
         setProfileOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
+    if (profileOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [profileOpen]);
 
-  // Unified button style
+  // Fetch extra user details from Microsoft Graph (optional but recommended)
+  const userDetails = {
+    name: account?.name || 'N/A',
+    email: account?.username || 'N/A',
+    department: account?.idTokenClaims?.department || 'Not set',
+    employeeId: account?.idTokenClaims?.extension_EmployeeID || account?.idTokenClaims?.employeeId || 'Not available',
+    mobile: account?.idTokenClaims?.mobilePhone || account?.idTokenClaims?.businessPhones?.[0] || 'Not provided',
+  };
+
   const buttonStyle = {
     padding: '0.5rem 1rem',
     borderRadius: '5px',
@@ -51,7 +50,8 @@ function Header({ logout }) {
       boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
       display: 'flex',
       justifyContent: 'space-between',
-      alignItems: 'center'
+      alignItems: 'center',
+      position: 'relative'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>🏢 SANDEZA INC</h1>
@@ -59,8 +59,8 @@ function Header({ logout }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        {/* Profile Button */}
-        <div ref={profileRef} style={{ position: 'relative' }}>
+        {/* Profile Dropdown Trigger */}
+        <div ref={profileButtonRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setProfileOpen(prev => !prev)}
             style={{
@@ -72,92 +72,184 @@ function Header({ logout }) {
               color: 'white'
             }}
           >
-            👤 View Profile
+            👤 {account?.name?.split(' ')[0] || 'User'}
           </button>
 
+          {/* Small Dropdown */}
           {profileOpen && (
             <div style={{
               position: 'absolute',
               right: 0,
-              marginTop: '6px',
+              top: '100%',
+              marginTop: '8px',
               background: 'white',
-              border: '1px solid #ccc',
+              border: '1px solid #ddd',
               borderRadius: '8px',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-              padding: '16px',
-              width: '260px',
-              zIndex: 10
+              boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
+              width: '220px',
+              zIndex: 100
             }}>
-              <p style={{ margin: '6px 0', fontWeight: '600', fontSize: '0.95rem' }}>Name: {accounts[0]?.name}</p>
-              <p style={{ margin: '6px 0', fontSize: '0.95rem'}}>Email: {accounts[0]?.username}</p>
-              <button style={{
-                ...buttonStyle,
-                marginTop: '10px',
-                width: '100%',
-                background: '#3498db',
-                color: 'white'
-              }}>
-                View Full Profile
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #eee' }}>
+                <p style={{ margin: '4px 0', fontWeight: '600', fontSize: '0.95rem' }}>
+                  {account?.name}
+                </p>
+                <p style={{ margin: '4px 0', fontSize: '0.85rem', color: '#666' }}>
+                  {account?.username}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setFullProfileOpen(true);
+                  setProfileOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '12px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  ':hover': { backgroundColor: '#f5f5f5' }
+                }}
+              >
+                👀 View Full Profile
+              </button>
+              <button
+                onClick={logout}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '12px 16px',
+                  background: '#e74c3c',
+                  color: 'white',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  borderRadius: '0 0 8px 8px'
+                }}
+              >
+                🚪 Logout
               </button>
             </div>
           )}
         </div>
-
-        {/* Logout Button */}
-        <button onClick={logout} style={{
-          ...buttonStyle,
-          background: '#e74c3c',
-          color: 'white'
-        }}>
-          🚪 Logout
-        </button>
       </div>
+
+      {/* Full Profile Modal */}
+      {fullProfileOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 999,
+              backdropFilter: 'blur(4px)'
+            }}
+            onClick={() => setFullProfileOpen(false)}
+          />
+
+          {/* Modal Card */}
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
+              width: '420px',
+              maxWidth: '90vw',
+              zIndex: 1000,
+              overflow: 'hidden'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              background: '#3498db',
+              color: 'white',
+              padding: '1rem 1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '1.3rem' }}>User Profile</h3>
+              <button
+                onClick={() => setFullProfileOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  padding: '0 8px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '50%',
+                  background: '#ddd',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '2rem',
+                  backgroundColor: '#3498db',
+                  color: 'white'
+                }}>
+                  {account?.name?.[0] || 'U'}
+                </div>
+                <div>
+                  <h4 style={{ margin: '0 0 4px 0', fontSize: '1.2rem' }}>{userDetails.name}</h4>
+                  <p style={{ margin: 0, color: '#666' }}>{userDetails.email}</p>
+                </div>
+              </div>
+
+              <div style={{ lineHeight: '1.8', fontSize: '0.95rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <strong>Department:</strong>
+                  <span>{userDetails.department}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <strong>Employee ID:</strong>
+                  <span>{userDetails.employeeId}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <strong>Mobile Number:</strong>
+                  <span>{userDetails.mobile}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setFullProfileOpen(false)}
+                style={{
+                  marginTop: '1.5rem',
+                  width: '100%',
+                  padding: '0.75rem',
+                  background: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '1rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </header>
   );
 }
-
-function AppContent() {
-  const { instance } = useMsal();
-
-  const handleLogout = () => {
-    instance.logoutRedirect({ postLogoutRedirectUri: '/' });
-  };
-
-  const handleLogin = async () => {
-    try {
-      await instance.loginRedirect({
-        scopes: ['User.Read', 'GroupMember.Read.All'],
-        prompt: 'select_account'
-      });
-    } catch (err) {
-      console.error('Login failed:', err);
-    }
-  };
-
-  return (
-    <Router>
-      <AuthenticatedTemplate>
-        <Header logout={handleLogout} />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/create" element={<CreateTicket />} />
-          <Route path="/ticket/:id" element={<TicketDetails />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-        </Routes>
-      </AuthenticatedTemplate>
-      <UnauthenticatedTemplate>
-        <Login login={handleLogin} />
-      </UnauthenticatedTemplate>
-    </Router>
-  );
-}
-
-function App() {
-  return (
-    <MsalProvider instance={pca}>
-      <AppContent />
-    </MsalProvider>
-  );
-}
-
-export default App;
