@@ -22,7 +22,6 @@ function Header({ logout }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
 
-  // Close profile dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
@@ -33,25 +32,20 @@ function Header({ logout }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Unified button style
   const buttonStyle = {
-    padding: '0.5rem 1rem',
+    padding: '0.6rem 1.2rem',
     borderRadius: '5px',
     border: 'none',
     cursor: 'pointer',
     fontWeight: '500',
     fontSize: '0.95rem',
-    whiteSpace: 'nowrap'
+    whiteSpace: 'nowrap',
   };
 
   return (
     <header style={{
-      background: 'white',
-      padding: '1rem 2rem',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
+      background: 'white', padding: '1rem 2rem', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>🏢 SANDEZA INC</h1>
@@ -65,11 +59,11 @@ function Header({ logout }) {
             onClick={() => setProfileOpen(prev => !prev)}
             style={{
               ...buttonStyle,
+              background: '#3498db',
+              color: 'white',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              background: '#3498db',
-              color: 'white'
+              gap: '6px'
             }}
           >
             👤 View Profile
@@ -85,20 +79,26 @@ function Header({ logout }) {
               borderRadius: '8px',
               boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
               padding: '16px',
-              width: '260px',
+              width: '280px',
               zIndex: 10
             }}>
-              <p style={{ margin: '6px 0', fontWeight: '600', fontSize: '0.95rem' }}>Name: {accounts[0]?.name}</p>
-              <p style={{ margin: '6px 0', fontSize: '0.95rem'}}>Email: {accounts[0]?.username}</p>
-              <button style={{
-                ...buttonStyle,
-                marginTop: '10px',
-                width: '100%',
-                background: '#3498db',
-                color: 'white'
-              }}>
-                View Full Profile
-              </button>
+              {/* Close button */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setProfileOpen(false)} style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}>✖</button>
+              </div>
+
+              {/* User Info */}
+              <p style={{ margin: '6px 0', fontWeight: '600' }}>Name: {accounts[0]?.name}</p>
+              <p style={{ margin: '6px 0' }}>Email: {accounts[0]?.username}</p>
+              <p style={{ margin: '6px 0' }}>Mobile: N/A</p>
+              <p style={{ margin: '6px 0' }}>Department: N/A</p>
+              <p style={{ margin: '6px 0' }}>Employee ID: N/A</p>
             </div>
           )}
         </div>
