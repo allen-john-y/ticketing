@@ -20,7 +20,7 @@ const pca = new PublicClientApplication({
 
 function Header({ logout }) {
   const { accounts, instance } = useMsal();
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [smallMenuOpen, setSmallMenuOpen] = useState(false);
   const [fullProfileOpen, setFullProfileOpen] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const profileRef = useRef(null);
@@ -28,30 +28,31 @@ function Header({ logout }) {
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
-        setProfileOpen(false);
+        setSmallMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchUserInfo = async () => {
+  const fetchFullProfile = async () => {
     try {
       if (!accounts[0]) return;
       const response = await instance.acquireTokenSilent({
         account: accounts[0],
         scopes: ['User.Read.All']
       });
-
       const token = response.accessToken;
-      const res = await axios.get(`https://graph.microsoft.com/v1.0/me?$select=id,displayName,jobTitle,department,mobilePhone,mail,streetAddress,state,postalCode`, {
+
+      const res = await axios.get(`https://graph.microsoft.com/v1.0/me?$select=id,displayName,jobTitle,department,mobilePhone,mail`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       setUserInfo(res.data);
       setFullProfileOpen(true);
+      setSmallMenuOpen(false);
     } catch (error) {
-      console.error('Error fetching user info:', error);
+      console.error('Error fetching full profile:', error);
     }
   };
 
@@ -80,7 +81,7 @@ function Header({ logout }) {
           {/* Profile Button */}
           <div ref={profileRef} style={{ position: 'relative' }}>
             <button
-              onClick={() => setProfileOpen(prev => !prev)}
+              onClick={() => setSmallMenuOpen(prev => !prev)}
               style={{
                 ...buttonStyle,
                 background: '#3498db',
@@ -93,7 +94,8 @@ function Header({ logout }) {
               👤 View Profile
             </button>
 
-            {profileOpen && (
+            {/* Small Menu */}
+            {smallMenuOpen && (
               <div style={{
                 position: 'absolute',
                 right: 0,
@@ -103,38 +105,27 @@ function Header({ logout }) {
                 borderRadius: '8px',
                 boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
                 padding: '16px',
-                width: '260px',
+                width: '240px',
                 zIndex: 10
               }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button onClick={() => setProfileOpen(false)} style={{
-                    background: 'transparent',
-                    border: 'none',
-                    fontSize: '1rem',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}>✖</button>
-                </div>
-
                 <p style={{ margin: '6px 0', fontWeight: '600' }}>Name: {accounts[0]?.name}</p>
                 <p style={{ margin: '6px 0' }}>Email: {accounts[0]?.username}</p>
-                <p style={{ margin: '6px 0' }}>Mobile: N/A</p>
-                <p style={{ margin: '6px 0' }}>Department: N/A</p>
-                <p style={{ margin: '6px 0' }}>Employee ID: N/A</p>
 
-                <button onClick={fetchUserInfo} style={{
-                  marginTop: '10px',
-                  width: '100%',
-                  padding: '8px 0',
-                  background: '#3498db',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  fontSize: '0.95rem',
-                  whiteSpace: 'nowrap'
-                }}>
+                <button
+                  onClick={fetchFullProfile}
+                  style={{
+                    marginTop: '10px',
+                    width: '100%',
+                    padding: '8px 0',
+                    background: '#3498db',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.95rem'
+                  }}
+                >
                   View Full Profile
                 </button>
               </div>
@@ -173,27 +164,26 @@ function Header({ logout }) {
             width: '360px',
             position: 'relative'
           }}>
-            <button onClick={() => setFullProfileOpen(false)} style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              background: 'transparent',
-              border: 'none',
-              fontSize: '1.2rem',
-              cursor: 'pointer',
-              fontWeight: '600'
-            }}>✖</button>
+            <button
+              onClick={() => setFullProfileOpen(false)}
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                background: 'transparent',
+                border: 'none',
+                fontSize: '1.2rem',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}>✖</button>
 
             <h2 style={{ marginBottom: '12px' }}>Full Profile</h2>
             <p><b>Full Name:</b> {userInfo.displayName}</p>
             <p><b>Email:</b> {userInfo.mail}</p>
-            <p><b>Mobile Phone:</b> {userInfo.mobilePhone}</p>
-            <p><b>Job Title:</b> {userInfo.jobTitle}</p>
-            <p><b>Department:</b> {userInfo.department}</p>
+            <p><b>Mobile Phone:</b> {userInfo.mobilePhone || 'N/A'}</p>
+            <p><b>Job Title:</b> {userInfo.jobTitle || 'N/A'}</p>
+            <p><b>Department:</b> {userInfo.department || 'N/A'}</p>
             <p><b>Employee ID:</b> {userInfo.id}</p>
-            <p><b>Street Address:</b> {userInfo.streetAddress || 'N/A'}</p>
-            <p><b>State:</b> {userInfo.state || 'N/A'}</p>
-            <p><b>Postal Code:</b> {userInfo.postalCode || 'N/A'}</p>
           </div>
         </div>
       )}
@@ -215,8 +205,8 @@ function AppContent() {
         prompt: 'select_account'
       });
 
-      const currentAccounts = instance.getAllAccounts();
-      if (currentAccounts.length > 0) instance.setActiveAccount(currentAccounts[0]);
+      const accounts = instance.getAllAccounts();
+      if (accounts.length > 0) instance.setActiveAccount(accounts[0]);
     } catch (err) {
       console.error('Login failed:', err);
     }
