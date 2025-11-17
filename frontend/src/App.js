@@ -85,7 +85,7 @@ function Header({ logout }) {
               color: 'white',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '5px'
             }}
           >
             👤 View Profile
