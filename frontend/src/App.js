@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import axios from 'axios';
 import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
 import TicketDetails from './TicketDetails';
-import Dashboard from './Dashboard';
+import Dashboard from './Dashboard'; // ← New import
 
 const pca = new PublicClientApplication({
   auth: {
@@ -19,32 +18,7 @@ const pca = new PublicClientApplication({
 });
 
 function Header({ logout }) {
-  const { accounts, instance } = useMsal();
-  const [showProfile, setShowProfile] = useState(false);
-  const [userProfile, setUserProfile] = useState(null);
-
-  // Fetch full profile details from Microsoft Graph
-  const fetchProfile = async () => {
-    try {
-      const tokenResponse = await instance.acquireTokenSilent({
-        scopes: ['User.Read.All'],
-        account: accounts[0]
-      });
-
-      const res = await axios.get(
-        `https://graph.microsoft.com/v1.0/me?$select=displayName,mail,mobilePhone,jobTitle,department,employeeId,streetAddress,city,state,postalCode`,
-        {
-          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
-        }
-      );
-
-      setUserProfile(res.data);
-      setShowProfile(true);
-    } catch (err) {
-      console.error('Error fetching profile:', err);
-    }
-  };
-
+  const { accounts } = useMsal();
   return (
     <header style={{
       background: 'white', padding: '1rem 2rem', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
@@ -54,65 +28,15 @@ function Header({ logout }) {
         <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>🏢 SANDEZA INC</h1>
         <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '1rem' }}>IT Ticket Portal</h2>
       </div>
-
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <button
-          onClick={fetchProfile}
-          style={{
-            background: '#3498db', color: 'white', border: 'none', padding: '0.5rem 1rem',
-            borderRadius: '5px', cursor: 'pointer', fontWeight: '500'
-          }}
-        >
-          View Full Profile
-        </button>
-
-        <button
-          onClick={logout}
-          style={{
-            background: '#e74c3c', color: 'white', border: 'none', padding: '0.5rem 1rem',
-            borderRadius: '5px', cursor: 'pointer', fontWeight: '500'
-          }}
-        >
+        <span style={{ color: '#2c3e50' }}>👋 {accounts[0]?.username}</span>
+        <button onClick={logout} style={{
+          background: '#e74c3c', color: 'white', border: 'none', padding: '0.5rem 1rem',
+          borderRadius: '5px', cursor: 'pointer', fontWeight: '500'
+        }}>
           🚪 Logout
         </button>
       </div>
-
-      {/* Profile Modal */}
-      {showProfile && userProfile && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center',
-          zIndex: 9999
-        }}>
-          <div style={{
-            background: 'white', padding: '2rem', borderRadius: '10px', width: '400px',
-            maxHeight: '80%', overflowY: 'auto', position: 'relative'
-          }}>
-            <button
-              onClick={() => setShowProfile(false)}
-              style={{
-                position: 'absolute', top: '10px', right: '10px', background: 'transparent',
-                border: 'none', fontSize: '1.2rem', cursor: 'pointer'
-              }}
-            >
-              ✕
-            </button>
-
-            <h2>User Profile</h2>
-            <p><strong>Full Name:</strong> {userProfile.displayName || 'N/A'}</p>
-            <p><strong>Email:</strong> {userProfile.mail || 'N/A'}</p>
-            <p><strong>Mobile Phone:</strong> {userProfile.mobilePhone || 'N/A'}</p>
-            <p><strong>Job Title:</strong> {userProfile.jobTitle || 'N/A'}</p>
-            <p><strong>Department:</strong> {userProfile.department || 'N/A'}</p>
-            <p><strong>Employee ID:</strong> {userProfile.employeeId || 'N/A'}</p>
-            <h3>Address</h3>
-            <p><strong>Street:</strong> {userProfile.streetAddress || 'N/A'}</p>
-            <p><strong>City:</strong> {userProfile.city || 'N/A'}</p>
-            <p><strong>State:</strong> {userProfile.state || 'N/A'}</p>
-            <p><strong>Pincode:</strong> {userProfile.postalCode || 'N/A'}</p>
-          </div>
-        </div>
-      )}
     </header>
   );
 }
@@ -143,7 +67,7 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<CreateTicket />} />
           <Route path="/ticket/:id" element={<TicketDetails />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} /> {/* New route */}
         </Routes>
       </AuthenticatedTemplate>
       <UnauthenticatedTemplate>
