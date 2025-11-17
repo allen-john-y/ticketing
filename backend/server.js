@@ -319,15 +319,15 @@ app.put("/tickets/:id/close", async (req, res) => {
   }
 });
 
-// Reopen Ticket
-app.put("/tickets/:id/reopen", async (req, res) => {
+// Revive Ticket (instead of reopen)
+app.put("/tickets/:id/revive", async (req, res) => {
   try {
-    const { reopenedBy } = req.body;
+    const { revivedBy } = req.body;
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    ticket.status = "Reopened";
-    ticket.reopenedBy = reopenedBy;
+    ticket.status = "Open";  // Revived means open again
+    ticket.reopenedBy = revivedBy;
     ticket.reopenedAt = new Date();
     await ticket.save();
 
@@ -335,17 +335,18 @@ app.put("/tickets/:id/reopen", async (req, res) => {
     const dept = deptEmails[ticket.category];
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    const body = `Ticket #${ticket.ticketNumber} (${ticket.category}) has been reopened by ${reopenedBy}\nTime: ${nowIST}`;
+    const body = `Ticket #${ticket.ticketNumber} (${ticket.category}) has been revived by ${revivedBy}\nTime: ${nowIST}`;
 
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Reopened`, body, itHead);
-    await sendEmail(dept, `[TICKET #${ticket.ticketNumber}] Reopened`, body, itHead);
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, body, itHead);
+    await sendEmail(dept, `[TICKET #${ticket.ticketNumber}] Revived`, body, itHead);
 
-    res.json({ message: "Ticket reopened successfully" });
+    res.json({ message: "Ticket revived successfully" });
   } catch (err) {
-    console.error("Error reopening ticket:", err.message);
+    console.error("Error reviving ticket:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
