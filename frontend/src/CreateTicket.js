@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -67,6 +67,7 @@ function PasswordPopup({ password, onClose }) {
 function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
+
   const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium' });
   const [loading, setLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -75,22 +76,57 @@ function CreateTicket() {
   // Modal for success/error messages (replaces window.alert)
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
 
+  // Displayed user info (read-only in the form)
+  const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
+  const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
+
+  // Fetch up-to-date name/email from Graph when component mounts (if possible)
+  useEffect(() => {
+    let mounted = true;
+    const fetchUser = async () => {
+      if (!accounts || !accounts[0]) return;
+      try {
+        const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
+        const resp = await axios.get('https://graph.microsoft.com/v1.0/me', {
+          headers: { Authorization: `Bearer ${tokenResp.accessToken}` }
+        });
+        if (!mounted) return;
+        setDisplayName(resp.data.displayName || accounts[0]?.name || '');
+        const email = (resp.data.mail && resp.data.mail.trim()) ||
+                      (resp.data.userPrincipalName && resp.data.userPrincipalName.trim()) ||
+                      accounts[0]?.username || '';
+        setDisplayEmail(email);
+      } catch (err) {
+        // Silent fail — keep values from accounts if Graph call fails (no interrupt for user)
+        console.debug('Could not fetch user profile for form display:', err?.message || err);
+      }
+    };
+    fetchUser();
+    return () => { mounted = false; };
+  }, [instance, accounts]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Acquire token for Graph API
+      // Acquire token for Graph API (and to authenticate backend)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
 
-      // Get actual display name from Microsoft Graph
-      const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
-        headers: { Authorization: `Bearer ${token.accessToken}` }
-      });
-      const displayName = userRes.data.displayName || 'User';
-      const userEmail = userRes.data.mail?.trim() ||
-        userRes.data.userPrincipalName?.trim() ||
-        accounts[0]?.username?.trim();
+      // Try to get the latest displayName and email (graceful fallback to earlier values)
+      let latestName = displayName;
+      let latestEmail = displayEmail;
+      try {
+        const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
+          headers: { Authorization: `Bearer ${token.accessToken}` }
+        });
+        latestName = userRes.data.displayName || latestName || 'User';
+        latestEmail = (userRes.data.mail && userRes.data.mail.trim()) ||
+                      (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
+                      latestEmail || '';
+      } catch (err) {
+        // ignore, we'll use existing displayName/displayEmail
+      }
 
       // Prepare ticket data
       const ticketData = {
@@ -98,8 +134,8 @@ function CreateTicket() {
         description: formData.description,
         priority: formData.priority,
         userId: accounts[0]?.localAccountId,
-        userName: displayName || accounts[0]?.username,
-        userEmail,
+        userName: latestName || accounts[0]?.username,
+        userEmail: latestEmail,
         status: 'Open'
       };
 
@@ -121,7 +157,6 @@ function CreateTicket() {
         setNewPassword(response.data.newPassword);
         setShowPasswordPopup(true);
       }
-
     } catch (error) {
       console.error('Error creating ticket:', error);
 
@@ -147,9 +182,6 @@ function CreateTicket() {
     }
   };
 
-  // derive a username to display in the form (read-only)
-  const displayUsername = accounts?.[0]?.username || accounts?.[0]?.name || '';
-
   return (
     <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
       <div style={{ background: 'white', padding: '2rem', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
@@ -157,10 +189,26 @@ function CreateTicket() {
         <form onSubmit={handleSubmit}>
 
           {/* Username (read-only) */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label>Username</label>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '6px' }}>User Name</label>
             <input
-              value={displayUsername}
+              value={displayName}
+              readOnly
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '2px solid #eee',
+                borderRadius: '8px',
+                background: '#f9fafb'
+              }}
+            />
+          </div>
+
+          {/* Email (read-only) */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', marginBottom: '6px' }}>User Email</label>
+            <input
+              value={displayEmail}
               readOnly
               style={{
                 width: '100%',
