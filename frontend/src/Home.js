@@ -212,8 +212,8 @@ function Home() {
         /* Action buttons */
         .actions { display:flex; gap:10px; }
         .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:700; border:none; }
-        .btn-create { background:linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow:0 8px 20px rgba(14, 79, 217, 0.12); }
-        .btn-closed { background:linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow:0 8px 20px rgba(88, 19, 207, 0.12); }
+        .btn-create { background:linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow:0 8px 20px rgba(37,99,235,0.12); }
+        .btn-closed { background:linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow:0 8px 20px rgba(124,58,237,0.12); }
 
         /* Search area: always centered */
         .search-wrapper { display:flex; justify-content:center; margin-bottom:14px; }
@@ -238,8 +238,10 @@ function Home() {
         .filter-actions { display:flex; gap:8px; margin-top:8px; }
 
         /* Applied filters */
-        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-start; }
+        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-end; }
         .chip { background:#ecf9ff; border-radius:20px; padding:6px 10px; display:flex; align-items:center; gap:6px; font-weight:600; color:#2c3e50; }
+
+        .show-my { display:flex; align-items:center; gap:8px; color:#374151; font-weight:600; }
 
         @media (max-width:840px) {
           .welcome { flex-direction:column; align-items:stretch; }
@@ -260,21 +262,37 @@ function Home() {
               <span className={`role-badge ${authority === 'admin' ? 'role-admin' : 'role-user'}`}>
                 {authority === 'admin' ? 'ADMIN' : 'USER'}
               </span>
-              <div className="kpis" style={{ marginTop: 8 }}>
+
+              {/* Show only my tickets checkbox for admin */}
+              {authority === 'admin' && (
+                <div style={{ marginTop: 8 }}>
+                  <label className="show-my">
+                    <input
+                      type="checkbox"
+                      checked={showMyTickets}
+                      onChange={() => setShowMyTickets(prev => !prev)}
+                      style={{ transform: 'scale(1.1)' }}
+                    />
+                    Show only my tickets
+                  </label>
+                </div>
+              )}
+
+              <div className="kpis" aria-hidden style={{ marginTop: 8 }}>
                 <div className="kpi"><span className="num">{openTickets.length}</span><span style={{ marginLeft: 8 }}>Open</span></div>
                 <div className="kpi"><span className="num">{closedTickets.length}</span><span style={{ marginLeft: 8 }}>Closed</span></div>
-                {/* Total KPI removed per request */}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="actions" role="toolbar" aria-label="Quick actions">
+        <div className="welcome-actions" role="toolbar" aria-label="Quick actions">
           <Link to="/create" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-create" aria-label="Create New Ticket">Create Ticket</button>
+            <button className="btn btn-create" aria-label="Create New Ticket">➕ Create Ticket</button>
           </Link>
+
           <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-closed" aria-label="View Closed Tickets">Closed Tickets</button>
+            <button className="btn btn-closed" aria-label="View Closed Tickets">📥 Closed Tickets</button>
           </Link>
         </div>
       </div>
