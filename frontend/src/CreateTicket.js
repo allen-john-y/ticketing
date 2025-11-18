@@ -183,7 +183,7 @@ function CreateTicket() {
           </div>
         </div>
 
-        <h1 style={{ textAlign: 'center', margin: '18px 0 8px' }}>➕ Create New Ticket</h1>
+        <h1 style={{ textAlign: 'center', margin: '18px 0 8px' }}>Create New Ticket</h1>
         <form onSubmit={handleSubmit}>
 
           <div style={styles.gridRow}>
