@@ -263,7 +263,7 @@ function Home() {
               <div className="kpis" style={{ marginTop: 8 }}>
                 <div className="kpi"><span className="num">{openTickets.length}</span><span style={{ marginLeft: 8 }}>Open</span></div>
                 <div className="kpi"><span className="num">{closedTickets.length}</span><span style={{ marginLeft: 8 }}>Closed</span></div>
-                <div className="kpi"><span className="num">{tickets.length}</span><span style={{ marginLeft: 8 }}>Total</span></div>
+                {/* Total KPI removed per request */}
               </div>
             </div>
           </div>
