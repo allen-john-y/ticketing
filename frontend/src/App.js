@@ -134,7 +134,7 @@ function Header({ logout }) {
         <img src={logo} alt="Sandeza logo" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6 }} />
         <div>
           <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: '1.25rem' }}>🏢</span>
+            <span style={{ fontSize: '1.25rem' }}></span>
             <span>SANDEZA INC</span>
           </h1>
           <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '0.9rem' }}>IT Ticket Portal</h2>
