@@ -151,8 +151,8 @@ function Home() {
     : userFiltered.filter(
         t =>
           t.ticketNumber.toString().includes(searchTerm) ||
-          t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          t.description.toLowerCase().includes(searchTerm.toLowerCase())
+          (t.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
 
   const openTickets = searchFiltered.filter(t => t.status !== 'Closed');
@@ -174,7 +174,7 @@ function Home() {
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <style>{`
-        /* Header / welcome enhancements */
+        /* Welcome card */
         .welcome {
           display: flex;
           gap: 16px;
@@ -218,10 +218,52 @@ function Home() {
         .btn-closed { background: linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow: 0 8px 20px rgba(124,58,237,0.12); }
         .btn-ghost { background:transparent; border:1px solid #e6e9ee; color:#0f172a; padding:8px 12px; border-radius:8px; font-weight:600; }
 
+        /* Filter controls & action row */
+        .action-row { display:flex; justify-content: space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+
+        /* Search: colorful, integrated pill with subtle gradient border */
+        .search-wrapper {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 1.5rem;
+          width: 100%;
+        }
+        .search-pill {
+          width: 100%;
+          max-width: 720px;
+          border-radius: 999px;
+          padding: 3px;
+          background: linear-gradient(90deg, rgba(37,99,235,0.12), rgba(124,58,237,0.08));
+          box-shadow: 0 8px 24px rgba(37,99,235,0.06);
+        }
+        .search-inner {
+          display: flex;
+          align-items: center;
+          background: white;
+          border-radius: 999px;
+          padding: 8px 12px;
+        }
+        .search-icon {
+          margin-left: 6px;
+          margin-right: 10px;
+          color: #64748b;
+        }
+        .search-input {
+          width: 100%;
+          border: none;
+          outline: none;
+          font-size: 16px;
+          font-family: Consolas, Monaco, monospace;
+          color: #0f172a;
+        }
+        .search-input::placeholder { color: #2563eb; opacity: 0.9; }
+        .search-inner:focus-within { box-shadow: 0 10px 30px rgba(37,99,235,0.10); transform: translateY(-1px); }
+
         @media (max-width: 840px) {
           .welcome { flex-direction: column; align-items: stretch; }
           .welcome-left { width: 100%; }
           .welcome-actions { justify-content: space-between; width: 100%; margin-top: 8px; }
+          .search-pill { max-width: 100%; padding: 2px; }
         }
       `}</style>
 
@@ -254,16 +296,7 @@ function Home() {
           <Link to="/dashboard" style={{ textDecoration: 'none' }}>
             <button className="btn btn-closed" aria-label="View Closed Tickets">📥 Closed Tickets</button>
           </Link>
-
-          <button
-            className="btn-ghost"
-            onClick={() => { setDropdownOpen(dropdownOpen === 'category' ? null : 'category'); }}
-            aria-expanded={dropdownOpen === 'category'}
-            aria-controls="filter-dropdown"
-            title="Filter by category"
-          >
-            Filter
-          </button>
+          {/* removed the extra 'Filter' button here per request - filtering controls remain below */}
         </div>
       </div>
 
@@ -274,8 +307,8 @@ function Home() {
         boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
       }}>
 
-        {/* Filters / Applied filters / Search are kept below the welcome area (unchanged behaviour) */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        {/* Filters / Search */}
+        <div className="action-row">
           <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'left' }}>
             <button
               onClick={() => setDropdownOpen(dropdownOpen === 'category' ? null : 'category')}
@@ -344,27 +377,20 @@ function Home() {
             )}
           </div>
 
-          {/* Search input (keeps the improved styling used earlier) */}
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-            <div style={{ width: '100%', maxWidth: 560 }}>
-              <div style={{ position: 'relative' }}>
-                <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, color: '#6b7280' }} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+          {/* Search input - colorful pill that fits the homepage */}
+          <div className="search-wrapper" aria-hidden={false} style={{ flex: 1 }}>
+            <div className="search-pill">
+              <div className="search-inner">
+                <svg className="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
                   <path d="M21 21l-4.35-4.35" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   <circle cx="11" cy="11" r="6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <input
                   className="search-input"
-                  placeholder="Search by number, category, or issue..."
+                  placeholder="Search by ticket number, category, or issue..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   aria-label="Search tickets"
-                  style={{
-                    width: '100%',
-                    padding: '10px 16px 10px 42px',
-                    borderRadius: 999,
-                    border: '1px solid #e6e9ee',
-                    outline: 'none'
-                  }}
                 />
               </div>
             </div>
