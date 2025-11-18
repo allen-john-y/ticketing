@@ -156,200 +156,160 @@ function Home() {
       );
 
   const openTickets = searchFiltered.filter(t => t.status !== 'Closed');
+  const closedTickets = tickets.filter(t => t.status === 'Closed');
 
-  // Category -> color mapping (per your request)
+  // Category -> color mapping
   const categoryColor = (category) => {
-    if (!category) return '#3498db'; // default blue
+    if (!category) return '#3498db';
     const c = category.toLowerCase();
-    if (c.includes('password') || c.includes('admin access') || c.includes('admin')) return '#f39c12'; // orange
-    if (c.includes('payroll') || c.includes('expense')) return '#27ae60'; // green
-    if (c.includes('leave') || c.includes('onboard') || c.includes('onboarding')) return '#e74c3c'; // red
+    if (c.includes('password') || c.includes('admin access') || c.includes('admin')) return '#f39c12';
+    if (c.includes('payroll') || c.includes('expense')) return '#27ae60';
+    if (c.includes('leave') || c.includes('onboard') || c.includes('onboarding')) return '#e74c3c';
     return '#3498db';
   };
 
+  // derive initials
+  const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Component-scoped CSS for upgraded button styles + search control */}
       <style>{`
-        /* BUTTONS: consistent sizing, subtle elevation and hover states */
-        .btn {
-          display: inline-flex;
+        /* Header / welcome enhancements */
+        .welcome {
+          display: flex;
+          gap: 16px;
           align-items: center;
-          gap: 10px;
-          padding: 10px 18px;
-          border-radius: 10px;
-          cursor: pointer;
-          font-weight: 700;
-          font-size: 0.95rem;
-          transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
-          border: none;
+          background: linear-gradient(180deg, #ffffff, #fbfdff);
+          padding: 18px;
+          border-radius: 12px;
+          box-shadow: 0 6px 24px rgba(2,6,23,0.06);
+          margin-bottom: 18px;
         }
-        .btn:active { transform: translateY(1px); }
+        .avatar {
+          width: 64px;
+          height: 64px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #eef2ff, #e9f5ff);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+          color: #3730a3;
+          font-size: 20px;
+          box-shadow: 0 4px 12px rgba(2,6,23,0.06);
+        }
+        .welcome-left { flex: 1; display: flex; gap: 12px; align-items: center; }
+        .welcome-meta { display:flex; flex-direction: column; gap: 6px; }
+        .welcome-title { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0; }
+        .welcome-sub { color: #475569; margin: 0; font-size: 13px; }
+        .role-badge { display:inline-block; padding: 6px 12px; border-radius: 999px; font-weight:700; font-size: 12px; color: white; }
+        .role-admin { background: linear-gradient(90deg,#16a34a,#60a5fa); }
+        .role-user { background: linear-gradient(90deg,#94a3b8,#64748b); }
 
-        /* Primary - bright blue gradient */
-        .btn-primary {
-          background: linear-gradient(90deg, #2563eb 0%, #60a5fa 100%);
-          color: white;
-          box-shadow: 0 8px 20px rgba(37,99,235,0.12);
-        }
-        .btn-primary:hover { filter: brightness(0.97); }
+        /* KPI chips */
+        .kpis { display:flex; gap:10px; margin-top: 6px; flex-wrap:wrap; }
+        .kpi { background: #f8fafc; padding: 8px 12px; border-radius: 10px; font-weight:700; color:#0f172a; display:inline-flex; gap:10px; align-items:center; box-shadow: 0 4px 12px rgba(2,6,23,0.03); }
+        .kpi .num { color: #0b6fbd; font-weight:900; }
 
-        /* Accent - purple for closed tickets / secondary action */
-        .btn-accent {
-          background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%);
-          color: white;
-          box-shadow: 0 8px 20px rgba(124,58,237,0.12);
-        }
-        .btn-accent:hover { filter: brightness(0.97); }
+        /* Actions area in header */
+        .welcome-actions { display:flex; gap:10px; align-items:center; }
+        .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:700; border:none; }
+        .btn-create { background: linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow: 0 8px 20px rgba(37,99,235,0.12); }
+        .btn-closed { background: linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow: 0 8px 20px rgba(124,58,237,0.12); }
+        .btn-ghost { background:transparent; border:1px solid #e6e9ee; color:#0f172a; padding:8px 12px; border-radius:8px; font-weight:600; }
 
-        /* Outline style for filters */
-        .btn-outline {
-          background: white;
-          border: 1px solid #e6e9ee;
-          color: #111827;
-          font-weight: 600;
-          padding: 8px 14px;
-          border-radius: 8px;
-          box-shadow: 0 2px 8px rgba(2,6,23,0.04);
-        }
-        .btn-outline .dot {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          display: inline-block;
-          margin-right: 8px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-
-        .btn-orange {
-          border-color: #f39c12;
-          color: #b45400;
-        }
-        .btn-orange:hover { background: #fff7ec; }
-
-        .btn-violet {
-          border-color: #7c3aed;
-          color: #5b21b6;
-        }
-        .btn-violet:hover { background: #fbf6ff; }
-
-        /* Make action buttons consistent size */
-        .action-buttons { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
-
-        /* Search box */
-        .search-wrapper { display: flex; justify-content: center; margin-bottom: 1.5rem; }
-        .search-box { position: relative; display: inline-flex; align-items: center; width: 100%; max-width: 560px; box-sizing: border-box; }
-        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #6b7280; pointer-events: none; opacity: 0.9; }
-        .search-input {
-          width: 100%;
-          padding: 10px 16px 10px 42px;
-          border: 1px solid #e6e9ee;
-          border-radius: 999px;
-          background: #ffffff;
-          font-size: 16px;
-          transition: box-shadow 0.18s ease, transform 0.18s ease;
-          font-family: Consolas, Monaco, monospace;
-          box-shadow: 0 1px rgba(0,0,0,0.04);
-          outline: none;
-          color: #111827;
-        }
-        .search-input::placeholder { color: #2563eb; opacity: 0.85; }
-        .search-input:focus {
-          box-shadow: 0 8px 24px rgba(37,99,235,0.12);
-          border-color: #2563eb;
-          transform: translateY(-1px);
-        }
-
-        @media (max-width: 640px) {
-          .action-buttons { gap: 8px; }
-          .btn { padding: 10px 12px; font-size: 0.92rem; }
-          .search-box { padding: 0 12px; max-width: 100%; }
+        @media (max-width: 840px) {
+          .welcome { flex-direction: column; align-items: stretch; }
+          .welcome-left { width: 100%; }
+          .welcome-actions { justify-content: space-between; width: 100%; margin-top: 8px; }
         }
       `}</style>
 
-      <div style={{
-        background: 'white',
-        padding: '2rem',
-        borderRadius: '10px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-      }}>
+      {/* Welcome card */}
+      <div className="welcome" role="region" aria-label="Welcome">
+        <div className="avatar" aria-hidden>{initials}</div>
 
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1rem'
-        }}>
-          <div style={{ textAlign: 'left' }}>
-            <h1 style={{ color: '#2c3e50' }}>
-              Welcome, <span style={{ color: '#3498db' }}>{userName}</span>
-            </h1>
-            <p>
-              <span style={{
-                background: authority === 'admin' ? '#27ae60' : '#95a5a6',
-                color: 'white',
-                padding: '6px 14px',
-                borderRadius: '20px',
-                fontSize: '0.9rem'
-              }}>
+        <div className="welcome-left">
+          <div className="welcome-meta">
+            <h2 className="welcome-title">Welcome back, <span style={{ color: '#2563eb' }}>{userName}</span></h2>
+            <p className="welcome-sub">
+              <span className={`role-badge ${authority === 'admin' ? 'role-admin' : 'role-user'}`}>
                 {authority === 'admin' ? 'ADMIN' : 'USER'}
               </span>
             </p>
 
-            {authority === 'admin' && (
-              <div style={{ marginTop: '1rem' }}>
-                <label style={{ fontSize: '0.95rem', color: '#2c3e50' }}>
-                  <input
-                    type="checkbox"
-                    checked={showMyTickets}
-                    onChange={() => setShowMyTickets(prev => !prev)}
-                    style={{ marginRight: '8px', transform: 'scale(1.2)' }}
-                  />
-                  Show only my tickets
-                </label>
-              </div>
-            )}
+            <div className="kpis" aria-hidden>
+              <div className="kpi"><span className="num">{openTickets.length}</span><span>Open</span></div>
+              <div className="kpi"><span className="num">{closedTickets.length}</span><span>Closed</span></div>
+              <div className="kpi"><span className="num">{tickets.length}</span><span>Total</span></div>
+            </div>
           </div>
+        </div>
 
-          {/* Filters */}
-          <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
+        <div className="welcome-actions" role="toolbar" aria-label="Quick actions">
+          <Link to="/create" style={{ textDecoration: 'none' }}>
+            <button className="btn btn-create" aria-label="Create New Ticket">➕ Create Ticket</button>
+          </Link>
+
+          <Link to="/dashboard" style={{ textDecoration: 'none' }}>
+            <button className="btn btn-closed" aria-label="View Closed Tickets">📥 Closed Tickets</button>
+          </Link>
+
+          <button
+            className="btn-ghost"
+            onClick={() => { setDropdownOpen(dropdownOpen === 'category' ? null : 'category'); }}
+            aria-expanded={dropdownOpen === 'category'}
+            aria-controls="filter-dropdown"
+            title="Filter by category"
+          >
+            Filter
+          </button>
+        </div>
+      </div>
+
+      <div style={{
+        background: 'white',
+        padding: '1.5rem 2rem',
+        borderRadius: '10px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
+      }}>
+
+        {/* Filters / Applied filters / Search are kept below the welcome area (unchanged behaviour) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'left' }}>
             <button
               onClick={() => setDropdownOpen(dropdownOpen === 'category' ? null : 'category')}
-              className="btn-outline btn-orange"
+              className="btn-ghost"
               style={{ marginRight: 8 }}
               aria-expanded={dropdownOpen === 'category'}
             >
-              <span className="dot" style={{ background: '#f39c12' }}></span>
               Filter by Category ▾
             </button>
 
             {authority === 'admin' && (
               <button
                 onClick={() => setDropdownOpen(dropdownOpen === 'user' ? null : 'user')}
-                className="btn-outline btn-violet"
+                className="btn-ghost"
                 aria-expanded={dropdownOpen === 'user'}
+                style={{ marginLeft: 8 }}
               >
-                <span className="dot" style={{ background: '#7c3aed' }}></span>
                 Filter by User ▾
               </button>
             )}
 
             {dropdownOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  right: 0,
-                  marginTop: '8px',
-                  background: 'white',
-                  border: '1px solid #ccc',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-                  zIndex: 10,
-                  minWidth: '220px',
-                  padding: '10px'
-                }}
-              >
+              <div id="filter-dropdown" style={{
+                position: 'absolute',
+                left: 0,
+                marginTop: '8px',
+                background: 'white',
+                border: '1px solid #ccc',
+                borderRadius: '8px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+                zIndex: 10,
+                minWidth: '220px',
+                padding: '10px'
+              }}>
                 {(dropdownOpen === 'category' ? categories : users).map(item => (
                   <label key={item} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                     <input
@@ -383,94 +343,52 @@ function Home() {
               </div>
             )}
           </div>
+
+          {/* Search input (keeps the improved styling used earlier) */}
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: 560 }}>
+              <div style={{ position: 'relative' }}>
+                <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, color: '#6b7280' }} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                  <path d="M21 21l-4.35-4.35" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="11" cy="11" r="6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <input
+                  className="search-input"
+                  placeholder="Search by number, category, or issue..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  aria-label="Search tickets"
+                  style={{
+                    width: '100%',
+                    padding: '10px 16px 10px 42px',
+                    borderRadius: 999,
+                    border: '1px solid #e6e9ee',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* ✅ Applied Filters */}
+        {/* Applied filters */}
         {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-            gap: '8px',
-            marginBottom: '1rem'
-          }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px' }}>
             {[...appliedCategories.map(c => ({ type: 'category', value: c })), 
               ...appliedUsers.map(u => ({ type: 'user', value: u }))].map(({ type, value }) => (
-              <div key={value} style={{
-                background: '#ecf9ff',
-                borderRadius: '20px',
-                padding: '6px 10px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
+              <div key={value} style={{ background: '#ecf9ff', borderRadius: '20px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ color: '#2c3e50', fontWeight: '500' }}>{value}</span>
-                <button
-                  onClick={() => removeFilter(type, value)}
-                  style={{
-                    background: 'transparent',
-                    color: '#e74c3c',
-                    border: 'none',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  ✕
-                </button>
+                <button onClick={() => removeFilter(type, value)} style={{ background: 'transparent', color: '#e74c3c', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>✕</button>
               </div>
             ))}
 
-            <button
-              onClick={clearAllFilters}
-              style={{
-                background: '#e74c3c',
-                color: 'white',
-                border: 'none',
-                borderRadius: '20px',
-                padding: '6px 14px',
-                cursor: 'pointer',
-                fontWeight: '600'
-              }}
-            >
+            <button onClick={clearAllFilters} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '20px', padding: '6px 14px', cursor: 'pointer', fontWeight: '600' }}>
               Clear All
             </button>
           </div>
         )}
 
-        {/* ✅ Action Buttons (Create + View) */}
-        <div className="action-buttons" style={{ marginBottom: '1.5rem' }}>
-          <Link to="/create" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-primary" aria-label="Create New Ticket">
-              ➕ Create New Ticket
-            </button>
-          </Link>
-
-          <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-accent" aria-label="View Closed Tickets">
-              📥 View Closed Tickets
-            </button>
-          </Link>
-        </div>
-
-        {/* ✅ Search Bar (now nicely integrated) */}
-        <div className="search-wrapper">
-          <div className="search-box" role="search" aria-label="Search tickets">
-            <svg className="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-              <path d="M21 21l-4.35-4.35" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <circle cx="11" cy="11" r="6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <input
-              className="search-input"
-              placeholder="Search by number, category, or issue..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              aria-label="Search tickets"
-            />
-          </div>
-        </div>
-
-        {/* ✅ Ticket Display (styled like Dashboard closed tickets) */}
+        {/* Ticket list header */}
         <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>
           {authority === 'admin'
             ? showMyTickets
@@ -479,6 +397,7 @@ function Home() {
             : `Your Open Tickets (${openTickets.length})`}
         </h2>
 
+        {/* Ticket list */}
         {openTickets.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#7f8c8d', padding: '2rem' }}>
             <h3 style={{ color: '#374151' }}>No results found for your search</h3>
@@ -515,12 +434,7 @@ function Home() {
                     </>
                   )}
 
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: '0.9rem',
-                    marginTop: 8
-                  }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: 8 }}>
                     <span style={{ color: '#10b981', fontWeight: 700 }}>Status: {ticket.status}</span>
                     <span style={{ color: '#6b7280' }}>Priority: {ticket.priority}</span>
                   </div>
