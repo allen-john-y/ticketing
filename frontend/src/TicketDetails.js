@@ -64,6 +64,7 @@ function TicketDetails() {
       }
 
       setModal({ open: false, action: null });
+      // refresh list on home
       navigate('/', { state: { refresh: true } });
 
     } catch (err) {
@@ -73,65 +74,228 @@ function TicketDetails() {
     setLoading(false);
   };
 
-  if (!ticket) return <p>Loading...</p>;
+  const categoryColor = (category) => {
+    if (!category) return '#3498db';
+    const c = category.toLowerCase();
+    if (c.includes('password') || c.includes('admin access') || c.includes('admin')) return '#f39c12';
+    if (c.includes('payroll') || c.includes('expense')) return '#27ae60';
+    if (c.includes('leave') || c.includes('onboard') || c.includes('onboarding')) return '#e74c3c';
+    return '#3498db';
+  };
+
+  const statusColor = (status) => {
+    if (!status) return '#6b7280';
+    const s = status.toLowerCase();
+    if (s === 'open') return '#10b981';
+    if (s === 'in progress' || s === 'pending') return '#f59e0b';
+    if (s === 'closed' || s === 'resolved') return '#6b7280';
+    return '#6b7280';
+  };
+
+  const initials = (nameOrEmail) => {
+    const value = nameOrEmail || '';
+    return value.split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase() || 'U';
+  };
+
+  if (!ticket) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: 900, margin: '0 auto' }}>
+        <div style={{ background: 'white', padding: 24, borderRadius: 12, boxShadow: '0 6px 20px rgba(2,6,23,0.06)' }}>
+          <p style={{ margin: 0 }}>Loading ticket…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
-      {/* TICKET DETAILS UI */}
-      <div style={{
-        padding: '2rem',
-        maxWidth: '600px',
-        margin: '0 auto',
-        background: 'white',
-        borderRadius: '10px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-      }}>
-        <h1>{ticket.category}</h1>
-        <p><strong>Ticket Number:</strong> {ticket.ticketNumber}</p>
-        <p><strong>Created by:</strong> {ticket.userName}</p>
-        <p><strong>Email:</strong> {ticket.userEmail}</p>
-        <p><strong>Description:</strong> {ticket.description}</p>
-        <p><strong>Priority:</strong> {ticket.priority}</p>
-        <p><strong>Status:</strong> {ticket.status}</p>
+      <div style={{ padding: '2rem', maxWidth: 980, margin: '0 auto' }}>
+        <div style={{
+          display: 'flex',
+          gap: 20,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 16
+        }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <button
+              onClick={() => navigate(-1)}
+              aria-label="Back"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                padding: 8,
+                borderRadius: 8
+              }}
+            >
+              ← Back
+            </button>
 
-        {/* ADMIN CLOSE BUTTON */}
-        {authority === 'admin' && ticket.status !== 'Closed' && (
-          <button
-            onClick={() => setModal({ open: true, action: "close" })}
-            disabled={loading}
-            style={{
-              marginTop: '1rem',
-              background: '#e74c3c',
-              color: 'white',
-              padding: '12px 24px',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            {loading ? 'Closing...' : 'Close Ticket'}
-          </button>
-        )}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 12,
+                background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 20, fontWeight: 800, color: '#3730a3'
+              }}>
+                {initials(ticket.userName || ticket.userEmail)}
+              </div>
 
-        {/* REVIVE BUTTON */}
-        {ticket.status === 'Closed' && (
-          <button
-            onClick={() => setModal({ open: true, action: "revive" })}
-            disabled={loading}
-            style={{
-              marginTop: '1rem',
-              background: '#27ae60',
-              color: 'white',
-              padding: '12px 24px',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              marginLeft: authority === 'admin' ? '10px' : '0'
-            }}
-          >
-            {loading ? 'Reviving...' : 'Revive Ticket'}
-          </button>
-        )}
+              <div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
+                  <h2 style={{ margin: 0, color: '#0f172a' }}>#{ticket.ticketNumber} — {ticket.category}</h2>
+                  <div style={{
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    background: '#f3f4f6',
+                    fontWeight: 700,
+                    color: '#374151',
+                    fontSize: 13
+                  }}>{ticket.priority || 'Medium'}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>{ticket.userName}</div>
+                  <div style={{ fontSize: 13, color: '#9ca3af' }}>•</div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>{ticket.userEmail}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div style={{
+              padding: '8px 12px',
+              borderRadius: 999,
+              background: '#ffffff',
+              boxShadow: '0 6px 18px rgba(2,6,23,0.06)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusColor(ticket.status) }} aria-hidden />
+              <div style={{ fontWeight: 700, color: '#0f172a' }}>{ticket.status}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 320px',
+          gap: 20,
+          alignItems: 'start'
+        }}>
+          {/* Main content */}
+          <div style={{ background: 'white', padding: 20, borderRadius: 12, boxShadow: '0 8px 30px rgba(2,6,23,0.04)' }}>
+            <h3 style={{ marginTop: 0, color: '#0f172a' }}>Description</h3>
+            <div style={{ color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {ticket.description || 'No description provided.'}
+            </div>
+
+            {ticket.notes || ticket.history ? (
+              <>
+                <h4 style={{ marginTop: 18 }}>Activity</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {Array.isArray(ticket.history) && ticket.history.length > 0 && ticket.history.map((h, i) => (
+                    <div key={i} style={{ background: '#fbfdff', padding: 10, borderRadius: 8, borderLeft: `4px solid ${categoryColor(h.category || ticket.category)}` }}>
+                      <div style={{ fontSize: 13, color: '#374151', fontWeight: 700 }}>{h.title || h.action || 'Update'}</div>
+                      <div style={{ fontSize: 13, color: '#6b7280' }}>{h.detail || h.note || ''}</div>
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>{h.when}</div>
+                    </div>
+                  ))}
+
+                  {ticket.notes && (
+                    <div style={{ background: '#fbfbfb', padding: 10, borderRadius: 8 }}>
+                      <div style={{ fontSize: 13, color: '#374151', fontWeight: 700 }}>Notes</div>
+                      <div style={{ marginTop: 6, color: '#6b7280' }}>{ticket.notes}</div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          {/* Right column: metadata & actions */}
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: 'white', padding: 16, borderRadius: 12, boxShadow: '0 8px 30px rgba(2,6,23,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 13, color: '#6b7280' }}>Category</div>
+                <div style={{ fontWeight: 800, color: categoryColor(ticket.category), textTransform: 'capitalize' }}>{ticket.category}</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 13, color: '#6b7280' }}>Created</div>
+                <div style={{ fontWeight: 700, color: '#374151' }}>{ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : '—'}</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 13, color: '#6b7280' }}>Last updated</div>
+                <div style={{ fontWeight: 700, color: '#374151' }}>{ticket.updatedAt ? new Date(ticket.updatedAt).toLocaleString() : '—'}</div>
+              </div>
+            </div>
+
+            {/* Actions card */}
+            <div style={{ background: 'white', padding: 16, borderRadius: 12, boxShadow: '0 8px 30px rgba(2,6,23,0.04)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* ADMIN CLOSE BUTTON */}
+                {authority === 'admin' && ticket.status !== 'Closed' && (
+                  <button
+                    onClick={() => setModal({ open: true, action: "close" })}
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      background: '#e74c3c',
+                      color: 'white',
+                      padding: '12px 14px',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 800
+                    }}
+                  >
+                    {loading ? 'Closing...' : 'Close Ticket'}
+                  </button>
+                )}
+
+                {/* REVIVE BUTTON */}
+                {ticket.status === 'Closed' && (
+                  <button
+                    onClick={() => setModal({ open: true, action: "revive" })}
+                    disabled={loading}
+                    style={{
+                      width: '100%',
+                      background: '#27ae60',
+                      color: 'white',
+                      padding: '12px 14px',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 800
+                    }}
+                  >
+                    {loading ? 'Reviving...' : 'Revive Ticket'}
+                  </button>
+                )}
+
+                <button
+                  onClick={() => navigate('/')}
+                  style={{
+                    width: '100%',
+                    background: 'transparent',
+                    color: '#2563eb',
+                    padding: '10px 12px',
+                    border: '1px solid rgba(37,99,235,0.12)',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontWeight: 700
+                  }}
+                >
+                  ← Back to list
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
 
       {/* CONFIRMATION MODAL */}
@@ -140,52 +304,59 @@ function TicketDetails() {
           position: "fixed",
           top: 0, left: 0,
           width: "100vw", height: "100vh",
-          background: "rgba(0,0,0,0.6)",
+          background: "rgba(0,0,0,0.45)",
           display: "flex",
           justifyContent: "center",
-          alignItems: "center"
+          alignItems: "center",
+          zIndex: 2000
         }}>
           <div style={{
             background: "white",
-            padding: "30px",
-            borderRadius: "10px",
-            width: "350px",
+            padding: "28px",
+            borderRadius: "12px",
+            width: "400px",
+            maxWidth: "92%",
             textAlign: "center",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.2)"
+            boxShadow: "0 8px 30px rgba(2,6,23,0.12)"
           }}>
-            <h3 style={{ marginBottom: "20px" }}>
-              {modal.action === "close"
-                ? "Close this ticket?"
-                : "Revive this ticket?"}
+            <h3 style={{ marginBottom: 12, color: '#0f172a' }}>
+              {modal.action === "close" ? "Close this ticket?" : "Revive this ticket?"}
             </h3>
+            <p style={{ color: '#6b7280', marginBottom: 18 }}>
+              {modal.action === "close"
+                ? "Closing will mark the ticket as completed. This action can be reversed by reviving."
+                : "Reviving will reopen the ticket so it can be worked on again."}
+            </p>
 
-            <div style={{ display: "flex", justifyContent: "space-around" }}>
+            <div style={{ display: "flex", gap: 12, justifyContent: 'center' }}>
               <button
                 onClick={confirmAction}
                 style={{
                   padding: "10px 20px",
-                  background: "#27ae60",
+                  background: "#2563eb",
                   color: "white",
                   border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer"
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: 800
                 }}
               >
-                Yes
+                {loading ? 'Working…' : 'Yes'}
               </button>
 
               <button
                 onClick={() => setModal({ open: false, action: null })}
                 style={{
                   padding: "10px 20px",
-                  background: "#e74c3c",
-                  color: "white",
+                  background: "#f3f4f6",
+                  color: "#374151",
                   border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer"
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: 700
                 }}
               >
-                No
+                Cancel
               </button>
             </div>
           </div>
