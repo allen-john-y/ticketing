@@ -131,7 +131,7 @@ function Header({ logout }) {
       alignItems: 'center'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>🏢 SANDEZA INC</h1>
+        <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>SANDEZA INC</h1>
         <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '1rem' }}>IT Ticket Portal</h2>
       </div>
 

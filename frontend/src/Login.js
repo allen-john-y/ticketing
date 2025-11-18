@@ -144,7 +144,7 @@ function Login() {
           width: '100%',
         }}
       >
-        <h1 style={{ color: '#2c3e50', marginBottom: '1rem' }}>🏢 SANDEZA INC</h1>
+        <h1 style={{ color: '#2c3e50', marginBottom: '1rem' }}>SANDEZA INC</h1>
         <h2 style={{ color: '#7f8c8d', marginBottom: '2rem' }}>IT Ticket Portal</h2>
         <button
           onClick={login}
