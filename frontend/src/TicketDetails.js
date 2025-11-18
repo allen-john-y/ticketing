@@ -51,7 +51,7 @@ function TicketDetails() {
     fetchTicket();
   }, [id]);
 
-  // ACTION HANDLERS WITHOUT ALERTS
+  // ACTION HANDLERS (logic unchanged)
   const confirmAction = async () => {
     if (!modal.action) return;
     setLoading(true);
@@ -64,7 +64,6 @@ function TicketDetails() {
       }
 
       setModal({ open: false, action: null });
-      // refresh list on home
       navigate('/', { state: { refresh: true } });
 
     } catch (err) {
@@ -97,6 +96,16 @@ function TicketDetails() {
     return value.split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase() || 'U';
   };
 
+  // Friendly date formatting helper
+  const fmt = (d) => {
+    if (!d) return '—';
+    try {
+      return new Date(d).toLocaleString();
+    } catch {
+      return d;
+    }
+  };
+
   if (!ticket) {
     return (
       <div style={{ padding: '2rem', maxWidth: 900, margin: '0 auto' }}>
@@ -109,105 +118,112 @@ function TicketDetails() {
 
   return (
     <>
-      <div style={{ padding: '2rem', maxWidth: 980, margin: '0 auto' }}>
-        <div style={{
-          display: 'flex',
-          gap: 20,
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 16
-        }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+      <style>{`
+        .td-page { padding: 2rem; max-width: 1100px; margin: 0 auto; }
+        .td-header {
+          display:flex; gap:20px; align-items:center; justify-content:space-between; margin-bottom:18px;
+        }
+        .td-info { display:flex; gap:16px; align-items:center; }
+        .td-avatar {
+          width:72px; height:72px; border-radius:12px; background:#eef2ff; display:flex; align-items:center; justify-content:center;
+          font-size:22px; font-weight:800; color:#3730a3;
+          box-shadow: 0 6px 18px rgba(2,6,23,0.06);
+        }
+        .td-title { display:flex; flex-direction:column; gap:6px; }
+        .td-title h1 { margin:0; font-size:1.4rem; color:#0f172a; }
+        .td-sub { font-size:0.95rem; color:#6b7280; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+        .badge-priority { padding:6px 10px; border-radius:999px; font-weight:800; color:white; font-size:0.88rem; }
+        .status-pill {
+          display:inline-flex; align-items:center; gap:10px; padding:10px 14px; border-radius:999px;
+          background:white; box-shadow: 0 8px 28px rgba(2,6,23,0.06); font-weight:700; color:#0f172a;
+        }
+
+        .td-grid { display:grid; grid-template-columns: 1fr 340px; gap:20px; align-items:start; }
+        .card { background:white; padding:20px; border-radius:12px; box-shadow: 0 8px 30px rgba(2,6,23,0.04); }
+        .card h3 { margin-top:0; color:#0f172a; }
+        .meta-row { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:12px; }
+        .meta-key { color:#6b7280; }
+        .meta-val { font-weight:800; color:#0f172a; }
+
+        .activity { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+        .activity-item { background:#fbfdff; padding:12px; border-radius:8px; border-left:4px solid #e2e8f0; }
+        .actions-column { display:flex; flex-direction:column; gap:10px; }
+
+        .btn-primary { width:100%; background:#e74c3c; color:white; padding:12px 14px; border:none; border-radius:8px; font-weight:800; cursor:pointer; }
+        .btn-success { width:100%; background:#27ae60; color:white; padding:12px 14px; border:none; border-radius:8px; font-weight:800; cursor:pointer; }
+        .btn-ghost { width:100%; background:transparent; border:1px solid rgba(37,99,235,0.12); color:#2563eb; padding:10px 12px; border-radius:8px; font-weight:700; cursor:pointer; }
+
+        /* Modal */
+        .td-modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:2000; }
+        .td-modal { background:white; padding:28px; border-radius:12px; width:420px; max-width:92%; box-shadow:0 12px 40px rgba(2,6,23,0.12); text-align:center; }
+
+        @media (max-width: 980px) {
+          .td-grid { grid-template-columns: 1fr; }
+          .td-header { flex-direction:column; align-items:flex-start; gap:12px; }
+          .status-pill { align-self:flex-start; }
+        }
+      `}</style>
+
+      <div className="td-page">
+        {/* Header */}
+        <div className="td-header">
+          <div className="td-info">
             <button
               onClick={() => navigate(-1)}
               aria-label="Back"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                padding: 8,
-                borderRadius: 8
-              }}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 8, marginRight: 6 }}
             >
               ← Back
             </button>
 
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 12,
-                background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 20, fontWeight: 800, color: '#3730a3'
-              }}>
-                {initials(ticket.userName || ticket.userEmail)}
+            <div className="td-avatar" aria-hidden>{initials(ticket.userName || ticket.userEmail)}</div>
+
+            <div className="td-title">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <h1>#{ticket.ticketNumber} — {ticket.category}</h1>
+                <div className="badge-priority" style={{ background: '#f59e0b' }}>{ticket.priority || 'Medium'}</div>
               </div>
-
-              <div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
-                  <h2 style={{ margin: 0, color: '#0f172a' }}>#{ticket.ticketNumber} — {ticket.category}</h2>
-                  <div style={{
-                    padding: '6px 10px',
-                    borderRadius: 999,
-                    background: '#f3f4f6',
-                    fontWeight: 700,
-                    color: '#374151',
-                    fontSize: 13
-                  }}>{ticket.priority || 'Medium'}</div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div style={{ fontSize: 13, color: '#6b7280' }}>{ticket.userName}</div>
-                  <div style={{ fontSize: 13, color: '#9ca3af' }}>•</div>
-                  <div style={{ fontSize: 13, color: '#6b7280' }}>{ticket.userEmail}</div>
-                </div>
+              <div className="td-sub">
+                <span>{ticket.userName}</span>
+                <span style={{ color: '#cbd5e1' }}>•</span>
+                <span>{ticket.userEmail}</span>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <div style={{
-              padding: '8px 12px',
-              borderRadius: 999,
-              background: '#ffffff',
-              boxShadow: '0 6px 18px rgba(2,6,23,0.06)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8
-            }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusColor(ticket.status) }} aria-hidden />
-              <div style={{ fontWeight: 700, color: '#0f172a' }}>{ticket.status}</div>
+          <div>
+            <div className="status-pill" role="status" aria-label={`Status ${ticket.status}`}>
+              <div style={{ width:10, height:10, borderRadius:999, background: statusColor(ticket.status) }} />
+              <div>{ticket.status}</div>
             </div>
           </div>
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 320px',
-          gap: 20,
-          alignItems: 'start'
-        }}>
-          {/* Main content */}
-          <div style={{ background: 'white', padding: 20, borderRadius: 12, boxShadow: '0 8px 30px rgba(2,6,23,0.04)' }}>
-            <h3 style={{ marginTop: 0, color: '#0f172a' }}>Description</h3>
-            <div style={{ color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+        {/* Main grid */}
+        <div className="td-grid">
+          {/* Left: description + activity */}
+          <div className="card">
+            <h3>Description</h3>
+            <div style={{ color: '#374151', whiteSpace: 'pre-wrap', minHeight: 80 }}>
               {ticket.description || 'No description provided.'}
             </div>
 
-            {ticket.notes || ticket.history ? (
+            {(ticket.history && ticket.history.length > 0) || ticket.notes ? (
               <>
-                <h4 style={{ marginTop: 18 }}>Activity</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {Array.isArray(ticket.history) && ticket.history.length > 0 && ticket.history.map((h, i) => (
-                    <div key={i} style={{ background: '#fbfdff', padding: 10, borderRadius: 8, borderLeft: `4px solid ${categoryColor(h.category || ticket.category)}` }}>
-                      <div style={{ fontSize: 13, color: '#374151', fontWeight: 700 }}>{h.title || h.action || 'Update'}</div>
-                      <div style={{ fontSize: 13, color: '#6b7280' }}>{h.detail || h.note || ''}</div>
-                      <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>{h.when}</div>
+                <h4 style={{ marginTop: 18, marginBottom: 8 }}>Activity</h4>
+                <div className="activity">
+                  {Array.isArray(ticket.history) && ticket.history.map((h, i) => (
+                    <div key={i} className="activity-item" style={{ borderLeftColor: categoryColor(h.category || ticket.category) }}>
+                      <div style={{ fontWeight:700, color:'#0f172a' }}>{h.title || h.action || 'Update'}</div>
+                      <div style={{ color:'#6b7280', marginTop:6 }}>{h.detail || h.note || ''}</div>
+                      {h.when && <div style={{ color:'#9ca3af', marginTop:8, fontSize:13 }}>{h.when}</div>}
                     </div>
                   ))}
 
                   {ticket.notes && (
-                    <div style={{ background: '#fbfbfb', padding: 10, borderRadius: 8 }}>
-                      <div style={{ fontSize: 13, color: '#374151', fontWeight: 700 }}>Notes</div>
-                      <div style={{ marginTop: 6, color: '#6b7280' }}>{ticket.notes}</div>
+                    <div className="activity-item" style={{ borderLeftColor: categoryColor(ticket.category) }}>
+                      <div style={{ fontWeight:700, color:'#0f172a' }}>Notes</div>
+                      <div style={{ color:'#6b7280', marginTop:6 }}>{ticket.notes}</div>
                     </div>
                   )}
                 </div>
@@ -215,84 +231,47 @@ function TicketDetails() {
             ) : null}
           </div>
 
-          {/* Right column: metadata & actions */}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ background: 'white', padding: 16, borderRadius: 12, boxShadow: '0 8px 30px rgba(2,6,23,0.04)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ fontSize: 13, color: '#6b7280' }}>Category</div>
-                <div style={{ fontWeight: 800, color: categoryColor(ticket.category), textTransform: 'capitalize' }}>{ticket.category}</div>
+          {/* Right: metadata & actions */}
+          <aside style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            <div className="card">
+              <div className="meta-row">
+                <div className="meta-key">Category</div>
+                <div className="meta-val" style={{ color: categoryColor(ticket.category) }}>{ticket.category}</div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ fontSize: 13, color: '#6b7280' }}>Created</div>
-                <div style={{ fontWeight: 700, color: '#374151' }}>{ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : '—'}</div>
+              <div className="meta-row">
+                <div className="meta-key">Created</div>
+                <div className="meta-val">{fmt(ticket.createdAt)}</div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 13, color: '#6b7280' }}>Last updated</div>
-                <div style={{ fontWeight: 700, color: '#374151' }}>{ticket.updatedAt ? new Date(ticket.updatedAt).toLocaleString() : '—'}</div>
+              <div className="meta-row">
+                <div className="meta-key">Last updated</div>
+                <div className="meta-val">{fmt(ticket.updatedAt)}</div>
               </div>
             </div>
 
-            {/* Actions card */}
-            <div style={{ background: 'white', padding: 16, borderRadius: 12, boxShadow: '0 8px 30px rgba(2,6,23,0.04)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {/* ADMIN CLOSE BUTTON */}
-                {authority === 'admin' && ticket.status !== 'Closed' && (
-                  <button
-                    onClick={() => setModal({ open: true, action: "close" })}
-                    disabled={loading}
-                    style={{
-                      width: '100%',
-                      background: '#e74c3c',
-                      color: 'white',
-                      padding: '12px 14px',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: 800
-                    }}
-                  >
-                    {loading ? 'Closing...' : 'Close Ticket'}
-                  </button>
-                )}
-
-                {/* REVIVE BUTTON */}
-                {ticket.status === 'Closed' && (
-                  <button
-                    onClick={() => setModal({ open: true, action: "revive" })}
-                    disabled={loading}
-                    style={{
-                      width: '100%',
-                      background: '#27ae60',
-                      color: 'white',
-                      padding: '12px 14px',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: 800
-                    }}
-                  >
-                    {loading ? 'Reviving...' : 'Revive Ticket'}
-                  </button>
-                )}
-
+            <div className="card actions-column">
+              {authority === 'admin' && ticket.status !== 'Closed' && (
                 <button
-                  onClick={() => navigate('/')}
-                  style={{
-                    width: '100%',
-                    background: 'transparent',
-                    color: '#2563eb',
-                    padding: '10px 12px',
-                    border: '1px solid rgba(37,99,235,0.12)',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    fontWeight: 700
-                  }}
+                  onClick={() => setModal({ open: true, action: "close" })}
+                  disabled={loading}
+                  className="btn-primary"
                 >
-                  ← Back to list
+                  {loading ? 'Closing…' : 'Close Ticket'}
                 </button>
-              </div>
+              )}
+
+              {ticket.status === 'Closed' && (
+                <button
+                  onClick={() => setModal({ open: true, action: "revive" })}
+                  disabled={loading}
+                  className="btn-success"
+                >
+                  {loading ? 'Reviving…' : 'Revive Ticket'}
+                </button>
+              )}
+
+              <button onClick={() => navigate('/')} className="btn-ghost">← Back to list</button>
             </div>
           </aside>
         </div>
@@ -300,25 +279,8 @@ function TicketDetails() {
 
       {/* CONFIRMATION MODAL */}
       {modal.open && (
-        <div style={{
-          position: "fixed",
-          top: 0, left: 0,
-          width: "100vw", height: "100vh",
-          background: "rgba(0,0,0,0.45)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          zIndex: 2000
-        }}>
-          <div style={{
-            background: "white",
-            padding: "28px",
-            borderRadius: "12px",
-            width: "400px",
-            maxWidth: "92%",
-            textAlign: "center",
-            boxShadow: "0 8px 30px rgba(2,6,23,0.12)"
-          }}>
+        <div className="td-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="td-modal" role="document">
             <h3 style={{ marginBottom: 12, color: '#0f172a' }}>
               {modal.action === "close" ? "Close this ticket?" : "Revive this ticket?"}
             </h3>
