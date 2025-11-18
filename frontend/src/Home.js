@@ -212,8 +212,8 @@ function Home() {
         /* Action buttons */
         .actions { display:flex; gap:10px; }
         .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:700; border:none; }
-        .btn-create { background:linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow:0 8px 20px rgba(37,99,235,0.12); }
-        .btn-closed { background:linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow:0 8px 20px rgba(124,58,237,0.12); }
+        .btn-create { background:linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow:0 8px 20px rgba(14, 79, 217, 0.12); }
+        .btn-closed { background:linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow:0 8px 20px rgba(88, 19, 207, 0.12); }
 
         /* Search area: always centered */
         .search-wrapper { display:flex; justify-content:center; margin-bottom:14px; }
@@ -271,10 +271,10 @@ function Home() {
 
         <div className="actions" role="toolbar" aria-label="Quick actions">
           <Link to="/create" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-create" aria-label="Create New Ticket">➕ Create Ticket</button>
+            <button className="btn btn-create" aria-label="Create New Ticket">Create Ticket</button>
           </Link>
           <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-closed" aria-label="View Closed Tickets">📥 Closed Tickets</button>
+            <button className="btn btn-closed" aria-label="View Closed Tickets">Closed Tickets</button>
           </Link>
         </div>
       </div>
