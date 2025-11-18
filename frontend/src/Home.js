@@ -157,6 +157,12 @@ function Home() {
 
   const openTickets = searchFiltered.filter(t => t.status !== 'Closed');
 
+  // helper for priority color (same look as Dashboard)
+  const priorityColor = (priority) => {
+    if (!priority) return '#27ae60';
+    return priority === 'High' ? '#e74c3c' : priority === 'Medium' ? '#f39c12' : '#27ae60';
+  };
+
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{
@@ -396,8 +402,8 @@ function Home() {
           />
         </div>
 
-        {/* ✅ Ticket Display */}
-        <h2 style={{ color: '#2c3e50', marginBottom: '1rem' }}>
+        {/* ✅ Ticket Display (styled like Dashboard closed tickets) */}
+        <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>
           {authority === 'admin'
             ? showMyTickets
               ? `My Open Tickets (${openTickets.length})`
@@ -407,7 +413,7 @@ function Home() {
 
         {openTickets.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#7f8c8d', padding: '2rem' }}>
-            <h3>No results found for your search</h3>
+            <h3 style={{ color: '#374151' }}>No results found for your search</h3>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: '1rem' }}>
@@ -418,30 +424,24 @@ function Home() {
                     background: '#f8f9fa',
                     padding: '1.5rem',
                     borderRadius: '10px',
-                    borderLeft: `4px solid ${
-                      ticket.priority === 'High'
-                        ? '#e74c3c'
-                        : ticket.priority === 'Medium'
-                        ? '#f39c12'
-                        : '#27ae60'
-                    }`,
+                    borderLeft: `4px solid ${priorityColor(ticket.priority)}`,
                     transition: '0.2s',
                     cursor: 'pointer'
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#eef7ff'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#f8f9fa'}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#eef7ff')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#f8f9fa')}
                 >
-                  <h3 style={{ margin: 0, color: '#2c3e50' }}>
+                  <h3 style={{ margin: 0, color: '#0f172a' }}>
                     #{ticket.ticketNumber} - {ticket.category}
                   </h3>
-                  <p style={{ color: '#7f8c8d', margin: '0.5rem 0' }}>{ticket.description}</p>
+                  <p style={{ color: '#334155', margin: '0.5rem 0' }}>{ticket.description}</p>
 
                   {authority === 'admin' && (
                     <>
-                      <p style={{ color: '#34495e', fontSize: '0.9rem', margin: 0 }}>
+                      <p style={{ margin: '0.3rem 0', color: '#34495e' }}>
                         <strong>Created by:</strong> {ticket.userName || '—'}
                       </p>
-                      <p style={{ color: '#34495e', fontSize: '0.9rem', margin: 0 }}>
+                      <p style={{ margin: '0.3rem 0', color: '#34495e' }}>
                         <strong>Email:</strong> {ticket.userEmail || '—'}
                       </p>
                     </>
@@ -451,9 +451,10 @@ function Home() {
                     display: 'flex',
                     justifyContent: 'space-between',
                     fontSize: '0.9rem',
-                    marginTop: '0.5rem'
+                    marginTop: 8
                   }}>
-                    <span style={{ color: '#27ae60' }}>Status: {ticket.status}</span>
+                    <span style={{ color: '#10b981', fontWeight: 700 }}>Status: {ticket.status}</span>
+                    <span style={{ color: '#6b7280' }}>Priority: {ticket.priority}</span>
                   </div>
                 </div>
               </Link>
