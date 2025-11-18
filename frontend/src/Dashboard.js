@@ -62,31 +62,32 @@ function Dashboard() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => navigate('/')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid #e6e9ee',
-              background: '#ffffff',
-              cursor: 'pointer'
-            }}
-            aria-label="Back to Home"
-          >
-            ← Back
-          </button>
-          <h1 style={{ color: '#111827', margin: 0 }}>Closed Tickets</h1>
-        </div>
-
-        {/* Show count on the right */}
+      {/* Heading + count row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <h1 style={{ color: '#0f172a', margin: 0 }}>Closed Tickets</h1>
         <div style={{ color: '#374151', fontWeight: 600 }}>
           {filteredTickets.length} closed {filteredTickets.length === 1 ? 'ticket' : 'tickets'}
         </div>
+      </div>
+
+      {/* Back button placed BELOW the "Closed Tickets" heading as requested */}
+      <div style={{ marginBottom: 16 }}>
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: '1px solid #e6e9ee',
+            background: '#ffffff',
+            cursor: 'pointer'
+          }}
+          aria-label="Back to Home"
+        >
+          ← Back to Home
+        </button>
       </div>
 
       {authority === 'admin' && (
