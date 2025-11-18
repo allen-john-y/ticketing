@@ -238,7 +238,7 @@ function Home() {
         .filter-actions { display:flex; gap:8px; margin-top:8px; }
 
         /* Applied filters */
-        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-end; }
+        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-start; }
         .chip { background:#ecf9ff; border-radius:20px; padding:6px 10px; display:flex; align-items:center; gap:6px; font-weight:600; color:#2c3e50; }
 
         @media (max-width:840px) {
