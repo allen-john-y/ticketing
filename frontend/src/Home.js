@@ -222,7 +222,7 @@ function Home() {
         .search-icon { width:20px; height:20px; margin-right:12px; color:#64748b; flex:0 0 20px; }
         .search-input { width:100%; border:none; outline:none; font-size:15px; font-family:Consolas,Monaco,monospace; color:#0f172a; }
         .search-input::placeholder { color:#2563eb; opacity:0.95; }
-        .search-inner:focus-within { box-shadow:0 10px 30px rgba(37,99,235,0.08); transform:translateY(-1px); }
+        .search-inner:focus-within { box-shadow:0 10px 30px rgba(216, 180, 18, 0.08); transform:translateY(-1px); }
 
         /* Filters row (below search) */
         .filters-row { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
