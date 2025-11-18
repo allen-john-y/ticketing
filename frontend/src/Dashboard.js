@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 function Dashboard() {
   const { accounts, instance } = useMsal();
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [filteredTickets, setFilteredTickets] = useState([]);
   const [authority, setAuthority] = useState('basic');
@@ -29,21 +30,18 @@ function Dashboard() {
 
         const backendUrl = 'https://ticketing-production-5334.up.railway.app';
 
-        // ✅ Updated endpoints with Render URL
         const endpoint = isAdmin
           ? `${backendUrl}/tickets`
           : `${backendUrl}/tickets?userId=${accounts[0].localAccountId}`;
 
         const res = await axios.get(endpoint);
-const closedTickets = res.data.filter(t => t.status === 'Closed');
 
-// Sort closed tickets in descending order for both admin and user
-const sortedClosed = closedTickets.sort((a, b) => b.ticketNumber - a.ticketNumber);
+        // Filter closed tickets and sort descending by ticketNumber
+        const closedTickets = res.data.filter(t => t.status === 'Closed');
+        const sortedClosed = closedTickets.sort((a, b) => (b.ticketNumber || 0) - (a.ticketNumber || 0));
 
-setTickets(sortedClosed);
-setFilteredTickets(sortedClosed);
-
-
+        setTickets(sortedClosed);
+        setFilteredTickets(sortedClosed);
       } catch (err) {
         console.error(err);
       }
@@ -64,7 +62,32 @@ setFilteredTickets(sortedClosed);
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1 style={{ color: '#2c3e50', marginBottom: '1rem' }}>Closed Tickets</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => navigate('/')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #e6e9ee',
+              background: '#ffffff',
+              cursor: 'pointer'
+            }}
+            aria-label="Back to Home"
+          >
+            ← Back
+          </button>
+          <h1 style={{ color: '#111827', margin: 0 }}>Closed Tickets</h1>
+        </div>
+
+        {/* Show count on the right */}
+        <div style={{ color: '#374151', fontWeight: 600 }}>
+          {filteredTickets.length} closed {filteredTickets.length === 1 ? 'ticket' : 'tickets'}
+        </div>
+      </div>
 
       {authority === 'admin' && (
         <div style={{ marginBottom: '1.5rem' }}>
@@ -82,7 +105,7 @@ setFilteredTickets(sortedClosed);
 
       {filteredTickets.length === 0 ? (
         <div style={{ textAlign: 'center', color: '#7f8c8d', padding: '2rem' }}>
-          <h3>No closed tickets</h3>
+          <h3 style={{ color: '#374151' }}>No closed tickets</h3>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '1rem' }}>
@@ -106,10 +129,10 @@ setFilteredTickets(sortedClosed);
                 onMouseEnter={e => (e.currentTarget.style.background = '#eef7ff')}
                 onMouseLeave={e => (e.currentTarget.style.background = '#f8f9fa')}
               >
-                <h3 style={{ margin: 0, color: '#2c3e50' }}>
+                <h3 style={{ margin: 0, color: '#0f172a' }}>
                   #{ticket.ticketNumber} - {ticket.category}
                 </h3>
-                <p style={{ color: '#7f8c8d', margin: '0.5rem 0' }}>{ticket.description}</p>
+                <p style={{ color: '#334155', margin: '0.5rem 0' }}>{ticket.description}</p>
 
                 {authority === 'admin' && (
                   <>
@@ -126,10 +149,12 @@ setFilteredTickets(sortedClosed);
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: '0.9rem'
+                    fontSize: '0.9rem',
+                    marginTop: 8
                   }}
                 >
-                  <span style={{ color: '#27ae60' }}>Status: {ticket.status}</span>
+                  <span style={{ color: '#10b981', fontWeight: 700 }}>Status: {ticket.status}</span>
+                  <span style={{ color: '#6b7280' }}>Priority: {ticket.priority}</span>
                 </div>
               </div>
             </Link>
