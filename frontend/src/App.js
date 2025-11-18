@@ -233,7 +233,7 @@ function Header({ logout }) {
                       onClick={logout}
                       style={{
                         textAlign: 'left',
-                        background: '#f97373',
+                        background: '#d91515ff',
                         border: 'none',
                         padding: '10px',
                         borderRadius: 8,
@@ -242,7 +242,7 @@ function Header({ logout }) {
                         fontWeight: 700
                       }}
                     >
-                      🚪 Logout
+                       Logout
                     </button>
                   </div>
                 </div>
