@@ -221,7 +221,7 @@ function Home() {
         /* Filter controls & action row */
         .action-row { display:flex; justify-content: space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
 
-        /* Search: colorful, integrated pill with subtle gradient border */
+        /* Search: colorful, integrated pill with constrained height & properly sized icon */
         .search-wrapper {
           display: flex;
           justify-content: center;
@@ -232,9 +232,10 @@ function Home() {
           width: 100%;
           max-width: 720px;
           border-radius: 999px;
-          padding: 3px;
-          background: linear-gradient(90deg, rgba(37,99,235,0.12), rgba(124,58,237,0.08));
-          box-shadow: 0 8px 24px rgba(37,99,235,0.06);
+          padding: 4px; /* small outer padding */
+          background: linear-gradient(90deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04));
+          box-shadow: 0 6px 18px rgba(37,99,235,0.04);
+          box-sizing: border-box;
         }
         .search-inner {
           display: flex;
@@ -242,10 +243,15 @@ function Home() {
           background: white;
           border-radius: 999px;
           padding: 8px 12px;
+          min-height: 48px;       /* constrain height so it can't blow up */
+          max-height: 64px;
+          box-sizing: border-box;
         }
         .search-icon {
-          margin-left: 6px;
-          margin-right: 10px;
+          width: 28px;
+          height: 28px;
+          flex: 0 0 28px;
+          margin-right: 12px;
           color: #64748b;
         }
         .search-input {
@@ -255,15 +261,19 @@ function Home() {
           font-size: 16px;
           font-family: Consolas, Monaco, monospace;
           color: #0f172a;
+          line-height: 1.2;
+          padding: 6px 0;
+          background: transparent;
         }
         .search-input::placeholder { color: #2563eb; opacity: 0.9; }
-        .search-inner:focus-within { box-shadow: 0 10px 30px rgba(37,99,235,0.10); transform: translateY(-1px); }
+        .search-inner:focus-within { box-shadow: 0 10px 30px rgba(37,99,235,0.08); transform: translateY(-1px); }
 
         @media (max-width: 840px) {
           .welcome { flex-direction: column; align-items: stretch; }
           .welcome-left { width: 100%; }
           .welcome-actions { justify-content: space-between; width: 100%; margin-top: 8px; }
           .search-pill { max-width: 100%; padding: 2px; }
+          .search-inner { min-height: 44px; }
         }
       `}</style>
 
@@ -296,7 +306,6 @@ function Home() {
           <Link to="/dashboard" style={{ textDecoration: 'none' }}>
             <button className="btn btn-closed" aria-label="View Closed Tickets">📥 Closed Tickets</button>
           </Link>
-          {/* removed the extra 'Filter' button here per request - filtering controls remain below */}
         </div>
       </div>
 
@@ -377,11 +386,11 @@ function Home() {
             )}
           </div>
 
-          {/* Search input - colorful pill that fits the homepage */}
+          {/* Search input - constrained and integrated pill */}
           <div className="search-wrapper" aria-hidden={false} style={{ flex: 1 }}>
-            <div className="search-pill">
+            <div className="search-pill" role="search" aria-label="Search tickets">
               <div className="search-inner">
-                <svg className="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                <svg className="search-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
                   <path d="M21 21l-4.35-4.35" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   <circle cx="11" cy="11" r="6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
