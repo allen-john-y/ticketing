@@ -1,18 +1,52 @@
 import React, { useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 
+function Toast({ open, type = 'info', message = '' }) {
+  // Styles: green for success, red for error, blue for info
+  const bg = type === 'success' ? '#27ae60' : type === 'error' ? '#e74c3c' : '#3498db';
+  return (
+    <div
+      aria-live="polite"
+      style={{
+        position: 'fixed',
+        top: 20,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: bg,
+        color: 'white',
+        padding: '10px 18px',
+        borderRadius: 8,
+        boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
+        opacity: open ? 1 : 0,
+        pointerEvents: open ? 'auto' : 'none',
+        transition: 'opacity 300ms ease, transform 300ms ease',
+        transformOrigin: 'center',
+        zIndex: 10001,
+      }}
+    >
+      <div style={{ fontWeight: 600 }}>{message}</div>
+    </div>
+  );
+}
+
 function Login() {
   const { instance } = useMsal();
 
-  // Modal state used instead of alert()
-  const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
+  // Toast state for small fading popup
+  const [toast, setToast] = useState({ open: false, type: 'info', message: '' });
 
-  const closeModal = () => setModal({ open: false, title: '', message: '', type: 'info' });
+  const showToast = (type, message, duration = 2000) => {
+    setToast({ open: true, type, message });
+    // fade out after duration
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, open: false }));
+    }, duration);
+  };
 
   const login = async () => {
     console.log('🔍 === LOGIN DEBUG START ===');
 
-    // ✅ Safe config check
+    // Safe config check
     if (instance && instance.config && instance.config.auth) {
       console.log('Client ID:', instance.config.auth.clientId);
       console.log('Authority:', instance.config.auth.authority);
@@ -25,37 +59,30 @@ function Login() {
       let loginResponse = null;
       let popupError = null;
 
-      // Try popup first (user picks account)
+      // Try popup first (lets user pick account)
       try {
         loginResponse = await instance.loginPopup({
           scopes: ['User.Read'],
           prompt: 'select_account',
         });
       } catch (err) {
-        // popup failed or was closed by user — don't treat this as an automatic "success"
         popupError = err;
         console.warn('⚠️ Popup login error/fallback:', err);
       }
 
-      // Determine if user is now signed in
+      // Determine sign-in status
       const accounts = instance.getAllAccounts() || [];
       const signedIn = Boolean(loginResponse || (accounts.length > 0));
 
       if (signedIn) {
         console.log('✅ Login success. Accounts:', accounts);
-        // Show modal success (instead of alert)
-        setModal({
-          open: true,
-          title: 'Login Successful',
-          message: 'You are now signed in.',
-          type: 'success'
-        });
+        // Show small fading toast and do NOT navigate automatically
+        showToast('success', 'Login successful');
         return;
       }
 
-      // If not signed in and there was a popupError, decide whether to notify:
+      // If popup returned an error (or was closed), decide if we notify user
       if (popupError) {
-        // Treat common popup/cancel cases as user-cancelled and DO NOT show an error modal.
         const msg = String(popupError.errorCode || popupError.error || popupError.message || '').toLowerCase();
         const userCancelled =
           msg.includes('cancel') ||
@@ -64,32 +91,23 @@ function Login() {
           msg.includes('user_cancel');
 
         if (userCancelled) {
-          // User closed/cancelled the popup — silently ignore (no modal)
-          console.log('ℹ️ User cancelled login popup — no modal shown.');
+          // User cancelled the popup — silently ignore (no toast)
+          console.log('ℹ️ User cancelled login popup — no toast shown.');
           return;
         }
 
-        // Otherwise show an error modal
-        setModal({
-          open: true,
-          title: 'Login Failed',
-          message: popupError.message || 'An error occurred during login.',
-          type: 'error'
-        });
+        // Otherwise show an error toast
+        console.error('❌ Login error:', popupError);
+        showToast('error', popupError.message || 'Login failed');
         return;
       }
 
-      // If no popupError and still no signedIn, do nothing (silent)
-      console.log('ℹ️ Login attempt finished without sign-in. No message shown.');
+      // If no popupError and not signed in, do nothing silently
+      console.log('ℹ️ Login attempt finished without sign-in. No toast shown.');
     } catch (error) {
-      // Unexpected error — show error modal
+      // Unexpected error — show error toast
       console.error('❌ LOGIN FAILED (unexpected):', error);
-      setModal({
-        open: true,
-        title: 'Login Error',
-        message: error?.message || 'An unexpected error occurred during login.',
-        type: 'error'
-      });
+      showToast('error', error?.message || 'An unexpected error occurred during login.');
     }
   };
 
@@ -137,46 +155,8 @@ function Login() {
         </p>
       </div>
 
-      {/* Modal used instead of window.alert */}
-      {modal.open && (
-        <div style={{
-          position: "fixed",
-          top: 0, left: 0,
-          width: "100vw", height: "100vh",
-          background: "rgba(0,0,0,0.6)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          zIndex: 10000
-        }}>
-          <div style={{
-            background: "white",
-            padding: "24px",
-            borderRadius: "10px",
-            width: "360px",
-            textAlign: "center",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.2)"
-          }}>
-            <h3 style={{ marginBottom: "12px" }}>{modal.title}</h3>
-            <p style={{ marginBottom: "20px" }}>{modal.message}</p>
-            <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-              <button
-                onClick={closeModal}
-                style={{
-                  padding: "10px 20px",
-                  background: modal.type === "success" ? "#27ae60" : "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer"
-                }}
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* small fading toast */}
+      <Toast open={toast.open} type={toast.type} message={toast.message} />
     </div>
   );
 }

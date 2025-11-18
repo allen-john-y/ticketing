@@ -21,11 +21,6 @@ function Home() {
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
 
-  // Toast for "Login successful" message
-  const [toastOpen, setToastOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const toastTimerRef = useRef(null);
-
   useEffect(() => {
     if (location.state?.refresh) {
       setRefreshKey(prev => prev + 1);
@@ -58,29 +53,7 @@ function Home() {
         const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
         });
-        const displayName = userRes.data.displayName || 'User';
-        setUserName(displayName);
-
-        // Show a small professional toast when the user first lands here after sign-in.
-        // Use a sessionStorage flag per localAccountId so it shows once per sign-in.
-        try {
-          const acctId = accounts[0]?.localAccountId || accounts[0]?.homeAccountId || 'anon';
-          const flagKey = `welcomeShown_${acctId}`;
-          if (!sessionStorage.getItem(flagKey)) {
-            setToastMessage(`Signed in successfully — Welcome, ${displayName}.`);
-            setToastOpen(true);
-            sessionStorage.setItem(flagKey, 'true');
-
-            // auto-hide after 4 seconds
-            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-            toastTimerRef.current = setTimeout(() => {
-              setToastOpen(false);
-              toastTimerRef.current = null;
-            }, 4000);
-          }
-        } catch (e) {
-          console.debug('Could not set welcome flag:', e);
-        }
+        setUserName(userRes.data.displayName || 'User');
 
         const groupsRes = await axios.get('https://graph.microsoft.com/v1.0/me/memberOf', {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
@@ -109,14 +82,6 @@ function Home() {
     };
 
     fetchData();
-
-    return () => {
-      // cleanup toast timer on unmount
-      if (toastTimerRef.current) {
-        clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = null;
-      }
-    };
   }, [accounts, instance, refreshKey]);
 
   // Close dropdown when clicking outside
@@ -200,46 +165,7 @@ function Home() {
         borderRadius: '10px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
       }}>
-
-        {/* Toast: small professional login success popup */}
-        {toastOpen && (
-          <div style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            background: '#e6ffed',
-            color: '#0b6b2f',
-            border: '1px solid #b7f0c9',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            boxShadow: '0 6px 20px rgba(8, 58, 20, 0.08)',
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            minWidth: '260px'
-          }}>
-            <div style={{ fontSize: '18px' }}>✅</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, marginBottom: '4px' }}>Signed in</div>
-              <div style={{ fontSize: '0.9rem', color: '#0b6b2f' }}>{toastMessage}</div>
-            </div>
-            <button
-              onClick={() => setToastOpen(false)}
-              aria-label="Close"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#0b6b2f',
-                fontSize: '16px',
-                cursor: 'pointer'
-              }}
-            >
-              ✖
-            </button>
-          </div>
-        )}
-
+        
         {/* Header */}
         <div style={{
           display: 'flex',
