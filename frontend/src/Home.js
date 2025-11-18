@@ -164,12 +164,41 @@ function Home() {
     if (c.includes('password') || c.includes('admin access') || c.includes('admin')) return '#f39c12'; // orange
     if (c.includes('payroll') || c.includes('expense')) return '#27ae60'; // green
     if (c.includes('leave') || c.includes('onboard') || c.includes('onboarding')) return '#e74c3c'; // red
-    // fallback: keep original priority-style color blue
     return '#3498db';
   };
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Inject small component-scoped CSS for the search input so the :focus and ::placeholder rules work */}
+      <style>{`
+        .input {
+          padding: 10px;
+          width: 120px;
+          border: none;
+          outline: none;
+          border-radius: 5px;
+          box-shadow: 0 1px gray;
+          font-size: 18px;
+          transition: width 0.3s;
+          font-family: Consolas,monaco,monospace;
+        }
+
+        .input:focus {
+          outline: 1px solid blue;
+          box-shadow: none;
+          width: 230px;
+        }
+
+        .input::placeholder {
+          color: blue;
+        }
+
+        /* small responsive tweak so large screens keep the search centered nicely */
+        @media (min-width: 900px) {
+          .search-wrapper { display: flex; justify-content: center; }
+        }
+      `}</style>
+
       <div style={{
         background: 'white',
         padding: '2rem',
@@ -390,20 +419,15 @@ function Home() {
           </Link>
         </div>
 
-        {/* ✅ Search Bar */}
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+        {/* ✅ Search Bar (uses .input CSS you provided, and remains fully wired to searchTerm/filtering) */}
+        <div className="search-wrapper" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <input
             type="text"
-            placeholder="Search by ticket number, category, or issue..."
+            className="input"
+            placeholder="Search..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              padding: '10px 15px',
-              borderRadius: '8px',
-              border: '1px solid #ccc',
-              width: '60%',
-              fontSize: '1rem'
-            }}
+            aria-label="Search tickets"
           />
         </div>
 
@@ -433,8 +457,8 @@ function Home() {
                     transition: '0.2s',
                     cursor: 'pointer'
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#eef7ff')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '#f8f9fa')}
+                  onMouseEnter={e => e.currentTarget.style.background = '#eef7ff'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#f8f9fa'}
                 >
                   <h3 style={{ margin: 0, color: '#0f172a' }}>
                     #{ticket.ticketNumber} - {ticket.category}
