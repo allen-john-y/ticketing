@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
@@ -39,17 +39,6 @@ function Header({ logout }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Unified button style
-  const buttonStyle = {
-    padding: '0.5rem 1rem',
-    borderRadius: '5px',
-    border: 'none',
-    cursor: 'pointer',
-    fontWeight: '500',
-    fontSize: '0.95rem',
-    whiteSpace: 'nowrap'
-  };
 
   // Fetch user profile from Microsoft Graph
   const fetchFullProfile = async () => {
@@ -121,82 +110,148 @@ function Header({ logout }) {
     setProfileError(null);
   };
 
+  // small helper for initials
+  const initials = (accounts?.[0]?.name || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+
   return (
-    <header style={{
-      background: 'white',
-      padding: '1rem 2rem',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <img src={logo} alt="Sandeza logo" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6 }} />
-        <div>
-          <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>SANDEZA INC</span>
-          </h1>
-          <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '0.9rem' }}>IT Ticket Portal</h2>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        {/* Profile Button */}
-        <div ref={profileRef} style={{ position: 'relative' }}>
-          <button
-            onClick={() => setProfileOpen(prev => !prev)}
-            style={{
-              ...buttonStyle,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: '#3498db',
-              color: 'white'
-            }}
-          >
-            👤 View Profile
-          </button>
-
-          {profileOpen && (
-            <div style={{
-              position: 'absolute',
-              right: 0,
-              marginTop: '6px',
-              background: 'white',
-              border: '1px solid #ccc',
-              borderRadius: '8px',
-              boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-              padding: '16px',
-              width: '260px',
-              zIndex: 10
-            }}>
-              <p style={{ margin: '6px 0', fontWeight: '600', fontSize: '0.95rem' }}>Name: {accounts[0]?.name}</p>
-              <p style={{ margin: '6px 0', fontSize: '0.95rem'}}>Email: {accounts[0]?.username}</p>
-              <button
-                onClick={() => { openFullProfile(); setProfileOpen(false); }}
-                style={{
-                  ...buttonStyle,
-                  marginTop: '10px',
-                  width: '100%',
-                  background: '#3498db',
-                  color: 'white'
-                }}
-              >
-                View Full Profile
-              </button>
+    <>
+      <header style={{
+        background: 'white',
+        padding: '14px 20px',
+        borderBottom: '1px solid rgba(15,23,42,0.06)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12,
+        position: 'sticky',
+        top: 0,
+        zIndex: 40,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <img src={logo} alt="Sandeza logo" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h1 style={{ color: '#0f172a', margin: 0, fontSize: '1.05rem', fontWeight: 800, letterSpacing: 0.2 }}>
+                SANDEZA INC
+              </h1>
             </div>
-          )}
+            <div style={{ color: '#6b7280', fontSize: 12 }}>IT Ticket Portal</div>
+          </div>
         </div>
 
-        {/* Logout Button */}
-        <button onClick={logout} style={{
-          ...buttonStyle,
-          background: '#e74c3c',
-          color: 'white'
-        }}>
-          🚪 Logout
-        </button>
-      </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* optional place for quick actions if needed in future */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+            {/* Profile / View button */}
+            <div ref={profileRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setProfileOpen(prev => !prev)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 12px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(15,23,42,0.06)',
+                  background: 'linear-gradient(180deg,#ffffff,#fbfdff)',
+                  cursor: 'pointer',
+                  boxShadow: '0 6px 18px rgba(2,6,23,0.06)',
+                }}
+                aria-haspopup="true"
+                aria-expanded={profileOpen}
+                aria-label="View profile"
+              >
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: '#eef2ff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 800,
+                  color: '#3730a3',
+                  fontSize: 14,
+                  flexShrink: 0
+                }}>
+                  {initials}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{accounts?.[0]?.name || accounts?.[0]?.username}</span>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>{accounts?.[0]?.username}</span>
+                </div>
+
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
+                  <path d="M6 8l4 4 4-4" stroke="#374151" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+
+              {profileOpen && (
+                <div role="menu" aria-label="Profile menu" style={{
+                  position: 'absolute',
+                  right: 0,
+                  marginTop: 10,
+                  background: 'white',
+                  border: '1px solid rgba(15,23,42,0.06)',
+                  borderRadius: 10,
+                  boxShadow: '0 12px 40px rgba(2,6,23,0.12)',
+                  padding: 12,
+                  width: 300,
+                  zIndex: 60
+                }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 12, background: '#eef2ff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#3730a3'
+                    }}>{initials}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, color: '#0f172a' }}>{accounts?.[0]?.name || 'Unknown'}</div>
+                      <div style={{ color: '#6b7280', fontSize: 13 }}>{accounts?.[0]?.username}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                      onClick={() => { openFullProfile(); setProfileOpen(false); }}
+                      style={{
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '10px',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                        color: '#2563eb'
+                      }}
+                    >
+                      View Full Profile
+                    </button>
+
+                    <button
+                      onClick={logout}
+                      style={{
+                        textAlign: 'left',
+                        background: '#f97373',
+                        border: 'none',
+                        padding: '10px',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        color: 'white',
+                        fontWeight: 700
+                      }}
+                    >
+                      🚪 Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      </header>
 
       {/* Full profile modal */}
       {fullProfileOpen && (
@@ -305,7 +360,7 @@ function Header({ logout }) {
           </div>
         </>
       )}
-    </header>
+    </>
   );
 }
 
