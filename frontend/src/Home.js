@@ -6,20 +6,29 @@ import axios from 'axios';
 function Home() {
   const { accounts, instance } = useMsal();
   const location = useLocation();
+
   const [tickets, setTickets] = useState([]);
   const [authority, setAuthority] = useState('basic');
   const [userName, setUserName] = useState('User');
   const [refreshKey, setRefreshKey] = useState(0);
   const [showMyTickets, setShowMyTickets] = useState(false);
+
   const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [appliedCategories, setAppliedCategories] = useState([]);
   const [appliedUsers, setAppliedUsers] = useState([]);
+
+  // dropdownOpen: null | 'category' | 'user'
   const [dropdownOpen, setDropdownOpen] = useState(null);
+  // dropdown position for anchoring
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 260 });
+
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
+  const categoryBtnRef = useRef(null);
+  const userBtnRef = useRef(null);
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -38,13 +47,13 @@ function Home() {
           scopes: ['User.Read', 'GroupMember.Read.All'],
           account: accounts[0]
         });
-      } catch (error) {
-        if (error.name === 'InteractionRequiredAuthError') {
+      } catch (err) {
+        if (err.name === 'InteractionRequiredAuthError') {
           tokenResponse = await instance.acquireTokenPopup({
             scopes: ['User.Read', 'GroupMember.Read.All']
           });
         } else {
-          console.error('Token acquisition failed:', error);
+          console.error('Token acquisition failed:', err);
           return;
         }
       }
@@ -71,11 +80,8 @@ function Home() {
         const allTickets = ticketsRes.data.reverse();
         setTickets(allTickets);
 
-        const uniqueCategories = [...new Set(allTickets.map(t => t.category).filter(Boolean))];
-        setCategories(uniqueCategories);
-
-        const uniqueUsers = [...new Set(allTickets.map(t => t.userName).filter(Boolean))];
-        setUsers(uniqueUsers);
+        setCategories([...new Set(allTickets.map(t => t.category).filter(Boolean))]);
+        setUsers([...new Set(allTickets.map(t => t.userName).filter(Boolean))]);
       } catch (err) {
         console.error('Error fetching tickets:', err);
       }
@@ -86,54 +92,24 @@ function Home() {
 
   // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+    const onDocClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+          !categoryBtnRef.current?.contains(e.target) &&
+          !userBtnRef.current?.contains(e.target)) {
         setDropdownOpen(null);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('mousedown', onDocClick);
+    window.addEventListener('scroll', () => setDropdownOpen(null), true);
+    window.addEventListener('resize', () => setDropdownOpen(null));
+    return () => {
+      window.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('scroll', () => setDropdownOpen(null), true);
+      window.removeEventListener('resize', () => setDropdownOpen(null));
+    };
   }, []);
 
-  // Handle category + user filter
-  const handleSelect = (type, value) => {
-    if (type === 'category') {
-      setSelectedCategories((prev) =>
-        prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
-      );
-    } else {
-      setSelectedUsers((prev) =>
-        prev.includes(value) ? prev.filter((u) => u !== value) : [...prev, value]
-      );
-    }
-  };
-
-  const applyFilters = () => {
-    setAppliedCategories(selectedCategories);
-    setAppliedUsers(selectedUsers);
-    setDropdownOpen(null);
-  };
-
-  const removeFilter = (type, value) => {
-    if (type === 'category') {
-      const updated = appliedCategories.filter((c) => c !== value);
-      setAppliedCategories(updated);
-      setSelectedCategories(updated);
-    } else {
-      const updated = appliedUsers.filter((u) => u !== value);
-      setAppliedUsers(updated);
-      setSelectedUsers(updated);
-    }
-  };
-
-  const clearAllFilters = () => {
-    setSelectedCategories([]);
-    setSelectedUsers([]);
-    setAppliedCategories([]);
-    setAppliedUsers([]);
-  };
-
-  // Filtering logic
+  // compute filtered lists
   const filteredTickets = authority === 'admin' && showMyTickets
     ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
     : tickets;
@@ -148,17 +124,63 @@ function Home() {
 
   const searchFiltered = searchTerm.trim() === ''
     ? userFiltered
-    : userFiltered.filter(
-        t =>
-          t.ticketNumber.toString().includes(searchTerm) ||
-          (t.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+    : userFiltered.filter(t =>
+        (t.ticketNumber || '').toString().includes(searchTerm) ||
+        (t.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
 
   const openTickets = searchFiltered.filter(t => t.status !== 'Closed');
   const closedTickets = tickets.filter(t => t.status === 'Closed');
 
-  // Category -> color mapping
+  const applyFilters = () => {
+    setAppliedCategories(selectedCategories);
+    setAppliedUsers(selectedUsers);
+    setDropdownOpen(null);
+  };
+
+  const removeFilter = (type, value) => {
+    if (type === 'category') {
+      const updated = appliedCategories.filter(c => c !== value);
+      setAppliedCategories(updated);
+      setSelectedCategories(updated);
+    } else {
+      const updated = appliedUsers.filter(u => u !== value);
+      setAppliedUsers(updated);
+      setSelectedUsers(updated);
+    }
+  };
+
+  const clearAllFilters = () => {
+    setSelectedCategories([]);
+    setSelectedUsers([]);
+    setAppliedCategories([]);
+    setAppliedUsers([]);
+  };
+
+  const handleSelect = (type, value) => {
+    if (type === 'category') {
+      setSelectedCategories(prev => prev.includes(value) ? prev.filter(c => c !== value) : [...prev, value]);
+    } else {
+      setSelectedUsers(prev => prev.includes(value) ? prev.filter(u => u !== value) : [...prev, value]);
+    }
+  };
+
+  // Anchor dropdown under the clicked button
+  const openDropdown = (type) => {
+    setDropdownOpen(prev => prev === type ? null : type);
+    const ref = type === 'category' ? categoryBtnRef.current : userBtnRef.current;
+    if (ref) {
+      const rect = ref.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.left + window.scrollX,
+        width: Math.max(260, rect.width)
+      });
+    }
+  };
+
+  // Category color mapping
   const categoryColor = (category) => {
     if (!category) return '#3498db';
     const c = category.toLowerCase();
@@ -168,306 +190,253 @@ function Home() {
     return '#3498db';
   };
 
-  // derive initials
   const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <style>{`
-        /* ---------- Visual polish for filter controls and action area ---------- */
-        .btn {
-          display:inline-flex;
-          align-items:center;
-          gap:8px;
-          padding:10px 14px;
-          border-radius:10px;
-          cursor:pointer;
-          font-weight:700;
-          border:none;
-        }
+        /* Overall spacing + card */
+        .welcome { display:flex; gap:16px; align-items:center; background:linear-gradient(180deg,#fff,#fbfdff); padding:18px; border-radius:12px; box-shadow:0 6px 24px rgba(2,6,23,0.06); margin-bottom:18px; }
+        .avatar { width:64px; height:64px; border-radius:12px; background:linear-gradient(135deg,#eef2ff,#e9f5ff); display:flex; align-items:center; justify-content:center; font-weight:800; color:#3730a3; font-size:20px; box-shadow:0 4px 12px rgba(2,6,23,0.06); }
+        .welcome-left { flex:1; display:flex; gap:12px; align-items:center; }
+        .welcome-title { font-size:20px; font-weight:800; color:#0f172a; margin:0; }
+        .role-badge { display:inline-block; padding:6px 12px; border-radius:999px; font-weight:700; font-size:12px; color:white; }
+        .role-admin { background:linear-gradient(90deg,#16a34a,#60a5fa); }
+        .role-user { background:linear-gradient(90deg,#94a3b8,#64748b); }
 
-        /* Primary and accent action buttons (Create / Closed) */
-        .btn-create { background: linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow: 0 8px 20px rgba(37,99,235,0.12); }
-        .btn-closed { background: linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow: 0 8px 20px rgba(124,58,237,0.12); }
+        /* KPIs */
+        .kpis { display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; }
+        .kpi { background:#f8fafc; padding:8px 12px; border-radius:10px; font-weight:700; color:#0f172a; display:inline-flex; gap:10px; align-items:center; box-shadow:0 4px 12px rgba(2,6,23,0.03); }
+        .kpi .num { color:#0b6fbd; font-weight:900; }
 
-        /* Filter buttons — unified look for both user & admin */
-        .filter-btn {
-          display:inline-flex;
-          align-items:center;
-          gap:10px;
-          padding:9px 12px;
-          border-radius:10px;
-          background: white;
-          border: 1px solid rgba(15,23,42,0.06);
-          box-shadow: 0 4px 12px rgba(2,6,23,0.04);
-          color: #0f172a;
-          font-weight: 600;
-          cursor: pointer;
-          transition: transform 80ms ease, box-shadow 120ms ease;
-        }
-        .filter-btn:active { transform: translateY(1px); }
-        .filter-btn:hover { box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
+        /* Action buttons */
+        .actions { display:flex; gap:10px; }
+        .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:700; border:none; }
+        .btn-create { background:linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow:0 8px 20px rgba(37,99,235,0.12); }
+        .btn-closed { background:linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow:0 8px 20px rgba(124,58,237,0.12); }
 
-        .filter-dot {
-          width:10px;
-          height:10px;
-          border-radius:50%;
-          display:inline-block;
-          box-shadow: 0 2px 6px rgba(2,6,23,0.06);
-        }
-        .filter-category { background: linear-gradient(180deg,#f59e0b,#d97706); }
-        .filter-user { background: linear-gradient(180deg,#7c3aed,#6d28d9); }
-
-        /* layout for action row and search */
-        .action-row { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
-        .left-controls { display:flex; gap:8px; align-items:center; }
-        .right-search { flex: 1; display:flex; justify-content:center; }
-
-        /* Search pill styling (keeps previous improved look) */
-        .search-pill { width:100%; max-width:560px; border-radius:999px; padding:4px; background: linear-gradient(90deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04)); box-shadow: 0 6px 18px rgba(37,99,235,0.04); }
-        .search-inner { display:flex; align-items:center; background:white; border-radius:999px; padding:8px 12px; min-height:44px; }
-        .search-icon { width:20px; height:20px; margin-right:10px; color:#64748b; flex:0 0 20px; }
-        .search-input { width:100%; border:none; outline:none; font-size:15px; font-family: Consolas, Monaco, monospace; color:#0f172a; }
+        /* Search area: always centered */
+        .search-wrapper { display:flex; justify-content:center; margin-bottom:14px; }
+        .search-pill { width:100%; max-width:760px; border-radius:999px; padding:6px; background:linear-gradient(90deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04)); box-shadow:0 6px 18px rgba(37,99,235,0.04); box-sizing:border-box; }
+        .search-inner { display:flex; align-items:center; background:white; border-radius:999px; padding:10px 14px; min-height:46px; }
+        .search-icon { width:20px; height:20px; margin-right:12px; color:#64748b; flex:0 0 20px; }
+        .search-input { width:100%; border:none; outline:none; font-size:15px; font-family:Consolas,Monaco,monospace; color:#0f172a; }
         .search-input::placeholder { color:#2563eb; opacity:0.95; }
+        .search-inner:focus-within { box-shadow:0 10px 30px rgba(37,99,235,0.08); transform:translateY(-1px); }
 
-        @media (max-width: 840px) {
-          .right-search { justify-content: center; width: 100%; order: 3; margin-top:10px; }
-          .left-controls { order: 1; width: 100%; justify-content: flex-start; }
+        /* Filters row (below search) */
+        .filters-row { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+        .filter-btn { display:inline-flex; align-items:center; gap:8px; padding:9px 12px; border-radius:10px; background:white; border:1px solid rgba(15,23,42,0.06); box-shadow:0 4px 12px rgba(2,6,23,0.04); color:#0f172a; font-weight:600; cursor:pointer; transition:box-shadow 120ms; }
+        .filter-btn:hover { box-shadow:0 8px 20px rgba(2,6,23,0.06); }
+        .filter-dot { width:10px; height:10px; border-radius:50%; box-shadow:0 2px 6px rgba(2,6,23,0.06); }
+        .filter-category { background:linear-gradient(180deg,#f59e0b,#d97706); }
+        .filter-user { background:linear-gradient(180deg,#7c3aed,#6d28d9); }
+
+        /* Dropdown (anchored) */
+        .filter-dropdown { position:fixed; background:white; border:1px solid #e6e9ee; border-radius:8px; box-shadow:0 12px 40px rgba(2,6,23,0.12); z-index:9999; padding:12px; }
+        .filter-item { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+        .filter-actions { display:flex; gap:8px; margin-top:8px; }
+
+        /* Applied filters */
+        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-end; }
+        .chip { background:#ecf9ff; border-radius:20px; padding:6px 10px; display:flex; align-items:center; gap:6px; font-weight:600; color:#2c3e50; }
+
+        @media (max-width:840px) {
+          .welcome { flex-direction:column; align-items:stretch; }
+          .actions { justify-content:space-between; width:100%; }
+          .search-pill { max-width:100%; }
+          .filters-row { justify-content:flex-start; }
         }
       `}</style>
 
       {/* Welcome card */}
-      <div style={{
-        display: 'flex',
-        gap: 16,
-        alignItems: 'center',
-        background: 'linear-gradient(180deg, #ffffff, #fbfdff)',
-        padding: 18,
-        borderRadius: 12,
-        boxShadow: '0 6px 24px rgba(2,6,23,0.06)',
-        marginBottom: 18
-      }}>
-        <div style={{
-          width: 64, height: 64, borderRadius: 12,
-          background: 'linear-gradient(135deg, #eef2ff, #e9f5ff)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 800, color: '#3730a3', fontSize: 20, boxShadow: '0 4px 12px rgba(2,6,23,0.06)'
-        }}>{initials}</div>
+      <div className="welcome" role="region" aria-label="Welcome">
+        <div className="avatar" aria-hidden>{initials}</div>
 
-        <div style={{ flex: 1, display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-              Welcome back, <span style={{ color: '#2563eb' }}>{userName}</span>
-            </h2>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span style={{
-                display: 'inline-block',
-                padding: '6px 12px',
-                borderRadius: 999,
-                fontWeight: 700,
-                fontSize: 12,
-                color: 'white',
-                background: authority === 'admin' ? 'linear-gradient(90deg,#16a34a,#60a5fa)' : 'linear-gradient(90deg,#94a3b8,#64748b)'
-              }}>
+        <div className="welcome-left">
+          <div>
+            <h2 className="welcome-title">Welcome back, <span style={{ color: '#2563eb' }}>{userName}</span></h2>
+            <div style={{ marginTop: 6 }}>
+              <span className={`role-badge ${authority === 'admin' ? 'role-admin' : 'role-user'}`}>
                 {authority === 'admin' ? 'ADMIN' : 'USER'}
               </span>
-
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 10, fontWeight: 700 }}>
-                  <span style={{ color: '#0b6fbd', fontWeight: 900 }}>{openTickets.length}</span> <span style={{ marginLeft: 8 }}>Open</span>
-                </div>
-                <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 10, fontWeight: 700 }}>
-                  <span style={{ color: '#0b6fbd', fontWeight: 900 }}>{closedTickets.length}</span> <span style={{ marginLeft: 8 }}>Closed</span>
-                </div>
-                <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 10, fontWeight: 700 }}>
-                  <span style={{ color: '#0b6fbd', fontWeight: 900 }}>{tickets.length}</span> <span style={{ marginLeft: 8 }}>Total</span>
-                </div>
+              <div className="kpis" style={{ marginTop: 8 }}>
+                <div className="kpi"><span className="num">{openTickets.length}</span><span style={{ marginLeft: 8 }}>Open</span></div>
+                <div className="kpi"><span className="num">{closedTickets.length}</span><span style={{ marginLeft: 8 }}>Closed</span></div>
+                <div className="kpi"><span className="num">{tickets.length}</span><span style={{ marginLeft: 8 }}>Total</span></div>
               </div>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="actions" role="toolbar" aria-label="Quick actions">
           <Link to="/create" style={{ textDecoration: 'none' }}>
             <button className="btn btn-create" aria-label="Create New Ticket">➕ Create Ticket</button>
           </Link>
-
           <Link to="/dashboard" style={{ textDecoration: 'none' }}>
             <button className="btn btn-closed" aria-label="View Closed Tickets">📥 Closed Tickets</button>
           </Link>
         </div>
       </div>
 
-      <div style={{
-        background: 'white',
-        padding: '1.5rem 2rem',
-        borderRadius: '10px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
-      }}>
-
-        {/* Filters / Search action row */}
-        <div className="action-row">
-          <div className="left-controls" ref={dropdownRef}>
-
-            {/* Filter by Category — unified, attractive button (visible to all users) */}
-            <button
-              onClick={() => setDropdownOpen(dropdownOpen === 'category' ? null : 'category')}
-              className="filter-btn"
-              aria-expanded={dropdownOpen === 'category'}
-              aria-controls="filter-dropdown"
-            >
-              <span className="filter-dot filter-category" aria-hidden />
-              Filter by Category ▾
-            </button>
-
-            {/* Filter by User — only for admins, same look */}
-            {authority === 'admin' && (
-              <button
-                onClick={() => setDropdownOpen(dropdownOpen === 'user' ? null : 'user')}
-                className="filter-btn"
-                aria-expanded={dropdownOpen === 'user'}
-                aria-controls="filter-dropdown"
-                style={{ marginLeft: 6 }}
-              >
-                <span className="filter-dot filter-user" aria-hidden />
-                Filter by User ▾
-              </button>
-            )}
-
-            {/* Dropdown (shared anchor) */}
-            {dropdownOpen && (
-              <div id="filter-dropdown" style={{
-                position: 'relative',
-                left: 8,
-                marginTop: 48,
-                background: 'white',
-                border: '1px solid #e6e9ee',
-                borderRadius: 8,
-                boxShadow: '0 8px 30px rgba(2,6,23,0.08)',
-                zIndex: 60,
-                minWidth: 260,
-                padding: 12
-              }}>
-                {(dropdownOpen === 'category' ? categories : users).map(item => (
-                  <label key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={
-                        dropdownOpen === 'category'
-                          ? selectedCategories.includes(item)
-                          : selectedUsers.includes(item)
-                      }
-                      onChange={() => handleSelect(dropdownOpen, item)}
-                    />
-                    <span style={{ fontWeight: 600 }}>{item}</span>
-                  </label>
-                ))}
-
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button onClick={applyFilters} style={{ background: '#27ae60', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                    Apply
-                  </button>
-                  <button onClick={() => setDropdownOpen(null)} style={{ background: '#f3f4f6', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Search input — positioned to the right and visually integrated */}
-          <div className="right-search">
-            <div className="search-pill" role="search" aria-label="Search tickets">
-              <div className="search-inner">
-                <svg className="search-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                  <path d="M21 21l-4.35-4.35" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <circle cx="11" cy="11" r="6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <input
-                  className="search-input"
-                  placeholder="Search by ticket number, category, or issue..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  aria-label="Search tickets"
-                />
-              </div>
-            </div>
+      {/* centered search */}
+      <div className="search-wrapper" aria-hidden={false}>
+        <div className="search-pill" role="search" aria-label="Search tickets">
+          <div className="search-inner">
+            <svg className="search-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <path d="M21 21l-4.35-4.35" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="11" cy="11" r="6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <input
+              className="search-input"
+              placeholder="Search by ticket number, category, or issue..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search tickets"
+            />
           </div>
         </div>
+      </div>
 
-        {/* Applied filters */}
-        {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px' }}>
-            {[...appliedCategories.map(c => ({ type: 'category', value: c })), 
-              ...appliedUsers.map(u => ({ type: 'user', value: u }))].map(({ type, value }) => (
-              <div key={value} style={{ background: '#ecf9ff', borderRadius: '20px', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ color: '#2c3e50', fontWeight: '500' }}>{value}</span>
-                <button onClick={() => removeFilter(type, value)} style={{ background: 'transparent', color: '#e74c3c', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>✕</button>
-              </div>
-            ))}
+      {/* filters row (moved below search) */}
+      <div className="filters-row" ref={dropdownRef}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            ref={categoryBtnRef}
+            onClick={() => openDropdown('category')}
+            className="filter-btn"
+            aria-expanded={dropdownOpen === 'category'}
+            aria-controls="filter-dropdown"
+            aria-haspopup="true"
+            title="Filter by Category"
+          >
+            <span className="filter-dot filter-category" aria-hidden />
+            Filter by Category ▾
+          </button>
 
-            <button onClick={clearAllFilters} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '20px', padding: '6px 14px', cursor: 'pointer', fontWeight: '600' }}>
-              Clear All
+          {authority === 'admin' && (
+            <button
+              ref={userBtnRef}
+              onClick={() => openDropdown('user')}
+              className="filter-btn"
+              aria-expanded={dropdownOpen === 'user'}
+              aria-controls="filter-dropdown"
+              aria-haspopup="true"
+              title="Filter by User"
+            >
+              <span className="filter-dot filter-user" aria-hidden />
+              Filter by User ▾
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* anchored dropdown (positioned under clicked button) */}
+      {dropdownOpen && (
+        <div
+          id="filter-dropdown"
+          role="dialog"
+          aria-modal="false"
+          ref={dropdownRef}
+          className="filter-dropdown"
+          style={{
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            minWidth: dropdownPos.width,
+          }}
+        >
+          {(dropdownOpen === 'category' ? categories : users).map(item => (
+            <label key={item} className="filter-item">
+              <input
+                type="checkbox"
+                checked={dropdownOpen === 'category' ? selectedCategories.includes(item) : selectedUsers.includes(item)}
+                onChange={() => handleSelect(dropdownOpen, item)}
+              />
+              <span style={{ fontWeight: 600 }}>{item}</span>
+            </label>
+          ))}
+
+          <div className="filter-actions">
+            <button onClick={applyFilters} style={{ background: '#27ae60', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+              Apply
+            </button>
+            <button onClick={() => setDropdownOpen(null)} style={{ background: '#f3f4f6', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+              Close
             </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Ticket list header */}
-        <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>
-          {authority === 'admin'
-            ? showMyTickets
-              ? `My Open Tickets (${openTickets.length})`
-              : `All Open Tickets (${openTickets.length})`
-            : `Your Open Tickets (${openTickets.length})`}
-        </h2>
+      {/* applied filters */}
+      {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
+        <div className="applied" aria-live="polite">
+          {[...appliedCategories.map(c => ({ type: 'category', value: c })), ...appliedUsers.map(u => ({ type: 'user', value: u }))].map(({ type, value }) => (
+            <div key={value} className="chip">
+              <span>{value}</span>
+              <button onClick={() => removeFilter(type, value)} style={{ background: 'transparent', color: '#e74c3c', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} aria-label={`Remove filter ${value}`}>✕</button>
+            </div>
+          ))}
+          <button onClick={clearAllFilters} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '20px', padding: '6px 14px', cursor: 'pointer', fontWeight: '600' }}>
+            Clear All
+          </button>
+        </div>
+      )}
 
-        {/* Ticket list */}
-        {openTickets.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#7f8c8d', padding: '2rem' }}>
-            <h3 style={{ color: '#374151' }}>No results found for your search</h3>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gap: '1rem' }}>
-            {openTickets.map(ticket => (
-              <Link key={ticket._id} to={`/ticket/${ticket._id}`} style={{ textDecoration: 'none' }}>
-                <div
-                  style={{
-                    background: '#f8f9fa',
-                    padding: '1.5rem',
-                    borderRadius: '10px',
-                    borderLeft: `4px solid ${categoryColor(ticket.category)}`,
-                    transition: '0.2s',
-                    cursor: 'pointer'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#eef7ff'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#f8f9fa'}
-                >
-                  <h3 style={{ margin: 0, color: '#0f172a' }}>
-                    #{ticket.ticketNumber} - {ticket.category}
-                  </h3>
-                  <p style={{ color: '#334155', margin: '0.5rem 0' }}>{ticket.description}</p>
+      {/* ticket list header */}
+      <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>
+        {authority === 'admin'
+          ? showMyTickets
+            ? `My Open Tickets (${openTickets.length})`
+            : `All Open Tickets (${openTickets.length})`
+          : `Your Open Tickets (${openTickets.length})`}
+      </h2>
 
-                  {authority === 'admin' && (
-                    <>
-                      <p style={{ margin: '0.3rem 0', color: '#34495e' }}>
-                        <strong>Created by:</strong> {ticket.userName || '—'}
-                      </p>
-                      <p style={{ margin: '0.3rem 0', color: '#34495e' }}>
-                        <strong>Email:</strong> {ticket.userEmail || '—'}
-                      </p>
-                    </>
-                  )}
+      {/* tickets */}
+      {openTickets.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#7f8c8d', padding: '2rem' }}>
+          <h3 style={{ color: '#374151' }}>No results found for your search</h3>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          {openTickets.map(ticket => (
+            <Link key={ticket._id} to={`/ticket/${ticket._id}`} style={{ textDecoration: 'none' }}>
+              <div
+                style={{
+                  background: '#f8f9fa',
+                  padding: '1.5rem',
+                  borderRadius: '10px',
+                  borderLeft: `4px solid ${categoryColor(ticket.category)}`,
+                  transition: '0.2s',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#eef7ff'}
+                onMouseLeave={e => e.currentTarget.style.background = '#f8f9fa'}
+              >
+                <h3 style={{ margin: 0, color: '#0f172a' }}>
+                  #{ticket.ticketNumber} - {ticket.category}
+                </h3>
+                <p style={{ color: '#334155', margin: '0.5rem 0' }}>{ticket.description}</p>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: 8 }}>
-                    <span style={{ color: '#10b981', fontWeight: 700 }}>Status: {ticket.status}</span>
-                    <span style={{ color: '#6b7280' }}>Priority: {ticket.priority}</span>
-                  </div>
+                {authority === 'admin' && (
+                  <>
+                    <p style={{ margin: '0.3rem 0', color: '#34495e' }}>
+                      <strong>Created by:</strong> {ticket.userName || '—'}
+                    </p>
+                    <p style={{ margin: '0.3rem 0', color: '#34495e' }}>
+                      <strong>Email:</strong> {ticket.userEmail || '—'}
+                    </p>
+                  </>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: 8 }}>
+                  <span style={{ color: '#10b981', fontWeight: 700 }}>Status: {ticket.status}</span>
+                  <span style={{ color: '#6b7280' }}>Priority: {ticket.priority}</span>
                 </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
