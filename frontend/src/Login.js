@@ -151,7 +151,7 @@ function Login() {
             alt="Sandeza logo"
             style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }}
           />
-          <h1 style={{ color: '#2c3e50', margin: 0 }}>🏢 SANDEZA INC</h1>
+          <h1 style={{ color: '#2c3e50', margin: 0 }}>SANDEZA INC</h1>
         </div>
         <h2 style={{ color: '#7f8c8d', marginBottom: '2rem' }}>IT Ticket Portal</h2>
         <button

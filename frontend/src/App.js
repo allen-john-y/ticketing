@@ -7,6 +7,7 @@ import Home from './Home';
 import CreateTicket from './CreateTicket';
 import TicketDetails from './TicketDetails';
 import Dashboard from './Dashboard';
+import logo from './sandeza.jpg';
 
 const pca = new PublicClientApplication({
   auth: {
@@ -64,7 +65,6 @@ function Header({ logout }) {
       });
 
       const token = response.accessToken;
-      // Requesting additional address fields: streetAddress, state, postalCode
       const graphRes = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode', {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -131,8 +131,14 @@ function Header({ logout }) {
       alignItems: 'center'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.5rem' }}>SANDEZA INC</h1>
-        <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '1rem' }}>IT Ticket Portal</h2>
+        <img src={logo} alt="Sandeza logo" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6 }} />
+        <div>
+          <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: '1.25rem' }}>🏢</span>
+            <span>SANDEZA INC</span>
+          </h1>
+          <h2 style={{ color: '#7f8c8d', margin: 0, fontSize: '0.9rem' }}>IT Ticket Portal</h2>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -313,8 +319,6 @@ function AppContent() {
 
   const handleLogin = async () => {
     try {
-      // Added User.ReadBasic.All so department / employeeId / address fields may be available.
-      // Note: the app may require admin consent for some attributes — see notes below.
       await instance.loginRedirect({
         scopes: ['User.Read', 'User.ReadBasic.All', 'GroupMember.Read.All'],
         prompt: 'select_account'
