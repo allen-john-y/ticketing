@@ -169,39 +169,80 @@ function Home() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Inject improved component-scoped CSS for the search input */}
+      {/* Component-scoped CSS for upgraded button styles + search control */}
       <style>{`
-        /* Container centers the control and keeps layout consistent */
-        .search-wrapper {
-          display: flex;
-          justify-content: center;
-          margin-bottom: 1.5rem;
-        }
-
-        .search-box {
-          position: relative;
+        /* BUTTONS: consistent sizing, subtle elevation and hover states */
+        .btn {
           display: inline-flex;
           align-items: center;
-          width: 100%;
-          max-width: 560px; /* fits homepage width nicely */
-          box-sizing: border-box;
+          gap: 10px;
+          padding: 10px 18px;
+          border-radius: 10px;
+          cursor: pointer;
+          font-weight: 700;
+          font-size: 0.95rem;
+          transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+          border: none;
+        }
+        .btn:active { transform: translateY(1px); }
+
+        /* Primary - bright blue gradient */
+        .btn-primary {
+          background: linear-gradient(90deg, #2563eb 0%, #60a5fa 100%);
+          color: white;
+          box-shadow: 0 8px 20px rgba(37,99,235,0.12);
+        }
+        .btn-primary:hover { filter: brightness(0.97); }
+
+        /* Accent - purple for closed tickets / secondary action */
+        .btn-accent {
+          background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%);
+          color: white;
+          box-shadow: 0 8px 20px rgba(124,58,237,0.12);
+        }
+        .btn-accent:hover { filter: brightness(0.97); }
+
+        /* Outline style for filters */
+        .btn-outline {
+          background: white;
+          border: 1px solid #e6e9ee;
+          color: #111827;
+          font-weight: 600;
+          padding: 8px 14px;
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(2,6,23,0.04);
+        }
+        .btn-outline .dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          display: inline-block;
+          margin-right: 8px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         }
 
-        .search-icon {
-          position: absolute;
-          left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 18px;
-          height: 18px;
-          color: #6b7280;
-          pointer-events: none;
-          opacity: 0.9;
+        .btn-orange {
+          border-color: #f39c12;
+          color: #b45400;
         }
+        .btn-orange:hover { background: #fff7ec; }
 
+        .btn-violet {
+          border-color: #7c3aed;
+          color: #5b21b6;
+        }
+        .btn-violet:hover { background: #fbf6ff; }
+
+        /* Make action buttons consistent size */
+        .action-buttons { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+
+        /* Search box */
+        .search-wrapper { display: flex; justify-content: center; margin-bottom: 1.5rem; }
+        .search-box { position: relative; display: inline-flex; align-items: center; width: 100%; max-width: 560px; box-sizing: border-box; }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #6b7280; pointer-events: none; opacity: 0.9; }
         .search-input {
           width: 100%;
-          padding: 10px 16px 10px 42px; /* leave room for icon */
+          padding: 10px 16px 10px 42px;
           border: 1px solid #e6e9ee;
           border-radius: 999px;
           background: #ffffff;
@@ -212,9 +253,7 @@ function Home() {
           outline: none;
           color: #111827;
         }
-
         .search-input::placeholder { color: #2563eb; opacity: 0.85; }
-
         .search-input:focus {
           box-shadow: 0 8px 24px rgba(37,99,235,0.12);
           border-color: #2563eb;
@@ -222,8 +261,9 @@ function Home() {
         }
 
         @media (max-width: 640px) {
-          .search-box { max-width: 100%; padding: 0 12px; }
-          .search-input { font-size: 15px; padding-left: 40px; }
+          .action-buttons { gap: 8px; }
+          .btn { padding: 10px 12px; font-size: 0.92rem; }
+          .search-box { padding: 0 12px; max-width: 100%; }
         }
       `}</style>
 
@@ -233,7 +273,7 @@ function Home() {
         borderRadius: '10px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
       }}>
-        
+
         {/* Header */}
         <div style={{
           display: 'flex',
@@ -276,33 +316,21 @@ function Home() {
           <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'right' }}>
             <button
               onClick={() => setDropdownOpen(dropdownOpen === 'category' ? null : 'category')}
-              style={{
-                background: '#3498db',
-                color: 'white',
-                border: 'none',
-                padding: '10px 18px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                marginRight: '10px'
-              }}
+              className="btn-outline btn-orange"
+              style={{ marginRight: 8 }}
+              aria-expanded={dropdownOpen === 'category'}
             >
+              <span className="dot" style={{ background: '#f39c12' }}></span>
               Filter by Category ▾
             </button>
 
             {authority === 'admin' && (
               <button
                 onClick={() => setDropdownOpen(dropdownOpen === 'user' ? null : 'user')}
-                style={{
-                  background: '#9b59b6',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px 18px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '600'
-                }}
+                className="btn-outline btn-violet"
+                aria-expanded={dropdownOpen === 'user'}
               >
+                <span className="dot" style={{ background: '#7c3aed' }}></span>
                 Filter by User ▾
               </button>
             )}
@@ -410,44 +438,22 @@ function Home() {
           </div>
         )}
 
-        {/* ✅ Action Buttons */}
-        <div style={{
-          textAlign: 'center',
-          marginBottom: '2rem',
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '1rem'
-        }}>
+        {/* ✅ Action Buttons (Create + View) */}
+        <div className="action-buttons" style={{ marginBottom: '1.5rem' }}>
           <Link to="/create" style={{ textDecoration: 'none' }}>
-            <button style={{
-              background: '#3498db',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '600'
-            }}>
-              Create New Ticket
+            <button className="btn btn-primary" aria-label="Create New Ticket">
+              ➕ Create New Ticket
             </button>
           </Link>
 
           <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-            <button style={{
-              background: '#9b59b6',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '600'
-            }}>
-              View Closed Tickets
+            <button className="btn btn-accent" aria-label="View Closed Tickets">
+              📥 View Closed Tickets
             </button>
           </Link>
         </div>
 
-        {/* ✅ Search Bar (now styled to fit and look like native control on the homepage) */}
+        {/* ✅ Search Bar (now nicely integrated) */}
         <div className="search-wrapper">
           <div className="search-box" role="search" aria-label="Search tickets">
             <svg className="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
