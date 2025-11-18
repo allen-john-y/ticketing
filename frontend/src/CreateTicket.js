@@ -32,7 +32,8 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium', phone: '' });
+  // removed phone from formData
+  const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium' });
   const [loading, setLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
@@ -96,12 +97,11 @@ function CreateTicket() {
         // ignore, we'll use existing displayName/displayEmail
       }
 
-      // Prepare ticket data
+      // Prepare ticket data (phone removed)
       const ticketData = {
         category: formData.category,
         description: formData.description,
         priority: formData.priority,
-        phone: formData.phone || undefined,
         userId: accounts[0]?.localAccountId,
         userName: latestName || accounts[0]?.username,
         userEmail: latestEmail,
@@ -232,16 +232,6 @@ function CreateTicket() {
             />
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>Contact Phone (optional)</label>
-            <input
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="e.g. +1 555 555 5555"
-              style={styles.input}
-            />
-          </div>
-
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
             <button type="submit" style={{ ...styles.primaryButton, flex: 1 }} disabled={loading}>
               {loading ? 'Creating...' : 'Create Ticket'}
@@ -315,13 +305,16 @@ const styles = {
   pageWrap: {
     padding: '2rem',
     maxWidth: 820,
-    margin: '0 auto'
+    margin: '0 auto',
+    boxSizing: 'border-box'
   },
   card: {
     background: 'white',
     padding: '1.25rem 1.5rem',
     borderRadius: 12,
-    boxShadow: '0 6px 30px rgba(2,6,23,0.08)'
+    boxShadow: '0 6px 30px rgba(2,6,23,0.08)',
+    boxSizing: 'border-box',
+    overflow: 'hidden'
   },
   headerRow: {
     display: 'flex',
@@ -363,22 +356,28 @@ const styles = {
     padding: '10px 12px',
     border: '1px solid #e6e9ee',
     borderRadius: 8,
-    background: '#fafafa'
+    background: '#fafafa',
+    boxSizing: 'border-box'
   },
   select: {
     width: '100%',
     padding: '10px 12px',
     border: '1px solid #e6e9ee',
     borderRadius: 8,
-    background: 'white'
+    background: 'white',
+    boxSizing: 'border-box'
   },
   textarea: {
     width: '100%',
+    minHeight: 140,
+    maxHeight: 300,
     padding: '12px',
     border: '1px solid #e6e9ee',
     borderRadius: 8,
     background: 'white',
-    resize: 'vertical'
+    resize: 'vertical',
+    overflow: 'auto',
+    boxSizing: 'border-box'
   },
   primaryButton: {
     background: '#2563eb',
