@@ -221,7 +221,7 @@ function Home() {
         /* layout for action row and search */
         .action-row { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
         .left-controls { display:flex; gap:8px; align-items:center; }
-        .right-search { flex: 1; display:flex; justify-content:flex-end; }
+        .right-search { flex: 1; display:flex; justify-content:center; }
 
         /* Search pill styling (keeps previous improved look) */
         .search-pill { width:100%; max-width:560px; border-radius:999px; padding:4px; background: linear-gradient(90deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04)); box-shadow: 0 6px 18px rgba(37,99,235,0.04); }
@@ -337,7 +337,7 @@ function Home() {
             {/* Dropdown (shared anchor) */}
             {dropdownOpen && (
               <div id="filter-dropdown" style={{
-                position: 'absolute',
+                position: 'relative',
                 left: 8,
                 marginTop: 48,
                 background: 'white',
