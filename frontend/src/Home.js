@@ -174,131 +174,120 @@ function Home() {
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <style>{`
-        /* Welcome card */
-        .welcome {
-          display: flex;
-          gap: 16px;
-          align-items: center;
-          background: linear-gradient(180deg, #ffffff, #fbfdff);
-          padding: 18px;
-          border-radius: 12px;
-          box-shadow: 0 6px 24px rgba(2,6,23,0.06);
-          margin-bottom: 18px;
+        /* ---------- Visual polish for filter controls and action area ---------- */
+        .btn {
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          padding:10px 14px;
+          border-radius:10px;
+          cursor:pointer;
+          font-weight:700;
+          border:none;
         }
-        .avatar {
-          width: 64px;
-          height: 64px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, #eef2ff, #e9f5ff);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 800;
-          color: #3730a3;
-          font-size: 20px;
-          box-shadow: 0 4px 12px rgba(2,6,23,0.06);
-        }
-        .welcome-left { flex: 1; display: flex; gap: 12px; align-items: center; }
-        .welcome-meta { display:flex; flex-direction: column; gap: 6px; }
-        .welcome-title { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0; }
-        .welcome-sub { color: #475569; margin: 0; font-size: 13px; }
-        .role-badge { display:inline-block; padding: 6px 12px; border-radius: 999px; font-weight:700; font-size: 12px; color: white; }
-        .role-admin { background: linear-gradient(90deg,#16a34a,#60a5fa); }
-        .role-user { background: linear-gradient(90deg,#94a3b8,#64748b); }
 
-        /* KPI chips */
-        .kpis { display:flex; gap:10px; margin-top: 6px; flex-wrap:wrap; }
-        .kpi { background: #f8fafc; padding: 8px 12px; border-radius: 10px; font-weight:700; color:#0f172a; display:inline-flex; gap:10px; align-items:center; box-shadow: 0 4px 12px rgba(2,6,23,0.03); }
-        .kpi .num { color: #0b6fbd; font-weight:900; }
-
-        /* Actions area in header */
-        .welcome-actions { display:flex; gap:10px; align-items:center; }
-        .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:700; border:none; }
+        /* Primary and accent action buttons (Create / Closed) */
         .btn-create { background: linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow: 0 8px 20px rgba(37,99,235,0.12); }
         .btn-closed { background: linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow: 0 8px 20px rgba(124,58,237,0.12); }
-        .btn-ghost { background:transparent; border:1px solid #e6e9ee; color:#0f172a; padding:8px 12px; border-radius:8px; font-weight:600; }
 
-        /* Filter controls & action row */
-        .action-row { display:flex; justify-content: space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
-
-        /* Search: colorful, integrated pill with constrained height & properly sized icon */
-        .search-wrapper {
-          display: flex;
-          justify-content: center;
-          margin-bottom: 1.5rem;
-          width: 100%;
-        }
-        .search-pill {
-          width: 100%;
-          max-width: 720px;
-          border-radius: 999px;
-          padding: 4px; /* small outer padding */
-          background: linear-gradient(90deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04));
-          box-shadow: 0 6px 18px rgba(37,99,235,0.04);
-          box-sizing: border-box;
-        }
-        .search-inner {
-          display: flex;
-          align-items: center;
+        /* Filter buttons — unified look for both user & admin */
+        .filter-btn {
+          display:inline-flex;
+          align-items:center;
+          gap:10px;
+          padding:9px 12px;
+          border-radius:10px;
           background: white;
-          border-radius: 999px;
-          padding: 8px 12px;
-          min-height: 48px;       /* constrain height so it can't blow up */
-          max-height: 64px;
-          box-sizing: border-box;
-        }
-        .search-icon {
-          width: 28px;
-          height: 28px;
-          flex: 0 0 28px;
-          margin-right: 12px;
-          color: #64748b;
-        }
-        .search-input {
-          width: 100%;
-          border: none;
-          outline: none;
-          font-size: 16px;
-          font-family: Consolas, Monaco, monospace;
+          border: 1px solid rgba(15,23,42,0.06);
+          box-shadow: 0 4px 12px rgba(2,6,23,0.04);
           color: #0f172a;
-          line-height: 1.2;
-          padding: 6px 0;
-          background: transparent;
+          font-weight: 600;
+          cursor: pointer;
+          transition: transform 80ms ease, box-shadow 120ms ease;
         }
-        .search-input::placeholder { color: #2563eb; opacity: 0.9; }
-        .search-inner:focus-within { box-shadow: 0 10px 30px rgba(37,99,235,0.08); transform: translateY(-1px); }
+        .filter-btn:active { transform: translateY(1px); }
+        .filter-btn:hover { box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
+
+        .filter-dot {
+          width:10px;
+          height:10px;
+          border-radius:50%;
+          display:inline-block;
+          box-shadow: 0 2px 6px rgba(2,6,23,0.06);
+        }
+        .filter-category { background: linear-gradient(180deg,#f59e0b,#d97706); }
+        .filter-user { background: linear-gradient(180deg,#7c3aed,#6d28d9); }
+
+        /* layout for action row and search */
+        .action-row { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+        .left-controls { display:flex; gap:8px; align-items:center; }
+        .right-search { flex: 1; display:flex; justify-content:flex-end; }
+
+        /* Search pill styling (keeps previous improved look) */
+        .search-pill { width:100%; max-width:560px; border-radius:999px; padding:4px; background: linear-gradient(90deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04)); box-shadow: 0 6px 18px rgba(37,99,235,0.04); }
+        .search-inner { display:flex; align-items:center; background:white; border-radius:999px; padding:8px 12px; min-height:44px; }
+        .search-icon { width:20px; height:20px; margin-right:10px; color:#64748b; flex:0 0 20px; }
+        .search-input { width:100%; border:none; outline:none; font-size:15px; font-family: Consolas, Monaco, monospace; color:#0f172a; }
+        .search-input::placeholder { color:#2563eb; opacity:0.95; }
 
         @media (max-width: 840px) {
-          .welcome { flex-direction: column; align-items: stretch; }
-          .welcome-left { width: 100%; }
-          .welcome-actions { justify-content: space-between; width: 100%; margin-top: 8px; }
-          .search-pill { max-width: 100%; padding: 2px; }
-          .search-inner { min-height: 44px; }
+          .right-search { justify-content: center; width: 100%; order: 3; margin-top:10px; }
+          .left-controls { order: 1; width: 100%; justify-content: flex-start; }
         }
       `}</style>
 
       {/* Welcome card */}
-      <div className="welcome" role="region" aria-label="Welcome">
-        <div className="avatar" aria-hidden>{initials}</div>
+      <div style={{
+        display: 'flex',
+        gap: 16,
+        alignItems: 'center',
+        background: 'linear-gradient(180deg, #ffffff, #fbfdff)',
+        padding: 18,
+        borderRadius: 12,
+        boxShadow: '0 6px 24px rgba(2,6,23,0.06)',
+        marginBottom: 18
+      }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: 12,
+          background: 'linear-gradient(135deg, #eef2ff, #e9f5ff)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 800, color: '#3730a3', fontSize: 20, boxShadow: '0 4px 12px rgba(2,6,23,0.06)'
+        }}>{initials}</div>
 
-        <div className="welcome-left">
-          <div className="welcome-meta">
-            <h2 className="welcome-title">Welcome back, <span style={{ color: '#2563eb' }}>{userName}</span></h2>
-            <p className="welcome-sub">
-              <span className={`role-badge ${authority === 'admin' ? 'role-admin' : 'role-user'}`}>
+        <div style={{ flex: 1, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              Welcome back, <span style={{ color: '#2563eb' }}>{userName}</span>
+            </h2>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{
+                display: 'inline-block',
+                padding: '6px 12px',
+                borderRadius: 999,
+                fontWeight: 700,
+                fontSize: 12,
+                color: 'white',
+                background: authority === 'admin' ? 'linear-gradient(90deg,#16a34a,#60a5fa)' : 'linear-gradient(90deg,#94a3b8,#64748b)'
+              }}>
                 {authority === 'admin' ? 'ADMIN' : 'USER'}
               </span>
-            </p>
 
-            <div className="kpis" aria-hidden>
-              <div className="kpi"><span className="num">{openTickets.length}</span><span>Open</span></div>
-              <div className="kpi"><span className="num">{closedTickets.length}</span><span>Closed</span></div>
-              <div className="kpi"><span className="num">{tickets.length}</span><span>Total</span></div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 10, fontWeight: 700 }}>
+                  <span style={{ color: '#0b6fbd', fontWeight: 900 }}>{openTickets.length}</span> <span style={{ marginLeft: 8 }}>Open</span>
+                </div>
+                <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 10, fontWeight: 700 }}>
+                  <span style={{ color: '#0b6fbd', fontWeight: 900 }}>{closedTickets.length}</span> <span style={{ marginLeft: 8 }}>Closed</span>
+                </div>
+                <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: 10, fontWeight: 700 }}>
+                  <span style={{ color: '#0b6fbd', fontWeight: 900 }}>{tickets.length}</span> <span style={{ marginLeft: 8 }}>Total</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="welcome-actions" role="toolbar" aria-label="Quick actions">
+        <div style={{ display: 'flex', gap: 10 }}>
           <Link to="/create" style={{ textDecoration: 'none' }}>
             <button className="btn btn-create" aria-label="Create New Ticket">➕ Create Ticket</button>
           </Link>
@@ -316,44 +305,51 @@ function Home() {
         boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
       }}>
 
-        {/* Filters / Search */}
+        {/* Filters / Search action row */}
         <div className="action-row">
-          <div ref={dropdownRef} style={{ position: 'relative', textAlign: 'left' }}>
+          <div className="left-controls" ref={dropdownRef}>
+
+            {/* Filter by Category — unified, attractive button (visible to all users) */}
             <button
               onClick={() => setDropdownOpen(dropdownOpen === 'category' ? null : 'category')}
-              className="btn-ghost"
-              style={{ marginRight: 8 }}
+              className="filter-btn"
               aria-expanded={dropdownOpen === 'category'}
+              aria-controls="filter-dropdown"
             >
+              <span className="filter-dot filter-category" aria-hidden />
               Filter by Category ▾
             </button>
 
+            {/* Filter by User — only for admins, same look */}
             {authority === 'admin' && (
               <button
                 onClick={() => setDropdownOpen(dropdownOpen === 'user' ? null : 'user')}
-                className="btn-ghost"
+                className="filter-btn"
                 aria-expanded={dropdownOpen === 'user'}
-                style={{ marginLeft: 8 }}
+                aria-controls="filter-dropdown"
+                style={{ marginLeft: 6 }}
               >
+                <span className="filter-dot filter-user" aria-hidden />
                 Filter by User ▾
               </button>
             )}
 
+            {/* Dropdown (shared anchor) */}
             {dropdownOpen && (
               <div id="filter-dropdown" style={{
                 position: 'absolute',
-                left: 0,
-                marginTop: '8px',
+                left: 8,
+                marginTop: 48,
                 background: 'white',
-                border: '1px solid #ccc',
-                borderRadius: '8px',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-                zIndex: 10,
-                minWidth: '220px',
-                padding: '10px'
+                border: '1px solid #e6e9ee',
+                borderRadius: 8,
+                boxShadow: '0 8px 30px rgba(2,6,23,0.08)',
+                zIndex: 60,
+                minWidth: 260,
+                padding: 12
               }}>
                 {(dropdownOpen === 'category' ? categories : users).map(item => (
-                  <label key={item} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <label key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <input
                       type="checkbox"
                       checked={
@@ -363,31 +359,24 @@ function Home() {
                       }
                       onChange={() => handleSelect(dropdownOpen, item)}
                     />
-                    {item}
+                    <span style={{ fontWeight: 600 }}>{item}</span>
                   </label>
                 ))}
-                <button
-                  onClick={applyFilters}
-                  style={{
-                    background: '#27ae60',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '6px 10px',
-                    marginTop: '10px',
-                    width: '100%',
-                    cursor: 'pointer',
-                    fontWeight: '600'
-                  }}
-                >
-                  Apply Filter
-                </button>
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button onClick={applyFilters} style={{ background: '#27ae60', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                    Apply
+                  </button>
+                  <button onClick={() => setDropdownOpen(null)} style={{ background: '#f3f4f6', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                    Close
+                  </button>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Search input - constrained and integrated pill */}
-          <div className="search-wrapper" aria-hidden={false} style={{ flex: 1 }}>
+          {/* Search input — positioned to the right and visually integrated */}
+          <div className="right-search">
             <div className="search-pill" role="search" aria-label="Search tickets">
               <div className="search-inner">
                 <svg className="search-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
