@@ -157,10 +157,15 @@ function Home() {
 
   const openTickets = searchFiltered.filter(t => t.status !== 'Closed');
 
-  // helper for priority color (same look as Dashboard)
-  const priorityColor = (priority) => {
-    if (!priority) return '#27ae60';
-    return priority === 'High' ? '#e74c3c' : priority === 'Medium' ? '#f39c12' : '#27ae60';
+  // Category -> color mapping (per your request)
+  const categoryColor = (category) => {
+    if (!category) return '#3498db'; // default blue
+    const c = category.toLowerCase();
+    if (c.includes('password') || c.includes('admin access') || c.includes('admin')) return '#f39c12'; // orange
+    if (c.includes('payroll') || c.includes('expense')) return '#27ae60'; // green
+    if (c.includes('leave') || c.includes('onboard') || c.includes('onboarding')) return '#e74c3c'; // red
+    // fallback: keep original priority-style color blue
+    return '#3498db';
   };
 
   return (
@@ -424,7 +429,7 @@ function Home() {
                     background: '#f8f9fa',
                     padding: '1.5rem',
                     borderRadius: '10px',
-                    borderLeft: `4px solid ${priorityColor(ticket.priority)}`,
+                    borderLeft: `4px solid ${categoryColor(ticket.category)}`,
                     transition: '0.2s',
                     cursor: 'pointer'
                   }}

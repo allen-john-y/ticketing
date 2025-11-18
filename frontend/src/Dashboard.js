@@ -60,11 +60,24 @@ function Dashboard() {
     }
   };
 
+  // Category -> color mapping (per your request)
+  const categoryColor = (category) => {
+    if (!category) return '#3498db'; // default blue
+    const c = category.toLowerCase();
+    if (c.includes('password') || c.includes('admin access') || c.includes('admin')) return '#f39c12'; // orange
+    if (c.includes('payroll') || c.includes('expense')) return '#27ae60'; // green
+    if (c.includes('leave') || c.includes('onboard') || c.includes('onboarding')) return '#e74c3c'; // red
+    return '#3498db';
+  };
+
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Heading + count row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <h1 style={{ color: '#0f172a', margin: 0 }}>Closed Tickets</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h1 style={{ color: '#111827', margin: 0 }}>Closed Tickets</h1>
+        </div>
+
+        {/* Show count on the right */}
         <div style={{ color: '#374151', fontWeight: 600 }}>
           {filteredTickets.length} closed {filteredTickets.length === 1 ? 'ticket' : 'tickets'}
         </div>
@@ -117,13 +130,7 @@ function Dashboard() {
                   background: '#f8f9fa',
                   padding: '1.5rem',
                   borderRadius: '10px',
-                  borderLeft: `4px solid ${
-                    ticket.priority === 'High'
-                      ? '#e74c3c'
-                      : ticket.priority === 'Medium'
-                      ? '#f39c12'
-                      : '#27ae60'
-                  }`,
+                  borderLeft: `4px solid ${categoryColor(ticket.category)}`,
                   transition: '0.2s',
                   cursor: 'pointer'
                 }}
