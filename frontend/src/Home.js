@@ -265,6 +265,21 @@ function Home() {
                 <div className="kpi"><span className="num">{closedTickets.length}</span><span style={{ marginLeft: 8 }}>Closed</span></div>
                 {/* Total KPI removed per request */}
               </div>
+
+              {/* Admin-only "Show only my tickets" checkbox */}
+              {authority === 'admin' && (
+                <div style={{ marginTop: 10 }}>
+                  <label style={{ fontSize: '0.95rem', color: '#2c3e50', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={showMyTickets}
+                      onChange={() => setShowMyTickets(prev => !prev)}
+                      style={{ transform: 'scale(1.1)' }}
+                    />
+                    Show only my tickets
+                  </label>
+                </div>
+              )}
             </div>
           </div>
         </div>
