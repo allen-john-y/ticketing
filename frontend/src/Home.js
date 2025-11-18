@@ -169,33 +169,61 @@ function Home() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Inject small component-scoped CSS for the search input so the :focus and ::placeholder rules work */}
+      {/* Inject improved component-scoped CSS for the search input */}
       <style>{`
-        .input {
-          padding: 10px;
-          width: 120px;
-          border: none;
+        /* Container centers the control and keeps layout consistent */
+        .search-wrapper {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 1.5rem;
+        }
+
+        .search-box {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          width: 100%;
+          max-width: 560px; /* fits homepage width nicely */
+          box-sizing: border-box;
+        }
+
+        .search-icon {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 18px;
+          height: 18px;
+          color: #6b7280;
+          pointer-events: none;
+          opacity: 0.9;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: 10px 16px 10px 42px; /* leave room for icon */
+          border: 1px solid #e6e9ee;
+          border-radius: 999px;
+          background: #ffffff;
+          font-size: 16px;
+          transition: box-shadow 0.18s ease, transform 0.18s ease;
+          font-family: Consolas, Monaco, monospace;
+          box-shadow: 0 1px rgba(0,0,0,0.04);
           outline: none;
-          border-radius: 5px;
-          box-shadow: 0 1px gray;
-          font-size: 18px;
-          transition: width 0.3s;
-          font-family: Consolas,monaco,monospace;
+          color: #111827;
         }
 
-        .input:focus {
-          outline: 1px solid blue;
-          box-shadow: none;
-          width: 230px;
+        .search-input::placeholder { color: #2563eb; opacity: 0.85; }
+
+        .search-input:focus {
+          box-shadow: 0 8px 24px rgba(37,99,235,0.12);
+          border-color: #2563eb;
+          transform: translateY(-1px);
         }
 
-        .input::placeholder {
-          color: blue;
-        }
-
-        /* small responsive tweak so large screens keep the search centered nicely */
-        @media (min-width: 900px) {
-          .search-wrapper { display: flex; justify-content: center; }
+        @media (max-width: 640px) {
+          .search-box { max-width: 100%; padding: 0 12px; }
+          .search-input { font-size: 15px; padding-left: 40px; }
         }
       `}</style>
 
@@ -419,16 +447,21 @@ function Home() {
           </Link>
         </div>
 
-        {/* ✅ Search Bar (uses .input CSS you provided, and remains fully wired to searchTerm/filtering) */}
-        <div className="search-wrapper" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <input
-            type="text"
-            className="input"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            aria-label="Search tickets"
-          />
+        {/* ✅ Search Bar (now styled to fit and look like native control on the homepage) */}
+        <div className="search-wrapper">
+          <div className="search-box" role="search" aria-label="Search tickets">
+            <svg className="search-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <path d="M21 21l-4.35-4.35" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="11" cy="11" r="6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <input
+              className="search-input"
+              placeholder="Search by number, category, or issue..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search tickets"
+            />
+          </div>
         </div>
 
         {/* ✅ Ticket Display (styled like Dashboard closed tickets) */}
