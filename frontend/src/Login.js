@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useMsal } from '@azure/msal-react';
+import logo from './sandeza.jpg';
 
 function Toast({ open, type = 'info', message = '' }) {
   const bg = type === 'success' ? '#27ae60' : type === 'error' ? '#e74c3c' : '#3498db';
@@ -144,7 +145,14 @@ function Login() {
           width: '100%',
         }}
       >
-        <h1 style={{ color: '#2c3e50', marginBottom: '1rem' }}>SANDEZA INC</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 12 }}>
+          <img
+            src={logo}
+            alt="Sandeza logo"
+            style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }}
+          />
+          <h1 style={{ color: '#2c3e50', margin: 0 }}>🏢 SANDEZA INC</h1>
+        </div>
         <h2 style={{ color: '#7f8c8d', marginBottom: '2rem' }}>IT Ticket Portal</h2>
         <button
           onClick={login}
