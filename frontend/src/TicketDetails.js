@@ -51,7 +51,7 @@ function TicketDetails() {
     fetchTicket();
   }, [id]);
 
-  // ACTION HANDLERS WITHOUT ALERTS
+  // ACTION HANDLERS
   const confirmAction = async () => {
     if (!modal.action) return;
     setLoading(true);
@@ -75,24 +75,63 @@ function TicketDetails() {
 
   if (!ticket) return <p>Loading...</p>;
 
+  const statusDot = {
+    width: 12,
+    height: 12,
+    borderRadius: "50%",
+    marginRight: 8,
+    background: ticket.status === "Closed" ? "#e74c3c" : "#27ae60",
+    boxShadow: "0 0 6px rgba(0,0,0,0.2)"
+  };
+
   return (
     <>
-      {/* TICKET DETAILS UI */}
+      {/* BACK BUTTON */}
+      <div style={{ padding: "1rem", maxWidth: 600, margin: "0 auto" }}>
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: '1px solid #e6e9ee',
+            background: '#ffffff',
+            cursor: 'pointer',
+            marginBottom: 16
+          }}
+        >
+          ← Back to Home
+        </button>
+      </div>
+
+      {/* CARD */}
       <div style={{
         padding: '2rem',
         maxWidth: '600px',
         margin: '0 auto',
         background: 'white',
         borderRadius: '10px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+        borderLeft: `4px solid ${ticket.status === "Closed" ? "#e74c3c" : "#27ae60"}`,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+        transition: "0.3s"
       }}>
-        <h1>{ticket.category}</h1>
+        <h1 style={{ marginBottom: 0 }}>{ticket.category}</h1>
+
+        {/* STATUS DOT + Label */}
+        <div style={{ display: "flex", alignItems: "center", marginTop: 6, marginBottom: 16 }}>
+          <div style={statusDot}></div>
+          <span style={{ fontSize: 16, color: "#374151", fontWeight: 600 }}>
+            {ticket.status}
+          </span>
+        </div>
+
         <p><strong>Ticket Number:</strong> {ticket.ticketNumber}</p>
         <p><strong>Created by:</strong> {ticket.userName}</p>
         <p><strong>Email:</strong> {ticket.userEmail}</p>
         <p><strong>Description:</strong> {ticket.description}</p>
         <p><strong>Priority:</strong> {ticket.priority}</p>
-        <p><strong>Status:</strong> {ticket.status}</p>
 
         {/* ADMIN CLOSE BUTTON */}
         {authority === 'admin' && ticket.status !== 'Closed' && (
@@ -106,7 +145,8 @@ function TicketDetails() {
               padding: '12px 24px',
               border: 'none',
               borderRadius: '8px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              transition: "0.2s"
             }}
           >
             {loading ? 'Closing...' : 'Close Ticket'}
@@ -126,6 +166,7 @@ function TicketDetails() {
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer',
+              transition: "0.2s",
               marginLeft: authority === 'admin' ? '10px' : '0'
             }}
           >
@@ -143,7 +184,8 @@ function TicketDetails() {
           background: "rgba(0,0,0,0.6)",
           display: "flex",
           justifyContent: "center",
-          alignItems: "center"
+          alignItems: "center",
+          animation: "fadeIn 0.2s"
         }}>
           <div style={{
             background: "white",
@@ -151,12 +193,12 @@ function TicketDetails() {
             borderRadius: "10px",
             width: "350px",
             textAlign: "center",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.2)"
+            boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+            transform: "scale(1)",
+            animation: "zoomIn 0.25s"
           }}>
             <h3 style={{ marginBottom: "20px" }}>
-              {modal.action === "close"
-                ? "Close this ticket?"
-                : "Revive this ticket?"}
+              {modal.action === "close" ? "Close this ticket?" : "Revive this ticket?"}
             </h3>
 
             <div style={{ display: "flex", justifyContent: "space-around" }}>
