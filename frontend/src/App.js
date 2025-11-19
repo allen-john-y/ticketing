@@ -99,7 +99,7 @@ function Header({ logout }) {
       });
 
       const token = response.accessToken;
-      const graphRes = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode', {
+      const graphRes = await fetch('https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode,jobTitle', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -112,15 +112,17 @@ function Header({ logout }) {
 
       const data = await graphRes.json();
       setProfileData({
-        name: data.displayName || '',
-        email: data.mail || data.userPrincipalName || '',
-        department: data.department || '',
-        employeeId: data.employeeId || '',
-        mobilePhone: data.mobilePhone || '',
-        streetAddress: data.streetAddress || '',
-        state: data.state || '',
-        postalCode: data.postalCode || '',
-      });
+  name: data.displayName || '',
+  email: data.mail || data.userPrincipalName || '',
+  department: data.department || '',
+  employeeId: data.employeeId || '',
+  mobilePhone: data.mobilePhone || '',
+  streetAddress: data.streetAddress || '',
+  state: data.state || '',
+  postalCode: data.postalCode || '',
+  jobTitle: data.jobTitle || '',
+});
+
 
       // Also attempt to fetch photo when opening full profile, and set if available.
       try {
@@ -420,6 +422,12 @@ function Header({ logout }) {
                   <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Department</div>
                   <div style={{ fontWeight: 600 }}>{profileData.department || '—'}</div>
                 </div>
+
+                <div>
+  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Job Title</div>
+  <div style={{ fontWeight: 600 }}>{profileData.jobTitle || '—'}</div>
+</div>
+
 
                 <div>
                   <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Employee ID</div>
