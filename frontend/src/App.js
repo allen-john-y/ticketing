@@ -29,6 +29,9 @@ function Header({ logout }) {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState(null);
 
+  // new: profile photo state (data URL)
+  const [profilePhoto, setProfilePhoto] = useState(null);
+
   // Close profile dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -39,6 +42,48 @@ function Header({ logout }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Fetch a lightweight profile photo from Graph silently on mount / when account changes.
+  // This is intentionally silent: on interaction-required we skip fetching to avoid redirecting the user.
+  useEffect(() => {
+    const fetchPhotoSilently = async () => {
+      if (!accounts || !accounts[0]) return;
+      try {
+        const tokenResponse = await instance.acquireTokenSilent({
+          scopes: ['User.Read'],
+          account: accounts[0]
+        });
+
+        // Request the binary photo content
+        const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
+        });
+
+        if (!photoRes.ok) {
+          // no photo or can't access — silently ignore
+          return;
+        }
+
+        const arrayBuffer = await photoRes.arrayBuffer();
+        const u8 = new Uint8Array(arrayBuffer);
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < u8.length; i += chunkSize) {
+          const slice = u8.subarray(i, i + chunkSize);
+          binary += String.fromCharCode.apply(null, slice);
+        }
+        const b64 = btoa(binary);
+        const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
+        setProfilePhoto(`data:${contentType};base64,${b64}`);
+      } catch (err) {
+        // InteractionRequiredAuthError or other errors — do not change app flow, just skip the photo.
+        // Do not log noise to console in production; keep minimal debugging if needed
+        // console.debug('Profile photo not available', err);
+      }
+    };
+
+    fetchPhotoSilently();
+  }, [accounts, instance]);
 
   // Fetch user profile from Microsoft Graph
   const fetchFullProfile = async () => {
@@ -76,6 +121,28 @@ function Header({ logout }) {
         state: data.state || '',
         postalCode: data.postalCode || '',
       });
+
+      // Also attempt to fetch photo when opening full profile, and set if available.
+      try {
+        const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (photoRes.ok) {
+          const arrayBuffer = await photoRes.arrayBuffer();
+          const u8 = new Uint8Array(arrayBuffer);
+          let binary = '';
+          const chunkSize = 0x8000;
+          for (let i = 0; i < u8.length; i += chunkSize) {
+            const slice = u8.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, slice);
+          }
+          const b64 = btoa(binary);
+          const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
+          setProfilePhoto(`data:${contentType};base64,${b64}`);
+        }
+      } catch (photoErr) {
+        // ignore photo fetch errors here as well
+      }
     } catch (err) {
       // If interaction required, fall back to redirect to get consent / login
       if (err instanceof InteractionRequiredAuthError || (err && err.errorCode === 'interaction_required')) {
@@ -173,9 +240,14 @@ function Header({ logout }) {
                   fontWeight: 800,
                   color: '#3730a3',
                   fontSize: 14,
-                  flexShrink: 0
+                  flexShrink: 0,
+                  overflow: 'hidden'
                 }}>
-                  {initials}
+                  {profilePhoto ? (
+                    <img src={profilePhoto} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  ) : (
+                    <span>{initials}</span>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
@@ -204,8 +276,14 @@ function Header({ logout }) {
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
                     <div style={{
                       width: 48, height: 48, borderRadius: 12, background: '#eef2ff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#3730a3'
-                    }}>{initials}</div>
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#3730a3', overflow: 'hidden'
+                    }}>
+                      {profilePhoto ? (
+                        <img src={profilePhoto} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      ) : (
+                        <span style={{ fontSize: 18 }}>{initials}</span>
+                      )}
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 800, color: '#0f172a' }}>{accounts?.[0]?.name || 'Unknown'}</div>
                       <div style={{ color: '#6b7280', fontSize: 13 }}>{accounts?.[0]?.username}</div>
@@ -296,6 +374,25 @@ function Header({ logout }) {
               >
                 ✖
               </button>
+            </div>
+
+            {/* show photo here as well if available */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 12, background: '#eef2ff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#3730a3', overflow: 'hidden'
+              }}>
+                {profilePhoto ? (
+                  <img src={profilePhoto} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                ) : (
+                  <span style={{ fontSize: 20 }}>{initials}</span>
+                )}
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 800, color: '#0f172a' }}>{accounts?.[0]?.name || ''}</div>
+                <div style={{ color: '#6b7280', fontSize: 13 }}>{accounts?.[0]?.username || ''}</div>
+              </div>
             </div>
 
             {loadingProfile && <p>Loading profile…</p>}
