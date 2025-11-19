@@ -30,6 +30,9 @@ function Home() {
   const categoryBtnRef = useRef(null);
   const userBtnRef = useRef(null);
 
+  // New: store profile photo data URL (if available)
+  const [profilePhoto, setProfilePhoto] = useState(null);
+
   useEffect(() => {
     if (location.state?.refresh) {
       setRefreshKey(prev => prev + 1);
@@ -63,6 +66,30 @@ function Home() {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
         });
         setUserName(userRes.data.displayName || 'User');
+
+        // Try to fetch the user's photo from Graph. If it exists, convert to base64 and use it.
+        // If it fails (404 or other), we silently ignore and keep initials fallback.
+        try {
+          const photoRes = await axios.get('https://graph.microsoft.com/v1.0/me/photo/$value', {
+            headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
+            responseType: 'arraybuffer'
+          });
+
+          // Convert arraybuffer to base64 (browser-safe)
+          const u8 = new Uint8Array(photoRes.data);
+          let binary = '';
+          const chunkSize = 0x8000;
+          for (let i = 0; i < u8.length; i += chunkSize) {
+            const slice = u8.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, slice);
+          }
+          const b64 = btoa(binary);
+          const contentType = (photoRes.headers && photoRes.headers['content-type']) || 'image/jpeg';
+          setProfilePhoto(`data:${contentType};base64,${b64}`);
+        } catch (photoErr) {
+          // No photo available or permission issue — fall back to initials (do not log noisy errors)
+          // console.debug('No profile photo:', photoErr?.response?.status || photoErr.message);
+        }
 
         const groupsRes = await axios.get('https://graph.microsoft.com/v1.0/me/memberOf', {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
@@ -197,7 +224,8 @@ function Home() {
       <style>{`
         /* Overall spacing + card */
         .welcome { display:flex; gap:16px; align-items:center; background:linear-gradient(180deg,#fff,#fbfdff); padding:18px; border-radius:12px; box-shadow:0 6px 24px rgba(2,6,23,0.06); margin-bottom:18px; }
-        .avatar { width:64px; height:64px; border-radius:12px; background:linear-gradient(135deg,#eef2ff,#e9f5ff); display:flex; align-items:center; justify-content:center; font-weight:800; color:#3730a3; font-size:20px; box-shadow:0 4px 12px rgba(2,6,23,0.06); }
+        .avatar { width:64px; height:64px; border-radius:12px; background:linear-gradient(135deg,#eef2ff,#e9f5ff); display:flex; align-items:center; justify-content:center; font-weight:800; color:#3730a3; font-size:20px; box-shadow:0 4px 12px rgba(2,6,23,0.06); overflow:hidden; }
+        .avatar img { width:100%; height:100%; object-fit:cover; display:block; }
         .welcome-left { flex:1; display:flex; gap:12px; align-items:center; }
         .welcome-title { font-size:20px; font-weight:800; color:#0f172a; margin:0; }
         .role-badge { display:inline-block; padding:6px 12px; border-radius:999px; font-weight:700; font-size:12px; color:white; }
@@ -251,7 +279,13 @@ function Home() {
 
       {/* Welcome card */}
       <div className="welcome" role="region" aria-label="Welcome">
-        <div className="avatar" aria-hidden>{initials}</div>
+        <div className="avatar" aria-hidden>
+          {profilePhoto ? (
+            <img src={profilePhoto} alt={`${userName} profile`} />
+          ) : (
+            initials
+          )}
+        </div>
 
         <div className="welcome-left">
           <div>
