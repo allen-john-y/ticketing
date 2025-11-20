@@ -206,7 +206,7 @@ function TicketDetails() {
           <p><strong>Created by:</strong> {ticket.userName}</p>
           <p><strong>Email:</strong> {ticket.userEmail}</p>
           <p><strong>Priority:</strong> <span style={{ color: '#f59e0b', fontWeight: 600 }}>{ticket.priority}</span></p>
-          <p style={{ marginTop: 16 }}><strong>Description:</strong><br />{ticket.description}</p>
+          <p style={{ marginTop: 16 }}><strong>Description:</strong>{ticket.description}</p>
         </div>
 
         {/* ADMIN: Close Ticket Button */}
