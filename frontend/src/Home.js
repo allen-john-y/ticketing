@@ -20,7 +20,9 @@ function Home() {
   const [appliedCategories, setAppliedCategories] = useState([]);
   const [appliedUsers, setAppliedUsers] = useState([]);
 
+  // dropdownOpen: null | 'category' | 'user'
   const [dropdownOpen, setDropdownOpen] = useState(null);
+  // dropdown position for anchoring
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 260 });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,41 +30,16 @@ function Home() {
   const categoryBtnRef = useRef(null);
   const userBtnRef = useRef(null);
 
+  // New: store profile photo data URL (if available)
   const [profilePhoto, setProfilePhoto] = useState(null);
 
-  // =======================================
-  // 🔥 TOAST SYSTEM
-  // =======================================
-  const [toasts, setToasts] = useState([]);
-
-  const showToast = ({ type = "success", message }) => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, type, message }]);
-
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-  };
-
-  const closeToast = (id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  // Trigger from navigation
   useEffect(() => {
-    if (location.state?.toast) {
-      showToast(location.state.toast);
-      window.history.replaceState({}, "");
-    }
     if (location.state?.refresh) {
       setRefreshKey(prev => prev + 1);
-      window.history.replaceState({}, "");
+      window.history.replaceState({}, '');
     }
   }, [location.state]);
 
-  // =======================================
-  // FETCH + GRAPH + BACKEND
-  // =======================================
   useEffect(() => {
     const fetchData = async () => {
       if (!accounts[0]) return;
@@ -79,7 +56,7 @@ function Home() {
             scopes: ['User.Read', 'GroupMember.Read.All']
           });
         } else {
-          console.error(err);
+          console.error('Token acquisition failed:', err);
           return;
         }
       }
@@ -90,26 +67,33 @@ function Home() {
         });
         setUserName(userRes.data.displayName || 'User');
 
-        // profile photo
+        // Try to fetch the user's photo from Graph. If it exists, convert to base64 and use it.
+        // If it fails (404 or other), we silently ignore and keep initials fallback.
         try {
-          const photoRes = await axios.get(
-            'https://graph.microsoft.com/v1.0/me/photo/$value',
-            { headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }, responseType: 'arraybuffer' }
-          );
+          const photoRes = await axios.get('https://graph.microsoft.com/v1.0/me/photo/$value', {
+            headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
+            responseType: 'arraybuffer'
+          });
 
+          // Convert arraybuffer to base64 (browser-safe)
           const u8 = new Uint8Array(photoRes.data);
           let binary = '';
-          for (let i = 0; i < u8.length; i += 0x8000) {
-            binary += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+          const chunkSize = 0x8000;
+          for (let i = 0; i < u8.length; i += chunkSize) {
+            const slice = u8.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, slice);
           }
           const b64 = btoa(binary);
-          setProfilePhoto(`data:${photoRes.headers['content-type'] || 'image/jpeg'};base64,${b64}`);
-        } catch {}
+          const contentType = (photoRes.headers && photoRes.headers['content-type']) || 'image/jpeg';
+          setProfilePhoto(`data:${contentType};base64,${b64}`);
+        } catch (photoErr) {
+          // No photo available or permission issue — fall back to initials (do not log noisy errors)
+          // console.debug('No profile photo:', photoErr?.response?.status || photoErr.message);
+        }
 
         const groupsRes = await axios.get('https://graph.microsoft.com/v1.0/me/memberOf', {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
         });
-
         const groups = groupsRes.data.value.map(g => g.displayName);
         const isAdmin = groups.includes('GS_Fortingate_VPN');
         setAuthority(isAdmin ? 'admin' : 'basic');
@@ -121,37 +105,38 @@ function Home() {
 
         const ticketsRes = await axios.get(endpoint);
         const allTickets = ticketsRes.data.reverse();
-
         setTickets(allTickets);
+
         setCategories([...new Set(allTickets.map(t => t.category).filter(Boolean))]);
         setUsers([...new Set(allTickets.map(t => t.userName).filter(Boolean))]);
-
       } catch (err) {
-        console.error('Error fetching:', err);
+        console.error('Error fetching tickets:', err);
       }
     };
 
     fetchData();
   }, [accounts, instance, refreshKey]);
 
-  // close dropdown on outside click
+  // Close dropdown when clicking outside
   useEffect(() => {
     const onDocClick = (e) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target) &&
-        !categoryBtnRef.current?.contains(e.target) &&
-        !userBtnRef.current?.contains(e.target)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+          !categoryBtnRef.current?.contains(e.target) &&
+          !userBtnRef.current?.contains(e.target)) {
         setDropdownOpen(null);
       }
     };
-
     window.addEventListener('mousedown', onDocClick);
-    return () => window.removeEventListener('mousedown', onDocClick);
+    window.addEventListener('scroll', () => setDropdownOpen(null), true);
+    window.addEventListener('resize', () => setDropdownOpen(null));
+    return () => {
+      window.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('scroll', () => setDropdownOpen(null), true);
+      window.removeEventListener('resize', () => setDropdownOpen(null));
+    };
   }, []);
 
-  // FILTER LOGIC (unchanged)
+  // compute filtered lists
   const filteredTickets = authority === 'admin' && showMyTickets
     ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
     : tickets;
@@ -167,7 +152,7 @@ function Home() {
   const searchFiltered = searchTerm.trim() === ''
     ? userFiltered
     : userFiltered.filter(t =>
-        (t.ticketNumber + "").includes(searchTerm) ||
+        (t.ticketNumber || '').toString().includes(searchTerm) ||
         (t.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
@@ -183,13 +168,13 @@ function Home() {
 
   const removeFilter = (type, value) => {
     if (type === 'category') {
-      const u = appliedCategories.filter(c => c !== value);
-      setAppliedCategories(u);
-      setSelectedCategories(u);
+      const updated = appliedCategories.filter(c => c !== value);
+      setAppliedCategories(updated);
+      setSelectedCategories(updated);
     } else {
-      const u = appliedUsers.filter(c => c !== value);
-      setAppliedUsers(u);
-      setSelectedUsers(u);
+      const updated = appliedUsers.filter(u => u !== value);
+      setAppliedUsers(updated);
+      setSelectedUsers(updated);
     }
   };
 
@@ -202,16 +187,13 @@ function Home() {
 
   const handleSelect = (type, value) => {
     if (type === 'category') {
-      setSelectedCategories(prev =>
-        prev.includes(value) ? prev.filter(c => c !== value) : [...prev, value]
-      );
+      setSelectedCategories(prev => prev.includes(value) ? prev.filter(c => c !== value) : [...prev, value]);
     } else {
-      setSelectedUsers(prev =>
-        prev.includes(value) ? prev.filter(c => c !== value) : [...prev, value]
-      );
+      setSelectedUsers(prev => prev.includes(value) ? prev.filter(u => u !== value) : [...prev, value]);
     }
   };
 
+  // Anchor dropdown under the clicked button
   const openDropdown = (type) => {
     setDropdownOpen(prev => prev === type ? null : type);
     const ref = type === 'category' ? categoryBtnRef.current : userBtnRef.current;
@@ -220,292 +202,284 @@ function Home() {
       setDropdownPos({
         top: rect.bottom + window.scrollY + 8,
         left: rect.left + window.scrollX,
-        width: rect.width
+        width: Math.max(260, rect.width)
       });
     }
   };
 
-  const categoryColor = (cat) => {
-    if (!cat) return '#3498db';
-    let c = cat.toLowerCase();
-    if (c.includes('admin')) return '#f39c12';
+  // Category color mapping
+  const categoryColor = (category) => {
+    if (!category) return '#3498db';
+    const c = category.toLowerCase();
+    if (c.includes('password') || c.includes('admin access') || c.includes('admin')) return '#f39c12';
     if (c.includes('payroll') || c.includes('expense')) return '#27ae60';
-    if (c.includes('leave') || c.includes('onboard')) return '#e74c3c';
+    if (c.includes('leave') || c.includes('onboard') || c.includes('onboarding')) return '#e74c3c';
     return '#3498db';
   };
 
-  const initials = (userName || accounts?.[0]?.username || 'U')
-    .split(' ')
-    .map(s => s[0])
-    .join('')
-    .toUpperCase();
+  const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
- return (
+  return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-
-      {/* ====================================================== */}
-      {/* 🔥 TOAST CONTAINER */}
-      {/* ====================================================== */}
-      <div style={{
-        position: 'fixed',
-        top: '18px',
-        right: '20px',
-        zIndex: 9999,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        maxWidth: '320px'
-      }}>
-        {toasts.map(t => (
-          <div
-            key={t.id}
-            style={{
-              padding: '14px 16px',
-              borderRadius: '10px',
-              color: 'white',
-              fontWeight: 600,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              animation: 'toastSlide 0.35s ease',
-              background:
-                t.type === 'success' ? '#16a34a' :
-                t.type === 'info' ? '#f39c12' :
-                '#dc2626',
-              boxShadow: '0 6px 18px rgba(0,0,0,0.2)'
-            }}
-          >
-            <span>{t.message}</span>
-            <button
-              onClick={() => closeToast(t.id)}
-              style={{
-                background: 'transparent',
-                color: 'white',
-                border: 'none',
-                fontSize: '18px',
-                cursor: 'pointer',
-                marginLeft: '10px'
-              }}
-            >
-              ×
-            </button>
-          </div>
-        ))}
-
-        <style>{`
-          @keyframes toastSlide {
-            from {
-              opacity:0;
-              transform: translateX(35px);
-            }
-            to {
-              opacity:1;
-              transform: translateX(0);
-            }
-          }
-          @media (max-width: 480px) {
-            div[style*="position: fixed"] {
-              right: 10px !important;
-              top: 10px !important;
-              max-width: 260px !important;
-            }
-          }
-        `}</style>
-      </div>
-
-      {/* WELCOME SECTION */}
       <style>{`
+        /* Overall spacing + card */
         .welcome { display:flex; gap:16px; align-items:center; background:linear-gradient(180deg,#fff,#fbfdff); padding:18px; border-radius:12px; box-shadow:0 6px 24px rgba(2,6,23,0.06); margin-bottom:18px; }
-        .avatar { width:64px; height:64px; border-radius:12px; background:linear-gradient(135deg,#eef2ff,#e9f5ff); display:flex; align-items:center; justify-content:center; font-weight:800; color:#3730a3; font-size:20px; overflow:hidden; box-shadow:0 4px 12px rgba(2,6,23,0.06); }
-        .avatar img { width:100%; height:100%; object-fit:cover; }
+        .avatar { width:64px; height:64px; border-radius:12px; background:linear-gradient(135deg,#eef2ff,#e9f5ff); display:flex; align-items:center; justify-content:center; font-weight:800; color:#3730a3; font-size:20px; box-shadow:0 4px 12px rgba(2,6,23,0.06); overflow:hidden; }
+        .avatar img { width:100%; height:100%; object-fit:cover; display:block; }
         .welcome-left { flex:1; display:flex; gap:12px; align-items:center; }
         .welcome-title { font-size:20px; font-weight:800; color:#0f172a; margin:0; }
-        .role-badge { padding:6px 12px; border-radius:999px; color:white; font-size:12px; font-weight:700; }
+        .role-badge { display:inline-block; padding:6px 12px; border-radius:999px; font-weight:700; font-size:12px; color:white; }
         .role-admin { background:linear-gradient(90deg,#16a34a,#60a5fa); }
         .role-user { background:linear-gradient(90deg,#94a3b8,#64748b); }
-        .kpis { display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; }
-        .kpi { background:#f8fafc; padding:8px 12px; border-radius:10px; font-weight:700; color:#0f172a; display:flex; gap:10px; align-items:center; box-shadow:0 4px 12px rgba(2,6,23,0.03); }
-        .actions { display:flex; gap:10px; }
-        .btn { padding:10px 14px; border-radius:10px; cursor:pointer; border:none; font-weight:700; }
-        .btn-create { background:linear-gradient(90deg,#2563eb,#60a5fa); color:white; }
-        .btn-closed { background:linear-gradient(90deg,#7c3aed,#a78bfa); color:white; }
 
-        @media(max-width:700px){
-          .welcome { flex-direction:column; align-items:flex-start; }
-          .actions { width:100%; justify-content:space-between; }
+        /* KPIs */
+        .kpis { display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; }
+        .kpi { background:#f8fafc; padding:8px 12px; border-radius:10px; font-weight:700; color:#0f172a; display:inline-flex; gap:10px; align-items:center; box-shadow:0 4px 12px rgba(2,6,23,0.03); }
+        .kpi .num { color:#0b6fbd; font-weight:900; }
+
+        /* Action buttons */
+        .actions { display:flex; gap:10px; }
+        .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:700; border:none; }
+        .btn-create { background:linear-gradient(90deg,#2563eb,#60a5fa); color:white; box-shadow:0 8px 20px rgba(14, 79, 217, 0.12); }
+        .btn-closed { background:linear-gradient(90deg,#7c3aed,#a78bfa); color:white; box-shadow:0 8px 20px rgba(88, 19, 207, 0.12); }
+
+        /* Search area: always centered */
+        .search-wrapper { display:flex; justify-content:center; margin-bottom:14px; }
+        .search-pill { width:100%; max-width:760px; border-radius:999px; padding:6px; background:linear-gradient(90deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04)); box-shadow:0 6px 18px rgba(37,99,235,0.04); box-sizing:border-box; }
+        .search-inner { display:flex; align-items:center; background:white; border-radius:999px; padding:10px 14px; min-height:46px; }
+        .search-icon { width:20px; height:20px; margin-right:12px; color:#64748b; flex:0 0 20px; }
+        .search-input { width:100%; border:none; outline:none; font-size:15px; font-family:Consolas,Monaco,monospace; color:#0f172a; }
+        .search-input::placeholder { color:#2563eb; opacity:0.95; }
+        .search-inner:focus-within { box-shadow:0 10px 30px rgba(216, 180, 18, 0.08); transform:translateY(-1px); }
+
+        /* Filters row (below search) */
+        .filters-row { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+        .filter-btn { display:inline-flex; align-items:center; gap:8px; padding:9px 12px; border-radius:10px; background:white; border:1px solid rgba(15,23,42,0.06); box-shadow:0 4px 12px rgba(2,6,23,0.04); color:#0f172a; font-weight:600; cursor:pointer; transition:box-shadow 120ms; }
+        .filter-btn:hover { box-shadow:0 8px 20px rgba(2,6,23,0.06); }
+        .filter-dot { width:10px; height:10px; border-radius:50%; box-shadow:0 2px 6px rgba(2,6,23,0.06); }
+        .filter-category { background:linear-gradient(180deg,#f59e0b,#d97706); }
+        .filter-user { background:linear-gradient(180deg,#7c3aed,#6d28d9); }
+
+        /* Dropdown (anchored) */
+        .filter-dropdown { position:fixed; background:white; border:1px solid #e6e9ee; border-radius:8px; box-shadow:0 12px 40px rgba(2,6,23,0.12); z-index:9999; padding:12px; }
+        .filter-item { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+        .filter-actions { display:flex; gap:8px; margin-top:8px; }
+
+        /* Applied filters */
+        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-start; }
+        .chip { background:#ecf9ff; border-radius:20px; padding:6px 10px; display:flex; align-items:center; gap:6px; font-weight:600; color:#2c3e50; }
+
+        @media (max-width:840px) {
+          .welcome { flex-direction:column; align-items:stretch; }
+          .actions { justify-content:space-between; width:100%; }
+          .search-pill { max-width:100%; }
+          .filters-row { justify-content:flex-start; }
         }
       `}</style>
 
-      <div className="welcome">
-        <div className="avatar">
-          {profilePhoto ? <img src={profilePhoto} alt="pf" /> : initials}
+      {/* Welcome card */}
+      <div className="welcome" role="region" aria-label="Welcome">
+        <div className="avatar" aria-hidden>
+          {profilePhoto ? (
+            <img src={profilePhoto} alt={`${userName} profile`} />
+          ) : (
+            initials
+          )}
         </div>
 
         <div className="welcome-left">
           <div>
-            <h2 className="welcome-title">
-              Welcome back, <span style={{ color:'#2563eb' }}>{userName}</span>
-            </h2>
+            <h2 className="welcome-title">Welcome back, <span style={{ color: '#2563eb' }}>{userName}</span></h2>
+            <div style={{ marginTop: 6 }}>
+              <span className={`role-badge ${authority === 'admin' ? 'role-admin' : 'role-user'}`}>
+                {authority === 'admin' ? 'ADMIN' : 'USER'}
+              </span>
+              <div className="kpis" style={{ marginTop: 8 }}>
+                <div className="kpi"><span className="num">{openTickets.length}</span><span style={{ marginLeft: 8 }}>Open</span></div>
+                <div className="kpi"><span className="num">{closedTickets.length}</span><span style={{ marginLeft: 8 }}>Closed</span></div>
+                {/* Total KPI removed per request */}
+              </div>
 
-            <span className={`role-badge ${authority === 'admin' ? 'role-admin' : 'role-user'}`}>
-              {authority === 'admin' ? 'ADMIN' : 'USER'}
-            </span>
-
-            <div className="kpis">
-              <div className="kpi"><b>{openTickets.length}</b> Open</div>
-              <div className="kpi"><b>{closedTickets.length}</b> Closed</div>
+              {/* Admin-only "Show only my tickets" checkbox */}
+              {authority === 'admin' && (
+                <div style={{ marginTop: 10 }}>
+                  <label style={{ fontSize: '0.95rem', color: '#2c3e50', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={showMyTickets}
+                      onChange={() => setShowMyTickets(prev => !prev)}
+                      style={{ transform: 'scale(1.1)' }}
+                    />
+                    Show only my tickets
+                  </label>
+                </div>
+              )}
             </div>
-
-            {authority === 'admin' && (
-              <label style={{ marginTop:10, display:'block', fontWeight:600 }}>
-                <input
-                  type="checkbox"
-                  checked={showMyTickets}
-                  onChange={() => setShowMyTickets(prev => !prev)}
-                  style={{ marginRight:8 }}
-                />
-                Show only my tickets
-              </label>
-            )}
           </div>
         </div>
 
-        <div className="actions">
-          <Link to="/create"><button className="btn btn-create">Create Ticket</button></Link>
-          <Link to="/dashboard"><button className="btn btn-closed">Closed Tickets</button></Link>
+        <div className="actions" role="toolbar" aria-label="Quick actions">
+          <Link to="/create" style={{ textDecoration: 'none' }}>
+            <button className="btn btn-create" aria-label="Create New Ticket">Create Ticket</button>
+          </Link>
+          <Link to="/dashboard" style={{ textDecoration: 'none' }}>
+            <button className="btn btn-closed" aria-label="View Closed Tickets">Closed Tickets</button>
+          </Link>
         </div>
       </div>
 
-      {/* SEARCH */}
-      <div style={{ display:'flex', justifyContent:'center', marginBottom:14 }}>
-        <div style={{ width:'100%', maxWidth:760 }}>
-          <input
-            placeholder="Search tickets…"
-            value={searchTerm}
-            onChange={(e)=>setSearchTerm(e.target.value)}
-            style={{
-              width:'100%',
-              padding:'12px 16px',
-              borderRadius:999,
-              border:'1px solid #d1d5db',
-              fontSize:16
-            }}
-          />
+      {/* centered search */}
+      <div className="search-wrapper" aria-hidden={false}>
+        <div className="search-pill" role="search" aria-label="Search tickets">
+          <div className="search-inner">
+            <svg className="search-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <path d="M21 21l-4.35-4.35" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="11" cy="11" r="6" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <input
+              className="search-input"
+              placeholder="Search by ticket number, category, or issue..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search tickets"
+            />
+          </div>
         </div>
       </div>
 
-      {/* FILTER BUTTONS */}
-      <div style={{ display:'flex', gap:10 }}>
-        <button ref={categoryBtnRef} onClick={()=>openDropdown('category')}
-          style={{ padding:'10px 12px', borderRadius:8, border:'1px solid #ccc', background:'white' }}>
-          Filter by Category ▾
-        </button>
-
-        {authority === 'admin' && (
-          <button ref={userBtnRef} onClick={()=>openDropdown('user')}
-            style={{ padding:'10px 12px', borderRadius:8, border:'1px solid #ccc', background:'white' }}>
-            Filter by User ▾
+      {/* filters row (moved below search) */}
+      <div className="filters-row" ref={dropdownRef}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            ref={categoryBtnRef}
+            onClick={() => openDropdown('category')}
+            className="filter-btn"
+            aria-expanded={dropdownOpen === 'category'}
+            aria-controls="filter-dropdown"
+            aria-haspopup="true"
+            title="Filter by Category"
+          >
+            <span className="filter-dot filter-category" aria-hidden />
+            Filter by Category ▾
           </button>
-        )}
+
+          {authority === 'admin' && (
+            <button
+              ref={userBtnRef}
+              onClick={() => openDropdown('user')}
+              className="filter-btn"
+              aria-expanded={dropdownOpen === 'user'}
+              aria-controls="filter-dropdown"
+              aria-haspopup="true"
+              title="Filter by User"
+            >
+              <span className="filter-dot filter-user" aria-hidden />
+              Filter by User ▾
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* FILTER DROPDOWN */}
+      {/* anchored dropdown (positioned under clicked button) */}
       {dropdownOpen && (
         <div
+          id="filter-dropdown"
+          role="dialog"
+          aria-modal="false"
           ref={dropdownRef}
+          className="filter-dropdown"
           style={{
-            position:'absolute',
             top: dropdownPos.top,
             left: dropdownPos.left,
-            width: dropdownPos.width,
-            background:'white',
-            border:'1px solid #ccc',
-            padding:12,
-            borderRadius:10,
-            boxShadow:'0 12px 28px rgba(0,0,0,0.1)',
-            zIndex:9999
+            minWidth: dropdownPos.width,
           }}
         >
           {(dropdownOpen === 'category' ? categories : users).map(item => (
-            <label key={item} style={{ display:'flex', gap:8, marginBottom:6 }}>
+            <label key={item} className="filter-item">
               <input
                 type="checkbox"
-                checked={
-                  dropdownOpen === 'category'
-                    ? selectedCategories.includes(item)
-                    : selectedUsers.includes(item)
-                }
-                onChange={()=>handleSelect(dropdownOpen, item)}
+                checked={dropdownOpen === 'category' ? selectedCategories.includes(item) : selectedUsers.includes(item)}
+                onChange={() => handleSelect(dropdownOpen, item)}
               />
-              {item}
+              <span style={{ fontWeight: 600 }}>{item}</span>
             </label>
           ))}
-          <br/>
-          <button onClick={applyFilters} style={{ padding:'6px 10px', marginRight:6 }}>Apply</button>
-          <button onClick={()=>setDropdownOpen(null)} style={{ padding:'6px 10px' }}>Close</button>
+
+          <div className="filter-actions">
+            <button onClick={applyFilters} style={{ background: '#27ae60', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+              Apply
+            </button>
+            <button onClick={() => setDropdownOpen(null)} style={{ background: '#f3f4f6', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+              Close
+            </button>
+          </div>
         </div>
       )}
 
-      {/* APPLIED FILTERS */}
-      {(appliedCategories.length>0 || appliedUsers.length>0) && (
-        <div style={{ marginTop:12, display:'flex', gap:10, flexWrap:'wrap' }}>
-          {appliedCategories.map(c=>(
-            <span key={c} style={{ padding:'6px 10px', background:'#eef', borderRadius:20 }}>
-              {c}
-              <button onClick={()=>removeFilter('category',c)} style={{ marginLeft:6, color:'red', background:'none', border:'none' }}>×</button>
-            </span>
+      {/* applied filters */}
+      {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
+        <div className="applied" aria-live="polite">
+          {[...appliedCategories.map(c => ({ type: 'category', value: c })), ...appliedUsers.map(u => ({ type: 'user', value: u }))].map(({ type, value }) => (
+            <div key={value} className="chip">
+              <span>{value}</span>
+              <button onClick={() => removeFilter(type, value)} style={{ background: 'transparent', color: '#e74c3c', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} aria-label={`Remove filter ${value}`}>✕</button>
+            </div>
           ))}
-          {appliedUsers.map(u=>(
-            <span key={u} style={{ padding:'6px 10px', background:'#eef', borderRadius:20 }}>
-              {u}
-              <button onClick={()=>removeFilter('user',u)} style={{ marginLeft:6, color:'red', background:'none', border:'none' }}>×</button>
-            </span>
-          ))}
-          <button onClick={clearAllFilters} style={{ padding:'6px 12px', background:'red', color:'white', borderRadius:20 }}>Clear All</button>
+          <button onClick={clearAllFilters} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '20px', padding: '6px 14px', cursor: 'pointer', fontWeight: '600' }}>
+            Clear All
+          </button>
         </div>
       )}
 
-      {/* LIST TITLE */}
-      <h2 style={{ marginTop:20 }}>
+      {/* ticket list header */}
+      <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>
         {authority === 'admin'
-          ? (showMyTickets ? `My Open Tickets (${openTickets.length})`
-                          : `All Open Tickets (${openTickets.length})`)
+          ? showMyTickets
+            ? `My Open Tickets (${openTickets.length})`
+            : `All Open Tickets (${openTickets.length})`
           : `Your Open Tickets (${openTickets.length})`}
       </h2>
 
-      {/* TICKETS LIST */}
+      {/* tickets */}
       {openTickets.length === 0 ? (
-        <div style={{ textAlign:'center', padding:'2rem', color:'#777' }}>
-          <h3>No tickets found</h3>
+        <div style={{ textAlign: 'center', color: '#7f8c8d', padding: '2rem' }}>
+          <h3 style={{ color: '#374151' }}>No results found for your search</h3>
         </div>
       ) : (
-        <div style={{ display:'grid', gap:'1rem' }}>
+        <div style={{ display: 'grid', gap: '1rem' }}>
           {openTickets.map(ticket => (
-            <Link key={ticket._id} to={`/ticket/${ticket._id}`} style={{ textDecoration:'none' }}>
+            <Link key={ticket._id} to={`/ticket/${ticket._id}`} style={{ textDecoration: 'none' }}>
               <div
                 style={{
-                  background:'#f8f9fa',
-                  padding:'1.3rem',
-                  borderRadius:10,
-                  borderLeft:`4px solid ${categoryColor(ticket.category)}`,
-                  transition:'0.2s'
+                  background: '#f8f9fa',
+                  padding: '1.5rem',
+                  borderRadius: '10px',
+                  borderLeft: `4px solid ${categoryColor(ticket.category)}`,
+                  transition: '0.2s',
+                  cursor: 'pointer'
                 }}
-                onMouseEnter={e=>e.currentTarget.style.background='#eef7ff'}
-                onMouseLeave={e=>e.currentTarget.style.background='#f8f9fa'}
+                onMouseEnter={e => e.currentTarget.style.background = '#eef7ff'}
+                onMouseLeave={e => e.currentTarget.style.background = '#f8f9fa'}
               >
-                <h3 style={{ margin:0 }}>#{ticket.ticketNumber} – {ticket.category}</h3>
-                <p style={{ margin:'6px 0', color:'#444' }}>{ticket.description}</p>
+                <h3 style={{ margin: 0, color: '#0f172a' }}>
+                  #{ticket.ticketNumber} - {ticket.category}
+                </h3>
+                <p style={{ color: '#334155', margin: '0.5rem 0' }}>{ticket.description}</p>
 
                 {authority === 'admin' && (
                   <>
-                    <p style={{ margin:0 }}><b>Created by:</b> {ticket.userName}</p>
-                    <p style={{ margin:0 }}><b>Email:</b> {ticket.userEmail}</p>
+                    <p style={{ margin: '0.3rem 0', color: '#34495e' }}>
+                      <strong>Created by:</strong> {ticket.userName || '—'}
+                    </p>
+                    <p style={{ margin: '0.3rem 0', color: '#34495e' }}>
+                      <strong>Email:</strong> {ticket.userEmail || '—'}
+                    </p>
                   </>
                 )}
 
-                <div style={{ display:'flex', justifyContent:'space-between', marginTop:10 }}>
-                  <span style={{ fontWeight:700, color:'#0f9' }}>Status: {ticket.status}</span>
-                  <span>Priority: {ticket.priority}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginTop: 8 }}>
+                  <span style={{ color: '#10b981', fontWeight: 700 }}>Status: {ticket.status}</span>
+                  <span style={{ color: '#6b7280' }}>Priority: {ticket.priority}</span>
                 </div>
               </div>
             </Link>
