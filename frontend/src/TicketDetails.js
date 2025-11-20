@@ -184,7 +184,7 @@ function TicketDetails() {
         }}>Back to Tickets</button>
       </div>
 
-      {/* MAIN CARD - ENHANCED LAYOUT ONLY (logic untouched) */}
+      {/* MAIN CARD - ENHANCED LAYOUT ONLY (logic untouched, removed "Back to list" button, ticket number emphasized) */}
       <div style={{
         padding: '2.5rem',
         maxWidth: '720px',
@@ -195,7 +195,8 @@ function TicketDetails() {
         boxShadow: '0 12px 40px rgba(2,6,23,0.08)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 18
+        gap: 18,
+        position: 'relative' // for any absolute-positioned badges in the card
       }}>
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1 }}>
@@ -220,42 +221,57 @@ function TicketDetails() {
               <h1 style={{ margin: 0, fontSize: '1.65rem', color: '#0f172a', fontWeight: 800 }}>
                 {ticket.category}
               </h1>
-              <div style={{ marginTop: 8, display: 'flex', gap: 12, alignItems: 'center', color: '#475569', fontSize: 14 }}>
-                <span style={{ fontWeight: 700, color: '#0f172a' }}>{ticket.ticketNumber}</span>
-                <span style={{ color: '#94a3b8' }}>•</span>
-                <span>Created {formatDate(ticket.createdAt)}</span>
-              </div>
 
-              <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
-                <span style={{
-                  padding: '6px 10px',
-                  borderRadius: 999,
-                  background: ticket.priority === 'High' ? '#fff1f2' : ticket.priority === 'Medium' ? '#fff7ed' : '#f0fdf4',
-                  color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#166534',
-                  fontWeight: 700,
+              {/* Prominent Ticket Number Badge */}
+              <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{
+                  padding: '10px 14px',
+                  borderRadius: 14,
+                  background: 'linear-gradient(90deg, #eef2ff 0%, #f0f9ff 100%)',
+                  color: '#3730a3',
+                  fontWeight: 800,
                   fontSize: 13,
-                  boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.02)'
-                }}>{ticket.priority}</span>
-
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 10px',
-                  borderRadius: 999,
-                  background: ticket.status === 'Closed' ? '#fff1f0' : '#f0fdf4',
-                  color: ticket.status === 'Closed' ? '#991b1b' : '#166534',
-                  fontWeight: 700,
-                  fontSize: 13
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  boxShadow: '0 6px 18px rgba(99,102,241,0.08)'
                 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : '#16a34a' }} />
-                  {ticket.status}
-                </span>
+                  <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 700 }}>Ticket #</span>
+                  <span style={{ fontSize: 20, marginTop: 4, letterSpacing: '0.6px' }}>{ticket.ticketNumber}</span>
+                </div>
+
+                {/* Priority & Status chips remain */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    background: ticket.priority === 'High' ? '#fff1f2' : ticket.priority === 'Medium' ? '#fff7ed' : '#f0fdf4',
+                    color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#166534',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.02)'
+                  }}>{ticket.priority}</span>
+
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    background: ticket.status === 'Closed' ? '#fff1f0' : '#f0fdf4',
+                    color: ticket.status === 'Closed' ? '#991b1b' : '#166534',
+                    fontWeight: 700,
+                    fontSize: 13
+                  }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : '#16a34a' }} />
+                    {ticket.status}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right side meta + actions */}
+          {/* Right side meta + actions (NO "Back to list" button any more) */}
           <div style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: '#64748b', fontSize: 13 }}>Created by</div>
@@ -279,18 +295,6 @@ function TicketDetails() {
                   boxShadow: '0 8px 24px rgba(16,185,129,0.12)'
                 }}>Revive Ticket</button>
               )}
-
-              <button onClick={() => navigate('/')} style={{
-                width: '100%',
-                background: '#f8fafc',
-                color: '#0f172a',
-                padding: '10px 12px',
-                border: '1px solid #e6eef8',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                fontWeight: 700,
-                fontSize: '14px'
-              }}>Back to list</button>
             </div>
           </div>
         </div>
