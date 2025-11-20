@@ -349,7 +349,7 @@ function Home() {
 
       {/* filters row (moved below search) */}
       <div className="filters-row" ref={dropdownRef}>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', width: '100%' }}>
           <button
             ref={categoryBtnRef}
             onClick={() => openDropdown('category')}
