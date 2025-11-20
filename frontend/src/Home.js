@@ -294,7 +294,7 @@ function Home() {
         .filter-dropdown { position:fixed; background:white; border:1px solid #e6e9ee; border-radius:8px; box-shadow:0 12px 40px rgba(2,6,23,0.12); z-index:9999; padding:12px; }
         .filter-item { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
         .filter-actions { display:flex; gap:8px; margin-top:8px; }
-        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-start; }
+        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-end; }
         .chip { background:#ecf9ff; border-radius:20px; padding:6px 10px; display:flex; align-items:center; gap:6px; font-weight:600; color:#2c3e50; }
 
         /* Toast Notifications */
@@ -335,7 +335,7 @@ function Home() {
           .welcome { flex-direction:column; align-items:stretch; }
           .actions { justify-content:space-between; width:100%; }
           .search-pill { max-width:100%; }
-          .filters-row { justify-content:flex-start; }
+          .filters-row { justify-content:flex-end; }
           .toast { min-width: 280px; }
         }
       `}</style>
