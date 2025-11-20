@@ -184,42 +184,132 @@ function TicketDetails() {
         }}>Back to Tickets</button>
       </div>
 
-      {/* MAIN CARD */}
+      {/* MAIN CARD - ENHANCED LAYOUT ONLY (logic untouched) */}
       <div style={{
-        padding: '2.5rem', maxWidth: '720px', margin: '0 auto', background: 'white',
-        borderRadius: '16px', borderLeft: `8px solid ${ticket.status === "Closed" ? "#dc2626" : "#16a34a"}`,
-        boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+        padding: '2.5rem',
+        maxWidth: '720px',
+        margin: '0 auto',
+        background: '#ffffff',
+        borderRadius: '16px',
+        borderLeft: `8px solid ${ticket.status === "Closed" ? "#dc2626" : "#16a34a"}`,
+        boxShadow: '0 12px 40px rgba(2,6,23,0.08)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 18
       }}>
-        <h1 style={{ margin: '0 0 10px', fontSize: '2rem', color: '#1e293b', fontWeight: 700 }}>
-          {ticket.category}
-        </h1>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
-          <div style={statusDot}></div>
-          <span style={{ fontSize: 20, fontWeight: 700, color: "#1e293b" }}>{ticket.status}</span>
-        </div>
-        <div style={{ lineHeight: 1.8, color: '#475569', fontSize: '15px' }}>
-          <p><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
-          <p><strong>Created by:</strong> {ticket.userName}</p>
-          <p><strong>Email:</strong> {ticket.userEmail}</p>
-          <p><strong>Priority:</strong> <span style={{ color: '#f59e0b', fontWeight: 700, background: '#fff7ed', padding: '4px 10px', borderRadius: 8 }}>{ticket.priority}</span></p>
-          <p style={{ marginTop: 20 }}><strong>Description:</strong><br /><span style={{ background: '#f8fafc', padding: 16, borderRadius: 12, display: 'block', marginTop: 8 }}>{ticket.description}</span></p>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1 }}>
+            {/* Avatar / visual */}
+            <div style={{
+              width: 72,
+              height: 72,
+              borderRadius: 12,
+              background: 'linear-gradient(135deg,#4f46e5 0%, #06b6d4 100%)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: '20px',
+              boxShadow: '0 8px 30px rgba(79,70,229,0.12)'
+            }}>
+              {ticket.userName ? ticket.userName.split(' ').map(n => n[0]).slice(0,2).join('') : 'U'}
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <h1 style={{ margin: 0, fontSize: '1.65rem', color: '#0f172a', fontWeight: 800 }}>
+                {ticket.category}
+              </h1>
+              <div style={{ marginTop: 8, display: 'flex', gap: 12, alignItems: 'center', color: '#475569', fontSize: 14 }}>
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>{ticket.ticketNumber}</span>
+                <span style={{ color: '#94a3b8' }}>•</span>
+                <span>Created {formatDate(ticket.createdAt)}</span>
+              </div>
+
+              <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span style={{
+                  padding: '6px 10px',
+                  borderRadius: 999,
+                  background: ticket.priority === 'High' ? '#fff1f2' : ticket.priority === 'Medium' ? '#fff7ed' : '#f0fdf4',
+                  color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#166534',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.02)'
+                }}>{ticket.priority}</span>
+
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 10px',
+                  borderRadius: 999,
+                  background: ticket.status === 'Closed' ? '#fff1f0' : '#f0fdf4',
+                  color: ticket.status === 'Closed' ? '#991b1b' : '#166534',
+                  fontWeight: 700,
+                  fontSize: 13
+                }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : '#16a34a' }} />
+                  {ticket.status}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right side meta + actions */}
+          <div style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: '#64748b', fontSize: 13 }}>Created by</div>
+              <div style={{ fontWeight: 800, color: '#0f172a' }}>{ticket.userName}</div>
+              <a href={`mailto:${ticket.userEmail}`} style={{ color: '#2563eb', fontSize: 13, textDecoration: 'none' }}>{ticket.userEmail}</a>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 8 }}>
+              {authority === 'admin' && ticket.status !== 'Closed' && (
+                <button onClick={() => setShowReasonInput(true)} style={{
+                  width: '100%', background: '#dc2626', color: 'white', padding: '12px 14px',
+                  border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
+                  boxShadow: '0 8px 24px rgba(220,38,38,0.18)'
+                }}>Close Ticket</button>
+              )}
+
+              {ticket.status === 'Closed' && (
+                <button onClick={() => setShowReviveReasonInput(true)} style={{
+                  width: '100%', background: '#16a34a', color: 'white', padding: '12px 14px',
+                  border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
+                  boxShadow: '0 8px 24px rgba(16,185,129,0.12)'
+                }}>Revive Ticket</button>
+              )}
+
+              <button onClick={() => navigate('/')} style={{
+                width: '100%',
+                background: '#f8fafc',
+                color: '#0f172a',
+                padding: '10px 12px',
+                border: '1px solid #e6eef8',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '14px'
+              }}>Back to list</button>
+            </div>
+          </div>
         </div>
 
-        {authority === 'admin' && ticket.status !== 'Closed' && (
-          <button onClick={() => setShowReasonInput(true)} style={{
-            marginTop: '2rem', background: '#dc2626', color: 'white', padding: '16px 32px',
-            border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 700, fontSize: '16px',
-            boxShadow: '0 6px 20px rgba(220,38,38,0.3)'
-          }}>Close Ticket</button>
-        )}
-
-        {ticket.status === 'Closed' && (
-          <button onClick={() => setShowReviveReasonInput(true)} style={{
-            marginTop: '2rem', background: '#16a34a', color: 'white', padding: '16px 32px',
-            border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 700, fontSize: '16px',
-            boxShadow: '0 6px 20px rgba(22,163,74,0.3)'
-          }}>Revive Ticket</button>
-        )}
+        {/* Description block */}
+        <div style={{
+          marginTop: 4,
+          background: '#f8fafc',
+          padding: 20,
+          borderRadius: 14,
+          display: 'block',
+          border: '1px solid #edf2f7',
+          color: '#334155',
+          lineHeight: 1.7,
+          fontSize: 15
+        }}>
+          <strong style={{ display: 'block', marginBottom: 8, fontSize: 15 }}>Description</strong>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
+        </div>
       </div>
 
       {/* FULL HISTORY TIMELINE */}
