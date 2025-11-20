@@ -70,6 +70,7 @@ const ticketSchema = new mongoose.Schema(
     priority: String,
     status: String,
     closedBy: String,
+    closeReason: String,
     closedAt: Date,
     reopenedBy: String,
     reopenedAt: Date,
@@ -305,32 +306,98 @@ app.post("/tickets", async (req, res) => {
   }
 });
 
-// Close Ticket
+// Close Ticket - FINAL WORKING VERSION (with reason + proper email)
 app.put("/tickets/:id/close", async (req, res) => {
   try {
-    const { closedBy } = req.body;
-    const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+    const { closedBy, closeReason } = req.body;
 
+    // Validate input
+    if (!closeReason || closeReason.trim() === "") {
+      return res.status(400).json({ message: "Close reason is required" });
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    if (ticket.status === "Closed") {
+      return res.status(400).json({ message: "Ticket is already closed" });
+    }
+
+    // Update ticket
     ticket.status = "Closed";
-    ticket.closedBy = closedBy || "IT Head";
+    ticket.closedBy = closedBy?.trim() || "IT Head";
+    ticket.closeReason = closeReason.trim();
     ticket.closedAt = new Date();
+
     await ticket.save();
 
-    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    // Format IST time
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
     const itHead = process.env.IT_HEAD_EMAIL;
 
+    // Beautiful & clear email body
+    const emailBody = `
+TICK LyndonT #${ticket.ticketNumber} HAS BEEN CLOSED
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Category       : ${ticket.category}
+Priority       : ${ticket.priority}
+Created by     : ${ticket.userName} (${ticket.userEmail})
+Ticket Number  : #${ticket.ticketNumber}
+
+Closed by      : ${ticket.closedBy}
+Closed on      : ${nowIST}
+
+Reason for closing:
+${ticket.closeReason}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This ticket is now officially closed.
+    `.trim();
+
+    // Send to user
     await sendEmail(
       ticket.userEmail,
       `[TICKET #${ticket.ticketNumber}] Closed`,
-      `Ticket #${ticket.ticketNumber} has been closed by ${closedBy}\nCategory: ${ticket.category}\nClosed On: ${nowIST}`,
+      emailBody,
       itHead
     );
 
-    res.json({ message: "Ticket closed successfully" });
+    // Send to department head (for audit)
+    await sendEmail(
+      deptEmails[ticket.category] || "helpdesk@sandeza-inc.com",
+      `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`,
+      emailBody,
+      itHead
+    );
+
+    console.log(`Ticket #${ticket.ticketNumber} closed by ${ticket.closedBy}`);
+
+    res.json({
+      message: "Ticket closed successfully",
+      ticket: {
+        _id: ticket._id,
+        ticketNumber: ticket.ticketNumber,
+        status: ticket.status,
+        closedBy: ticket.closedBy,
+        closeReason: ticket.closeReason,
+        closedAt: ticket.closedAt,
+      },
+    });
   } catch (err) {
-    console.error("Error closing ticket:", err.message);
-    res.status(500).json({ message: "Server error" });
+    console.error("Close ticket error:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 

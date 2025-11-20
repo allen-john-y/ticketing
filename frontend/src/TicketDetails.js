@@ -11,8 +11,10 @@ function TicketDetails() {
   const [authority, setAuthority] = useState('basic');
   const [loading, setLoading] = useState(false);
 
-  // modal state
-  const [modal, setModal] = useState({ open: false, action: null });
+  // Modal & reason states
+  const [showReasonInput, setShowReasonInput] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+  const [confirmModal, setConfirmModal] = useState(false);
 
   const backendBase = "https://ticketing-production-5334.up.railway.app";
 
@@ -51,29 +53,43 @@ function TicketDetails() {
     fetchTicket();
   }, [id]);
 
-  // ACTION HANDLERS
-  const confirmAction = async () => {
-    if (!modal.action) return;
+  // Handle "Submit Reason" → Open final confirmation
+  const handleSubmitReason = () => {
+    if (!closeReason.trim()) {
+      alert("Please provide a reason for closing the ticket.");
+      return;
+    }
+    setShowReasonInput(false);
+    setConfirmModal(true);
+  };
+
+  // Final close action with reason
+  const confirmCloseTicket = async () => {
     setLoading(true);
-
     try {
-      if (modal.action === "close") {
-        await axios.put(`${backendBase}/tickets/${id}/close`);
-      } else if (modal.action === "revive") {
-        await axios.put(`${backendBase}/tickets/${id}/revive`);
-      }
+      await axios.put(`${backendBase}/tickets/${id}/close`, {
+        closeReason: closeReason.trim(),
+        closedBy: accounts[0]?.name || accounts[0]?.username
+      });
 
-      setModal({ open: false, action: null });
+      setConfirmModal(false);
+      setCloseReason('');
       navigate('/', { state: { refresh: true } });
-
     } catch (err) {
-      console.error(err);
-      setModal({ open: false, action: null });
+      console.error("Failed to close ticket:", err);
+      alert("Failed to close ticket. Please try again.");
     }
     setLoading(false);
   };
 
-  if (!ticket) return <p>Loading...</p>;
+  // Cancel everything
+  const cancelClose = () => {
+    setShowReasonInput(false);
+    setConfirmModal(false);
+    setCloseReason('');
+  };
+
+  if (!ticket) return <p style={{ textAlign: 'center', padding: '2rem' }}>Loading ticket...</p>;
 
   const statusDot = {
     width: 12,
@@ -81,11 +97,31 @@ function TicketDetails() {
     borderRadius: "50%",
     marginRight: 8,
     background: ticket.status === "Closed" ? "#e74c3c" : "#27ae60",
-    boxShadow: "0 0 6px rgba(0,0,0,0.2)"
+    boxShadow: "0 0 6px rgba(0,0,0,0.2)",
+    display: "inline-block"
   };
 
   return (
     <>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoomIn { from { transform: scale(0.8); } to { transform: scale(1); } }
+        .overlay { 
+          position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+          background: rgba(0,0,0,0.65); display: flex; justify-content: center; 
+          align-items: center; z-index: 9999; animation: fadeIn 0.3s;
+        }
+        .modal-box { 
+          background: white; padding: 30px; border-radius: 12px; 
+          width: 90%; max-width: 420px; text-align: center; 
+          box-shadow: 0 10px 40px rgba(0,0,0,0.2); animation: zoomIn 0.3s;
+        }
+        .reason-input { 
+          width: 100%; padding: 12px; margin: 12px 0; 
+          border: 1px solid #ddd; border-radius: 8px; font-size: 15px;
+        }
+      `}</style>
+
       {/* BACK BUTTON */}
       <div style={{ padding: "1rem", maxWidth: 600, margin: "0 auto" }}>
         <button
@@ -94,80 +130,91 @@ function TicketDetails() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid #e6e9ee',
-            background: '#ffffff',
+            padding: '10px 16px',
+            borderRadius: 10,
+            border: '1px solid #e2e8f0',
+            background: '#fff',
             cursor: 'pointer',
-            marginBottom: 16
+            fontWeight: 600,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
           }}
         >
           ← Back to Home
         </button>
       </div>
 
-      {/* CARD */}
+      {/* TICKET CARD */}
       <div style={{
         padding: '2rem',
         maxWidth: '600px',
         margin: '0 auto',
         background: 'white',
-        borderRadius: '10px',
-        borderLeft: `4px solid ${ticket.status === "Closed" ? "#e74c3c" : "#27ae60"}`,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-        transition: "0.3s"
+        borderRadius: '12px',
+        borderLeft: `6px solid ${ticket.status === "Closed" ? "#e74c3c" : "#27ae60"}`,
+        boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
       }}>
-        <h1 style={{ marginBottom: 0 }}>{ticket.category}</h1>
+        <h1 style={{ margin: '0 0 8px', fontSize: '1.8rem', color: '#1e293b' }}>
+          {ticket.category}
+        </h1>
 
-        {/* STATUS DOT + Label */}
-        <div style={{ display: "flex", alignItems: "center", marginTop: 6, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
           <div style={statusDot}></div>
-          <span style={{ fontSize: 16, color: "#374151", fontWeight: 600 }}>
+          <span style={{ fontSize: 18, fontWeight: 600, color: "#1e293b" }}>
             {ticket.status}
           </span>
         </div>
 
-        <p><strong>Ticket Number:</strong> {ticket.ticketNumber}</p>
-        <p><strong>Created by:</strong> {ticket.userName}</p>
-        <p><strong>Email:</strong> {ticket.userEmail}</p>
-        <p><strong>Description:</strong> {ticket.description}</p>
-        <p><strong>Priority:</strong> {ticket.priority}</p>
+        <div style={{ lineHeight: 1.7, color: '#475569' }}>
+          <p><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
+          <p><strong>Created by:</strong> {ticket.userName}</p>
+          <p><strong>Email:</strong> {ticket.userEmail}</p>
+          <p><strong>Priority:</strong> <span style={{ color: '#f59e0b', fontWeight: 600 }}>{ticket.priority}</span></p>
+          <p style={{ marginTop: 16 }}><strong>Description:</strong><br />{ticket.description}</p>
+        </div>
 
-        {/* ADMIN CLOSE BUTTON */}
+        {/* ADMIN: Close Ticket Button */}
         {authority === 'admin' && ticket.status !== 'Closed' && (
           <button
-            onClick={() => setModal({ open: true, action: "close" })}
-            disabled={loading}
+            onClick={() => setShowReasonInput(true)}
             style={{
-              marginTop: '1rem',
-              background: '#e74c3c',
+              marginTop: '1.5rem',
+              background: '#dc2626',
               color: 'white',
-              padding: '12px 24px',
+              padding: '14px 28px',
               border: 'none',
-              borderRadius: '8px',
+              borderRadius: '10px',
               cursor: 'pointer',
-              transition: "0.2s"
+              fontSize: '1rem',
+              fontWeight: 600,
+              boxShadow: '0 4px 12px rgba(220,38,38,0.3)'
             }}
           >
-            {loading ? 'Closing...' : 'Close Ticket'}
+            Close Ticket
           </button>
         )}
 
-        {/* REVIVE BUTTON */}
+        {/* REVIVE BUTTON (for closed tickets) */}
         {ticket.status === 'Closed' && (
           <button
-            onClick={() => setModal({ open: true, action: "revive" })}
+            onClick={() => {
+              if (window.confirm("Are you sure you want to revive this ticket?")) {
+                setLoading(true);
+                axios.put(`${backendBase}/tickets/${id}/revive`)
+                  .then(() => navigate('/', { state: { refresh: true } }))
+                  .catch(() => alert("Failed to revive ticket"))
+                  .finally(() => setLoading(false));
+              }
+            }}
             disabled={loading}
             style={{
-              marginTop: '1rem',
-              background: '#27ae60',
+              marginTop: '1.5rem',
+              background: '#16a34a',
               color: 'white',
-              padding: '12px 24px',
+              padding: '14px 28px',
               border: 'none',
-              borderRadius: '8px',
+              borderRadius: '10px',
               cursor: 'pointer',
-              transition: "0.2s",
-              marginLeft: authority === 'admin' ? '10px' : '0'
+              fontWeight: 600,
             }}
           >
             {loading ? 'Reviving...' : 'Revive Ticket'}
@@ -175,59 +222,92 @@ function TicketDetails() {
         )}
       </div>
 
-      {/* CONFIRMATION MODAL */}
-      {modal.open && (
-        <div style={{
-          position: "fixed",
-          top: 0, left: 0,
-          width: "100vw", height: "100vh",
-          background: "rgba(0,0,0,0.6)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          animation: "fadeIn 0.2s"
-        }}>
-          <div style={{
-            background: "white",
-            padding: "30px",
-            borderRadius: "10px",
-            width: "350px",
-            textAlign: "center",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-            transform: "scale(1)",
-            animation: "zoomIn 0.25s"
-          }}>
-            <h3 style={{ marginBottom: "20px" }}>
-              {modal.action === "close" ? "Close this ticket?" : "Revive this ticket?"}
+      {/* STEP 1: Reason Input Modal */}
+      {showReasonInput && (
+        <div className="overlay" onClick={cancelClose}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', color: '#1e293b' }}>
+              Reason for Closing Ticket #{ticket.ticketNumber}
             </h3>
-
-            <div style={{ display: "flex", justifyContent: "space-around" }}>
+            <textarea
+              className="reason-input"
+              rows="5"
+              placeholder="Please explain why this ticket is being closed..."
+              value={closeReason}
+              onChange={(e) => setCloseReason(e.target.value)}
+              autoFocus
+            />
+            <div style={{ marginTop: 20, display: 'flex', gap: 12, justifyContent: 'center' }}>
               <button
-                onClick={confirmAction}
+                onClick={handleSubmitReason}
                 style={{
-                  padding: "10px 20px",
-                  background: "#27ae60",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer"
+                  padding: '10px 20px',
+                  background: '#16a34a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontWeight: 600
                 }}
               >
-                Yes
+                Submit Reason
               </button>
-
               <button
-                onClick={() => setModal({ open: false, action: null })}
+                onClick={cancelClose}
                 style={{
-                  padding: "10px 20px",
-                  background: "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer"
+                  padding: '10px 20px',
+                  background: '#64748b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer'
                 }}
               >
-                No
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 2: Final Confirmation Modal */}
+      {confirmModal && (
+        <div className="overlay" onClick={cancelClose}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 20px', color: '#dc2626' }}>
+              Close Ticket #{ticket.ticketNumber}?
+            </h3>
+            <p style={{ color: '#475569', marginBottom: 24 }}>
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <button
+                onClick={confirmCloseTicket}
+                disabled={loading}
+                style={{
+                  padding: '12px 28px',
+                  background: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                {loading ? 'Closing...' : 'Yes, Close It'}
+              </button>
+              <button
+                onClick={cancelClose}
+                style={{
+                  padding: '12px 28px',
+                  background: '#64748b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer'
+                }}
+              >
+                No, Cancel
               </button>
             </div>
           </div>
