@@ -162,7 +162,7 @@ function TicketDetails() {
         @keyframes zoomIn { from { transform: scale(0.8); } to { transform: scale(1); } }
         .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.3s; }
         .modal-box { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 460px; text-align: center; box-shadow: 0 15px 50px rgba(0,0,0,0.25); animation: zoomIn 0.3s; }
-        .reason-input { width: 100%; padding: 14px; margin: 12px 0; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; transition: border 0.2s; }
+        .reason-input { width: 433px; padding: 14px; margin: 12px 0; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; transition: border 0.2s; }
         .reason-input:focus { outline: none; border-color: #3b82f6; }
         .error-text { color: #dc2626; font-size: 14px; margin-top: 8px; font-weight: 500; }
         .timeline { position: relative; padding-left: 40px; }
