@@ -266,14 +266,14 @@ function Home() {
         .filter-actions { display:flex; gap:8px; margin-top:8px; }
 
         /* Applied filters */
-        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-start; }
+        .applied { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; justify-content:flex-end; }
         .chip { background:#ecf9ff; border-radius:20px; padding:6px 10px; display:flex; align-items:center; gap:6px; font-weight:600; color:#2c3e50; }
 
         @media (max-width:840px) {
           .welcome { flex-direction:column; align-items:stretch; }
           .actions { justify-content:space-between; width:100%; }
           .search-pill { max-width:100%; }
-          .filters-row { justify-content:flex-start; }
+          .filters-row { justify-content:flex-end; }
         }
       `}</style>
 
