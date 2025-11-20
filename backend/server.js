@@ -50,15 +50,16 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log("✅ MongoDB connected");
+    console.log("MongoDB connected");
   } catch (err) {
-    console.error("❌ MongoDB connection error:", err.message);
+    console.error("MongoDB connection error:", err.message);
     process.exit(1);
   }
 };
 connectDB();
 
 // ---------------------- Schema ----------------------------
+// ONLY THIS PART CHANGED — Added history array
 const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: { type: Number, unique: true },
@@ -71,10 +72,20 @@ const ticketSchema = new mongoose.Schema(
     status: String,
     closedBy: String,
     closeReason: String,
-    reviveReason: String,   // ← Add this line in ticketSchema
+    reviveReason: String,
     closedAt: Date,
     reopenedBy: String,
     reopenedAt: Date,
+
+    // NEW: FULL HISTORY (never lose anything)
+    history: [
+      {
+        action: { type: String, enum: ["created", "closed", "revived"] },
+        by: String,
+        at: { type: Date, default: Date.now },
+        reason: String,
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -158,14 +169,14 @@ const sendEmail = async (to, subject, bodyText, cc) => {
     );
 
     if (res.status === 202) {
-      console.log(`📧 Sent to: ${Array.isArray(to) ? to.join(", ") : to} | CC: ${cc || "-"}`);
+      console.log(`Sent to: ${Array.isArray(to) ? to.join(", ") : to} | CC: ${cc || "-"}`);
       return true;
     } else {
-      console.error("❌ Graph send failed:", await res.text());
+      console.error("Graph send failed:", await res.text());
       return false;
     }
   } catch (err) {
-    console.error("❌ Failed to send mail:", err.message);
+    console.error("Failed to send mail:", err.message);
     return false;
   }
 };
@@ -208,7 +219,7 @@ const resetAzurePassword = async (userId) => {
 // ---------------------- Routes ----------------------------
 
 // Health Check
-app.get("/", (req, res) => res.send("✅ Sandeza Helpdesk API Running"));
+app.get("/", (req, res) => res.send("Sandeza Helpdesk API Running"));
 
 // Get Tickets
 app.get("/tickets", async (req, res) => {
@@ -221,12 +232,11 @@ app.get("/tickets", async (req, res) => {
   }
 });
 
-// Get Ticket by ID (Needed for TicketDetails page)
+// Get Ticket by ID
 app.get("/tickets/:id", async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
-
     res.json(ticket);
   } catch (err) {
     console.error("Error fetching ticket:", err.message);
@@ -234,9 +244,7 @@ app.get("/tickets/:id", async (req, res) => {
   }
 });
 
-
-
-// Create Ticket
+// Create Ticket — NOW ADDS TO HISTORY
 app.post("/tickets", async (req, res) => {
   try {
     const { category, description, priority, userId, userName, userEmail } = req.body;
@@ -252,6 +260,13 @@ app.post("/tickets", async (req, res) => {
       description,
       priority,
       status: "Open",
+      // Initialize history with creation event
+      history: [{
+        action: "created",
+        by: userName,
+        at: new Date(),
+        reason: null
+      }]
     });
 
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
@@ -294,6 +309,12 @@ app.post("/tickets", async (req, res) => {
         ticket.status = "Closed";
         ticket.closedBy = "IT Automation System";
         ticket.closedAt = new Date();
+        ticket.history.push({
+          action: "closed",
+          by: "IT Automation System",
+          at: new Date(),
+          reason: "Auto-closed after password reset"
+        });
         await ticket.save();
       } catch (err) {
         console.error("Password reset failed:", err.message);
@@ -307,12 +328,11 @@ app.post("/tickets", async (req, res) => {
   }
 });
 
-// Close Ticket - FINAL WORKING VERSION (with reason + proper email)
+// Close Ticket — NOW PUSHES TO HISTORY (never overwrites)
 app.put("/tickets/:id/close", async (req, res) => {
   try {
     const { closedBy, closeReason } = req.body;
 
-    // Validate input
     if (!closeReason || closeReason.trim() === "") {
       return res.status(400).json({ message: "Close reason is required" });
     }
@@ -326,15 +346,24 @@ app.put("/tickets/:id/close", async (req, res) => {
       return res.status(400).json({ message: "Ticket is already closed" });
     }
 
-    // Update ticket
+    const now = new Date();
+
+    // PUSH TO HISTORY — THIS IS THE KEY CHANGE
+    ticket.history.push({
+      action: "closed",
+      by: closedBy?.trim() || "IT Head",
+      at: now,
+      reason: closeReason.trim()
+    });
+
+    // Update current fields (for backward compatibility)
     ticket.status = "Closed";
     ticket.closedBy = closedBy?.trim() || "IT Head";
     ticket.closeReason = closeReason.trim();
-    ticket.closedAt = new Date();
+    ticket.closedAt = now;
 
     await ticket.save();
 
-    // Format IST time
     const nowIST = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
       year: "numeric",
@@ -347,9 +376,8 @@ app.put("/tickets/:id/close", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Beautiful & clear email body
     const emailBody = `
-TICK LyndonT #${ticket.ticketNumber} HAS BEEN CLOSED
+TICKET #${ticket.ticketNumber} HAS BEEN CLOSED
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Category       : ${ticket.category}
@@ -367,21 +395,8 @@ ${ticket.closeReason}
 This ticket is now officially closed.
     `.trim();
 
-    // Send to user
-    await sendEmail(
-      ticket.userEmail,
-      `[TICKET #${ticket.ticketNumber}] Closed`,
-      emailBody,
-      itHead
-    );
-
-    // Send to department head (for audit)
-    await sendEmail(
-      deptEmails[ticket.category] || "helpdesk@sandeza-inc.com",
-      `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`,
-      emailBody,
-      itHead
-    );
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailBody, itHead);
+    await sendEmail(deptEmails[ticket.category] || "helpdesk@sandeza-inc.com", `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} closed by ${ticket.closedBy}`);
 
@@ -394,6 +409,7 @@ This ticket is now officially closed.
         closedBy: ticket.closedBy,
         closeReason: ticket.closeReason,
         closedAt: ticket.closedAt,
+        history: ticket.history
       },
     });
   } catch (err) {
@@ -402,12 +418,11 @@ This ticket is now officially closed.
   }
 });
 
-// Revive Ticket - FINAL WORKING VERSION (with reviveReason + beautiful email)
+// Revive Ticket — NOW PUSHES TO HISTORY
 app.put("/tickets/:id/revive", async (req, res) => {
   try {
     const { revivedBy, reviveReason } = req.body;
 
-    // Required: reason must be provided
     if (!reviveReason || reviveReason.trim() === "") {
       return res.status(400).json({ message: "Revive reason is required" });
     }
@@ -421,15 +436,24 @@ app.put("/tickets/:id/revive", async (req, res) => {
       return res.status(400).json({ message: "Only closed tickets can be revived" });
     }
 
-    // Update ticket with revive info
+    const now = new Date();
+
+    // PUSH TO HISTORY — NEVER LOSE ANYTHING
+    ticket.history.push({
+      action: "revived",
+      by: revivedBy?.trim() || "Unknown User",
+      at: now,
+      reason: reviveReason.trim()
+    });
+
+    // Update current state
     ticket.status = "Open";
     ticket.reopenedBy = revivedBy?.trim() || "Unknown User";
-    ticket.reopenedAt = new Date();
-    ticket.reviveReason = reviveReason.trim();  // ← Saved here
+    ticket.reopenedAt = now;
+    ticket.reviveReason = reviveReason.trim();
 
     await ticket.save();
 
-    // Beautiful IST formatted time
     const nowIST = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
       year: "numeric",
@@ -443,7 +467,6 @@ app.put("/tickets/:id/revive", async (req, res) => {
     const dept = deptEmails[ticket.category] || "helpdesk@sandeza-inc.com";
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Professional email with full audit
     const emailBody = `
 TICKET #${ticket.ticketNumber} HAS BEEN REVIVED (Reopened)
 
@@ -463,21 +486,8 @@ ${ticket.reviveReason}
 This ticket is now OPEN again and requires attention.
     `.trim();
 
-    // Notify user
-    await sendEmail(
-      ticket.userEmail,
-      `[TICKET #${ticket.ticketNumber}] Revived`,
-      emailBody,
-      itHead
-    );
-
-    // Notify department
-    await sendEmail(
-      dept,
-      `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`,
-      emailBody,
-      itHead
-    );
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailBody, itHead);
+    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
 
@@ -489,6 +499,7 @@ This ticket is now OPEN again and requires attention.
         reopenedBy: ticket.reopenedBy,
         reviveReason: ticket.reviveReason,
         reopenedAt: ticket.reopenedAt,
+        history: ticket.history
       },
     });
   } catch (err) {
@@ -497,9 +508,8 @@ This ticket is now OPEN again and requires attention.
   }
 });
 
-
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`🚀 Server running on port ${PORT} (Graph Mail Enabled)`)
+  console.log(`Server running on port ${PORT} (Full History Enabled)`)
 );

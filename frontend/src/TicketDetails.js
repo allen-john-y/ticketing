@@ -54,7 +54,6 @@ function TicketDetails() {
     fetchTicket();
   }, [id]);
 
-  // Format date: 20 Nov 2025, 3:45 PM
   const formatDate = (dateString) => {
     if (!dateString) return "—";
     return new Date(dateString).toLocaleDateString('en-IN', {
@@ -67,7 +66,7 @@ function TicketDetails() {
     });
   };
 
-  // === CLOSE FUNCTIONS ===
+  // Close & Revive functions (unchanged)
   const handleSubmitReason = () => {
     if (!closeReason.trim()) return alert("Please provide a reason.");
     setShowReasonInput(false);
@@ -96,7 +95,6 @@ function TicketDetails() {
     setCloseReason('');
   };
 
-  // === REVIVE FUNCTIONS ===
   const handleSubmitReviveReason = () => {
     if (!reviveReason.trim()) return alert("Please provide a reason.");
     setShowReviveReasonInput(false);
@@ -133,43 +131,14 @@ function TicketDetails() {
     boxShadow: "0 0 6px rgba(0,0,0,0.2)", display: "inline-block"
   };
 
-  // === BUILD FULL TIMELINE (Supports multiple close/revive cycles) ===
-  const timelineEvents = [];
-
-  // 1. Created
-  timelineEvents.push({
-    type: "created",
-    date: ticket.createdAt,
-    by: ticket.userName,
-    reason: null
-  });
-
-  // 2. Closed (only if ever closed)
-  if (ticket.closedAt) {
-    timelineEvents.push({
-      type: "closed",
-      date: ticket.closedAt,
-      by: ticket.closedBy || "Unknown",
-      reason: ticket.closeReason
-    });
-  }
-
-  // 3. Revived (only if ever revived)
-  if (ticket.reopenedAt) {
-    timelineEvents.push({
-      type: "revived",
-      date: ticket.reopenedAt,
-      by: ticket.reopenedBy || "Unknown",
-      reason: ticket.reviveReason
-    });
-  }
-
-  // 4. Current Status
-  timelineEvents.push({
-    type: "current",
-    date: new Date(),
-    status: ticket.status
-  });
+  // BUILD TIMELINE — Works with BOTH old & new tickets
+  const historyEvents = ticket.history && ticket.history.length > 0
+    ? ticket.history
+    : [
+        { action: "created", by: ticket.userName, at: ticket.createdAt, reason: null },
+        ...(ticket.closedAt ? [{ action: "closed", by: ticket.closedBy || "Unknown", at: ticket.closedAt, reason: ticket.closeReason }] : []),
+        ...(ticket.reopenedAt ? [{ action: "revived", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reviveReason }] : [])
+      ];
 
   return (
     <>
@@ -179,10 +148,10 @@ function TicketDetails() {
         .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.3s; }
         .modal-box { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 420px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2); animation: zoomIn 0.3s; }
         .reason-input { width: 100%; padding: 12px; margin: 12px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; }
-        .timeline { position: relative; padding-left: 36px; }
-        .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 4px; background: #e2e8f0; border-radius: 2px; }
-        .tl-item { position: relative; margin-bottom: 28px; }
-        .tl-dot { position: absolute; left: -36px; top: 6px; width: 20px; height: 20px; border-radius: 50%; border: 5px solid white; box-shadow: 0 0 0 5px #e2e8f0; }
+        .timeline { position: relative; padding-left: 40px; }
+        .timeline::before { content: ''; position: absolute; left: 14px; top: 0; bottom: 0; width: 4px; background: #e2e8f0; border-radius: 2px; }
+        .tl-item { position: relative; margin-bottom: 32px; }
+        .tl-dot { position: absolute; left: -40px; top: 8px; width: 24px; height: 24px; border-radius: 50%; border: 5px solid white; box-shadow: 0 0 0 5px #e2e8f0; }
         .tl-created .tl-dot { background: #3b82f6; box-shadow: 0 0 0 5px #dbeafe; }
         .tl-closed .tl-dot { background: #dc2626; box-shadow: 0 0 0 5px #fecaca; }
         .tl-revived .tl-dot { background: #16a34a; box-shadow: 0 0 0 5px #bbf7d0; }
@@ -195,9 +164,7 @@ function TicketDetails() {
           display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px',
           borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer',
           fontWeight: 600, boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-        }}>
-          ← Back to Home
-        </button>
+        }}>← Back to Home</button>
       </div>
 
       {/* MAIN CARD */}
@@ -235,61 +202,68 @@ function TicketDetails() {
         )}
       </div>
 
-      {/* FULL LIFECYCLE TIMELINE */}
-      <div style={{ maxWidth: '720px', margin: '2.5rem auto', padding: '0 1rem' }}>
-        <h2 style={{ fontSize: '1.6rem', color: '#1e293b', marginBottom: '2rem', textAlign: 'center' }}>
-          Ticket Lifecycle History
+      {/* FULL HISTORY TIMELINE */}
+      <div style={{ maxWidth: '720px', margin: '3rem auto', padding: '0 1rem' }}>
+        <h2 style={{ fontSize: '1.8rem', color: '#1e293b', marginBottom: '2rem', textAlign: 'center', fontWeight: 700 }}>
+          Ticket History
         </h2>
 
         <div className="timeline">
-          {timelineEvents.map((event, index) => (
-            <div key={index} className={`tl-item tl-${event.type}`}>
+          {historyEvents.map((event, index) => (
+            <div key={index} className={`tl-item tl-${event.action}`}>
               <div className="tl-dot"></div>
               <div style={{
-                background: event.type === "created" ? "#eff6ff" :
-                            event.type === "closed" ? "#fee2e2" :
-                            event.type === "revived" ? "#f0fdf4" : "#f8fafc",
-                padding: '16px 20px', borderRadius: '14px',
-                borderLeft: `6px solid ${
-                  event.type === "created" ? "#3b82f6" :
-                  event.type === "closed" ? "#dc2626" :
-                  event.type === "revived" ? "#16a34a" :
-                  ticket.status === "Closed" ? "#dc2626" : "#16a34a"
+                background: event.action === "created" ? "#eff6ff" :
+                            event.action === "closed" ? "#fee2e2" : "#f0fdf4",
+                padding: '20px 24px', borderRadius: '18px',
+                borderLeft: `8px solid ${
+                  event.action === "created" ? "#3b82f6" :
+                  event.action === "closed" ? "#dc2626" : "#16a34a"
                 }`,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                boxShadow: '0 8px 25px rgba(0,0,0,0.12)'
               }}>
                 <strong style={{
-                  fontSize: '1.15rem',
-                  color: event.type === "created" ? "#1e40af" :
-                         event.type === "closed" ? "#991b1b" :
-                         event.type === "revived" ? "#166534" :
-                         ticket.status === "Closed" ? "#991b1b" : "#166534"
+                  fontSize: '1.25rem',
+                  color: event.action === "created" ? "#1e40af" :
+                         event.action === "closed" ? "#991b1b" : "#166534"
                 }}>
-                  {event.type === "created" && "Ticket Created"}
-                  {event.type === "closed" && "Ticket Closed"}
-                  {event.type === "revived" && "Ticket Revived (Reopened)"}
-                  {event.type === "current" && `Current Status: ${event.status}`}
+                  {event.action === "created" && "Ticket Created"}
+                  {event.action === "closed" && "Ticket Closed"}
+                  {event.action === "revived" && "Ticket Revived (Reopened)"}
                 </strong><br />
-                <small style={{ color: '#475569', fontWeight: 500 }}>
-                  {formatDate(event.date)}
-                  {event.by && ` by `}
-                  {event.by && <strong>{event.by}</strong>}
+                <small style={{ color: '#475569', fontWeight: 600 }}>
+                  {formatDate(event.at)} by <strong>{event.by || "Unknown"}</strong>
                 </small>
                 {event.reason && (
-                  <p style={{
-                    margin: '10px 0 0', padding: '10px', background: 'rgba(0,0,0,0.05)',
-                    borderRadius: '8px', fontStyle: 'italic', color: '#555'
+                  <div style={{
+                    marginTop: 14, padding: 14, background: 'rgba(0,0,0,0.07)',
+                    borderRadius: 12, fontStyle: 'italic', color: '#333', borderLeft: '4px solid #999'
                   }}>
                     <strong>Reason:</strong> {event.reason}
-                  </p>
+                  </div>
                 )}
               </div>
             </div>
           ))}
+
+          {/* Current Status */}
+          <div className="tl-item tl-current">
+            <div className="tl-dot"></div>
+            <div style={{
+              background: ticket.status === "Closed" ? "#fee2e2" : "#f0fdf4",
+              padding: '20px 24px', borderRadius: '18px',
+              borderLeft: `8px solid ${ticket.status === "Closed" ? "#dc2626" : "#16a34a"}`,
+              boxShadow: '0 8px 25px rgba(0,0,0,0.12)'
+            }}>
+              <strong style={{ fontSize: '1.4rem', color: ticket.status === "Closed" ? "#991b1b" : "#166534" }}>
+                Current Status: {ticket.status}
+              </strong>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ALL MODALS */}
+      {/* ALL MODALS — unchanged */}
       {showReasonInput && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
