@@ -450,7 +450,7 @@ function TicketDetails() {
               <button onClick={confirmReviveTicket} disabled={loading} style={{ padding: '16px 36px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
                 {loading ? 'Reviving...' : 'Yes, Revive It'}
               </button>
-              <  <button onClick={cancelRevive} style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                <button onClick={cancelRevive} style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
             </div>
           </div>
         </div>
