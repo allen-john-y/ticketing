@@ -14,12 +14,12 @@ function TicketDetails() {
   // Close states
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [closeReason, setCloseReason] = useState('');
-  const [closeError, setCloseError] = useState('');
+  const [closeError, setCloseError] = useState('');  // NEW: Professional error
 
   // Revive states
   const [showReviveReasonInput, setShowReviveReasonInput] = useState(false);
   const [reviveReason, setReviveReason] = useState('');
-  const [reviveError, setReviveError] = useState('');
+  const [reviveError, setReviveError] = useState('');  // NEW: Professional error
 
   const [confirmModal, setConfirmModal] = useState(false);
   const [confirmReviveModal, setConfirmReviveModal] = useState(false);
@@ -71,6 +71,7 @@ function TicketDetails() {
     });
   };
 
+  // PROFESSIONAL CLOSE HANDLING
   const handleSubmitReason = () => {
     if (!closeReason.trim()) {
       setCloseError("Please provide a reason for closing this ticket.");
@@ -104,6 +105,7 @@ function TicketDetails() {
     setCloseError('');
   };
 
+  // PROFESSIONAL REVIVE HANDLING
   const handleSubmitReviveReason = () => {
     if (!reviveReason.trim()) {
       setReviveError("Please provide a reason for reviving this ticket.");
@@ -182,134 +184,45 @@ function TicketDetails() {
         }}>Back to Tickets</button>
       </div>
 
-      {/* MAIN CARD — UPGRADED & PROFESSIONAL */}
+      {/* MAIN CARD */}
       <div style={{
-        padding: '3rem 2.8rem',
-        maxWidth: '780px',
-        margin: '2rem auto',
-        background: 'white',
-        borderRadius: '24px',
-        borderLeft: `12px solid ${ticket.status === "Closed" ? "#dc2626" : "#16a34a"}`,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
-        border: '1px solid #f1f5f9',
-        position: 'relative',
-        overflow: 'hidden'
+        padding: '2.5rem', maxWidth: '720px', margin: '0 auto', background: 'white',
+        borderRadius: '16px', borderLeft: `8px solid ${ticket.status === "Closed" ? "#dc2626" : "#16a34a"}`,
+        boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
       }}>
-        <div style={{
-          position: 'absolute',
-          top: 0, left: 0, right: 0,
-          height: '6px',
-          background: ticket.status === "Closed" ? '#fca5a5' : '#86efac',
-          borderRadius: '24px 24px 0 0'
-        }}></div>
-
-        <h1 style={{
-          margin: '0 0 16px',
-          fontSize: '2.4rem',
-          fontWeight: 800,
-          color: '#0f172a',
-          letterSpacing: '-0.5px'
-        }}>
+        <h1 style={{ margin: '0 0 10px', fontSize: '2rem', color: '#1e293b', fontWeight: 700 }}>
           {ticket.category}
         </h1>
-
-        <div style={{ display: "flex", alignItems: "center", marginBottom: '28px', gap: '12px' }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
           <div style={statusDot}></div>
-          <span style={{
-            fontSize: '1.5rem',
-            fontWeight: 700,
-            color: ticket.status === "Closed" ? "#991b1b" : "#166534",
-            background: ticket.status === "Closed" ? "#fef2f2" : "#f0fdf4",
-            padding: "8px 16px",
-            borderRadius: "50px",
-            border: `2px solid ${ticket.status === "Closed" ? "#fca5a5" : "#86efac"}`
-          }}>
-            {ticket.status}
-          </span>
+          <span style={{ fontSize: 20, fontWeight: 700, color: "#1e293b" }}>{ticket.status}</span>
+        </div>
+        <div style={{ lineHeight: 1.8, color: '#475569', fontSize: '15px' }}>
+          <p><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
+          <p><strong>Created by:</strong> {ticket.userName}</p>
+          <p><strong>Email:</strong> {ticket.userEmail}</p>
+          <p><strong>Priority:</strong> <span style={{ color: '#f59e0b', fontWeight: 700, background: '#fff7ed', padding: '4px 10px', borderRadius: 8 }}>{ticket.priority}</span></p>
+          <p style={{ marginTop: 20 }}><strong>Description:</strong><br /><span style={{ background: '#f8fafc', padding: 16, borderRadius: 12, display: 'block', marginTop: 8 }}>{ticket.description}</span></p>
         </div>
 
-        <div style={{ fontSize: '16.5px', lineHeight: '2', color: '#334155' }}>
-          <div style={{ marginBottom: '18px' }}>
-            <strong style={{ color: '#1e293b', fontWeight: 600 }}>Ticket #:</strong> {ticket.ticketNumber}
-          </div>
-          <div style={{ marginBottom: '18px' }}>
-            <strong style={{ color: '#1e293b', fontWeight: 600 }}>Created by:</strong> {ticket.userName}
-          </div>
-          <div style={{ marginBottom: '18px' }}>
-            <strong style={{ color: '#1e293b', fontWeight: 600 }}>Email:</strong> {ticket.userEmail}
-          </div>
-          <div style={{ marginBottom: '28px' }}>
-            <strong style={{ color: '#1e293b', fontWeight: 600 }}>Priority:</strong>{' '}
-            <span style={{
-              display: 'inline-block',
-              background: ticket.priority === "High" ? '#fee2e2' : ticket.priority === "Medium" ? '#fff7ed' : '#f0fdf4',
-              color: ticket.priority === "High" ? '#991b1b' : ticket.priority === "Medium" ? '#c2410c' : '#166534',
-              fontWeight: 700,
-              padding: '8px 18px',
-              borderRadius: '50px',
-              fontSize: '14.5px',
-              border: `1.5px solid ${ticket.priority === "High" ? '#fca5a5' : ticket.priority === "Medium" ? '#fdba74' : '#86efac'}`
-            }}>
-              {ticket.priority}
-            </span>
-          </div>
+        {authority === 'admin' && ticket.status !== 'Closed' && (
+          <button onClick={() => setShowReasonInput(true)} style={{
+            marginTop: '2rem', background: '#dc2626', color: 'white', padding: '16px 32px',
+            border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 700, fontSize: '16px',
+            boxShadow: '0 6px 20px rgba(220,38,38,0.3)'
+          }}>Close Ticket</button>
+        )}
 
-          <div>
-            <p style={{ margin: '0 0 12px', fontSize: '17px', fontWeight: 600, color: '#1e293b' }}>
-              Description
-            </p>
-            <div style={{
-              background: '#fafbfc',
-              padding: '22px 24px',
-              borderRadius: '18px',
-              border: '2px solid #e2e8f0',
-              fontSize: '16px',
-              lineHeight: '1.8',
-              color: '#1e293b',
-              minHeight: '100px',
-              whiteSpace: 'pre-wrap'
-            }}>
-              {ticket.description || "No description provided."}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: '2.5rem', display: 'flex', gap: '16px', justifyContent: 'center' }}>
-          {authority === 'admin' && ticket.status !== 'Closed' && (
-            <button onClick={() => setShowReasonInput(true)} style={{
-              background: '#dc2626',
-              color: 'white',
-              padding: '16px 36px',
-              border: 'none',
-              borderRadius: '16px',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '17px',
-              boxShadow: '0 8px 25px rgba(220,38,38,0.3)'
-            }}>
-              Close Ticket
-            </button>
-          )}
-
-          {ticket.status === 'Closed' && (
-            <button onClick={() => setShowReviveReasonInput(true)} style={{
-              background: '#16a34a',
-              color: 'white',
-              padding: '16px 36px',
-              border: 'none',
-              borderRadius: '16px',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '17px',
-              boxShadow: '0 8px 25px rgba(22,163,74,0.3)'
-              }}>
-              Revive Ticket
-            </button>
-          )}
-        </div>
+        {ticket.status === 'Closed' && (
+          <button onClick={() => setShowReviveReasonInput(true)} style={{
+            marginTop: '2rem', background: '#16a34a', color: 'white', padding: '16px 32px',
+            border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 700, fontSize: '16px',
+            boxShadow: '0 6px 20px rgba(22,163,74,0.3)'
+          }}>Revive Ticket</button>
+        )}
       </div>
 
-      {/* FULL HISTORY TIMELINE — UNTOUCHED */}
+      {/* FULL HISTORY TIMELINE */}
       <div style={{ maxWidth: '720px', margin: '3rem auto', padding: '0 1rem' }}>
         <h2 style={{ fontSize: '1.9rem', color: '#1e293b', marginBottom: '2.5rem', textAlign: 'center', fontWeight: 700 }}>
           Ticket History
@@ -369,7 +282,7 @@ function TicketDetails() {
         </div>
       </div>
 
-      {/* ALL MODALS — EXACTLY AS BEFORE */}
+      {/* PROFESSIONAL CLOSE MODAL */}
       {showReasonInput && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -398,6 +311,7 @@ function TicketDetails() {
         </div>
       )}
 
+      {/* CONFIRM CLOSE */}
       {confirmModal && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -413,6 +327,7 @@ function TicketDetails() {
         </div>
       )}
 
+      {/* PROFESSIONAL REVIVE MODAL */}
       {showReviveReasonInput && (
         <div className="overlay" onClick={cancelRevive}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -441,6 +356,7 @@ function TicketDetails() {
         </div>
       )}
 
+      {/* CONFIRM REVIVE */}
       {confirmReviveModal && (
         <div className="overlay" onClick={cancelRevive}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -450,7 +366,7 @@ function TicketDetails() {
               <button onClick={confirmReviveTicket} disabled={loading} style={{ padding: '16px 36px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
                 {loading ? 'Reviving...' : 'Yes, Revive It'}
               </button>
-                <button onClick={cancelRevive} style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button onClick={cancelRevive} style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
             </div>
           </div>
         </div>
