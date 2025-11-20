@@ -59,7 +59,6 @@ const connectDB = async () => {
 connectDB();
 
 // ---------------------- Schema ----------------------------
-// ONLY THIS PART CHANGED — Added history array
 const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: { type: Number, unique: true },
@@ -77,7 +76,6 @@ const ticketSchema = new mongoose.Schema(
     reopenedBy: String,
     reopenedAt: Date,
 
-    // NEW: FULL HISTORY (never lose anything)
     history: [
       {
         action: { type: String, enum: ["created", "closed", "revived"] },
@@ -114,10 +112,13 @@ const deptEmails = {
   "Employee Onboarding": "allenj@sandeza-inc.com",
 };
 
-// ---------------------- Azure Graph: Token + Mail ----------------------
+// ---------------------- Azure Graph Token ----------------------
 const getGraphToken = async () => {
+  console.log("🔵 [MAIL] Getting Microsoft Graph token...");
+
   const tenantId = process.env.AZURE_TENANT_ID;
   const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
   const params = new URLSearchParams();
   params.append("client_id", process.env.AZURE_CLIENT_ID);
   params.append("scope", "https://graph.microsoft.com/.default");
@@ -128,15 +129,25 @@ const getGraphToken = async () => {
   const data = await res.json();
 
   if (!res.ok || !data.access_token) {
-    throw new Error(`Failed to get token: ${JSON.stringify(data)}`);
+    console.log("❌ [MAIL] Token FAILED:", data);
+    throw new Error(`Token failed: ${JSON.stringify(data)}`);
   }
+
+  console.log("✅ [MAIL] Token received");
   return data.access_token;
 };
 
 // ---------------------- Send Email ----------------------
 const sendEmail = async (to, subject, bodyText, cc) => {
   try {
+    console.log(`\n📧 [MAIL] Preparing email...`);
+    console.log("To:", to);
+    console.log("CC:", cc);
+    console.log("Subject:", subject);
+
     const token = await getGraphToken();
+    console.log("🔵 [MAIL] Sending email via Microsoft Graph...");
+
     const normalize = (addr) => {
       if (!addr) return [];
       if (Array.isArray(addr))
@@ -168,15 +179,20 @@ const sendEmail = async (to, subject, bodyText, cc) => {
       }
     );
 
+    const responseText = await res.text();
+
+    console.log("🔍 [MAIL] Graph Response Status:", res.status);
+    console.log("🔍 [MAIL] Graph Response Body:", responseText);
+
     if (res.status === 202) {
-      console.log(`Sent to: ${Array.isArray(to) ? to.join(", ") : to} | CC: ${cc || "-"}`);
+      console.log(`✅ [MAIL] Email sent SUCCESSFULLY to: ${Array.isArray(to) ? to.join(", ") : to}`);
       return true;
     } else {
-      console.error("Graph send failed:", await res.text());
+      console.log("❌ [MAIL] Email FAILED");
       return false;
     }
   } catch (err) {
-    console.error("Failed to send mail:", err.message);
+    console.error("❌ [MAIL] Error sending email:", err.message);
     return false;
   }
 };
@@ -244,7 +260,7 @@ app.get("/tickets/:id", async (req, res) => {
   }
 });
 
-// Create Ticket — NOW ADDS TO HISTORY
+// Create Ticket
 app.post("/tickets", async (req, res) => {
   try {
     const { category, description, priority, userId, userName, userEmail } = req.body;
@@ -260,26 +276,23 @@ app.post("/tickets", async (req, res) => {
       description,
       priority,
       status: "Open",
-      // Initialize history with creation event
       history: [{
         action: "created",
         by: userName,
         at: new Date(),
         reason: null
-      }]
+      }],
     });
 
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Notify Ticket Creator
     await sendEmail(
       userEmail,
       `Ticket #${ticketCounter} Created`,
       `Hi ${userName},\n\nYour ticket has been created.\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}`
     );
 
-    // Notify Department
     await sendEmail(
       deptEmails[category],
       `[TICKET #${ticketCounter}] ${category}`,
@@ -287,7 +300,6 @@ app.post("/tickets", async (req, res) => {
       itHead
     );
 
-    // Auto Password Reset Handling
     if (category === "Password Reset") {
       try {
         const newPassword = await resetAzurePassword(userId);
@@ -328,7 +340,7 @@ app.post("/tickets", async (req, res) => {
   }
 });
 
-// Close Ticket — NOW PUSHES TO HISTORY (never overwrites)
+// Close Ticket
 app.put("/tickets/:id/close", async (req, res) => {
   try {
     const { closedBy, closeReason } = req.body;
@@ -338,9 +350,7 @@ app.put("/tickets/:id/close", async (req, res) => {
     }
 
     const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
-    }
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     if (ticket.status === "Closed") {
       return res.status(400).json({ message: "Ticket is already closed" });
@@ -348,7 +358,6 @@ app.put("/tickets/:id/close", async (req, res) => {
 
     const now = new Date();
 
-    // PUSH TO HISTORY — THIS IS THE KEY CHANGE
     ticket.history.push({
       action: "closed",
       by: closedBy?.trim() || "IT Head",
@@ -356,7 +365,6 @@ app.put("/tickets/:id/close", async (req, res) => {
       reason: closeReason.trim()
     });
 
-    // Update current fields (for backward compatibility)
     ticket.status = "Closed";
     ticket.closedBy = closedBy?.trim() || "IT Head";
     ticket.closeReason = closeReason.trim();
@@ -396,7 +404,7 @@ This ticket is now officially closed.
     `.trim();
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailBody, itHead);
-    await sendEmail(deptEmails[ticket.category] || "helpdesk@sandeza-inc.com", `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
+    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} closed by ${ticket.closedBy}`);
 
@@ -418,7 +426,7 @@ This ticket is now officially closed.
   }
 });
 
-// Revive Ticket — NOW PUSHES TO HISTORY
+// Revive Ticket
 app.put("/tickets/:id/revive", async (req, res) => {
   try {
     const { revivedBy, reviveReason } = req.body;
@@ -438,7 +446,6 @@ app.put("/tickets/:id/revive", async (req, res) => {
 
     const now = new Date();
 
-    // PUSH TO HISTORY — NEVER LOSE ANYTHING
     ticket.history.push({
       action: "revived",
       by: revivedBy?.trim() || "Unknown User",
@@ -446,7 +453,6 @@ app.put("/tickets/:id/revive", async (req, res) => {
       reason: reviveReason.trim()
     });
 
-    // Update current state
     ticket.status = "Open";
     ticket.reopenedBy = revivedBy?.trim() || "Unknown User";
     ticket.reopenedAt = now;
