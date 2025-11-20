@@ -71,6 +71,7 @@ const ticketSchema = new mongoose.Schema(
     status: String,
     closedBy: String,
     closeReason: String,
+    reviveReason: String,   // ← Add this line in ticketSchema
     closedAt: Date,
     reopenedBy: String,
     reopenedAt: Date,
@@ -401,30 +402,97 @@ This ticket is now officially closed.
   }
 });
 
-// Revive Ticket (instead of reopen)
+// Revive Ticket - FINAL WORKING VERSION (with reviveReason + beautiful email)
 app.put("/tickets/:id/revive", async (req, res) => {
   try {
-    const { revivedBy } = req.body;
-    const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+    const { revivedBy, reviveReason } = req.body;
 
-    ticket.status = "Open";  // Revived means open again
-    ticket.reopenedBy = revivedBy;
+    // Required: reason must be provided
+    if (!reviveReason || reviveReason.trim() === "") {
+      return res.status(400).json({ message: "Revive reason is required" });
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    if (ticket.status !== "Closed") {
+      return res.status(400).json({ message: "Only closed tickets can be revived" });
+    }
+
+    // Update ticket with revive info
+    ticket.status = "Open";
+    ticket.reopenedBy = revivedBy?.trim() || "Unknown User";
     ticket.reopenedAt = new Date();
+    ticket.reviveReason = reviveReason.trim();  // ← Saved here
+
     await ticket.save();
 
-    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    const dept = deptEmails[ticket.category];
+    // Beautiful IST formatted time
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const dept = deptEmails[ticket.category] || "helpdesk@sandeza-inc.com";
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    const body = `Ticket #${ticket.ticketNumber} (${ticket.category}) has been revived by ${revivedBy}\nTime: ${nowIST}`;
+    // Professional email with full audit
+    const emailBody = `
+TICKET #${ticket.ticketNumber} HAS BEEN REVIVED (Reopened)
 
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, body, itHead);
-    await sendEmail(dept, `[TICKET #${ticket.ticketNumber}] Revived`, body, itHead);
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Category       : ${ticket.category}
+Priority       : ${ticket.priority}
+Created by     : ${ticket.userName} (${ticket.userEmail})
+Ticket Number  : #${ticket.ticketNumber}
 
-    res.json({ message: "Ticket revived successfully" });
+Revived by     : ${ticket.reopenedBy}
+Revived on     : ${nowIST}
+
+Reason for reviving:
+${ticket.reviveReason}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This ticket is now OPEN again and requires attention.
+    `.trim();
+
+    // Notify user
+    await sendEmail(
+      ticket.userEmail,
+      `[TICKET #${ticket.ticketNumber}] Revived`,
+      emailBody,
+      itHead
+    );
+
+    // Notify department
+    await sendEmail(
+      dept,
+      `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`,
+      emailBody,
+      itHead
+    );
+
+    console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
+
+    res.json({
+      message: "Ticket revived successfully",
+      ticket: {
+        _id: ticket._id,
+        status: "Open",
+        reopenedBy: ticket.reopenedBy,
+        reviveReason: ticket.reviveReason,
+        reopenedAt: ticket.reopenedAt,
+      },
+    });
   } catch (err) {
-    console.error("Error reviving ticket:", err.message);
+    console.error("Revive ticket error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
