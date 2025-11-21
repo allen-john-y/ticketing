@@ -259,23 +259,41 @@ This message contains confidential information intended for the recipient only. 
 app.get("/", (req, res) => res.send(`${companyName} Helpdesk API Running`));
 
 // --- Azure AD User Search (backend uses app credentials) ---
+// NOTE: this endpoint always returns an array (possibly empty).
 app.get("/users/search", async (req, res) => {
   try {
-    const q = (req.query.query || "").trim();
+    let q = (req.query.query || "").trim();
     if (!q) return res.json([]);
 
+    // Escape single quotes for OData filter by doubling them
+    q = q.replace(/'/g, "''");
+
     const token = await getGraphToken();
-    // Use startswith on displayName, mail, userPrincipalName (OR)
+
+    // Use startswith filter across commonly searched fields
     const filter = `startswith(displayName,'${q}') or startswith(mail,'${q}') or startswith(userPrincipalName,'${q}')`;
     const url = `https://graph.microsoft.com/v1.0/users?$select=id,displayName,mail,userPrincipalName&$filter=${encodeURIComponent(filter)}&$top=25`;
+
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const text = await resp.text();
+
     if (!resp.ok) {
-      const body = await resp.text();
-      console.error("Graph search failed", resp.status, body);
-      return res.status(500).json({ message: "User search failed" });
+      console.error("Graph search failed", resp.status, text);
+      // Try to parse JSON if possible and return safe empty array
+      return res.status(500).json({ message: "User search failed", error: text });
     }
-    const data = await resp.json();
-    res.json(data.value || []);
+
+    // Graph returns an object with "value" array
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      console.error("Failed to parse Graph response:", parseErr);
+      return res.json([]);
+    }
+
+    const values = Array.isArray(data.value) ? data.value : [];
+    res.json(values);
   } catch (err) {
     console.error("User search error:", err.message);
     res.status(500).json({ message: "Server error" });
@@ -334,7 +352,7 @@ app.post("/tickets", async (req, res) => {
       approvalStatus = "Approved";
     } else {
       // if password reset and onBehalfType is Self, we'll auto-approve (and reset)
-      if (category === "Password Reset" && onBehalfType === "Self") {
+      if (category === "Password Reset" && (onBehalfType === 'Self' || !onBehalfType)) {
         approvalStatus = "Approved";
       } else {
         // Others -> pending
@@ -381,7 +399,7 @@ Priority      : ${priority}
 Description   : ${description}
 Requested On  : ${nowIST}
 
-${category === "Password Reset" && onBehalfType === "Others" ? "Status: Awaiting administrative approval." : (category === "Password Reset" && onBehalfType === "Self" ? "Status: Reset in progress." : "Status: Open.")}
+${category === "Password Reset" && onBehalfType === "Others" ? "Status: Awaiting administrative approval." : (category === "Password Reset" ? "Status: Reset in progress or queued." : "Status: Open.")}
 
 ${supportSignature}
 `.trim();
@@ -442,7 +460,7 @@ ${supportSignature}
 
     // If Password Reset + Self -> attempt reset immediately (auto-approve)
     let returnedPassword = null;
-    if (category === "Password Reset" && onBehalfType === "Self") {
+    if (category === "Password Reset" && (onBehalfType === "Self" || !onBehalfType)) {
       try {
         const targetUserId = ticket.onBehalfUserId || userId;
         const newPassword = await resetAzurePassword(targetUserId);
@@ -466,7 +484,7 @@ ${supportSignature}
         });
         await ticket.save();
 
-        // Email with temp password to creator and alternate and dept
+        // Email with temp password to onBehalfUser (or creator) and alternate and dept
         const passwordBody = `
 Dear ${ticket.onBehalfUserName || userName},
 
@@ -566,11 +584,11 @@ ${supportSignature}
 `.trim();
 
       // Recipients: onBehalfUserEmail, creator, alternateEmail (if present)
-      const recipients = [ticket.onBehalfUserEmail, ticket.userEmail];
+      const recipients = [ticket.onBehalfUserEmail, ticket.userEmail].filter(Boolean);
       const cc = ticket.alternateEmail ? [ticket.alternateEmail] : undefined;
 
       // send to main recipients
-      await sendEmail(recipients.filter(Boolean), subject, body, cc);
+      await sendEmail(recipients, subject, body, cc);
       // inform department/admin
       await sendEmail(deptEmails[ticket.category], `[${companyName} Helpdesk] Password Reset Completed - Ticket #${ticket.ticketNumber}`, `Password reset completed for ${ticket.onBehalfUserName} (${ticket.onBehalfUserEmail}).\n\nTicket: ${ticket.ticketNumber}\nTime: ${nowIST}\n\n${supportSignature}`, process.env.IT_HEAD_EMAIL);
 

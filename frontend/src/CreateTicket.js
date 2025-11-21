@@ -38,12 +38,17 @@ function CreateTicket() {
 
   // form data
   const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium' });
-  const [onBehalfType, setOnBehalfType] = useState('Self'); // 'Self' | 'Others'
+
+  // on-behalf state - only shown for Password Reset category
+  const [onBehalfType, setOnBehalfType] = useState(null); // null | 'Self' | 'Others'
   const [onBehalfUser, setOnBehalfUser] = useState(null); // { id, displayName, mail }
   const [alternateEmail, setAlternateEmail] = useState('');
+
+  // search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const searchTimeout = useRef(null);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -81,11 +86,36 @@ function CreateTicket() {
     return () => { mounted = false; };
   }, [instance, accounts]);
 
-  // simple debounce for search
-  const searchTimeout = useRef(null);
+  // When category changes, reset on-behalf UI unless Password Reset
   useEffect(() => {
-    if (!searchQuery || onBehalfType !== 'Others') {
+    if (formData.category === 'Password Reset') {
+      // default to 'Self' when user selects Password Reset, but don't show until user interacts
+      setOnBehalfType(prev => prev || 'Self');
+    } else {
+      // clear on-behalf related state if category not Password Reset
+      setOnBehalfType(null);
+      setOnBehalfUser(null);
+      setAlternateEmail('');
+      setSearchQuery('');
       setSearchResults([]);
+      setSearching(false);
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current);
+        searchTimeout.current = null;
+      }
+    }
+  }, [formData.category]);
+
+  // search Azure AD for on-behalf users (debounced)
+  useEffect(() => {
+    const shouldSearch = formData.category === 'Password Reset' && onBehalfType === 'Others' && searchQuery && searchQuery.trim().length > 0;
+    if (!shouldSearch) {
+      setSearchResults([]);
+      setSearching(false);
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current);
+        searchTimeout.current = null;
+      }
       return;
     }
 
@@ -96,7 +126,14 @@ function CreateTicket() {
         const resp = await axios.get(`${process.env.REACT_APP_API_BASE || ''}/users/search`, {
           params: { query: searchQuery.trim() }
         });
-        setSearchResults(resp.data || []);
+
+        // resp.data can be an array or an object { value: [...] } depending on backend
+        let results = [];
+        if (Array.isArray(resp.data)) results = resp.data;
+        else if (resp.data && Array.isArray(resp.data.value)) results = resp.data.value;
+        else results = [];
+
+        setSearchResults(results);
       } catch (err) {
         console.error('Search error', err);
         setSearchResults([]);
@@ -108,7 +145,7 @@ function CreateTicket() {
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [searchQuery, onBehalfType]);
+  }, [searchQuery, onBehalfType, formData.category]);
 
   const handleSelectSearchResult = (u) => {
     setOnBehalfUser({
@@ -128,6 +165,18 @@ function CreateTicket() {
     setShowPasswordPopup(false);
 
     try {
+      // Validate required fields for on-behalf others
+      if (formData.category === 'Password Reset' && onBehalfType === 'Others' && !onBehalfUser) {
+        setModal({
+          open: true,
+          title: 'Missing selection',
+          message: 'Please select the user to reset password for (search and choose the user).',
+          type: 'error'
+        });
+        setLoading(false);
+        return;
+      }
+
       // Acquire token for Graph (backend might validate but API doesn't require token here)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
 
@@ -146,6 +195,7 @@ function CreateTicket() {
         // ignore
       }
 
+      // Build ticket payload; only include on-behalf fields if Password Reset category
       const ticketData = {
         category: formData.category,
         description: formData.description,
@@ -154,13 +204,15 @@ function CreateTicket() {
         userName: latestName || accounts[0]?.username,
         userEmail: latestEmail,
         status: 'Open',
-        // new fields
-        onBehalfType,
-        onBehalfUserId: onBehalfUser?.id || (onBehalfType === 'Self' ? accounts[0]?.localAccountId : undefined),
-        onBehalfUserName: onBehalfUser?.displayName || (onBehalfType === 'Self' ? latestName : undefined),
-        onBehalfUserEmail: onBehalfUser?.mail || (onBehalfType === 'Self' ? latestEmail : undefined),
-        alternateEmail: alternateEmail || undefined
       };
+
+      if (formData.category === 'Password Reset') {
+        ticketData.onBehalfType = onBehalfType || 'Self';
+        ticketData.onBehalfUserId = onBehalfType === 'Others' ? onBehalfUser?.id : accounts[0]?.localAccountId;
+        ticketData.onBehalfUserName = onBehalfType === 'Others' ? onBehalfUser?.displayName : latestName;
+        ticketData.onBehalfUserEmail = onBehalfType === 'Others' ? onBehalfUser?.mail : latestEmail;
+        if (alternateEmail) ticketData.alternateEmail = alternateEmail;
+      }
 
       const response = await axios.post(`${process.env.REACT_APP_API_BASE || ''}/tickets`, ticketData, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
@@ -276,63 +328,70 @@ function CreateTicket() {
             </div>
           </div>
 
-          <div style={styles.field}>
-            <label style={styles.label}>On behalf of</label>
-            <select
-              value={onBehalfType}
-              onChange={(e) => {
-                setOnBehalfType(e.target.value);
-                setOnBehalfUser(null);
-                setAlternateEmail('');
-                setSearchResults([]);
-                setSearchQuery('');
-              }}
-              style={styles.select}
-            >
-              <option value="Self">Self</option>
-              <option value="Others">Others</option>
-            </select>
-            {onBehalfType === 'Others' && (
-              <div style={{ marginTop: 10 }}>
-                <label style={{ ...styles.label, marginBottom: 6 }}>Search user (name or email)</label>
-                <input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Type name or email to search Azure AD..."
-                  style={styles.input}
-                />
-                {searching && <div style={{ marginTop: 8 }}>Searching...</div>}
-                {!!searchResults.length && (
-                  <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto', border: '1px solid #e6e9ee', borderRadius: 8, padding: 8 }}>
-                    {searchResults.map(u => (
-                      <div key={u.id} style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }} onClick={() => handleSelectSearchResult(u)}>
-                        <div style={{ fontWeight: 700 }}>{u.displayName || u.userPrincipalName || u.mail}</div>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>{u.mail || u.userPrincipalName}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* Only show On-behalf controls for Password Reset */}
+          {formData.category === 'Password Reset' && (
+            <div style={styles.field}>
+              <label style={styles.label}>On behalf of</label>
+              <select
+                value={onBehalfType || 'Self'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setOnBehalfType(val);
+                  setOnBehalfUser(null);
+                  setAlternateEmail('');
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
+                style={styles.select}
+              >
+                <option value="Self">Self</option>
+                <option value="Others">Others</option>
+              </select>
 
-                {onBehalfUser && (
-                  <div style={{ marginTop: 10, padding: 10, background: '#f8fafc', borderRadius: 8 }}>
-                    <div style={{ fontWeight: 700 }}>{onBehalfUser.displayName}</div>
-                    <div style={{ fontSize: 13, color: '#6b7280' }}>{onBehalfUser.mail}</div>
-                  </div>
-                )}
-
-                <div style={{ marginTop: 12 }}>
-                  <label style={styles.label}>Alternate email to receive temporary password (optional)</label>
+              {onBehalfType === 'Others' && (
+                <div style={{ marginTop: 10 }}>
+                  <label style={{ ...styles.label, marginBottom: 6 }}>Search user (name or email)</label>
                   <input
-                    value={alternateEmail}
-                    onChange={(e) => setAlternateEmail(e.target.value)}
-                    placeholder="someone@example.com"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Type name or email to search Azure AD..."
                     style={styles.input}
-                    type="email"
                   />
+                  {searching && <div style={{ marginTop: 8 }}>Searching...</div>}
+
+                  {/* Render only if searchResults is an array to avoid map errors */}
+                  {Array.isArray(searchResults) && searchResults.length > 0 && (
+                    <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto', border: '1px solid #e6e9ee', borderRadius: 8, padding: 8 }}>
+                      {searchResults.map(u => (
+                        <div key={u.id} style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }} onClick={() => handleSelectSearchResult(u)}>
+                          <div style={{ fontWeight: 700 }}>{u.displayName || u.userPrincipalName || u.mail}</div>
+                          <div style={{ fontSize: 12, color: '#6b7280' }}>{u.mail || u.userPrincipalName}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {onBehalfUser && (
+                    <div style={{ marginTop: 10, padding: 10, background: '#f8fafc', borderRadius: 8 }}>
+                      <div style={{ fontWeight: 700 }}>{onBehalfUser.displayName}</div>
+                      <div style={{ fontSize: 13, color: '#6b7280' }}>{onBehalfUser.mail}</div>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 12 }}>
+                    <label style={styles.label}>Alternate email to receive temporary password (optional)</label>
+                    <input
+                      value={alternateEmail}
+                      onChange={(e) => setAlternateEmail(e.target.value)}
+                      placeholder="someone@example.com"
+                      style={styles.input}
+                      type="email"
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           <div style={styles.field}>
             <label style={styles.label}>Description *</label>
