@@ -1,15 +1,14 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 /*
   CreateTicket.js
-  - Uses a "verify email" flow: user types exact email (mail or userPrincipalName) and clicks Verify.
-  - Calls backend GET /users/verify?email=<email> to validate and retrieve { id, displayName, mail, userPrincipalName }.
-  - Enforces alternateEmail as mandatory for Password Reset tickets.
-  - Shows temporary password popup for Self auto-reset when backend returns newPassword.
-  - IMPORTANT: set REACT_APP_API_BASE to your backend URL (e.g. https://ticketing-production-5334.up.railway.app)
+  - Verify-by-email flow: calls backend GET /users/verify?email=<email>
+  - Requires REACT_APP_API_BASE in frontend env (example: REACT_APP_API_BASE=https://your-backend.example.com)
+  - Alternate email is mandatory for Password Reset tickets.
+  - Shows raw /users/verify JSON response for debugging.
 */
 
 function PasswordPopup({ password, onClose }) {
@@ -28,17 +27,11 @@ function PasswordPopup({ password, onClose }) {
     <div style={styles.overlay}>
       <div style={styles.passwordBox}>
         <h2 style={{ marginBottom: "1rem" }}>🎉 Password Reset Complete</h2>
-        <p>
-          <strong>Temporary password:</strong>
-        </p>
+        <p><strong>Temporary password:</strong></p>
         <p style={styles.passwordText}>{password}</p>
-        <button onClick={handleCopy} style={styles.copyButton}>
-          Copy Password
-        </button>
+        <button onClick={handleCopy} style={styles.copyButton}>Copy Password</button>
         {copied && <p style={{ color: "green", marginTop: "0.5rem" }}>Copied!</p>}
-        <button onClick={onClose} style={styles.modalCloseButton}>
-          ✖
-        </button>
+        <button onClick={onClose} style={styles.modalCloseButton}>✖</button>
       </div>
     </div>
   );
@@ -49,33 +42,34 @@ export default function CreateTicket() {
   const navigate = useNavigate();
   const API_BASE = process.env.REACT_APP_API_BASE || "";
 
-  // form
+  // Form state
   const [formData, setFormData] = useState({ category: "", description: "", priority: "Medium" });
 
-  // on-behalf / verify
+  // On-behalf and verify
   const [onBehalfType, setOnBehalfType] = useState(null); // null | "Self" | "Others"
   const [onBehalfEmailInput, setOnBehalfEmailInput] = useState("");
-  const [onBehalfUser, setOnBehalfUser] = useState(null); // {id, displayName, mail, userPrincipalName}
+  const [onBehalfUser, setOnBehalfUser] = useState(null); // normalized user { id, displayName, mail, userPrincipalName }
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState("");
+  const [verifyRaw, setVerifyRaw] = useState(null); // raw server response for debugging
 
-  // alternate email mandatory for password reset
+  // Alternate email (mandatory for password reset)
   const [alternateEmail, setAlternateEmail] = useState("");
 
-  // UI
+  // UI state
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState({ open: false, title: "", message: "", type: "info" });
   const [createdTicketId, setCreatedTicketId] = useState(null);
 
-  // password popup (for self reset)
+  // Password popup
   const [newPassword, setNewPassword] = useState("");
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
-  // display signed-in user info
+  // Signed-in user display
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || "");
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || "");
 
-  // fetch /me to show accurate name/email
+  // Fetch /me to show nicer header info (best-effort)
   useEffect(() => {
     let mounted = true;
     const fetchMe = async () => {
@@ -94,17 +88,14 @@ export default function CreateTicket() {
           "";
         setDisplayEmail(email);
       } catch (err) {
-        // ignore; use account values
         console.debug("Could not fetch /me:", err?.message || err);
       }
     };
     fetchMe();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [instance, accounts]);
 
-  // clear on-behalf when leaving Password Reset category
+  // Clear on-behalf UI when leaving Password Reset
   useEffect(() => {
     if (formData.category !== "Password Reset") {
       setOnBehalfType(null);
@@ -112,40 +103,46 @@ export default function CreateTicket() {
       setOnBehalfUser(null);
       setAlternateEmail("");
       setVerifyMessage("");
+      setVerifyRaw(null);
       setVerifyLoading(false);
     }
   }, [formData.category]);
 
-  // Verify entered exact email with backend /users/verify
+  // Verify exact email against backend /users/verify
   const verifyEmail = async (email) => {
     setVerifyLoading(true);
     setVerifyMessage("");
+    setVerifyRaw(null);
     setOnBehalfUser(null);
-    const safeEmail = (email || "").trim();
-    if (!safeEmail) {
+    const safe = (email || "").trim();
+    if (!safe) {
       setVerifyMessage("Please enter an email to verify.");
       setVerifyLoading(false);
       return;
     }
 
     try {
-      const resp = await axios.get(`${API_BASE}/users/verify`, { params: { email: safeEmail } });
-      const u = resp.data || {};
+      const resp = await axios.get(`${API_BASE}/users/verify`, { params: { email: safe } });
+      // Save raw response for debugging in UI
+      setVerifyRaw(resp.data || null);
 
-      // Normalize / fallback
+      // Normalize with fallbacks
+      const u = resp.data || {};
       const id = u.id || u.objectId || "";
       const display = u.displayName || u.userPrincipalName || u.mail || id || "Unknown user";
       const mail = u.mail || u.userPrincipalName || "";
 
       const normalized = { id, displayName: display, mail, userPrincipalName: u.userPrincipalName || "" };
-
       setOnBehalfUser(normalized);
       setVerifyMessage(`Verified: ${display}`);
     } catch (err) {
       console.error("/users/verify error:", err?.response?.data || err.message || err);
-      if (err?.response?.status === 404) setVerifyMessage("User not found in Azure AD.");
-      else setVerifyMessage("Verification failed. Check server logs or network.");
+      const status = err?.response?.status;
+      if (status === 404) setVerifyMessage("User not found in Azure AD.");
+      else if (status === 401 || status === 403) setVerifyMessage("Azure permission or token error (401/403). Check server logs.");
+      else setVerifyMessage("Verification failed. See console or server logs.");
       setOnBehalfUser(null);
+      setVerifyRaw(err?.response?.data || null);
     } finally {
       setVerifyLoading(false);
     }
@@ -156,6 +153,7 @@ export default function CreateTicket() {
     await verifyEmail(onBehalfEmailInput);
   };
 
+  // Submit ticket
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -172,7 +170,7 @@ export default function CreateTicket() {
           return;
         }
         if (onBehalfType === "Others" && !onBehalfUser) {
-          setModal({ open: true, title: "Missing", message: "Please verify target user's email using Verify.", type: "error" });
+          setModal({ open: true, title: "Missing", message: "Please verify the target user's email using Verify.", type: "error" });
           setLoading(false);
           return;
         }
@@ -189,36 +187,31 @@ export default function CreateTicket() {
         }
       }
 
-      // Try to acquire token for authentication to backend (optional)
+      // Acquire token to authenticate to backend (optional; backend may not require)
       let tokenAccess = null;
       if (accounts && accounts[0]) {
         try {
-          const tokenResp = await instance.acquireTokenSilent({ scopes: ["User.Read"], account: accounts[0] });
-          tokenAccess = tokenResp?.accessToken;
+          const t = await instance.acquireTokenSilent({ scopes: ["User.Read"], account: accounts[0] });
+          tokenAccess = t?.accessToken;
         } catch (err) {
           console.debug("acquireTokenSilent failed (optional):", err?.message || err);
         }
       }
 
-      // Refresh creator's displayName/email if possible
+      // Refresh creator details
       let latestName = displayName;
       let latestEmail = displayEmail;
       if (tokenAccess) {
         try {
           const meResp = await axios.get("https://graph.microsoft.com/v1.0/me", { headers: { Authorization: `Bearer ${tokenAccess}` } });
           latestName = meResp.data.displayName || latestName || accounts?.[0]?.name || "";
-          latestEmail =
-            (meResp.data.mail && meResp.data.mail.trim()) ||
-            (meResp.data.userPrincipalName && meResp.data.userPrincipalName.trim()) ||
-            latestEmail ||
-            accounts?.[0]?.username ||
-            "";
+          latestEmail = (meResp.data.mail && meResp.data.mail.trim()) || (meResp.data.userPrincipalName && meResp.data.userPrincipalName.trim()) || latestEmail || accounts?.[0]?.username || "";
         } catch (err) {
-          // ignore if fails
+          // ignore
         }
       }
 
-      // Build ticket payload
+      // Build payload
       const payload = {
         category: formData.category,
         description: formData.description,
@@ -240,7 +233,7 @@ export default function CreateTicket() {
       const headers = {};
       if (tokenAccess) headers.Authorization = `Bearer ${tokenAccess}`;
 
-      // POST to backend (ensure REACT_APP_API_BASE points to your backend)
+      // POST to backend - ensure REACT_APP_API_BASE points to your backend URL
       const resp = await axios.post(`${API_BASE}/tickets`, payload, { headers });
       const ticket = resp.data;
       if (ticket?._id) setCreatedTicketId(ticket._id);
@@ -251,14 +244,9 @@ export default function CreateTicket() {
         setShowPasswordPopup(true);
       }
 
-      // Show success modal
+      // Success modal
       if (formData.category === "Password Reset" && onBehalfType === "Others") {
-        setModal({
-          open: true,
-          title: "Ticket Created - Pending Approval",
-          message: `Ticket created and awaiting admin approval. Ticket #: ${ticket?.ticketNumber || "—"}`,
-          type: "success",
-        });
+        setModal({ open: true, title: "Ticket Created - Pending Approval", message: `Ticket created and awaiting admin approval. Ticket #: ${ticket?.ticketNumber || "—"}`, type: "success" });
       } else {
         setModal({ open: true, title: "Ticket Created", message: "Ticket created successfully!", type: "success" });
       }
@@ -277,12 +265,7 @@ export default function CreateTicket() {
     if (wasSuccess) navigate("/", { state: { refresh: true } });
   };
 
-  const initials = (displayName || displayEmail || "U")
-    .split(" ")
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const initials = (displayName || displayEmail || "U").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 
   return (
     <div style={styles.pageWrap}>
@@ -305,12 +288,7 @@ export default function CreateTicket() {
           <div style={styles.gridRow}>
             <div style={styles.field}>
               <label style={styles.label}>Category *</label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                required
-                style={styles.select}
-              >
+              <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} required style={styles.select}>
                 <option value="">Select Category</option>
                 <option value="Password Reset">🔑 Password Reset</option>
                 <option value="Admin Access">👨‍💼 Admin Access</option>
@@ -323,12 +301,7 @@ export default function CreateTicket() {
 
             <div style={styles.field}>
               <label style={styles.label}>Priority *</label>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                required
-                style={styles.select}
-              >
+              <select value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: e.target.value })} required style={styles.select}>
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
@@ -336,25 +309,11 @@ export default function CreateTicket() {
             </div>
           </div>
 
-          {/* On-behalf: only for Password Reset */}
           {formData.category === "Password Reset" && (
             <div style={styles.field}>
               <label style={styles.label}>On behalf of *</label>
-              <select
-                value={onBehalfType || ""}
-                onChange={(e) => {
-                  const val = e.target.value || null;
-                  setOnBehalfType(val);
-                  setOnBehalfUser(null);
-                  setOnBehalfEmailInput("");
-                  setVerifyMessage("");
-                }}
-                required
-                style={styles.select}
-              >
-                <option value="" disabled>
-                  -- choose --
-                </option>
+              <select value={onBehalfType || ""} onChange={(e) => { const val = e.target.value || null; setOnBehalfType(val); setOnBehalfUser(null); setOnBehalfEmailInput(""); setVerifyMessage(""); setVerifyRaw(null); }} required style={styles.select}>
+                <option value="" disabled>-- choose --</option>
                 <option value="Self">Self</option>
                 <option value="Others">Others</option>
               </select>
@@ -363,25 +322,14 @@ export default function CreateTicket() {
                 <div style={{ marginTop: 10 }}>
                   <label style={{ ...styles.label, marginBottom: 6 }}>Enter exact email (userPrincipalName or mail) to verify *</label>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      value={onBehalfEmailInput}
-                      onChange={(e) => setOnBehalfEmailInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleVerifyClick(e);
-                        }
-                      }}
-                      placeholder="user@yourdomain.com"
-                      style={{ ...styles.input, flex: 1 }}
-                      autoComplete="off"
-                    />
-                    <button onClick={handleVerifyClick} type="button" style={styles.primarySmallButton} disabled={verifyLoading}>
-                      {verifyLoading ? "Verifying..." : "Verify"}
-                    </button>
+                    <input value={onBehalfEmailInput} onChange={(e) => setOnBehalfEmailInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleVerifyClick(e); } }} placeholder="user@yourdomain.com" style={{ ...styles.input, flex: 1 }} autoComplete="off" />
+                    <button onClick={handleVerifyClick} type="button" style={styles.primarySmallButton} disabled={verifyLoading}>{verifyLoading ? "Verifying..." : "Verify"}</button>
                   </div>
 
                   {verifyMessage && <div style={{ marginTop: 8, color: onBehalfUser ? "green" : "crimson" }}>{verifyMessage}</div>}
+
+                  {/* Raw JSON response for debugging */}
+                  {verifyRaw && <pre style={{ marginTop: 8, background: "#f3f4f6", padding: 8, borderRadius: 6, fontSize: 12, maxHeight: 160, overflow: "auto" }}>{JSON.stringify(verifyRaw, null, 2)}</pre>}
 
                   {onBehalfUser && (
                     <div style={{ marginTop: 10, padding: 10, background: "#f8fafc", borderRadius: 8 }}>
@@ -412,33 +360,20 @@ export default function CreateTicket() {
           </div>
 
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-            <button type="submit" style={{ ...styles.primaryButton, flex: 1 }} disabled={loading}>
-              {loading ? "Creating..." : "Create Ticket"}
-            </button>
-            <button type="button" onClick={() => navigate("/")} style={{ ...styles.ghostButton }}>
-              Cancel
-            </button>
+            <button type="submit" style={{ ...styles.primaryButton, flex: 1 }} disabled={loading}>{loading ? "Creating..." : "Create Ticket"}</button>
+            <button type="button" onClick={() => navigate("/")} style={{ ...styles.ghostButton }}>Cancel</button>
           </div>
         </form>
       </div>
 
-      {/* modal */}
       {modal.open && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
             <h3 style={{ marginBottom: 12 }}>{modal.title}</h3>
             <p style={{ marginBottom: 20 }}>{modal.message}</p>
-
             <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
-              <button onClick={handleCloseModal} style={{ padding: "10px 18px", background: modal.type === "success" ? "#27ae60" : "#e74c3c", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}>
-                OK
-              </button>
-
-              {modal.type === "success" && createdTicketId && (
-                <button onClick={() => navigate(`/ticket/${createdTicketId}`)} style={{ padding: "10px 18px", background: "#2563eb", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}>
-                  View Ticket
-                </button>
-              )}
+              <button onClick={handleCloseModal} style={{ padding: "10px 18px", background: modal.type === "success" ? "#27ae60" : "#e74c3c", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}>OK</button>
+              {modal.type === "success" && createdTicketId && <button onClick={() => navigate(`/ticket/${createdTicketId}`)} style={{ padding: "10px 18px", background: "#2563eb", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}>View Ticket</button>}
             </div>
           </div>
         </div>
@@ -451,174 +386,24 @@ export default function CreateTicket() {
 
 /* --- styles --- */
 const styles = {
-  pageWrap: {
-    padding: "2rem",
-    maxWidth: 820,
-    margin: "0 auto",
-    boxSizing: "border-box",
-  },
-  card: {
-    background: "white",
-    padding: "1.25rem 1.5rem",
-    borderRadius: 12,
-    boxShadow: "0 6px 30px rgba(2,6,23,0.08)",
-    boxSizing: "border-box",
-    overflow: "hidden",
-  },
-  headerRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 8,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    background: "#eef2ff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 700,
-    color: "#4338ca",
-    fontSize: 18,
-  },
-  gridRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 12,
-    alignItems: "start",
-    marginBottom: 12,
-  },
-  field: {
-    marginBottom: 12,
-  },
-  label: {
-    display: "block",
-    marginBottom: 6,
-    fontSize: 13,
-    color: "#374151",
-    fontWeight: 600,
-  },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    border: "1px solid #e6e9ee",
-    borderRadius: 8,
-    background: "#fafafa",
-    boxSizing: "border-box",
-  },
-  select: {
-    width: "100%",
-    padding: "10px 12px",
-    border: "1px solid #e6e9ee",
-    borderRadius: 8,
-    background: "white",
-    boxSizing: "border-box",
-  },
-  textarea: {
-    width: "100%",
-    minHeight: 140,
-    maxHeight: 300,
-    padding: "12px",
-    border: "1px solid #e6e9ee",
-    borderRadius: 8,
-    background: "white",
-    resize: "vertical",
-    overflow: "auto",
-    boxSizing: "border-box",
-  },
-  primaryButton: {
-    background: "#2563eb",
-    color: "white",
-    padding: "12px 18px",
-    border: "none",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontWeight: 700,
-  },
-  primarySmallButton: {
-    background: "#2563eb",
-    color: "white",
-    padding: "8px 12px",
-    border: "none",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontWeight: 700,
-  },
-  ghostButton: {
-    background: "#f3f4f6",
-    color: "#374151",
-    padding: "12px 18px",
-    border: "none",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100vw",
-    height: "100vh",
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10000,
-  },
-  modalBox: {
-    background: "white",
-    padding: "28px",
-    borderRadius: "10px",
-    width: "420px",
-    textAlign: "center",
-    boxShadow: "0 6px 24px rgba(2,6,23,0.12)",
-  },
-  overlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 9999,
-  },
-  passwordBox: {
-    background: "white",
-    padding: "2rem",
-    borderRadius: "10px",
-    textAlign: "center",
-    width: "400px",
-    boxShadow: "0 8px 30px rgba(2,6,23,0.12)",
-    position: "relative",
-  },
-  passwordText: {
-    fontFamily: "monospace",
-    fontSize: "1.1rem",
-    background: "#f1f1f1",
-    padding: "10px",
-    borderRadius: "6px",
-  },
-  copyButton: {
-    marginTop: "1rem",
-    background: "#3498db",
-    color: "white",
-    padding: "8px 16px",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-  },
-  modalCloseButton: {
-    position: "absolute",
-    top: "10px",
-    right: "10px",
-    background: "transparent",
-    border: "none",
-    fontSize: "1.2rem",
-    cursor: "pointer",
-  },
+  pageWrap: { padding: "2rem", maxWidth: 820, margin: "0 auto", boxSizing: "border-box" },
+  card: { background: "white", padding: "1.25rem 1.5rem", borderRadius: 12, boxShadow: "0 6px 30px rgba(2,6,23,0.08)", boxSizing: "border-box", overflow: "hidden" },
+  headerRow: { display: "flex", alignItems: "center", gap: 12, marginBottom: 8 },
+  avatar: { width: 56, height: 56, borderRadius: 10, background: "#eef2ff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#4338ca", fontSize: 18 },
+  gridRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start", marginBottom: 12 },
+  field: { marginBottom: 12 },
+  label: { display: "block", marginBottom: 6, fontSize: 13, color: "#374151", fontWeight: 600 },
+  input: { width: "100%", padding: "10px 12px", border: "1px solid #e6e9ee", borderRadius: 8, background: "#fafafa", boxSizing: "border-box" },
+  select: { width: "100%", padding: "10px 12px", border: "1px solid #e6e9ee", borderRadius: 8, background: "white", boxSizing: "border-box" },
+  textarea: { width: "100%", minHeight: 140, maxHeight: 300, padding: "12px", border: "1px solid #e6e9ee", borderRadius: 8, background: "white", resize: "vertical", overflow: "auto", boxSizing: "border-box" },
+  primaryButton: { background: "#2563eb", color: "white", padding: "12px 18px", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 },
+  primarySmallButton: { background: "#2563eb", color: "white", padding: "8px 12px", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 },
+  ghostButton: { background: "#f3f4f6", color: "#374151", padding: "12px 18px", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 },
+  modalOverlay: { position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10000 },
+  modalBox: { background: "white", padding: "28px", borderRadius: "10px", width: "420px", textAlign: "center", boxShadow: "0 6px 24px rgba(2,6,23,0.12)" },
+  overlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999 },
+  passwordBox: { background: "white", padding: "2rem", borderRadius: "10px", textAlign: "center", width: "400px", boxShadow: "0 8px 30px rgba(2,6,23,0.12)", position: "relative" },
+  passwordText: { fontFamily: "monospace", fontSize: "1.1rem", background: "#f1f1f1", padding: "10px", borderRadius: "6px" },
+  copyButton: { marginTop: "1rem", background: "#3498db", color: "white", padding: "8px 16px", border: "none", borderRadius: "6px", cursor: "pointer" },
+  modalCloseButton: { position: "absolute", top: "10px", right: "10px", background: "transparent", border: "none", fontSize: "1.2rem", cursor: "pointer" }
 };
