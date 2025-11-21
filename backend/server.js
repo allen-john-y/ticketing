@@ -1,4 +1,9 @@
-// ---------------------- Imports -------------------------
+// Full updated server.js
+// - /users/verify endpoint: verifies an exact email (mail or userPrincipalName) using app-only Graph token
+// - /tickets endpoints: create, get, get by id, approve, reject, close, revive
+// - Uses only the .env vars you provided (MONGO_URI, AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET, AZURE_SENDER_EMAIL)
+// - Ensure your Azure app registration has Application permission User.Read.All or Directory.Read.All with admin consent.
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -8,16 +13,16 @@ const fetch = require("node-fetch");
 const https = require("https");
 require("dotenv").config();
 
-// ---------------------- App Setup ------------------------
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
 app.use(helmet());
 
-// ---------------------- CORS ------------------------------
+// CORS - allow your frontend origin(s)
 const allowedOrigins = [
   process.env.FRONTEND_URL || "https://ticketing-psi-tawny.vercel.app",
   "http://localhost:3000",
+  // add your backend domain if necessary
 ];
 
 app.use(
@@ -36,14 +41,14 @@ app.use(
 );
 app.options("*", cors());
 
-// ---------------------- Rate Limiter ----------------------
+// rate limiter for ticket creation
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
 });
 app.use("/tickets", limiter);
 
-// ---------------------- MongoDB ---------------------------
+// MongoDB
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
@@ -58,7 +63,7 @@ const connectDB = async () => {
 };
 connectDB();
 
-// ---------------------- Schema ----------------------------
+// Ticket schema
 const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: { type: Number, unique: true },
@@ -97,7 +102,7 @@ const ticketSchema = new mongoose.Schema(
 );
 const Ticket = mongoose.model("Ticket", ticketSchema);
 
-// ---------------------- Counter ---------------------------
+// ticket counter load
 let ticketCounter = 0;
 const loadCounter = async () => {
   try {
@@ -110,7 +115,7 @@ const loadCounter = async () => {
 };
 loadCounter();
 
-// ---------------------- Department Emails -----------------
+// dept emails (defaults)
 const deptEmails = {
   "Password Reset": process.env.DEPT_PASSWORD_RESET_EMAIL || "allenj@sandeza-inc.com",
   "Admin Access": process.env.DEPT_ADMIN_EMAIL || "vigneshm@sandeza-inc.com",
@@ -120,9 +125,8 @@ const deptEmails = {
   "Employee Onboarding": process.env.DEPT_ONBOARDING_EMAIL || "allenj@sandeza-inc.com",
 };
 
-// ---------------------- Azure Graph Token ----------------------
+// get app-only graph token
 const getGraphToken = async () => {
-  // Uses the AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET from your .env
   const tenantId = process.env.AZURE_TENANT_ID;
   const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 
@@ -139,19 +143,19 @@ const getGraphToken = async () => {
     console.error("Graph token error:", data);
     throw new Error(`Token failed: ${JSON.stringify(data)}`);
   }
+
   return data.access_token;
 };
 
-// ---------------------- Send Email ----------------------
+// send email helper (Microsoft Graph sendMail)
 const sendEmail = async (to, subject, bodyText, cc) => {
   try {
     const token = await getGraphToken();
 
     const normalize = (addr) => {
       if (!addr) return [];
-      if (Array.isArray(addr))
-        return addr.filter(Boolean).map((a) => ({ emailAddress: { address: a } }));
-      if (typeof addr === 'string') return [{ emailAddress: { address: addr } }];
+      if (Array.isArray(addr)) return addr.filter(Boolean).map((a) => ({ emailAddress: { address: a } }));
+      if (typeof addr === "string") return [{ emailAddress: { address: addr } }];
       return [];
     };
 
@@ -167,17 +171,14 @@ const sendEmail = async (to, subject, bodyText, cc) => {
 
     const sender = process.env.AZURE_SENDER_EMAIL || "helpdesk@sandeza-inc.com";
 
-    const res = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(mailBody),
-      }
-    );
+    const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(mailBody),
+    });
 
     const text = await res.text();
     if (res.status === 202) {
@@ -193,7 +194,7 @@ const sendEmail = async (to, subject, bodyText, cc) => {
   }
 };
 
-// ---------------------- Azure Password Reset ----------------------
+// get app-only access token for resetting password
 const getAccessToken = async () => {
   const url = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
@@ -232,7 +233,7 @@ const resetAzurePassword = async (userId) => {
   return newPassword;
 };
 
-// ---------------------- Helpers ----------------------
+// helpers / email template
 const nowISTString = () => new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 const portalUrl = process.env.FRONTEND_URL || "https://ticketing-psi-tawny.vercel.app";
 const companyName = process.env.COMPANY_NAME || "Sandeza";
@@ -241,20 +242,14 @@ ${companyName} Helpdesk Team
 ${portalUrl}
 This message contains confidential information intended for the recipient only. Do not share the temporary password.`;
 
-// ---------------------- Routes ----------------------------
-
-// Health Check
+// Health
 app.get("/", (req, res) => res.send(`${companyName} Helpdesk API Running`));
 
 /*
-  NEW: /users/verify
-  - Purpose: user types an email in the frontend; we verify that exact email exists in Azure AD.
-  - Behavior: Accepts query param ?email=<user email>.
-    * First tries GET /users/{email} (works if email is userPrincipalName or id).
-    * If 404, falls back to a $filter to find by mail or userPrincipalName equality.
-    * Returns 200 + normalized user object { id, displayName, mail, userPrincipalName } when found.
-    * Returns 404 when not found.
-  - Notes: This approach is simpler & reliable for "validate entered email" scenarios and does not attempt fuzzy search.
+  /users/verify
+  - Accepts ?email=<full email or userPrincipalName>
+  - Tries GET /users/{email} first (works with userPrincipalName), falls back to filter equality on mail or userPrincipalName.
+  - Returns normalized { id, displayName, mail, userPrincipalName } or 404.
 */
 app.get("/users/verify", async (req, res) => {
   try {
@@ -263,35 +258,37 @@ app.get("/users/verify", async (req, res) => {
 
     const token = await getGraphToken();
 
-    // Try direct GET by identifier (userPrincipalName often works here)
+    // Try direct GET /users/{id|UPN}
     const directUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=id,displayName,mail,userPrincipalName`;
     try {
       const resp = await fetch(directUrl, { headers: { Authorization: `Bearer ${token}` } });
       const text = await resp.text();
       if (resp.ok) {
         let data;
-        try { data = JSON.parse(text); } catch (err) { data = null; }
+        try {
+          data = JSON.parse(text);
+        } catch (err) {
+          data = null;
+        }
         if (data && data.id) {
           const user = {
             id: data.id,
             displayName: data.displayName || data.userPrincipalName || data.mail || "",
             mail: data.mail || data.userPrincipalName || "",
-            userPrincipalName: data.userPrincipalName || ""
+            userPrincipalName: data.userPrincipalName || "",
           };
           return res.json(user);
         }
       } else {
-        // 404 or other status -> fallthrough to filter-based lookup
-        console.warn(`/users/${email} returned status ${resp.status}; falling back to filter`);
+        console.warn(`/users/${email} returned status ${resp.status}, falling back to filter`);
       }
     } catch (err) {
       console.warn("Direct /users/{id} lookup error:", err.message || err);
-      // continue to fallback
     }
 
-    // Fallback: exact-match filter on mail or userPrincipalName
-    // Use equality (not startswith) because user entered full email.
-    const filter = `mail eq '${email.replace(/'/g, "''")}' or userPrincipalName eq '${email.replace(/'/g, "''")}'`;
+    // Fallback: exact match on mail or userPrincipalName
+    const q = email.replace(/'/g, "''");
+    const filter = `mail eq '${q}' or userPrincipalName eq '${q}'`;
     const url = `https://graph.microsoft.com/v1.0/users?$select=id,displayName,mail,userPrincipalName&$filter=${encodeURIComponent(filter)}&$top=1`;
     const resp2 = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     const text2 = await resp2.text();
@@ -300,7 +297,11 @@ app.get("/users/verify", async (req, res) => {
       return res.status(500).json({ message: "Azure lookup failed" });
     }
     let data2;
-    try { data2 = JSON.parse(text2); } catch (err) { data2 = null; }
+    try {
+      data2 = JSON.parse(text2);
+    } catch (err) {
+      data2 = null;
+    }
     const values = data2 && Array.isArray(data2.value) ? data2.value : [];
     if (values.length === 0) {
       return res.status(404).json({ message: "User not found" });
@@ -310,7 +311,7 @@ app.get("/users/verify", async (req, res) => {
       id: u.id,
       displayName: u.displayName || u.userPrincipalName || u.mail || "",
       mail: u.mail || u.userPrincipalName || "",
-      userPrincipalName: u.userPrincipalName || ""
+      userPrincipalName: u.userPrincipalName || "",
     };
     return res.json(user);
   } catch (err) {
@@ -318,11 +319,6 @@ app.get("/users/verify", async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
-
-// Keep other ticket routes mostly unchanged (Create, Get, Close, Revive, Approve, Reject).
-// For brevity I keep the same logic you had previously for tickets creation and approval.
-// The code below is a minimal, working set adapted from your existing server.js.
-// (If you need the full previous logic restored exactly, I can paste the full create/approve/reject routes.)
 
 // Get Tickets
 app.get("/tickets", async (req, res) => {
@@ -347,14 +343,14 @@ app.get("/tickets/:id", async (req, res) => {
   }
 });
 
-// Create Ticket (simplified / robust)
+// Create Ticket
 app.post("/tickets", async (req, res) => {
   try {
     const { category, description, priority, userId, userName, userEmail, onBehalfType, onBehalfUserId, onBehalfUserName, onBehalfUserEmail, alternateEmail } = req.body;
 
     if (!category) return res.status(400).json({ message: "category is required" });
 
-    // If Password Reset enforce alternateEmail and onBehalf selection as you requested
+    // If Password Reset enforce onBehalf and alternateEmail
     if (category === "Password Reset") {
       if (!onBehalfType) return res.status(400).json({ message: "onBehalfType is required for Password Reset" });
       if (onBehalfType === "Others" && !(onBehalfUserId && typeof onBehalfUserId === "string")) {
@@ -364,33 +360,47 @@ app.post("/tickets", async (req, res) => {
     }
 
     ticketCounter++;
+    const ticketNumber = ticketCounter;
+
+    let status = "Open";
+    let approvalStatus = "Approved";
+    if (category === "Password Reset") {
+      if (onBehalfType === "Others") {
+        status = "Pending Approval";
+        approvalStatus = "Pending";
+      } else {
+        approvalStatus = "Approved";
+      }
+    }
+
     const ticket = await Ticket.create({
-      ticketNumber: ticketCounter,
+      ticketNumber,
       userId,
       userName,
       userEmail,
       category,
       description,
       priority,
-      status: category === "Password Reset" && onBehalfType === "Others" ? "Pending Approval" : "Open",
+      status,
       onBehalfType: onBehalfType || "Self",
       onBehalfUserId: onBehalfUserId || (onBehalfType === "Self" ? userId : undefined),
       onBehalfUserName: onBehalfUserName || (onBehalfType === "Self" ? userName : undefined),
       onBehalfUserEmail: onBehalfUserEmail || (onBehalfType === "Self" ? userEmail : undefined),
       alternateEmail: alternateEmail || undefined,
-      approvalStatus: (category === "Password Reset" && onBehalfType === "Others") ? "Pending" : "Approved",
-      history: [{ action: "created", by: userName, at: new Date(), reason: null }]
+      approvalStatus,
+      history: [{ action: "created", by: userName, at: new Date(), reason: null }],
     });
 
     const nowIST = nowISTString();
+    const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Email confirmations (minimal / professional)
+    // Email: confirmation to creator
     const creatorBody = `
 Dear ${userName},
 
 Your ticket has been created successfully.
 
-Ticket Number : ${ticket.ticketNumber}
+Ticket Number : ${ticketNumber}
 Category      : ${category}
 Priority      : ${priority}
 Description   : ${description}
@@ -401,16 +411,16 @@ ${category === "Password Reset" && onBehalfType === "Others" ? "Status: Awaiting
 ${supportSignature}
 `.trim();
 
-    await sendEmail(userEmail, `[${companyName} Helpdesk] Ticket #${ticket.ticketNumber} Created`, creatorBody, process.env.IT_HEAD_EMAIL);
+    await sendEmail(userEmail, `[${companyName} Helpdesk] Ticket #${ticketNumber} Created`, creatorBody, itHead);
 
-    // Notify department admin
+    // Email: notify admin/department
     const adminRecipients = deptEmails[category] || process.env.AZURE_SENDER_EMAIL;
     const adminBody = `
 Hello,
 
 A new ticket has been created.
 
-Ticket Number : ${ticket.ticketNumber}
+Ticket Number : ${ticketNumber}
 Category      : ${category}
 Priority      : ${priority}
 Created By    : ${userName} (${userEmail})
@@ -424,9 +434,10 @@ ${category === "Password Reset" && onBehalfType === "Others" ? `Action required:
 ${supportSignature}
 `.trim();
 
-    await sendEmail(adminRecipients, `[${companyName} Helpdesk] [TICKET #${ticket.ticketNumber}] ${category}`, adminBody, process.env.IT_HEAD_EMAIL);
+    await sendEmail(adminRecipients, `[${companyName} Helpdesk] [TICKET #${ticketNumber}] ${category}`, adminBody, itHead);
 
-    // If Password Reset + Self -> attempt reset immediately
+    // If Password Reset + Self -> attempt immediate reset
+    let returnedPassword = null;
     if (category === "Password Reset" && (onBehalfType === "Self" || !onBehalfType)) {
       try {
         const targetUserId = ticket.onBehalfUserId || userId;
@@ -445,7 +456,7 @@ Dear ${ticket.onBehalfUserName || userName},
 
 Your password has been reset successfully.
 
-Ticket Number     : ${ticket.ticketNumber}
+Ticket Number     : ${ticketNumber}
 Temporary Password: ${newPassword}
 Note              : You will be required to change your password at next sign-in.
 
@@ -454,29 +465,34 @@ Requested On      : ${nowIST}
 ${supportSignature}
 `.trim();
 
-        await sendEmail(ticket.onBehalfUserEmail || userEmail, `[${companyName} Helpdesk] Password Reset Completed - Ticket #${ticket.ticketNumber}`, passwordBody, process.env.IT_HEAD_EMAIL);
+        await sendEmail(ticket.onBehalfUserEmail || userEmail, `[${companyName} Helpdesk] Password Reset Completed - Ticket #${ticketNumber}`, passwordBody, [itHead]);
+        if (ticket.alternateEmail) {
+          await sendEmail(ticket.alternateEmail, `[${companyName} Helpdesk] Password Reset Completed - Ticket #${ticketNumber}`, passwordBody, [userEmail]);
+        }
 
+        returnedPassword = newPassword;
       } catch (err) {
-        console.error("Auto-reset failed:", err.message || err);
+        console.error("Auto reset failed:", err.message || err);
       }
     }
 
-    res.status(201).json(ticket);
+    const responsePayload = ticket.toObject();
+    if (returnedPassword) responsePayload.newPassword = returnedPassword;
+
+    res.status(201).json(responsePayload);
   } catch (err) {
     console.error("Error creating ticket:", err.message || err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// Minimal approve/reject endpoints (kept concise)
-// Approve
+// Approve endpoint
 app.put("/tickets/:id/approve", async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
     if (ticket.approvalStatus !== "Pending") return res.status(400).json({ message: "Ticket not pending" });
 
-    // perform reset for onBehalfUserId
     if (!ticket.onBehalfUserId) return res.status(400).json({ message: "Missing target user id" });
 
     const newPassword = await resetAzurePassword(ticket.onBehalfUserId);
@@ -514,7 +530,7 @@ ${supportSignature}
   }
 });
 
-// Reject
+// Reject endpoint
 app.put("/tickets/:id/reject", async (req, res) => {
   try {
     const { reason } = req.body;
@@ -558,8 +574,107 @@ ${supportSignature}
   }
 });
 
-// ---------------------- Start Server ----------------------
+// Close ticket (existing)
+app.put("/tickets/:id/close", async (req, res) => {
+  try {
+    const { closedBy, closeReason } = req.body;
+    if (!closeReason || closeReason.trim() === "") return res.status(400).json({ message: "Close reason is required" });
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+    if (ticket.status === "Closed") return res.status(400).json({ message: "Ticket is already closed" });
+
+    const now = new Date();
+    ticket.history.push({ action: "closed", by: closedBy?.trim() || "IT Head", at: now, reason: closeReason.trim() });
+    ticket.status = "Closed";
+    ticket.closedBy = closedBy?.trim() || "IT Head";
+    ticket.closeReason = closeReason.trim();
+    ticket.closedAt = now;
+    await ticket.save();
+
+    const nowIST = nowISTString();
+    const itHead = process.env.IT_HEAD_EMAIL;
+    const emailBody = `
+TICKET #${ticket.ticketNumber} HAS BEEN CLOSED
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Category       : ${ticket.category}
+Priority       : ${ticket.priority}
+Created by     : ${ticket.userName} (${ticket.userEmail})
+Ticket Number  : #${ticket.ticketNumber}
+
+Closed by      : ${ticket.closedBy}
+Closed on      : ${nowIST}
+
+Reason for closing:
+${ticket.closeReason}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This ticket is now officially closed.
+${supportSignature}
+    `.trim();
+
+    await sendEmail(ticket.userEmail, `[${companyName} Helpdesk] [TICKET #${ticket.ticketNumber}] Closed`, emailBody, itHead);
+    await sendEmail(deptEmails[ticket.category], `[${companyName} Helpdesk] [CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
+
+    res.json({ message: "Ticket closed successfully", ticket: { _id: ticket._id, ticketNumber: ticket.ticketNumber, status: ticket.status, closedBy: ticket.closedBy, closeReason: ticket.closeReason, closedAt: ticket.closedAt, history: ticket.history } });
+  } catch (err) {
+    console.error("Close ticket error:", err.message || err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// Revive ticket (existing)
+app.put("/tickets/:id/revive", async (req, res) => {
+  try {
+    const { revivedBy, reviveReason } = req.body;
+    if (!reviveReason || reviveReason.trim() === "") return res.status(400).json({ message: "Revive reason is required" });
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+    if (ticket.status !== "Closed") return res.status(400).json({ message: "Only closed tickets can be revived" });
+
+    const now = new Date();
+    ticket.history.push({ action: "revived", by: revivedBy?.trim() || "Unknown User", at: now, reason: reviveReason.trim() });
+    ticket.status = "Open";
+    ticket.reopenedBy = revivedBy?.trim() || "Unknown User";
+    ticket.reopenedAt = now;
+    ticket.reviveReason = reviveReason.trim();
+    await ticket.save();
+
+    const nowIST = nowISTString();
+    const dept = deptEmails[ticket.category] || "helpdesk@sandeza-inc.com";
+    const itHead = process.env.IT_HEAD_EMAIL;
+    const emailBody = `
+TICKET #${ticket.ticketNumber} HAS BEEN REVIVED (Reopened)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Category       : ${ticket.category}
+Priority       : ${ticket.priority}
+Created by     : ${ticket.userName} (${ticket.userEmail})
+Ticket Number  : #${ticket.ticketNumber}
+
+Revived by     : ${ticket.reopenedBy}
+Revived on     : ${nowIST}
+
+Reason for reviving:
+${ticket.reviveReason}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This ticket is now OPEN again and requires attention.
+${supportSignature}
+    `.trim();
+
+    await sendEmail(ticket.userEmail, `[${companyName} Helpdesk] [TICKET #${ticket.ticketNumber}] Revived`, emailBody, itHead);
+    await sendEmail(dept, `[${companyName} Helpdesk] [REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
+
+    res.json({ message: "Ticket revived successfully", ticket: { _id: ticket._id, status: "Open", reopenedBy: ticket.reopenedBy, reviveReason: ticket.reviveReason, reopenedAt: ticket.reopenedAt, history: ticket.history } });
+  } catch (err) {
+    console.error("Revive ticket error:", err.message || err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Start server
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`Server running on port ${PORT} (Email-verify flow enabled)`)
-);
+app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT} (Email-verify flow enabled)`));

@@ -1,16 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 /*
   CreateTicket.js
-  - Uses a simple "verify email" approach for selecting an on-behalf user.
-  - When category === "Password Reset" and On behalf of === "Others":
-      * User types an exact email (userPrincipalName / mail)
-      * Clicks "Verify" (or press Enter) -> calls GET /users/verify?email=<email>
-      * If found, the user object is stored and used as the target for password reset
-  - This avoids fuzzy search issues and relies on the /users/verify endpoint provided in server.js
+  - Uses a "verify email" flow: user types exact email (mail or userPrincipalName) and clicks Verify.
+  - Calls backend GET /users/verify?email=<email> to validate and retrieve { id, displayName, mail, userPrincipalName }.
+  - Enforces alternateEmail as mandatory for Password Reset tickets.
+  - Shows temporary password popup for Self auto-reset when backend returns newPassword.
+  - IMPORTANT: set REACT_APP_API_BASE to your backend URL (e.g. https://ticketing-production-5334.up.railway.app)
 */
 
 function PasswordPopup({ password, onClose }) {
@@ -21,7 +20,7 @@ function PasswordPopup({ password, onClose }) {
       await navigator.clipboard.writeText(password);
       setCopied(true);
     } catch (err) {
-      console.error("copy failed", err);
+      console.error("Copy failed", err);
     }
   };
 
@@ -50,11 +49,12 @@ export default function CreateTicket() {
   const navigate = useNavigate();
   const API_BASE = process.env.REACT_APP_API_BASE || "";
 
+  // form
   const [formData, setFormData] = useState({ category: "", description: "", priority: "Medium" });
 
-  // On-behalf states
+  // on-behalf / verify
   const [onBehalfType, setOnBehalfType] = useState(null); // null | "Self" | "Others"
-  const [onBehalfEmailInput, setOnBehalfEmailInput] = useState(""); // typed email for verification
+  const [onBehalfEmailInput, setOnBehalfEmailInput] = useState("");
   const [onBehalfUser, setOnBehalfUser] = useState(null); // {id, displayName, mail, userPrincipalName}
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState("");
@@ -67,7 +67,7 @@ export default function CreateTicket() {
   const [modal, setModal] = useState({ open: false, title: "", message: "", type: "info" });
   const [createdTicketId, setCreatedTicketId] = useState(null);
 
-  // password popup (for self auto reset)
+  // password popup (for self reset)
   const [newPassword, setNewPassword] = useState("");
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
@@ -75,6 +75,7 @@ export default function CreateTicket() {
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || "");
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || "");
 
+  // fetch /me to show accurate name/email
   useEffect(() => {
     let mounted = true;
     const fetchMe = async () => {
@@ -93,6 +94,7 @@ export default function CreateTicket() {
           "";
         setDisplayEmail(email);
       } catch (err) {
+        // ignore; use account values
         console.debug("Could not fetch /me:", err?.message || err);
       }
     };
@@ -102,7 +104,7 @@ export default function CreateTicket() {
     };
   }, [instance, accounts]);
 
-  // Clear onBehalf when category changes away from Password Reset
+  // clear on-behalf when leaving Password Reset category
   useEffect(() => {
     if (formData.category !== "Password Reset") {
       setOnBehalfType(null);
@@ -110,25 +112,35 @@ export default function CreateTicket() {
       setOnBehalfUser(null);
       setAlternateEmail("");
       setVerifyMessage("");
+      setVerifyLoading(false);
     }
   }, [formData.category]);
 
-  // Verify function: calls GET /users/verify?email=<email>
+  // Verify entered exact email with backend /users/verify
   const verifyEmail = async (email) => {
     setVerifyLoading(true);
     setVerifyMessage("");
     setOnBehalfUser(null);
+    const safeEmail = (email || "").trim();
+    if (!safeEmail) {
+      setVerifyMessage("Please enter an email to verify.");
+      setVerifyLoading(false);
+      return;
+    }
+
     try {
-      const resp = await axios.get(`${API_BASE}/users/verify`, { params: { email } });
-      // resp.data expected: { id, displayName, mail, userPrincipalName }
-      const u = resp.data;
-      setOnBehalfUser({
-        id: u.id,
-        displayName: u.displayName || u.userPrincipalName || u.mail || "",
-        mail: u.mail || u.userPrincipalName || "",
-        userPrincipalName: u.userPrincipalName || "",
-      });
-      setVerifyMessage(`Verified: ${u.displayName || u.userPrincipalName || u.mail}`);
+      const resp = await axios.get(`${API_BASE}/users/verify`, { params: { email: safeEmail } });
+      const u = resp.data || {};
+
+      // Normalize / fallback
+      const id = u.id || u.objectId || "";
+      const display = u.displayName || u.userPrincipalName || u.mail || id || "Unknown user";
+      const mail = u.mail || u.userPrincipalName || "";
+
+      const normalized = { id, displayName: display, mail, userPrincipalName: u.userPrincipalName || "" };
+
+      setOnBehalfUser(normalized);
+      setVerifyMessage(`Verified: ${display}`);
     } catch (err) {
       console.error("/users/verify error:", err?.response?.data || err.message || err);
       if (err?.response?.status === 404) setVerifyMessage("User not found in Azure AD.");
@@ -139,15 +151,9 @@ export default function CreateTicket() {
     }
   };
 
-  // Handler: verify when clicking button or pressing Enter in field
   const handleVerifyClick = async (e) => {
-    e.preventDefault();
-    const email = onBehalfEmailInput.trim();
-    if (!email) {
-      setVerifyMessage("Please enter an email to verify.");
-      return;
-    }
-    await verifyEmail(email);
+    e && e.preventDefault();
+    await verifyEmail(onBehalfEmailInput);
   };
 
   const handleSubmit = async (e) => {
@@ -158,22 +164,18 @@ export default function CreateTicket() {
     setNewPassword("");
 
     try {
-      // Validate password-reset-specific requirements
+      // Validation for Password Reset flow
       if (formData.category === "Password Reset") {
         if (!onBehalfType) {
           setModal({ open: true, title: "Missing", message: 'Choose "On behalf of" (Self or Others).', type: "error" });
           setLoading(false);
           return;
         }
-
-        if (onBehalfType === "Others") {
-          if (!onBehalfUser) {
-            setModal({ open: true, title: "Missing", message: "Please verify the target user's email using Verify.", type: "error" });
-            setLoading(false);
-            return;
-          }
+        if (onBehalfType === "Others" && !onBehalfUser) {
+          setModal({ open: true, title: "Missing", message: "Please verify target user's email using Verify.", type: "error" });
+          setLoading(false);
+          return;
         }
-
         if (!alternateEmail || !alternateEmail.trim()) {
           setModal({ open: true, title: "Alternate email required", message: "Provide an alternate email to receive the temporary password.", type: "error" });
           setLoading(false);
@@ -187,18 +189,18 @@ export default function CreateTicket() {
         }
       }
 
-      // Acquire token for Graph if possible (we'll include it when creating ticket)
+      // Try to acquire token for authentication to backend (optional)
       let tokenAccess = null;
       if (accounts && accounts[0]) {
         try {
-          const tr = await instance.acquireTokenSilent({ scopes: ["User.Read"], account: accounts[0] });
-          tokenAccess = tr?.accessToken;
+          const tokenResp = await instance.acquireTokenSilent({ scopes: ["User.Read"], account: accounts[0] });
+          tokenAccess = tokenResp?.accessToken;
         } catch (err) {
-          console.debug("acquireTokenSilent failed:", err?.message || err);
+          console.debug("acquireTokenSilent failed (optional):", err?.message || err);
         }
       }
 
-      // Get freshest creator details
+      // Refresh creator's displayName/email if possible
       let latestName = displayName;
       let latestEmail = displayEmail;
       if (tokenAccess) {
@@ -212,11 +214,11 @@ export default function CreateTicket() {
             accounts?.[0]?.username ||
             "";
         } catch (err) {
-          // ignore
+          // ignore if fails
         }
       }
 
-      // Build payload
+      // Build ticket payload
       const payload = {
         category: formData.category,
         description: formData.description,
@@ -238,15 +240,18 @@ export default function CreateTicket() {
       const headers = {};
       if (tokenAccess) headers.Authorization = `Bearer ${tokenAccess}`;
 
+      // POST to backend (ensure REACT_APP_API_BASE points to your backend)
       const resp = await axios.post(`${API_BASE}/tickets`, payload, { headers });
       const ticket = resp.data;
       if (ticket?._id) setCreatedTicketId(ticket._id);
 
+      // If backend returned newPassword (self auto-reset), show popup
       if (resp.data?.newPassword) {
         setNewPassword(resp.data.newPassword);
         setShowPasswordPopup(true);
       }
 
+      // Show success modal
       if (formData.category === "Password Reset" && onBehalfType === "Others") {
         setModal({
           open: true,
@@ -331,7 +336,7 @@ export default function CreateTicket() {
             </div>
           </div>
 
-          {/* On-behalf section only for Password Reset */}
+          {/* On-behalf: only for Password Reset */}
           {formData.category === "Password Reset" && (
             <div style={styles.field}>
               <label style={styles.label}>On behalf of *</label>
@@ -375,7 +380,9 @@ export default function CreateTicket() {
                       {verifyLoading ? "Verifying..." : "Verify"}
                     </button>
                   </div>
+
                   {verifyMessage && <div style={{ marginTop: 8, color: onBehalfUser ? "green" : "crimson" }}>{verifyMessage}</div>}
+
                   {onBehalfUser && (
                     <div style={{ marginTop: 10, padding: 10, background: "#f8fafc", borderRadius: 8 }}>
                       <div style={{ fontWeight: 700 }}>{onBehalfUser.displayName}</div>
@@ -385,14 +392,7 @@ export default function CreateTicket() {
 
                   <div style={{ marginTop: 12 }}>
                     <label style={styles.label}>Alternate email to receive temporary password (mandatory)</label>
-                    <input
-                      value={alternateEmail}
-                      onChange={(e) => setAlternateEmail(e.target.value)}
-                      placeholder="someone@example.com"
-                      style={styles.input}
-                      type="email"
-                      required
-                    />
+                    <input value={alternateEmail} onChange={(e) => setAlternateEmail(e.target.value)} placeholder="someone@example.com" style={styles.input} type="email" required />
                   </div>
                 </div>
               )}
@@ -400,14 +400,7 @@ export default function CreateTicket() {
               {onBehalfType === "Self" && (
                 <div style={{ marginTop: 12 }}>
                   <label style={styles.label}>Alternate email to receive temporary password (mandatory)</label>
-                  <input
-                    value={alternateEmail}
-                    onChange={(e) => setAlternateEmail(e.target.value)}
-                    placeholder="someone@example.com"
-                    style={styles.input}
-                    type="email"
-                    required
-                  />
+                  <input value={alternateEmail} onChange={(e) => setAlternateEmail(e.target.value)} placeholder="someone@example.com" style={styles.input} type="email" required />
                 </div>
               )}
             </div>
@@ -415,14 +408,7 @@ export default function CreateTicket() {
 
           <div style={styles.field}>
             <label style={styles.label}>Description *</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              required
-              rows="5"
-              style={styles.textarea}
-              placeholder="Describe your issue..."
-            />
+            <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required rows="5" style={styles.textarea} placeholder="Describe your issue..." />
           </div>
 
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
@@ -436,7 +422,7 @@ export default function CreateTicket() {
         </form>
       </div>
 
-      {/* Notification modal */}
+      {/* modal */}
       {modal.open && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
@@ -444,17 +430,7 @@ export default function CreateTicket() {
             <p style={{ marginBottom: 20 }}>{modal.message}</p>
 
             <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
-              <button
-                onClick={handleCloseModal}
-                style={{
-                  padding: "10px 18px",
-                  background: modal.type === "success" ? "#27ae60" : "#e74c3c",
-                  color: "white",
-                  border: "none",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                }}
-              >
+              <button onClick={handleCloseModal} style={{ padding: "10px 18px", background: modal.type === "success" ? "#27ae60" : "#e74c3c", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}>
                 OK
               </button>
 
