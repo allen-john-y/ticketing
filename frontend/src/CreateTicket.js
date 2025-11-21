@@ -1,3 +1,4 @@
+// CreateTicket.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
@@ -36,17 +37,17 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  // form data
   const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium' });
 
-  // on-behalf state - only shown for Password Reset category
+  // on-behalf state - only used for Password Reset
+  // Important: we don't auto-select 'Self' so user must choose explicitly
   const [onBehalfType, setOnBehalfType] = useState(null); // null | 'Self' | 'Others'
   const [onBehalfUser, setOnBehalfUser] = useState(null); // { id, displayName, mail }
   const [alternateEmail, setAlternateEmail] = useState('');
 
   // search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState([]); // always an array
   const [searching, setSearching] = useState(false);
   const searchTimeout = useRef(null);
 
@@ -89,8 +90,8 @@ function CreateTicket() {
   // When category changes, reset on-behalf UI unless Password Reset
   useEffect(() => {
     if (formData.category === 'Password Reset') {
-      // default to 'Self' when user selects Password Reset, but don't show until user interacts
-      setOnBehalfType(prev => prev || 'Self');
+      // do not auto-select Self — require explicit user choice
+      // keep previous selection if user already chose
     } else {
       // clear on-behalf related state if category not Password Reset
       setOnBehalfType(null);
@@ -108,7 +109,12 @@ function CreateTicket() {
 
   // search Azure AD for on-behalf users (debounced)
   useEffect(() => {
-    const shouldSearch = formData.category === 'Password Reset' && onBehalfType === 'Others' && searchQuery && searchQuery.trim().length > 0;
+    const shouldSearch =
+      formData.category === 'Password Reset' &&
+      onBehalfType === 'Others' &&
+      searchQuery &&
+      searchQuery.trim().length > 0;
+
     if (!shouldSearch) {
       setSearchResults([]);
       setSearching(false);
@@ -127,7 +133,7 @@ function CreateTicket() {
           params: { query: searchQuery.trim() }
         });
 
-        // resp.data can be an array or an object { value: [...] } depending on backend
+        // normalize possible resp shapes to an array
         let results = [];
         if (Array.isArray(resp.data)) results = resp.data;
         else if (resp.data && Array.isArray(resp.data.value)) results = resp.data.value;
@@ -165,32 +171,52 @@ function CreateTicket() {
     setShowPasswordPopup(false);
 
     try {
-      // Validate required fields for on-behalf others
-      if (formData.category === 'Password Reset' && onBehalfType === 'Others' && !onBehalfUser) {
-        setModal({
-          open: true,
-          title: 'Missing selection',
-          message: 'Please select the user to reset password for (search and choose the user).',
-          type: 'error'
-        });
-        setLoading(false);
-        return;
+      // Validate category-specific required fields
+      if (formData.category === 'Password Reset') {
+        if (!onBehalfType) {
+          setModal({ open: true, title: 'Please choose', message: 'Select "Self" or "Others" for On behalf of.', type: 'error' });
+          setLoading(false);
+          return;
+        }
+
+        if (onBehalfType === 'Others' && !onBehalfUser) {
+          setModal({ open: true, title: 'User required', message: 'Please search and select the user whose password should be reset.', type: 'error' });
+          setLoading(false);
+          return;
+        }
+
+        // alternateEmail is mandatory (as you requested)
+        if (!alternateEmail || !alternateEmail.trim()) {
+          setModal({ open: true, title: 'Alternate email required', message: 'Please provide the alternate email to receive the temporary password.', type: 'error' });
+          setLoading(false);
+          return;
+        }
+
+        // basic email format check
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(alternateEmail.trim())) {
+          setModal({ open: true, title: 'Invalid email', message: 'Please provide a valid alternate email address.', type: 'error' });
+          setLoading(false);
+          return;
+        }
       }
 
-      // Acquire token for Graph (backend might validate but API doesn't require token here)
-      const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
+      // Acquire token for Graph (backend might require it; we still send token for authentication)
+      const token = accounts && accounts[0] ? await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] }) : null;
 
       // Latest name/email from graph (best effort)
       let latestName = displayName;
       let latestEmail = displayEmail;
       try {
-        const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
-          headers: { Authorization: `Bearer ${token.accessToken}` }
-        });
-        latestName = userRes.data.displayName || latestName || 'User';
-        latestEmail = (userRes.data.mail && userRes.data.mail.trim()) ||
-                      (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
-                      latestEmail || '';
+        if (token && token.accessToken) {
+          const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
+            headers: { Authorization: `Bearer ${token.accessToken}` }
+          });
+          latestName = userRes.data.displayName || latestName || 'User';
+          latestEmail = (userRes.data.mail && userRes.data.mail.trim()) ||
+                        (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
+                        latestEmail || '';
+        }
       } catch (err) {
         // ignore
       }
@@ -200,22 +226,22 @@ function CreateTicket() {
         category: formData.category,
         description: formData.description,
         priority: formData.priority,
-        userId: accounts[0]?.localAccountId,
-        userName: latestName || accounts[0]?.username,
+        userId: accounts?.[0]?.localAccountId,
+        userName: latestName || accounts?.[0]?.username,
         userEmail: latestEmail,
         status: 'Open',
       };
 
       if (formData.category === 'Password Reset') {
-        ticketData.onBehalfType = onBehalfType || 'Self';
-        ticketData.onBehalfUserId = onBehalfType === 'Others' ? onBehalfUser?.id : accounts[0]?.localAccountId;
+        ticketData.onBehalfType = onBehalfType;
+        ticketData.onBehalfUserId = onBehalfType === 'Others' ? onBehalfUser?.id : accounts?.[0]?.localAccountId;
         ticketData.onBehalfUserName = onBehalfType === 'Others' ? onBehalfUser?.displayName : latestName;
         ticketData.onBehalfUserEmail = onBehalfType === 'Others' ? onBehalfUser?.mail : latestEmail;
-        if (alternateEmail) ticketData.alternateEmail = alternateEmail;
+        ticketData.alternateEmail = alternateEmail.trim();
       }
 
       const response = await axios.post(`${process.env.REACT_APP_API_BASE || ''}/tickets`, ticketData, {
-        headers: { Authorization: `Bearer ${token.accessToken}` }
+        headers: { Authorization: token?.accessToken ? `Bearer ${token.accessToken}` : undefined }
       });
 
       const ticket = response.data;
@@ -228,7 +254,6 @@ function CreateTicket() {
         setShowPasswordPopup(true);
       }
 
-      // Show appropriate modal
       if (formData.category === 'Password Reset' && onBehalfType === 'Others') {
         setModal({
           open: true,
@@ -331,26 +356,28 @@ function CreateTicket() {
           {/* Only show On-behalf controls for Password Reset */}
           {formData.category === 'Password Reset' && (
             <div style={styles.field}>
-              <label style={styles.label}>On behalf of</label>
+              <label style={styles.label}>On behalf of *</label>
               <select
-                value={onBehalfType || 'Self'}
+                value={onBehalfType || ''}
                 onChange={(e) => {
-                  const val = e.target.value;
+                  const val = e.target.value || null;
                   setOnBehalfType(val);
                   setOnBehalfUser(null);
                   setAlternateEmail('');
                   setSearchQuery('');
                   setSearchResults([]);
                 }}
+                required
                 style={styles.select}
               >
+                <option value="" disabled>-- choose --</option>
                 <option value="Self">Self</option>
                 <option value="Others">Others</option>
               </select>
 
               {onBehalfType === 'Others' && (
                 <div style={{ marginTop: 10 }}>
-                  <label style={{ ...styles.label, marginBottom: 6 }}>Search user (name or email)</label>
+                  <label style={{ ...styles.label, marginBottom: 6 }}>Search user (name or email) *</label>
                   <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -379,15 +406,30 @@ function CreateTicket() {
                   )}
 
                   <div style={{ marginTop: 12 }}>
-                    <label style={styles.label}>Alternate email to receive temporary password (optional)</label>
+                    <label style={styles.label}>Alternate email to receive temporary password (mandatory)</label>
                     <input
                       value={alternateEmail}
                       onChange={(e) => setAlternateEmail(e.target.value)}
                       placeholder="someone@example.com"
                       style={styles.input}
                       type="email"
+                      required
                     />
                   </div>
+                </div>
+              )}
+
+              {onBehalfType === 'Self' && (
+                <div style={{ marginTop: 12 }}>
+                  <label style={styles.label}>Alternate email to receive temporary password (mandatory)</label>
+                  <input
+                    value={alternateEmail}
+                    onChange={(e) => setAlternateEmail(e.target.value)}
+                    placeholder="someone@example.com"
+                    style={styles.input}
+                    type="email"
+                    required
+                  />
                 </div>
               )}
             </div>

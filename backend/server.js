@@ -1,4 +1,6 @@
-// ---------------------- Imports -------------------------
+// server.js
+// Updated server with improved /users/search and stricter validation for Password Reset
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -8,13 +10,11 @@ const fetch = require("node-fetch");
 const https = require("https");
 require("dotenv").config();
 
-// ---------------------- App Setup ------------------------
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
 app.use(helmet());
 
-// ---------------------- CORS ------------------------------
 const allowedOrigins = [
   process.env.FRONTEND_URL || "https://ticketing-psi-tawny.vercel.app",
   "http://localhost:3000",
@@ -36,14 +36,13 @@ app.use(
 );
 app.options("*", cors());
 
-// ---------------------- Rate Limiter ----------------------
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
 });
 app.use("/tickets", limiter);
 
-// ---------------------- MongoDB ---------------------------
+// MongoDB
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
@@ -58,7 +57,7 @@ const connectDB = async () => {
 };
 connectDB();
 
-// ---------------------- Schema ----------------------------
+// Schema
 const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: { type: Number, unique: true },
@@ -76,7 +75,6 @@ const ticketSchema = new mongoose.Schema(
     reopenedBy: String,
     reopenedAt: Date,
 
-    // new fields for on-behalf flow
     onBehalfType: { type: String, enum: ["Self", "Others"], default: "Self" },
     onBehalfUserId: String,
     onBehalfUserName: String,
@@ -98,7 +96,6 @@ const ticketSchema = new mongoose.Schema(
 );
 const Ticket = mongoose.model("Ticket", ticketSchema);
 
-// ---------------------- Counter ---------------------------
 let ticketCounter = 0;
 const loadCounter = async () => {
   try {
@@ -111,7 +108,6 @@ const loadCounter = async () => {
 };
 loadCounter();
 
-// ---------------------- Department Emails -----------------
 const deptEmails = {
   "Password Reset": process.env.DEPT_PASSWORD_RESET_EMAIL || "allenj@sandeza-inc.com",
   "Admin Access": process.env.DEPT_ADMIN_EMAIL || "vigneshm@sandeza-inc.com",
@@ -121,7 +117,7 @@ const deptEmails = {
   "Employee Onboarding": process.env.DEPT_ONBOARDING_EMAIL || "allenj@sandeza-inc.com",
 };
 
-// ---------------------- Azure Graph Token ----------------------
+// Graph token
 const getGraphToken = async () => {
   console.log("🔵 [MAIL] Getting Microsoft Graph token...");
   const tenantId = process.env.AZURE_TENANT_ID;
@@ -145,7 +141,7 @@ const getGraphToken = async () => {
   return data.access_token;
 };
 
-// ---------------------- Send Email ----------------------
+// sendEmail (unchanged)
 const sendEmail = async (to, subject, bodyText, cc) => {
   try {
     console.log(`\n📧 [MAIL] Preparing email...`);
@@ -206,7 +202,7 @@ const sendEmail = async (to, subject, bodyText, cc) => {
   }
 };
 
-// ---------------------- Azure Password Reset ----------------------
+// Azure reset
 const getAccessToken = async () => {
   const url = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
@@ -222,7 +218,6 @@ const getAccessToken = async () => {
 
 const resetAzurePassword = async (userId) => {
   const token = await getAccessToken();
-  // generate strong-ish temporary password (adjust policy as needed)
   const randomPart = Math.random().toString(36).slice(-8);
   const newPassword = `${randomPart}A1!`;
   const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userId)}`, {
@@ -243,9 +238,8 @@ const resetAzurePassword = async (userId) => {
   return newPassword;
 };
 
-// ---------------------- Helper: pretty email templates ----------------------
+// helpers
 const nowISTString = () => new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-
 const portalUrl = process.env.FRONTEND_URL || "https://ticketing-psi-tawny.vercel.app";
 const companyName = process.env.COMPANY_NAME || "Sandeza";
 const supportSignature = `Regards,
@@ -253,50 +247,73 @@ ${companyName} Helpdesk Team
 ${portalUrl}
 This message contains confidential information intended for the recipient only. Do not share the temporary password.`;
 
-// ---------------------- Routes ----------------------------
-
-// Health Check
+// Health
 app.get("/", (req, res) => res.send(`${companyName} Helpdesk API Running`));
 
-// --- Azure AD User Search (backend uses app credentials) ---
-// NOTE: this endpoint always returns an array (possibly empty).
+/*
+  /users/search
+  - Uses app-only token (client_credentials).
+  - IMPORTANT: your Azure AD app must have Application permission User.Read.All or Directory.Read.All
+    and admin consent must be granted for app-only directory reads to work.
+  - This endpoint always returns an ARRAY (possibly empty).
+*/
 app.get("/users/search", async (req, res) => {
   try {
     let q = (req.query.query || "").trim();
     if (!q) return res.json([]);
 
-    // Escape single quotes for OData filter by doubling them
+    // Escape single quotes for OData filter/search
     q = q.replace(/'/g, "''");
 
     const token = await getGraphToken();
 
-    // Use startswith filter across commonly searched fields
+    // Try using $search first (more flexible). Graph requires "ConsistencyLevel: eventual" for $search.
+    // Note: $search support requires the tenant to allow indexing and app permissions.
+    const encodedSearch = encodeURIComponent(`displayName:${q} OR mail:${q} OR userPrincipalName:${q}`);
+    const searchUrl = `https://graph.microsoft.com/v1.0/users?$search="${encodeURIComponent(`displayName:${q} OR mail:${q} OR userPrincipalName:${q}`)}"&$select=id,displayName,mail,userPrincipalName&$top=25`;
+
+    try {
+      const resp = await fetch(`https://graph.microsoft.com/v1.0/users?$search="${encodeURIComponent(`displayName:${q} OR mail:${q} OR userPrincipalName:${q}`)}"&$select=id,displayName,mail,userPrincipalName&$top=25`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "ConsistencyLevel": "eventual",
+          "Content-Type": "application/json"
+        }
+      });
+
+      const text = await resp.text();
+      if (!resp.ok) {
+        console.warn("Graph $search failed, will try fallback:", resp.status, text);
+        // fallthrough to fallback below
+      } else {
+        let data;
+        try { data = JSON.parse(text); } catch (err) { data = null; }
+        if (data && Array.isArray(data.value)) {
+          return res.json(data.value);
+        }
+      }
+    } catch (searchErr) {
+      console.warn("Graph $search error (will fallback):", searchErr.message || searchErr);
+      // continue to fallback
+    }
+
+    // Fallback: use $filter with startswith on displayName, mail, userPrincipalName
+    // Note: startswith may be sufficient; if contains is required, ensure Graph supports it in your tenant.
     const filter = `startswith(displayName,'${q}') or startswith(mail,'${q}') or startswith(userPrincipalName,'${q}')`;
     const url = `https://graph.microsoft.com/v1.0/users?$select=id,displayName,mail,userPrincipalName&$filter=${encodeURIComponent(filter)}&$top=25`;
-
-    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    const text = await resp.text();
-
-    if (!resp.ok) {
-      console.error("Graph search failed", resp.status, text);
-      // Try to parse JSON if possible and return safe empty array
-      return res.status(500).json({ message: "User search failed", error: text });
+    const resp2 = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const text2 = await resp2.text();
+    if (!resp2.ok) {
+      console.error("Graph fallback search failed", resp2.status, text2);
+      return res.status(500).json([]);
     }
-
-    // Graph returns an object with "value" array
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (parseErr) {
-      console.error("Failed to parse Graph response:", parseErr);
-      return res.json([]);
-    }
-
-    const values = Array.isArray(data.value) ? data.value : [];
-    res.json(values);
+    let data2;
+    try { data2 = JSON.parse(text2); } catch (err) { data2 = null; }
+    const values = data2 && Array.isArray(data2.value) ? data2.value : [];
+    return res.json(values);
   } catch (err) {
     console.error("User search error:", err.message);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json([]);
   }
 });
 
@@ -323,7 +340,7 @@ app.get("/tickets/:id", async (req, res) => {
   }
 });
 
-// Create Ticket
+// Create Ticket. Validates required fields for Password Reset on-behalf flow.
 app.post("/tickets", async (req, res) => {
   try {
     const {
@@ -342,6 +359,21 @@ app.post("/tickets", async (req, res) => {
 
     if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
+    // If Password Reset, enforce on-behalf selection and alternateEmail mandatory
+    if (category === "Password Reset") {
+      if (!onBehalfType) return res.status(400).json({ message: "onBehalfType is required for Password Reset" });
+
+      // If Others, onBehalfUserId must be provided (selected from Azure AD)
+      if (onBehalfType === "Others" && !(onBehalfUserId && typeof onBehalfUserId === "string")) {
+        return res.status(400).json({ message: "onBehalfUserId (Azure AD user id) is required when On behalf of is Others" });
+      }
+
+      // alternateEmail mandatory (per your request)
+      if (!alternateEmail || !alternateEmail.trim()) {
+        return res.status(400).json({ message: "alternateEmail is required for Password Reset" });
+      }
+    }
+
     ticketCounter++;
     const ticketNumber = ticketCounter;
 
@@ -352,7 +384,7 @@ app.post("/tickets", async (req, res) => {
       approvalStatus = "Approved";
     } else {
       // if password reset and onBehalfType is Self, we'll auto-approve (and reset)
-      if (category === "Password Reset" && (onBehalfType === 'Self' || !onBehalfType)) {
+      if (category === "Password Reset" && onBehalfType === "Self") {
         approvalStatus = "Approved";
       } else {
         // Others -> pending
@@ -387,7 +419,7 @@ app.post("/tickets", async (req, res) => {
     const nowIST = nowISTString();
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Email 1: Confirmation to ticket creator
+    // emails (same as before but with clearer messages)
     const creatorBody = `
 Dear ${userName},
 
@@ -406,7 +438,6 @@ ${supportSignature}
 
     await sendEmail(userEmail, `[${companyName} Helpdesk] Ticket #${ticketNumber} Created`, creatorBody, itHead);
 
-    // Email 2: Notify department/admin
     const adminRecipients = deptEmails[category];
     const adminBody = `
 Hello,
@@ -429,7 +460,7 @@ ${supportSignature}
 
     await sendEmail(adminRecipients, `[${companyName} Helpdesk] [TICKET #${ticketNumber}] ${category}`, adminBody, itHead);
 
-    // Email 3: If onBehalf Others, inform on-behalf user and alternate email (if provided)
+    // If Others -> notify on-behalf user and alt email about pending approval
     if (category === "Password Reset" && onBehalfType === "Others") {
       const onBehalfBody = `
 Dear ${ticket.onBehalfUserName || 'User'},
@@ -447,25 +478,22 @@ This request is currently awaiting administrative approval. You will receive ano
 ${supportSignature}
 `.trim();
 
-      // send to onBehalf user
       if (ticket.onBehalfUserEmail) {
         await sendEmail(ticket.onBehalfUserEmail, `[${companyName} Helpdesk] Password Reset Requested - Ticket #${ticketNumber}`, onBehalfBody, [userEmail, ticket.alternateEmail].filter(Boolean));
       }
 
-      // send to alternate email if provided
       if (ticket.alternateEmail) {
         await sendEmail(ticket.alternateEmail, `[${companyName} Helpdesk] Password Reset Requested - Ticket #${ticketNumber}`, onBehalfBody, [userEmail]);
       }
     }
 
-    // If Password Reset + Self -> attempt reset immediately (auto-approve)
+    // If self -> attempt reset immediately
     let returnedPassword = null;
-    if (category === "Password Reset" && (onBehalfType === "Self" || !onBehalfType)) {
+    if (category === "Password Reset" && onBehalfType === "Self") {
       try {
         const targetUserId = ticket.onBehalfUserId || userId;
         const newPassword = await resetAzurePassword(targetUserId);
 
-        // Update ticket to closed
         ticket.status = "Closed";
         ticket.closedBy = "IT Automation System";
         ticket.closedAt = new Date();
@@ -484,7 +512,6 @@ ${supportSignature}
         });
         await ticket.save();
 
-        // Email with temp password to onBehalfUser (or creator) and alternate and dept
         const passwordBody = `
 Dear ${ticket.onBehalfUserName || userName},
 
@@ -509,7 +536,6 @@ ${supportSignature}
         returnedPassword = newPassword;
       } catch (err) {
         console.error("Password reset failed:", err.message);
-        // Keep ticket open and note failure in history
         ticket.history.push({
           action: "closed",
           by: "IT Automation System",
@@ -520,7 +546,6 @@ ${supportSignature}
       }
     }
 
-    // Respond with created ticket. If self reset happened, include newPassword so frontend shows popup.
     const responsePayload = ticket.toObject();
     if (returnedPassword) responsePayload.newPassword = returnedPassword;
 
@@ -531,7 +556,8 @@ ${supportSignature}
   }
 });
 
-// Admin Approve endpoint (approve password reset for Others)
+// Admin approve/reject endpoints remain unchanged (they expect the ticket.onBehalfUserId to exist for Others)
+// Approve:
 app.put("/tickets/:id/approve", async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id);
@@ -539,7 +565,6 @@ app.put("/tickets/:id/approve", async (req, res) => {
     if (!(ticket.category === "Password Reset")) return res.status(400).json({ message: "Only password reset tickets can be approved via this endpoint" });
     if (ticket.approvalStatus !== "Pending") return res.status(400).json({ message: "Ticket is not pending approval" });
 
-    // Perform reset
     try {
       const targetUserId = ticket.onBehalfUserId;
       if (!targetUserId) return res.status(400).json({ message: "No target user specified for password reset" });
@@ -583,13 +608,10 @@ Approved on: ${nowIST}
 ${supportSignature}
 `.trim();
 
-      // Recipients: onBehalfUserEmail, creator, alternateEmail (if present)
       const recipients = [ticket.onBehalfUserEmail, ticket.userEmail].filter(Boolean);
       const cc = ticket.alternateEmail ? [ticket.alternateEmail] : undefined;
 
-      // send to main recipients
       await sendEmail(recipients, subject, body, cc);
-      // inform department/admin
       await sendEmail(deptEmails[ticket.category], `[${companyName} Helpdesk] Password Reset Completed - Ticket #${ticket.ticketNumber}`, `Password reset completed for ${ticket.onBehalfUserName} (${ticket.onBehalfUserEmail}).\n\nTicket: ${ticket.ticketNumber}\nTime: ${nowIST}\n\n${supportSignature}`, process.env.IT_HEAD_EMAIL);
 
       res.json({ message: "Approved and password reset. Emails sent." });
@@ -603,7 +625,7 @@ ${supportSignature}
   }
 });
 
-// Admin Reject endpoint (reject password reset request)
+// Reject:
 app.put("/tickets/:id/reject", async (req, res) => {
   try {
     const { reason } = req.body;
@@ -667,7 +689,8 @@ ${supportSignature}
   }
 });
 
-// Close Ticket (existing)
+// Existing close & revive endpoints unchanged (kept here for completeness)...
+
 app.put("/tickets/:id/close", async (req, res) => {
   try {
     const { closedBy, closeReason } = req.body;
@@ -745,7 +768,6 @@ ${supportSignature}
   }
 });
 
-// Revive Ticket (existing)
 app.put("/tickets/:id/revive", async (req, res) => {
   try {
     const { revivedBy, reviveReason } = req.body;
@@ -826,7 +848,6 @@ ${supportSignature}
   }
 });
 
-// ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Server running on port ${PORT} (On-behalf flow enabled)`)
