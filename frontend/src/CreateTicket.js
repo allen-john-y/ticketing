@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -7,16 +7,20 @@ import axios from 'axios';
 function PasswordPopup({ password, onClose }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(password);
-    setCopied(true);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
   };
 
   return (
     <div style={styles.overlay}>
       <div style={styles.passwordBox}>
-        <h2 style={{ marginBottom: '1rem' }}>🎉 Ticket Created!</h2>
-        <p><strong>Your new password:</strong></p>
+        <h2 style={{ marginBottom: '1rem' }}>🎉 Password Reset Complete</h2>
+        <p><strong>Temporary password:</strong></p>
         <p style={styles.passwordText}>{password}</p>
         <button onClick={handleCopy} style={styles.copyButton}>
           Copy Password
@@ -32,23 +36,28 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  // removed phone from formData
+  // form data
   const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium' });
+  const [onBehalfType, setOnBehalfType] = useState('Self'); // 'Self' | 'Others'
+  const [onBehalfUser, setOnBehalfUser] = useState(null); // { id, displayName, mail }
+  const [alternateEmail, setAlternateEmail] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  // UI state
   const [loading, setLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
-  // Modal for success/error messages (replaces window.alert)
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
-
-  // store created ticket id (if backend returns it) so we can offer "View Ticket"
   const [createdTicketId, setCreatedTicketId] = useState(null);
 
-  // Displayed user info (read-only in the form)
+  // display info
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
 
-  // Fetch up-to-date name/email from Graph when component mounts (if possible)
+  // fetch fresh profile for display
   useEffect(() => {
     let mounted = true;
     const fetchUser = async () => {
@@ -65,7 +74,6 @@ function CreateTicket() {
                       accounts[0]?.username || '';
         setDisplayEmail(email);
       } catch (err) {
-        // Silent fail — keep values from accounts if Graph call fails (no interrupt for user)
         console.debug('Could not fetch user profile for form display:', err?.message || err);
       }
     };
@@ -73,16 +81,57 @@ function CreateTicket() {
     return () => { mounted = false; };
   }, [instance, accounts]);
 
+  // simple debounce for search
+  const searchTimeout = useRef(null);
+  useEffect(() => {
+    if (!searchQuery || onBehalfType !== 'Others') {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        const resp = await axios.get(`${process.env.REACT_APP_API_BASE || ''}/users/search`, {
+          params: { query: searchQuery.trim() }
+        });
+        setSearchResults(resp.data || []);
+      } catch (err) {
+        console.error('Search error', err);
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, [searchQuery, onBehalfType]);
+
+  const handleSelectSearchResult = (u) => {
+    setOnBehalfUser({
+      id: u.id,
+      displayName: u.displayName || u.userPrincipalName || u.mail || '',
+      mail: u.mail || u.userPrincipalName || ''
+    });
+    setSearchResults([]);
+    setSearchQuery('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setCreatedTicketId(null);
+    setNewPassword('');
+    setShowPasswordPopup(false);
 
     try {
-      // Acquire token for Graph API (and to authenticate backend)
+      // Acquire token for Graph (backend might validate but API doesn't require token here)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
 
-      // Try to get the latest displayName and email (graceful fallback to earlier values)
+      // Latest name/email from graph (best effort)
       let latestName = displayName;
       let latestEmail = displayEmail;
       try {
@@ -94,10 +143,9 @@ function CreateTicket() {
                       (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
                       latestEmail || '';
       } catch (err) {
-        // ignore, we'll use existing displayName/displayEmail
+        // ignore
       }
 
-      // Prepare ticket data (phone removed)
       const ticketData = {
         category: formData.category,
         description: formData.description,
@@ -105,36 +153,48 @@ function CreateTicket() {
         userId: accounts[0]?.localAccountId,
         userName: latestName || accounts[0]?.username,
         userEmail: latestEmail,
-        status: 'Open'
+        status: 'Open',
+        // new fields
+        onBehalfType,
+        onBehalfUserId: onBehalfUser?.id || (onBehalfType === 'Self' ? accounts[0]?.localAccountId : undefined),
+        onBehalfUserName: onBehalfUser?.displayName || (onBehalfType === 'Self' ? latestName : undefined),
+        onBehalfUserEmail: onBehalfUser?.mail || (onBehalfType === 'Self' ? latestEmail : undefined),
+        alternateEmail: alternateEmail || undefined
       };
 
-      // Post ticket to backend
-      const response = await axios.post('https://ticketing-production-5334.up.railway.app/tickets', ticketData, {
+      const response = await axios.post(`${process.env.REACT_APP_API_BASE || ''}/tickets`, ticketData, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
-      // capture returned ticket id (backend may return different property names)
-      const id = response?.data?._id || response?.data?.id || response?.data?.ticketId || null;
+      const ticket = response.data;
+      const id = ticket?._id || ticket?.id || null;
       if (id) setCreatedTicketId(id);
 
-      // Show success modal instead of alert
-      setModal({
-        open: true,
-        title: 'Ticket Created',
-        message: 'Ticket created successfully!',
-        type: 'success'
-      });
-
-      // If password reset, show popup with new password
-      if (formData.category === 'Password Reset' && response.data?.newPassword) {
+      // If backend returned a newPassword (Self password reset) show popup
+      if (response.data?.newPassword) {
         setNewPassword(response.data.newPassword);
         setShowPasswordPopup(true);
       }
+
+      // Show appropriate modal
+      if (formData.category === 'Password Reset' && onBehalfType === 'Others') {
+        setModal({
+          open: true,
+          title: 'Ticket Created - Pending Approval',
+          message: `Ticket created successfully and is awaiting admin approval. Ticket No: ${ticket.ticketNumber || '—'}. Once approved, temporary password will be emailed to the designated recipients.`,
+          type: 'success'
+        });
+      } else {
+        setModal({
+          open: true,
+          title: 'Ticket Created',
+          message: 'Ticket created successfully!',
+          type: 'success'
+        });
+      }
     } catch (error) {
       console.error('Error creating ticket:', error);
-
-      // Show error modal instead of alert
-      const message = error?.response?.data?.message || error.message || 'Failed to create ticket.';
+      const message = error?.response?.data?.message || error?.response?.data?.error || error.message || 'Failed to create ticket.';
       setModal({
         open: true,
         title: 'Failed',
@@ -146,7 +206,6 @@ function CreateTicket() {
     setLoading(false);
   };
 
-  // Close modal handler: if success and user clicks OK we navigate home; user can also view the ticket
   const handleCloseModal = () => {
     const wasSuccess = modal.type === 'success';
     setModal({ open: false, title: '', message: '', type: 'info' });
@@ -157,15 +216,12 @@ function CreateTicket() {
 
   const handleViewTicket = () => {
     if (createdTicketId) {
-      // navigate to the ticket details page
       navigate(`/ticket/${createdTicketId}`);
     } else {
-      // fallback: go home to refresh list
       navigate('/', { state: { refresh: true } });
     }
   };
 
-  // small helper to render user's initials as an avatar
   const initials = (displayName || displayEmail || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   return (
@@ -184,8 +240,8 @@ function CreateTicket() {
         </div>
 
         <h1 style={{ textAlign: 'center', margin: '18px 0 8px' }}>Create New Ticket</h1>
-        <form onSubmit={handleSubmit}>
 
+        <form onSubmit={handleSubmit}>
           <div style={styles.gridRow}>
             <div style={styles.field}>
               <label style={styles.label}>Category *</label>
@@ -221,6 +277,64 @@ function CreateTicket() {
           </div>
 
           <div style={styles.field}>
+            <label style={styles.label}>On behalf of</label>
+            <select
+              value={onBehalfType}
+              onChange={(e) => {
+                setOnBehalfType(e.target.value);
+                setOnBehalfUser(null);
+                setAlternateEmail('');
+                setSearchResults([]);
+                setSearchQuery('');
+              }}
+              style={styles.select}
+            >
+              <option value="Self">Self</option>
+              <option value="Others">Others</option>
+            </select>
+            {onBehalfType === 'Others' && (
+              <div style={{ marginTop: 10 }}>
+                <label style={{ ...styles.label, marginBottom: 6 }}>Search user (name or email)</label>
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Type name or email to search Azure AD..."
+                  style={styles.input}
+                />
+                {searching && <div style={{ marginTop: 8 }}>Searching...</div>}
+                {!!searchResults.length && (
+                  <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto', border: '1px solid #e6e9ee', borderRadius: 8, padding: 8 }}>
+                    {searchResults.map(u => (
+                      <div key={u.id} style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }} onClick={() => handleSelectSearchResult(u)}>
+                        <div style={{ fontWeight: 700 }}>{u.displayName || u.userPrincipalName || u.mail}</div>
+                        <div style={{ fontSize: 12, color: '#6b7280' }}>{u.mail || u.userPrincipalName}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {onBehalfUser && (
+                  <div style={{ marginTop: 10, padding: 10, background: '#f8fafc', borderRadius: 8 }}>
+                    <div style={{ fontWeight: 700 }}>{onBehalfUser.displayName}</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>{onBehalfUser.mail}</div>
+                  </div>
+                )}
+
+                <div style={{ marginTop: 12 }}>
+                  <label style={styles.label}>Alternate email to receive temporary password (optional)</label>
+                  <input
+                    value={alternateEmail}
+                    onChange={(e) => setAlternateEmail(e.target.value)}
+                    placeholder="someone@example.com"
+                    style={styles.input}
+                    type="email"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={styles.field}>
             <label style={styles.label}>Description *</label>
             <textarea
               value={formData.description}
@@ -247,7 +361,7 @@ function CreateTicket() {
         </form>
       </div>
 
-      {/* Notification Modal (replaces window.alert) */}
+      {/* Notification Modal */}
       {modal.open && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
@@ -269,7 +383,6 @@ function CreateTicket() {
                 OK
               </button>
 
-              {/* Offer to view newly created ticket if the backend returned an ID */}
               {modal.type === 'success' && createdTicketId && (
                 <button
                   onClick={handleViewTicket}
@@ -411,7 +524,7 @@ const styles = {
     background: "white",
     padding: "28px",
     borderRadius: "10px",
-    width: "380px",
+    width: "420px",
     textAlign: "center",
     boxShadow: "0 6px 24px rgba(2,6,23,0.12)"
   },
