@@ -90,7 +90,7 @@ function Login() {
       const signedIn = Boolean(loginResponse || (accounts.length > 0));
 
       if (signedIn) {
-        console.log('✅ Login success. Accounts:', accounts);
+        console.log('Login success. Accounts:', accounts);
         // show small fading toast, do NOT navigate away
         showToast('success', 'Login successful', 2000);
         return;

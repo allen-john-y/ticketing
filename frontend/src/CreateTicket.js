@@ -121,7 +121,7 @@ function CreateTicket() {
       setModal({
         open: true,
         title: 'Ticket Created',
-        message: '✅ Ticket created successfully!',
+        message: 'Ticket created successfully!',
         type: 'success'
       });
 
