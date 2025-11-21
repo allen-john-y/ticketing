@@ -1,10 +1,9 @@
-// CreateTicket.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// Password Popup Component
+// Password Popup Component (kept minimal, as in your original)
 function PasswordPopup({ password, onClose }) {
   const [copied, setCopied] = useState(false);
 
@@ -37,36 +36,40 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
+  // API base (set REACT_APP_API_BASE in your frontend env if needed)
+  const API_BASE = process.env.REACT_APP_API_BASE || '';
+
+  // form state
   const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium' });
 
-  // on-behalf state - only used for Password Reset
-  // Important: we don't auto-select 'Self' so user must choose explicitly
+  // on-behalf state (only relevant for Password Reset)
   const [onBehalfType, setOnBehalfType] = useState(null); // null | 'Self' | 'Others'
   const [onBehalfUser, setOnBehalfUser] = useState(null); // { id, displayName, mail }
   const [alternateEmail, setAlternateEmail] = useState('');
 
   // search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]); // always an array
+  const [searchResults, setSearchResults] = useState([]); // always keep as array
   const [searching, setSearching] = useState(false);
   const searchTimeout = useRef(null);
 
-  // UI state
+  // UI
   const [loading, setLoading] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [showPasswordPopup, setShowPasswordPopup] = useState(false);
-
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
   const [createdTicketId, setCreatedTicketId] = useState(null);
 
-  // display info
+  // password popup
+  const [newPassword, setNewPassword] = useState('');
+  const [showPasswordPopup, setShowPasswordPopup] = useState(false);
+
+  // displayed user info
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
 
-  // fetch fresh profile for display
+  // fetch current user profile to show accurate name/email in header
   useEffect(() => {
     let mounted = true;
-    const fetchUser = async () => {
+    const fetchMe = async () => {
       if (!accounts || !accounts[0]) return;
       try {
         const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
@@ -80,40 +83,39 @@ function CreateTicket() {
                       accounts[0]?.username || '';
         setDisplayEmail(email);
       } catch (err) {
-        console.debug('Could not fetch user profile for form display:', err?.message || err);
+        // ignore, keep account values
+        console.debug('Could not fetch /me:', err?.message || err);
       }
     };
-    fetchUser();
+    fetchMe();
     return () => { mounted = false; };
   }, [instance, accounts]);
 
-  // When category changes, reset on-behalf UI unless Password Reset
+  // Reset or keep on-behalf state depending on category
   useEffect(() => {
     if (formData.category === 'Password Reset') {
-      // do not auto-select Self — require explicit user choice
-      // keep previous selection if user already chose
-    } else {
-      // clear on-behalf related state if category not Password Reset
-      setOnBehalfType(null);
-      setOnBehalfUser(null);
-      setAlternateEmail('');
-      setSearchQuery('');
-      setSearchResults([]);
-      setSearching(false);
-      if (searchTimeout.current) {
-        clearTimeout(searchTimeout.current);
-        searchTimeout.current = null;
-      }
+      // don't auto-select Self; require explicit selection by user
+      return;
+    }
+    // clear on-behalf fields for other categories
+    setOnBehalfType(null);
+    setOnBehalfUser(null);
+    setAlternateEmail('');
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearching(false);
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+      searchTimeout.current = null;
     }
   }, [formData.category]);
 
-  // search Azure AD for on-behalf users (debounced)
+  // Debounced search against backend /users/search
   useEffect(() => {
-    const shouldSearch =
-      formData.category === 'Password Reset' &&
-      onBehalfType === 'Others' &&
-      searchQuery &&
-      searchQuery.trim().length > 0;
+    const shouldSearch = formData.category === 'Password Reset'
+      && onBehalfType === 'Others'
+      && searchQuery
+      && searchQuery.trim().length > 0;
 
     if (!shouldSearch) {
       setSearchResults([]);
@@ -129,70 +131,82 @@ function CreateTicket() {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(async () => {
       try {
-        const resp = await axios.get(`${process.env.REACT_APP_API_BASE || ''}/users/search`, {
+        const resp = await axios.get(`${API_BASE}/users/search`, {
           params: { query: searchQuery.trim() }
         });
 
-        // normalize possible resp shapes to an array
+        // Debug: keep developer able to inspect returned shape
+        console.debug('/users/search resp.data =', resp.data);
+
+        // Normalize the response into an array of { id, displayName, mail }
         let results = [];
-        if (Array.isArray(resp.data)) results = resp.data;
-        else if (resp.data && Array.isArray(resp.data.value)) results = resp.data.value;
-        else results = [];
+        if (Array.isArray(resp.data)) {
+          results = resp.data.map(u => ({
+            id: u.id,
+            displayName: u.displayName || u.userPrincipalName || u.mail || '',
+            mail: u.mail || u.userPrincipalName || ''
+          }));
+        } else if (resp.data && Array.isArray(resp.data.value)) {
+          results = resp.data.value.map(u => ({
+            id: u.id,
+            displayName: u.displayName || u.userPrincipalName || u.mail || '',
+            mail: u.mail || u.userPrincipalName || ''
+          }));
+        } else {
+          // unexpected shape -> empty
+          results = [];
+        }
 
         setSearchResults(results);
       } catch (err) {
-        console.error('Search error', err);
+        console.error('Search error:', err?.response?.data || err.message || err);
         setSearchResults([]);
       } finally {
         setSearching(false);
       }
-    }, 400);
+    }, 450);
 
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
-  }, [searchQuery, onBehalfType, formData.category]);
+  }, [searchQuery, onBehalfType, formData.category, API_BASE]);
 
   const handleSelectSearchResult = (u) => {
     setOnBehalfUser({
       id: u.id,
-      displayName: u.displayName || u.userPrincipalName || u.mail || '',
-      mail: u.mail || u.userPrincipalName || ''
+      displayName: u.displayName || u.mail || '',
+      mail: u.mail || ''
     });
-    setSearchResults([]);
     setSearchQuery('');
+    setSearchResults([]);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setCreatedTicketId(null);
-    setNewPassword('');
     setShowPasswordPopup(false);
+    setNewPassword('');
 
     try {
-      // Validate category-specific required fields
+      // Validation: when Password Reset, enforce onBehalfType selection and alternateEmail mandatory
       if (formData.category === 'Password Reset') {
         if (!onBehalfType) {
-          setModal({ open: true, title: 'Please choose', message: 'Select "Self" or "Others" for On behalf of.', type: 'error' });
+          setModal({ open: true, title: 'Missing selection', message: 'Please choose "On behalf of" (Self or Others).', type: 'error' });
           setLoading(false);
           return;
         }
-
         if (onBehalfType === 'Others' && !onBehalfUser) {
-          setModal({ open: true, title: 'User required', message: 'Please search and select the user whose password should be reset.', type: 'error' });
+          setModal({ open: true, title: 'User required', message: 'Please search and select the user from Azure AD when "Others" is chosen.', type: 'error' });
           setLoading(false);
           return;
         }
-
-        // alternateEmail is mandatory (as you requested)
         if (!alternateEmail || !alternateEmail.trim()) {
-          setModal({ open: true, title: 'Alternate email required', message: 'Please provide the alternate email to receive the temporary password.', type: 'error' });
+          setModal({ open: true, title: 'Alternate email required', message: 'Please provide an alternate email to receive the temporary password.', type: 'error' });
           setLoading(false);
           return;
         }
-
-        // basic email format check
+        // simple email format check
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(alternateEmail.trim())) {
           setModal({ open: true, title: 'Invalid email', message: 'Please provide a valid alternate email address.', type: 'error' });
@@ -201,64 +215,74 @@ function CreateTicket() {
         }
       }
 
-      // Acquire token for Graph (backend might require it; we still send token for authentication)
-      const token = accounts && accounts[0] ? await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] }) : null;
-
-      // Latest name/email from graph (best effort)
-      let latestName = displayName;
-      let latestEmail = displayEmail;
-      try {
-        if (token && token.accessToken) {
-          const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
-            headers: { Authorization: `Bearer ${token.accessToken}` }
-          });
-          latestName = userRes.data.displayName || latestName || 'User';
-          latestEmail = (userRes.data.mail && userRes.data.mail.trim()) ||
-                        (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
-                        latestEmail || '';
+      // Acquire token silently if possible (for backend auth and Graph calls)
+      let tokenAccess = null;
+      if (accounts && accounts[0]) {
+        try {
+          const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
+          tokenAccess = tokenResp?.accessToken;
+        } catch (err) {
+          console.debug('acquireTokenSilent failed:', err?.message || err);
         }
-      } catch (err) {
-        // ignore
       }
 
-      // Build ticket payload; only include on-behalf fields if Password Reset category
-      const ticketData = {
+      // Attempt to get freshest name/email for creator
+      let latestName = displayName;
+      let latestEmail = displayEmail;
+      if (tokenAccess) {
+        try {
+          const meResp = await axios.get('https://graph.microsoft.com/v1.0/me', {
+            headers: { Authorization: `Bearer ${tokenAccess}` }
+          });
+          latestName = meResp.data.displayName || latestName || accounts?.[0]?.name || '';
+          latestEmail = (meResp.data.mail && meResp.data.mail.trim()) ||
+                        (meResp.data.userPrincipalName && meResp.data.userPrincipalName.trim()) ||
+                        latestEmail || accounts?.[0]?.username || '';
+        } catch (err) {
+          // ignore
+        }
+      }
+
+      // Build ticket payload
+      const payload = {
         category: formData.category,
         description: formData.description,
         priority: formData.priority,
         userId: accounts?.[0]?.localAccountId,
         userName: latestName || accounts?.[0]?.username,
         userEmail: latestEmail,
-        status: 'Open',
+        status: 'Open'
       };
 
       if (formData.category === 'Password Reset') {
-        ticketData.onBehalfType = onBehalfType;
-        ticketData.onBehalfUserId = onBehalfType === 'Others' ? onBehalfUser?.id : accounts?.[0]?.localAccountId;
-        ticketData.onBehalfUserName = onBehalfType === 'Others' ? onBehalfUser?.displayName : latestName;
-        ticketData.onBehalfUserEmail = onBehalfType === 'Others' ? onBehalfUser?.mail : latestEmail;
-        ticketData.alternateEmail = alternateEmail.trim();
+        payload.onBehalfType = onBehalfType;
+        payload.onBehalfUserId = onBehalfType === 'Others' ? onBehalfUser?.id : accounts?.[0]?.localAccountId;
+        payload.onBehalfUserName = onBehalfType === 'Others' ? onBehalfUser?.displayName : latestName;
+        payload.onBehalfUserEmail = onBehalfType === 'Others' ? onBehalfUser?.mail : latestEmail;
+        payload.alternateEmail = alternateEmail.trim();
       }
 
-      const response = await axios.post(`${process.env.REACT_APP_API_BASE || ''}/tickets`, ticketData, {
-        headers: { Authorization: token?.accessToken ? `Bearer ${token.accessToken}` : undefined }
-      });
+      const headers = {};
+      if (tokenAccess) headers.Authorization = `Bearer ${tokenAccess}`;
 
-      const ticket = response.data;
-      const id = ticket?._id || ticket?.id || null;
+      const response = await axios.post(`${API_BASE}/tickets`, payload, { headers });
+
+      const created = response.data;
+      const id = created?._id || created?.id || null;
       if (id) setCreatedTicketId(id);
 
-      // If backend returned a newPassword (Self password reset) show popup
+      // If backend returned newPassword (Self reset auto), show popup
       if (response.data?.newPassword) {
         setNewPassword(response.data.newPassword);
         setShowPasswordPopup(true);
       }
 
+      // Show appropriate modal
       if (formData.category === 'Password Reset' && onBehalfType === 'Others') {
         setModal({
           open: true,
           title: 'Ticket Created - Pending Approval',
-          message: `Ticket created successfully and is awaiting admin approval. Ticket No: ${ticket.ticketNumber || '—'}. Once approved, temporary password will be emailed to the designated recipients.`,
+          message: `Ticket created successfully and is awaiting admin approval. Ticket No: ${created?.ticketNumber || '—'}. Once approved, temporary password will be emailed.`,
           type: 'success'
         });
       } else {
@@ -269,18 +293,14 @@ function CreateTicket() {
           type: 'success'
         });
       }
-    } catch (error) {
-      console.error('Error creating ticket:', error);
-      const message = error?.response?.data?.message || error?.response?.data?.error || error.message || 'Failed to create ticket.';
-      setModal({
-        open: true,
-        title: 'Failed',
-        message: `⚠️ ${message}`,
-        type: 'error'
-      });
-    }
 
-    setLoading(false);
+    } catch (err) {
+      console.error('Create ticket error:', err?.response?.data || err.message || err);
+      const message = err?.response?.data?.message || err?.response?.data?.error || err.message || 'Failed to create ticket.';
+      setModal({ open: true, title: 'Failed', message: `⚠️ ${message}`, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCloseModal = () => {
@@ -292,11 +312,8 @@ function CreateTicket() {
   };
 
   const handleViewTicket = () => {
-    if (createdTicketId) {
-      navigate(`/ticket/${createdTicketId}`);
-    } else {
-      navigate('/', { state: { refresh: true } });
-    }
+    if (createdTicketId) navigate(`/ticket/${createdTicketId}`);
+    else navigate('/', { state: { refresh: true } });
   };
 
   const initials = (displayName || displayEmail || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
@@ -319,6 +336,7 @@ function CreateTicket() {
         <h1 style={{ textAlign: 'center', margin: '18px 0 8px' }}>Create New Ticket</h1>
 
         <form onSubmit={handleSubmit}>
+
           <div style={styles.gridRow}>
             <div style={styles.field}>
               <label style={styles.label}>Category *</label>
@@ -353,7 +371,7 @@ function CreateTicket() {
             </div>
           </div>
 
-          {/* Only show On-behalf controls for Password Reset */}
+          {/* On-behalf only for Password Reset */}
           {formData.category === 'Password Reset' && (
             <div style={styles.field}>
               <label style={styles.label}>On behalf of *</label>
@@ -383,16 +401,17 @@ function CreateTicket() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Type name or email to search Azure AD..."
                     style={styles.input}
+                    autoComplete="off"
                   />
                   {searching && <div style={{ marginTop: 8 }}>Searching...</div>}
 
-                  {/* Render only if searchResults is an array to avoid map errors */}
+                  {/* safe render: only map when array */}
                   {Array.isArray(searchResults) && searchResults.length > 0 && (
-                    <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto', border: '1px solid #e6e9ee', borderRadius: 8, padding: 8 }}>
+                    <div style={{ marginTop: 8, maxHeight: 220, overflow: 'auto', border: '1px solid #e6e9ee', borderRadius: 8, padding: 8, background: 'white' }}>
                       {searchResults.map(u => (
                         <div key={u.id} style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }} onClick={() => handleSelectSearchResult(u)}>
-                          <div style={{ fontWeight: 700 }}>{u.displayName || u.userPrincipalName || u.mail}</div>
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>{u.mail || u.userPrincipalName}</div>
+                          <div style={{ fontWeight: 700 }}>{u.displayName || u.mail || u.id}</div>
+                          <div style={{ fontSize: 12, color: '#6b7280' }}>{u.mail || '—'}</div>
                         </div>
                       ))}
                     </div>

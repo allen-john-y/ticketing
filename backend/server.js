@@ -257,63 +257,79 @@ app.get("/", (req, res) => res.send(`${companyName} Helpdesk API Running`));
     and admin consent must be granted for app-only directory reads to work.
   - This endpoint always returns an ARRAY (possibly empty).
 */
+// REPLACE the existing /users/search route with this (keeps using getGraphToken)
 app.get("/users/search", async (req, res) => {
   try {
     let q = (req.query.query || "").trim();
     if (!q) return res.json([]);
 
-    // Escape single quotes for OData filter/search
+    // Protect from OData single-quote injection
     q = q.replace(/'/g, "''");
 
     const token = await getGraphToken();
 
-    // Try using $search first (more flexible). Graph requires "ConsistencyLevel: eventual" for $search.
-    // Note: $search support requires the tenant to allow indexing and app permissions.
-    const encodedSearch = encodeURIComponent(`displayName:${q} OR mail:${q} OR userPrincipalName:${q}`);
-    const searchUrl = `https://graph.microsoft.com/v1.0/users?$search="${encodeURIComponent(`displayName:${q} OR mail:${q} OR userPrincipalName:${q}`)}"&$select=id,displayName,mail,userPrincipalName&$top=25`;
-
+    // First attempt: use $search (more flexible). $search requires ConsistencyLevel: eventual header.
+    // Note: $search syntax here uses displayName/mail/userPrincipalName terms.
     try {
-      const resp = await fetch(`https://graph.microsoft.com/v1.0/users?$search="${encodeURIComponent(`displayName:${q} OR mail:${q} OR userPrincipalName:${q}`)}"&$select=id,displayName,mail,userPrincipalName&$top=25`, {
+      const searchTerm = `displayName:${q} OR mail:${q} OR userPrincipalName:${q}`;
+      const url = `https://graph.microsoft.com/v1.0/users?$search="${encodeURIComponent(searchTerm)}"&$select=id,displayName,mail,userPrincipalName&$top=25`;
+
+      const resp = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
-          "ConsistencyLevel": "eventual",
+          "ConsistencyLevel": "eventual", // required for $search/$count
           "Content-Type": "application/json"
         }
       });
 
       const text = await resp.text();
-      if (!resp.ok) {
-        console.warn("Graph $search failed, will try fallback:", resp.status, text);
-        // fallthrough to fallback below
-      } else {
+      if (resp.ok) {
         let data;
         try { data = JSON.parse(text); } catch (err) { data = null; }
         if (data && Array.isArray(data.value)) {
-          return res.json(data.value);
+          // Normalize results to stable shape
+          const mapped = data.value.map(u => ({
+            id: u.id,
+            displayName: u.displayName || u.userPrincipalName || u.mail || "",
+            mail: u.mail || u.userPrincipalName || ""
+          }));
+          return res.json(mapped);
         }
+        // If shape unexpected, continue to fallback
+      } else {
+        console.warn("Graph $search returned non-OK, falling back to filter. resp:", resp.status, text);
       }
-    } catch (searchErr) {
-      console.warn("Graph $search error (will fallback):", searchErr.message || searchErr);
-      // continue to fallback
+    } catch (err) {
+      console.warn("Graph $search threw, falling back to filter:", err.message || err);
     }
 
-    // Fallback: use $filter with startswith on displayName, mail, userPrincipalName
-    // Note: startswith may be sufficient; if contains is required, ensure Graph supports it in your tenant.
+    // Fallback: use $filter with startswith
     const filter = `startswith(displayName,'${q}') or startswith(mail,'${q}') or startswith(userPrincipalName,'${q}')`;
-    const url = `https://graph.microsoft.com/v1.0/users?$select=id,displayName,mail,userPrincipalName&$filter=${encodeURIComponent(filter)}&$top=25`;
-    const resp2 = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const filterUrl = `https://graph.microsoft.com/v1.0/users?$select=id,displayName,mail,userPrincipalName&$filter=${encodeURIComponent(filter)}&$top=25`;
+    const resp2 = await fetch(filterUrl, { headers: { Authorization: `Bearer ${token}` } });
     const text2 = await resp2.text();
+
     if (!resp2.ok) {
-      console.error("Graph fallback search failed", resp2.status, text2);
+      console.error("Graph filter search failed:", resp2.status, text2);
+      // return empty array instead of error (frontend expects array)
       return res.status(500).json([]);
     }
+
     let data2;
     try { data2 = JSON.parse(text2); } catch (err) { data2 = null; }
     const values = data2 && Array.isArray(data2.value) ? data2.value : [];
-    return res.json(values);
+
+    // Normalize to stable shape before returning
+    const mapped2 = values.map(u => ({
+      id: u.id,
+      displayName: u.displayName || u.userPrincipalName || u.mail || "",
+      mail: u.mail || u.userPrincipalName || ""
+    }));
+
+    return res.json(mapped2);
   } catch (err) {
-    console.error("User search error:", err.message);
-    res.status(500).json([]);
+    console.error("User search error:", err.message || err);
+    return res.status(500).json([]);
   }
 });
 
