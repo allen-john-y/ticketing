@@ -32,13 +32,14 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  // Added onBehalf and onBehalfEmail to formData (onBehalf defaults to 'Self')
+  // Added onBehalf, onBehalfEmail and alternativeEmail to formData (onBehalf defaults to 'Self')
   const [formData, setFormData] = useState({
     category: '',
     description: '',
     priority: 'Medium',
     onBehalf: 'Self',
-    onBehalfEmail: ''
+    onBehalfEmail: '',
+    alternativeEmail: ''
   });
   const [loading, setLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -96,6 +97,22 @@ function CreateTicket() {
       return;
     }
 
+    // If Self and alternativeEmail is provided, validate it looks like an email
+    if (formData.category === 'Password Reset' && formData.onBehalf === 'Self' && formData.alternativeEmail.trim()) {
+      const email = formData.alternativeEmail.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please enter a valid alternative email address to receive the reset password.',
+          type: 'error'
+        });
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       // Acquire token for Graph API (and to authenticate backend)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
@@ -137,6 +154,8 @@ function CreateTicket() {
         // include on-behalf info for password resets
         ...(onBehalf ? { onBehalf } : {}),
         ...(onBehalfEmail ? { onBehalfEmail } : {}),
+        // if the requester provided an alternative email to receive the reset password, include it
+        ...(formData.alternativeEmail && formData.alternativeEmail.trim() ? { deliveryEmail: formData.alternativeEmail.trim() } : {}),
         // flag asking backend to return the new password in the response when appropriate
         ...(returnPasswordToRequester ? { returnPasswordToRequester: true } : {})
       };
@@ -160,7 +179,9 @@ function CreateTicket() {
           setModal({
             open: true,
             title: 'Password Reset Delivered',
-            message: 'The new password is shown on screen. Please change it after first sign-in.',
+            message: formData.alternativeEmail
+              ? `The new password is shown on screen and will also be delivered to ${formData.alternativeEmail.trim()}. Please change it after first sign-in.`
+              : 'The new password is shown on screen. Please change it after first sign-in.',
             type: 'success'
           });
         } else {
@@ -168,7 +189,9 @@ function CreateTicket() {
           setModal({
             open: true,
             title: 'Password Reset Requested',
-            message: 'Password reset was requested. The new password will be delivered via email after approved by an administrator.',
+            message: formData.alternativeEmail
+              ? `Password reset was requested. The new password will be delivered to ${formData.alternativeEmail.trim()} via email after approved by an administrator.`
+              : 'Password reset was requested. The new password will be delivered via email after approved by an administrator.',
             type: 'success'
           });
         }
@@ -251,12 +274,13 @@ function CreateTicket() {
                 onChange={(e) => {
                   const val = e.target.value;
                   // if selecting Password Reset, ensure onBehalf is set to Self by default;
-                  // if switching away, clear onBehalfEmail
+                  // if switching away, clear onBehalfEmail and alternativeEmail
                   setFormData({
                     ...formData,
                     category: val,
                     onBehalf: val === 'Password Reset' ? 'Self' : formData.onBehalf,
-                    onBehalfEmail: val === 'Password Reset' ? formData.onBehalfEmail : ''
+                    onBehalfEmail: val === 'Password Reset' ? formData.onBehalfEmail : '',
+                    alternativeEmail: val === 'Password Reset' ? formData.alternativeEmail : ''
                   });
                 }}
                 required
@@ -312,9 +336,21 @@ function CreateTicket() {
                     required
                   />
                 )}
+
+                {/* If Self is selected, offer an optional alternative email to deliver the reset */}
+                {formData.onBehalf === 'Self' && (
+                  <input
+                    type="email"
+                    placeholder="Optional: alternative email to receive reset"
+                    value={formData.alternativeEmail}
+                    onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
+                    style={{ ...styles.input, flex: 1 }}
+                  />
+                )}
               </div>
               <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
                 Choose who the password reset is for. If "Other", provide their email or username.
+                {formData.onBehalf === 'Self' && ' You may optionally provide an alternative email to receive the reset password.'}
               </div>
             </div>
           )}
