@@ -95,16 +95,17 @@ export default function CreateTicket() {
     return () => { mounted = false; };
   }, [instance, accounts]);
 
-  // Clear on-behalf UI when leaving Password Reset
+  // Previously we cleared on-behalf state when leaving Password Reset.
+  // Change: Only clear fields that are specific to the verify/password-reset flow.
+  // Keep onBehalfType/onBehalfUser so "On behalf" can be used for other categories as well.
   useEffect(() => {
     if (formData.category !== "Password Reset") {
-      setOnBehalfType(null);
-      setOnBehalfEmailInput("");
-      setOnBehalfUser(null);
+      // clear verify/alternate-email fields that only apply to Password Reset
       setAlternateEmail("");
       setVerifyMessage("");
       setVerifyRaw(null);
       setVerifyLoading(false);
+      // keep onBehalfType/onBehalfUser/onBehalfEmailInput intact so other categories can use them
     }
   }, [formData.category]);
 
@@ -222,13 +223,15 @@ export default function CreateTicket() {
         status: "Open",
       };
 
-      if (formData.category === "Password Reset") {
+      if (onBehalfType) {
         payload.onBehalfType = onBehalfType;
         payload.onBehalfUserId = onBehalfType === "Others" ? onBehalfUser?.id : accounts?.[0]?.localAccountId;
         payload.onBehalfUserName = onBehalfType === "Others" ? onBehalfUser?.displayName : latestName;
         payload.onBehalfUserEmail = onBehalfType === "Others" ? onBehalfUser?.mail : latestEmail;
-        payload.alternateEmail = alternateEmail.trim();
       }
+
+      // Only set alternateEmail when present (and server checks its requirement for Password Reset)
+      if (alternateEmail && alternateEmail.trim()) payload.alternateEmail = alternateEmail.trim();
 
       const headers = {};
       if (tokenAccess) headers.Authorization = `Bearer ${tokenAccess}`;
@@ -309,7 +312,10 @@ export default function CreateTicket() {
             </div>
           </div>
 
-          {formData.category === "Password Reset" && (
+          {/* Show On-behalf controls for any selected category.
+              Password Reset keeps its extra validations (alternateEmail required) in handleSubmit.
+          */}
+          {formData.category && (
             <div style={styles.field}>
               <label style={styles.label}>On behalf of *</label>
               <select value={onBehalfType || ""} onChange={(e) => { const val = e.target.value || null; setOnBehalfType(val); setOnBehalfUser(null); setOnBehalfEmailInput(""); setVerifyMessage(""); setVerifyRaw(null); }} required style={styles.select}>
@@ -320,7 +326,7 @@ export default function CreateTicket() {
 
               {onBehalfType === "Others" && (
                 <div style={{ marginTop: 10 }}>
-                  <label style={{ ...styles.label, marginBottom: 6 }}>Enter exact email (userPrincipalName or mail) to verify *</label>
+                  <label style={{ ...styles.label, marginBottom: 6 }}>Enter exact email (userPrincipalName or mail) to verify</label>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input value={onBehalfEmailInput} onChange={(e) => setOnBehalfEmailInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleVerifyClick(e); } }} placeholder="user@yourdomain.com" style={{ ...styles.input, flex: 1 }} autoComplete="off" />
                     <button onClick={handleVerifyClick} type="button" style={styles.primarySmallButton} disabled={verifyLoading}>{verifyLoading ? "Verifying..." : "Verify"}</button>
@@ -345,15 +351,11 @@ export default function CreateTicket() {
                       <div style={{ fontSize: 13, color: "#6b7280" }}>{onBehalfUser.mail}</div>
                     </div>
                   )}
-
-                  <div style={{ marginTop: 12 }}>
-                    <label style={styles.label}>Alternate email to receive temporary password (mandatory)</label>
-                    <input value={alternateEmail} onChange={(e) => setAlternateEmail(e.target.value)} placeholder="someone@example.com" style={styles.input} type="email" required />
-                  </div>
                 </div>
               )}
 
-              {onBehalfType === "Self" && (
+              {/* Only show alternate email input for Password Reset (mandatory there) */}
+              {formData.category === "Password Reset" && (
                 <div style={{ marginTop: 12 }}>
                   <label style={styles.label}>Alternate email to receive temporary password (mandatory)</label>
                   <input value={alternateEmail} onChange={(e) => setAlternateEmail(e.target.value)} placeholder="someone@example.com" style={styles.input} type="email" required />
