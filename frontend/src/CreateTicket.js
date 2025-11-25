@@ -347,9 +347,9 @@ function CreateTicket() {
                     <div style={{ marginTop: 8, fontSize: 13 }}>
                       {verifyStatus === 'idle' && <span style={{ color: '#6b7280' }}>Click Verify to confirm the user exists in Azure AD.</span>}
                       {verifyStatus === 'verifying' && <span style={{ color: '#0ea5e9' }}>Verifying presence in Azure AD...</span>}
-                      {verifyStatus === 'verified' && <span style={{ color: '#16a34a' }}>✅ User verified: <strong>{verifiedName}</strong></span>}
-                      {verifyStatus === 'notfound' && <span style={{ color: '#dc2626' }}>❌ User not found in Azure AD. Check the email.</span>}
-                      {verifyStatus === 'error' && <span style={{ color: '#dc2626' }}>❌ Verification error: {verifyError}</span>}
+                      {verifyStatus === 'verified' && <span style={{ color: '#16a34a' }}>User verified: <strong>{verifiedName}</strong></span>}
+                      {verifyStatus === 'notfound' && <span style={{ color: '#dc2626' }}>User not found in Azure AD. Check the email.</span>}
+                      {verifyStatus === 'error' && <span style={{ color: '#dc2626' }}>Verification error: {verifyError}</span>}
                     </div>
 
                     {/* If verified -> ask for delivery email (alternative) */}

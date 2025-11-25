@@ -267,7 +267,7 @@ function TicketDetails() {
         @keyframes zoomIn { from { transform: scale(0.8); } to { transform: scale(1); } }
         .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.3s; }
         .modal-box { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 760px; text-align: center; box-shadow: 0 15px 50px rgba(0,0,0,0.25); animation: zoomIn 0.3s; }
-        .reason-input { width: 100%; padding: 12px; margin: 12px 0; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; }
+        .reason-input { width: 80%; padding: 12px; margin: 12px 0; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; }
         .error-text { color: #dc2626; font-size: 14px; margin-top: 8px; font-weight: 500; }
       `}</style>
 
@@ -648,7 +648,7 @@ function TicketDetails() {
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px', color: '#dc2626', fontSize: '1.6rem', fontWeight: 700 }}>Permanently Close Ticket?</h3>
-            <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>This action cannot be undone.</p>
+            <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>Are you sure?</p>
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
               <button onClick={confirmCloseTicket} disabled={loading} style={{ padding: '16px 36px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
                 {loading ? 'Closing...' : 'Yes, Close It'}
