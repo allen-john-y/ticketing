@@ -1,3 +1,4 @@
+// ---------------------- PART 1 ----------------------
 // ---------------------- Imports -------------------------
 const express = require("express");
 const mongoose = require("mongoose");
@@ -59,7 +60,6 @@ const connectDB = async () => {
 connectDB();
 
 // ---------------------- Schema ----------------------------
-// (keep your existing schema; I assume it already has deliveryEmail/onBehalf fields)
 const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: { type: Number, unique: true },
@@ -76,9 +76,12 @@ const ticketSchema = new mongoose.Schema(
     closedAt: Date,
     reopenedBy: String,
     reopenedAt: Date,
-    onBehalf: { type: String },
-    onBehalfEmail: { type: String },
+
+    // new fields to support "on behalf" password reset flow
+    onBehalf: { type: String }, // 'Self' or 'Other'
+    onBehalfEmail: { type: String }, // when onBehalf === 'Other'
     deliveryEmail: { type: String },
+
     history: [
       {
         action: { type: String, enum: ["created", "closed", "revived", "approved", "rejected"] },
@@ -282,12 +285,8 @@ app.post("/verify-user", async (req, res) => {
     return res.status(500).json({ message: 'Server error during verification' });
   }
 });
-
-// ---------------------- (rest of your existing routes) ----------------------
-// Get Tickets, Get Ticket by ID, Create Ticket, Approve, Reject, Close, Revive
-// (You already have these routes implemented; keep them as-is.)
-// Make sure your existing code for /tickets POST sets status: "Pending" as per previous change.
-
+// ---------------------- END PART 1 ----------------------
+// ---------------------- PART 2 ----------------------
 
 // Get Tickets
 app.get("/tickets", async (req, res) => {
@@ -312,7 +311,7 @@ app.get("/tickets/:id", async (req, res) => {
   }
 });
 
-// Create Ticket (ensure this uses status: "Pending" and accepts deliveryEmail/onBehalfEmail)
+// Create Ticket (ensure this uses status: "Pending" only for Password Reset and accepts deliveryEmail/onBehalfEmail)
 app.post("/tickets", async (req, res) => {
   try {
     const {
@@ -350,6 +349,9 @@ app.post("/tickets", async (req, res) => {
       }
     }
 
+    // Decide initial status based on category
+    const initialStatus = category === "Password Reset" ? "Pending" : "Open";
+
     ticketCounter++;
     const ticket = await Ticket.create({
       ticketNumber: ticketCounter,
@@ -359,7 +361,7 @@ app.post("/tickets", async (req, res) => {
       category,
       description,
       priority,
-      status: "Pending",
+      status: initialStatus,
       onBehalf: onBehalf || "Self",
       onBehalfEmail: onBehalfEmail || "",
       deliveryEmail: deliveryEmail || "",
@@ -376,17 +378,49 @@ app.post("/tickets", async (req, res) => {
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;
 
+    // Notify the ticket creator (different copy depending on whether approval is needed)
+    const creatorBodyPending = `
+Hi ${userName},
+
+Your ticket has been created and is currently PENDING department approval.
+
+Ticket No: ${ticketCounter}
+Category: ${category}
+Priority: ${priority}
+Description: ${description}
+Time: ${nowIST}
+
+If approved, the new password (for password reset) will be delivered to both your primary email and the alternative email you provided.
+You will be notified when the ticket is processed.
+    `.trim();
+
+    const creatorBodyOpen = `
+Hi ${userName},
+
+Your ticket has been created.
+
+Ticket No: ${ticketCounter}
+Category: ${category}
+Priority: ${priority}
+Description: ${description}
+Time: ${nowIST}
+
+This ticket is now in the queue and will be processed normally.
+    `.trim();
+
     await sendEmail(
       userEmail,
       `Ticket #${ticketCounter} Created`,
-      `Hi ${userName},\n\nYour ticket has been created and is currently PENDING department approval.\n\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}\n\nIf approved, the new password (for password reset) will be delivered to both your primary email and the alternative email you provided.\n\nYou will be notified when the ticket is processed.`,
+      (initialStatus === "Pending" ? creatorBodyPending : creatorBodyOpen),
       itHead
     );
 
-    const prodUrl = "https://ticketing-psi-tawny.vercel.app";
-    const ticketLink = `${prodUrl}/ticket/${ticket._id}`;
+    // If Password Reset -> send email to department head to ask for approval
+    if (initialStatus === "Pending") {
+      const prodUrl = "https://ticketing-psi-tawny.vercel.app";
+      const ticketLink = `${prodUrl}/ticket/${ticket._id}`;
 
-    const deptMessage = `
+      const deptMessage = `
 New Ticket #${ticketCounter}
 Created By: ${userName} (${userEmail})
 Category: ${category}
@@ -400,14 +434,15 @@ ${ticketLink}
 
 If you click Approve, the requested password reset will be performed and the new password will be sent to both the requester and the alternative email provided. The ticket will be closed automatically.
 If you click Reject, the requester will be notified and the ticket will be closed.
-    `.trim();
+      `.trim();
 
-    await sendEmail(
-      deptEmails[category],
-      `[TICKET #${ticketCounter}] ${category} - Action Required`,
-      deptMessage,
-      itHead
-    );
+      await sendEmail(
+        deptEmails[category],
+        `[TICKET #${ticketCounter}] ${category} - Action Required`,
+        deptMessage,
+        itHead
+      );
+    }
 
     res.status(201).json(ticket);
   } catch (err) {
@@ -415,8 +450,10 @@ If you click Reject, the requester will be notified and the ticket will be close
     res.status(500).json({ error: "Server error" });
   }
 });
+// ---------------------- END PART 2 ----------------------
+// ---------------------- PART 3 ----------------------
 
-// Approve endpoint (unchanged; ensure new behavior same as before)
+// Approve endpoint
 app.post("/tickets/:id/approve", async (req, res) => {
   try {
     const { approvedBy, note } = req.body;
@@ -427,11 +464,18 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(400).json({ message: "Ticket is already closed" });
     }
 
+    // SAFETY: Only allow approve flow for Password Reset category
+    if (ticket.category !== "Password Reset") {
+      return res.status(400).json({ message: "Approval is only allowed for Password Reset tickets." });
+    }
+
+    // Determine which user to reset: if onBehalfEmail provided use it, else try userId then userEmail
     const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
     if (!userIdentifier) {
       return res.status(400).json({ message: "No user identifier available to reset password" });
     }
 
+    // Perform Azure password reset
     let newPassword;
     try {
       newPassword = await resetAzurePassword(userIdentifier);
@@ -440,6 +484,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(500).json({ message: "Password reset failed", error: err.message });
     }
 
+    // Update ticket history and close it
     const now = new Date();
 
     ticket.history.push({
@@ -449,18 +494,18 @@ app.post("/tickets/:id/approve", async (req, res) => {
       reason: note || "Approved and password reset performed",
     });
 
-    ticket.status = "Approved";
+    // Mark closed and add close history entry
+    ticket.status = "Closed";
     ticket.closedBy = approvedBy || "Department Head";
     ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
     ticket.closedAt = now;
 
     ticket.history.push({
       action: "closed",
-      by: approvedBy || "Department Head",
+      by: ticket.closedBy,
       at: now,
       reason: ticket.closeReason,
     });
-    ticket.status = "Closed";
 
     await ticket.save();
 
@@ -492,12 +537,15 @@ Category: ${ticket.category}
 If you did not request this, please contact IT immediately.
     `.trim();
 
+    // Notify requestor primary email
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBody, itHead);
 
+    // Notify deliveryEmail if provided and different
     if (ticket.deliveryEmail && ticket.deliveryEmail.trim() && ticket.deliveryEmail.trim() !== ticket.userEmail.trim()) {
       await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBody, itHead);
     }
 
+    // Notify department (confirmation)
     const deptBody = `
 Ticket #${ticket.ticketNumber} has been approved and password reset performed by ${ticket.closedBy} on ${nowIST}.
 
@@ -528,7 +576,7 @@ Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
   }
 });
 
-// Reject endpoint (unchanged)
+// Reject endpoint (keeps behavior: closes and notifies)
 app.post("/tickets/:id/reject", async (req, res) => {
   try {
     const { rejectedBy, reason } = req.body;
@@ -548,7 +596,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
       reason: reason || "Rejected by Department Head",
     });
 
-    ticket.status = "Rejected";
+    ticket.status = "Closed";
     ticket.closedBy = rejectedBy || "Department Head";
     ticket.closeReason = reason ? `Rejected: ${reason}` : "Rejected by Department Head";
     ticket.closedAt = now;
@@ -559,7 +607,6 @@ app.post("/tickets/:id/reject", async (req, res) => {
       at: now,
       reason: ticket.closeReason,
     });
-    ticket.status = "Closed";
 
     await ticket.save();
 
@@ -618,11 +665,186 @@ Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
+// ---------------------- END PART 3 ----------------------
+// ---------------------- PART 4 ----------------------
 
-// (keep your close/revive endpoints unchanged as in your existing server.js)
+// Close Ticket (manual close - unchanged but kept tidy)
+app.put("/tickets/:id/close", async (req, res) => {
+  try {
+    const { closedBy, closeReason } = req.body;
+
+    if (!closeReason || closeReason.trim() === "") {
+      return res.status(400).json({ message: "Close reason is required" });
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    if (ticket.status === "Closed") {
+      return res.status(400).json({ message: "Ticket is already closed" });
+    }
+
+    const now = new Date();
+
+    ticket.history.push({
+      action: "closed",
+      by: closedBy?.trim() || "IT Head",
+      at: now,
+      reason: closeReason.trim(),
+    });
+
+    ticket.status = "Closed";
+    ticket.closedBy = closedBy?.trim() || "IT Head";
+    ticket.closeReason = closeReason.trim();
+    ticket.closedAt = now;
+
+    await ticket.save();
+
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    const emailBody = `
+TICKET #${ticket.ticketNumber} HAS BEEN CLOSED
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Category       : ${ticket.category}
+Priority       : ${ticket.priority}
+Created by     : ${ticket.userName} (${ticket.userEmail})
+Ticket Number  : #${ticket.ticketNumber}
+
+Closed by      : ${ticket.closedBy}
+Closed on      : ${nowIST}
+
+Reason for closing:
+${ticket.closeReason}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This ticket is now officially closed.
+    `.trim();
+
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailBody, itHead);
+    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
+
+    console.log(`Ticket #${ticket.ticketNumber} closed by ${ticket.closedBy}`);
+
+    res.json({
+      message: "Ticket closed successfully",
+      ticket: {
+        _id: ticket._id,
+        ticketNumber: ticket.ticketNumber,
+        status: ticket.status,
+        closedBy: ticket.closedBy,
+        closeReason: ticket.closeReason,
+        closedAt: ticket.closedAt,
+        history: ticket.history,
+      },
+    });
+  } catch (err) {
+    console.error("Close ticket error:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// Revive Ticket
+app.put("/tickets/:id/revive", async (req, res) => {
+  try {
+    const { revivedBy, reviveReason } = req.body;
+
+    if (!reviveReason || reviveReason.trim() === "") {
+      return res.status(400).json({ message: "Revive reason is required" });
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    if (ticket.status !== "Closed") {
+      return res.status(400).json({ message: "Only closed tickets can be revived" });
+    }
+
+    const now = new Date();
+
+    ticket.history.push({
+      action: "revived",
+      by: revivedBy?.trim() || "Unknown User",
+      at: now,
+      reason: reviveReason.trim(),
+    });
+
+    ticket.status = "Open";
+    ticket.reopenedBy = revivedBy?.trim() || "Unknown User";
+    ticket.reopenedAt = now;
+    ticket.reviveReason = reviveReason.trim();
+
+    await ticket.save();
+
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const dept = deptEmails[ticket.category] || "helpdesk@sandeza-inc.com";
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    const emailBody = `
+TICKET #${ticket.ticketNumber} HAS BEEN REVIVED (Reopened)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Category       : ${ticket.category}
+Priority       : ${ticket.priority}
+Created by     : ${ticket.userName} (${ticket.userEmail})
+Ticket Number  : #${ticket.ticketNumber}
+
+Revived by     : ${ticket.reopenedBy}
+Revived on     : ${nowIST}
+
+Reason for reviving:
+${ticket.reviveReason}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This ticket is now OPEN again and requires attention.
+    `.trim();
+
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailBody, itHead);
+    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
+
+    console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
+
+    res.json({
+      message: "Ticket revived successfully",
+      ticket: {
+        _id: ticket._id,
+        status: "Open",
+        reopenedBy: ticket.reopenedBy,
+        reviveReason: ticket.reviveReason,
+        reopenedAt: ticket.reopenedAt,
+        history: ticket.history,
+      },
+    });
+  } catch (err) {
+    console.error("Revive ticket error:", err.message);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Server running on port ${PORT} (Full History Enabled)`)
 );
+// ---------------------- END PART 4 ----------------------
