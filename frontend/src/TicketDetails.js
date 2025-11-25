@@ -383,40 +383,100 @@ function TicketDetails() {
 
       {/* ⭐⭐⭐ CATEGORY HEAD APPROVAL MODAL ⭐⭐⭐ */}
       {showApprovalModal && isCategoryHead && (
-        <div className="overlay">
-          <div className="modal-box">
-            <h2 style={{ marginBottom: 15 }}>Action Required</h2>
-            <p>You are the <strong>Category Head</strong> for:</p>
-            <p><strong>{ticket.category}</strong></p>
+  <div className="overlay">
+    <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
 
-            <textarea
-              className="reason-input"
-              placeholder="Optional note..."
-              value={adminNote}
-              onChange={(e) => setAdminNote(e.target.value)}
-              rows={4}
-            />
+      <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
+      <p style={{ color: "#475569", marginBottom: 20 }}>
+        You are the <strong>Category Head</strong> for <strong>{ticket.category}</strong>.
+        Review the ticket details before taking action.
+      </p>
 
-            <div style={{ display: "flex", gap: 16, marginTop: 20, justifyContent: "center" }}>
-              <button
-                onClick={handleApprove}
-                disabled={approveLoading}
-                style={{ padding: "12px 20px", background: "#16a34a", color: "white", borderRadius: 12 }}
-              >
-                {approveLoading ? "Approving..." : "Approve"}
-              </button>
+      {/* ⭐ TICKET DETAILS BOX ⭐ */}
+      <div style={{
+        background: "#f8fafc",
+        padding: 18,
+        borderRadius: 12,
+        textAlign: "left",
+        marginBottom: 20,
+        border: "1px solid #e2e8f0"
+      }}>
+        <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700 }}>
+          Ticket Summary
+        </h3>
 
-              <button
-                onClick={handleReject}
-                disabled={rejectLoading}
-                style={{ padding: "12px 20px", background: "#dc2626", color: "white", borderRadius: 12 }}
-              >
-                {rejectLoading ? "Rejecting..." : "Reject"}
-              </button>
-            </div>
+        <p><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
+        <p><strong>Created By:</strong> {ticket.userName} ({ticket.userEmail})</p>
+        <p><strong>Category:</strong> {ticket.category}</p>
+        <p><strong>Priority:</strong> {ticket.priority}</p>
+        <p><strong>On Behalf:</strong> {ticket.onBehalf || "Self"}</p>
+        {ticket.onBehalfEmail && (
+          <p><strong>On Behalf Email:</strong> {ticket.onBehalfEmail}</p>
+        )}
+        <p><strong>Created On:</strong> {formatDate(ticket.createdAt)}</p>
+
+        <div style={{ marginTop: 12 }}>
+          <strong>Description:</strong>
+          <div style={{
+            background: "#e2e8f0",
+            padding: 10,
+            borderRadius: 8,
+            marginTop: 6,
+            whiteSpace: "pre-wrap"
+          }}>
+            {ticket.description}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ⭐ ADMIN NOTE INPUT ⭐ */}
+      <textarea
+        className="reason-input"
+        placeholder="Optional note to requester..."
+        value={adminNote}
+        onChange={(e) => setAdminNote(e.target.value)}
+        rows={4}
+        style={{ width: "100%", marginBottom: 10 }}
+      />
+
+      {/* ⭐ ACTION BUTTONS ⭐ */}
+      <div style={{ display: "flex", gap: 16, marginTop: 10, justifyContent: "center" }}>
+        <button
+          onClick={handleApprove}
+          disabled={approveLoading}
+          style={{
+            padding: "12px 22px",
+            background: "#16a34a",
+            color: "white",
+            borderRadius: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            minWidth: 120
+          }}
+        >
+          {approveLoading ? "Approving..." : "Approve"}
+        </button>
+
+        <button
+          onClick={handleReject}
+          disabled={rejectLoading}
+          style={{
+            padding: "12px 22px",
+            background: "#dc2626",
+            color: "white",
+            borderRadius: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            minWidth: 120
+          }}
+        >
+          {rejectLoading ? "Rejecting..." : "Reject"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
       {/* ⭐⭐⭐ PASSWORD POPUP FOR CATEGORY HEAD ⭐⭐⭐ */}
       {showPasswordPopup && (
