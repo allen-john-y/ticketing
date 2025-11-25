@@ -168,7 +168,7 @@ function CreateTicket() {
           setModal({
             open: true,
             title: 'Password Reset Requested',
-            message: 'Password reset was requested. The new password will be delivered via email or your organization’s preferred channel.',
+            message: 'Password reset was requested. The new password will be delivered via email after approved by an administrator.',
             type: 'success'
           });
         }

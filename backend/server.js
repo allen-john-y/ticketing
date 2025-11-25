@@ -76,9 +76,13 @@ const ticketSchema = new mongoose.Schema(
     reopenedBy: String,
     reopenedAt: Date,
 
+    // new fields to support "on behalf" password reset flow
+    onBehalf: { type: String }, // 'Self' or 'Other'
+    onBehalfEmail: { type: String }, // when onBehalf === 'Other'
+
     history: [
       {
-        action: { type: String, enum: ["created", "closed", "revived"] },
+        action: { type: String, enum: ["created", "closed", "revived", "approved", "rejected"] },
         by: String,
         at: { type: Date, default: Date.now },
         reason: String,
@@ -211,10 +215,11 @@ const getAccessToken = async () => {
   return data.access_token;
 };
 
-const resetAzurePassword = async (userId) => {
+const resetAzurePassword = async (userIdentifier) => {
+  // userIdentifier can be UPN (email) or id depending on what caller provides.
   const token = await getAccessToken();
   const newPassword = Math.random().toString(36).slice(-10) + "A1!";
-  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userId)}`, {
+  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userIdentifier)}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -228,7 +233,10 @@ const resetAzurePassword = async (userId) => {
     }),
     agent: new https.Agent({ rejectUnauthorized: false }),
   });
-  if (!res.ok) throw new Error(`Azure reset failed: ${await res.text()}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Azure reset failed: ${body}`);
+  }
   return newPassword;
 };
 
@@ -263,9 +271,19 @@ app.get("/tickets/:id", async (req, res) => {
 // Create Ticket
 app.post("/tickets", async (req, res) => {
   try {
-    const { category, description, priority, userId, userName, userEmail } = req.body;
+    const {
+      category,
+      description,
+      priority,
+      userId,
+      userName,
+      userEmail,
+      onBehalf,
+      onBehalfEmail,
+    } = req.body;
     if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
+    // Increment ticket counter and create ticket
     ticketCounter++;
     const ticket = await Ticket.create({
       ticketNumber: ticketCounter,
@@ -276,62 +294,56 @@ app.post("/tickets", async (req, res) => {
       description,
       priority,
       status: "Open",
-      history: [{
-        action: "created",
-        by: userName,
-        at: new Date(),
-        reason: null
-      }],
+      onBehalf: onBehalf || "Self",
+      onBehalfEmail: onBehalfEmail || "",
+      history: [
+        {
+          action: "created",
+          by: userName,
+          at: new Date(),
+          reason: null,
+        },
+      ],
     });
 
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;
 
+    // Send confirmation to the ticket creator
     await sendEmail(
       userEmail,
       `Ticket #${ticketCounter} Created`,
-      `Hi ${userName},\n\nYour ticket has been created.\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}`
-    );
-
-    await sendEmail(
-      deptEmails[category],
-      `[TICKET #${ticketCounter}] ${category}`,
-      `New Ticket #${ticketCounter}\nCreated By: ${userName}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}`,
+      `Hi ${userName},\n\nYour ticket has been created.\n\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}\n\nYou will be notified when the ticket is processed.`,
       itHead
     );
 
-    if (category === "Password Reset") {
-      try {
-        const newPassword = await resetAzurePassword(userId);
+    // Send mail to department head with production URL link for approve/reject
+    const prodUrl = "https://ticketing-psi-tawny.vercel.app";
+    const ticketLink = `${prodUrl}/ticket/${ticket._id}`;
 
-        await sendEmail(
-          userEmail,
-          `[TICKET #${ticketCounter}] Password Reset Completed`,
-          `Hi ${userName},\n\nYour password has been reset.\nNew Password: ${newPassword}\nTicket: ${ticketCounter}\nTime: ${nowIST}`,
-          itHead
-        );
+    const deptMessage = `
+New Ticket #${ticketCounter}
+Created By: ${userName} (${userEmail})
+Category: ${category}
+Priority: ${priority}
+Description: ${description}
+Time: ${nowIST}
 
-        await sendEmail(
-          deptEmails[category],
-          `[TICKET #${ticketCounter}] Password Reset Completed`,
-          `Password reset completed for ${userName} (${userEmail}).\nNew Password: ${newPassword}\nTime: ${nowIST}`,
-          itHead
-        );
+To review and take action, open this link in your browser (please sign in with your admin account):
+${ticketLink}
 
-        ticket.status = "Closed";
-        ticket.closedBy = "IT Automation System";
-        ticket.closedAt = new Date();
-        ticket.history.push({
-          action: "closed",
-          by: "IT Automation System",
-          at: new Date(),
-          reason: "Auto-closed after password reset"
-        });
-        await ticket.save();
-      } catch (err) {
-        console.error("Password reset failed:", err.message);
-      }
-    }
+If you click Approve, the requested password reset will be performed and the new password will be sent to the requester. If you click Reject, the requester will be notified and the ticket will be closed.
+    `.trim();
+
+    await sendEmail(
+      deptEmails[category],
+      `[TICKET #${ticketCounter}] ${category} - Action Required`,
+      deptMessage,
+      itHead
+    );
+
+    // IMPORTANT: Do NOT auto-reset password or auto-close ticket here.
+    // Approval or rejection must be done by the category head via the UI (which will call the endpoints below).
 
     res.status(201).json(ticket);
   } catch (err) {
@@ -340,7 +352,197 @@ app.post("/tickets", async (req, res) => {
   }
 });
 
-// Close Ticket
+// Admin APPROVE endpoint - performs the password reset and closes ticket
+app.post("/tickets/:id/approve", async (req, res) => {
+  try {
+    const { approvedBy, note } = req.body; // approvedBy should contain admin name/email
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    if (ticket.status === "Closed") {
+      return res.status(400).json({ message: "Ticket is already closed" });
+    }
+
+    // Determine which user to reset: if onBehalfEmail provided use it, else try userId then userEmail
+    const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
+    if (!userIdentifier) {
+      return res.status(400).json({ message: "No user identifier available to reset password" });
+    }
+
+    // Perform Azure password reset
+    let newPassword;
+    try {
+      newPassword = await resetAzurePassword(userIdentifier);
+    } catch (err) {
+      console.error("Password reset failed during approve:", err.message);
+      return res.status(500).json({ message: "Password reset failed", error: err.message });
+    }
+
+    // Update ticket to closed + history
+    const now = new Date();
+    ticket.history.push({
+      action: "approved",
+      by: approvedBy || "Department Head",
+      at: now,
+      reason: note || "Approved and password reset performed",
+    });
+
+    ticket.status = "Closed";
+    ticket.closedBy = approvedBy || "Department Head";
+    ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
+    ticket.closedAt = now;
+
+    await ticket.save();
+
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    // Notify requester with the new password
+    const userBody = `
+Hi ${ticket.userName},
+
+Your password reset request (Ticket #${ticket.ticketNumber}) has been approved by ${ticket.closedBy} on ${nowIST}.
+The new temporary password is:
+
+${newPassword}
+
+Please sign in and change your password immediately (the password is set to force change on next sign-in).
+
+Ticket: #${ticket.ticketNumber}
+Category: ${ticket.category}
+
+If you did not request this, please contact IT immediately.
+    `.trim();
+
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBody, itHead);
+
+    // Notify department (confirmation)
+    const deptBody = `
+Ticket #${ticket.ticketNumber} has been approved and password reset performed by ${ticket.closedBy} on ${nowIST}.
+
+Affected user: ${ticket.onBehalfEmail || ticket.userEmail}
+Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
+    `.trim();
+
+    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptBody, itHead);
+
+    console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
+
+    // Return the new password to the caller (so the frontend modal can display it).
+    res.json({
+      message: "Ticket approved and password reset performed",
+      ticket: {
+        _id: ticket._id,
+        ticketNumber: ticket.ticketNumber,
+        status: ticket.status,
+        closedBy: ticket.closedBy,
+        closeReason: ticket.closeReason,
+        closedAt: ticket.closedAt,
+        history: ticket.history,
+      },
+      newPassword, // sensitive: only returned on approve flow to admin caller
+    });
+  } catch (err) {
+    console.error("Approve error:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// Admin REJECT endpoint - closes ticket and notifies requester
+app.post("/tickets/:id/reject", async (req, res) => {
+  try {
+    const { rejectedBy, reason } = req.body; // rejectedBy should contain admin name/email
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    if (ticket.status === "Closed") {
+      return res.status(400).json({ message: "Ticket is already closed" });
+    }
+
+    const now = new Date();
+
+    ticket.history.push({
+      action: "rejected",
+      by: rejectedBy || "Department Head",
+      at: now,
+      reason: reason || "Rejected by Department Head",
+    });
+
+    ticket.status = "Closed";
+    ticket.closedBy = rejectedBy || "Department Head";
+    ticket.closeReason = reason ? `Rejected: ${reason}` : "Rejected by Department Head";
+    ticket.closedAt = now;
+
+    await ticket.save();
+
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    // Notify requester that their ticket was rejected
+    const userBody = `
+Hi ${ticket.userName},
+
+Your request (Ticket #${ticket.ticketNumber}) has been reviewed by ${ticket.closedBy} on ${nowIST} and has been rejected.
+
+Reason:
+${reason || "No reason provided."}
+
+Ticket: #${ticket.ticketNumber}
+Category: ${ticket.category}
+
+If you believe this is in error, please contact the department or raise a new ticket.
+    `.trim();
+
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Request Rejected`, userBody, itHead);
+
+    // Notify department (confirmation)
+    const deptBody = `
+Ticket #${ticket.ticketNumber} has been rejected by ${ticket.closedBy} on ${nowIST}.
+
+Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
+    `.trim();
+
+    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptBody, itHead);
+
+    console.log(`Ticket #${ticket.ticketNumber} rejected by ${ticket.closedBy} and closed.`);
+
+    res.json({
+      message: "Ticket rejected and closed",
+      ticket: {
+        _id: ticket._id,
+        ticketNumber: ticket.ticketNumber,
+        status: ticket.status,
+        closedBy: ticket.closedBy,
+        closeReason: ticket.closeReason,
+        closedAt: ticket.closedAt,
+        history: ticket.history,
+      },
+    });
+  } catch (err) {
+    console.error("Reject error:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// Close Ticket (manual close - unchanged but kept)
 app.put("/tickets/:id/close", async (req, res) => {
   try {
     const { closedBy, closeReason } = req.body;
@@ -362,7 +564,7 @@ app.put("/tickets/:id/close", async (req, res) => {
       action: "closed",
       by: closedBy?.trim() || "IT Head",
       at: now,
-      reason: closeReason.trim()
+      reason: closeReason.trim(),
     });
 
     ticket.status = "Closed";
@@ -417,7 +619,7 @@ This ticket is now officially closed.
         closedBy: ticket.closedBy,
         closeReason: ticket.closeReason,
         closedAt: ticket.closedAt,
-        history: ticket.history
+        history: ticket.history,
       },
     });
   } catch (err) {
@@ -450,7 +652,7 @@ app.put("/tickets/:id/revive", async (req, res) => {
       action: "revived",
       by: revivedBy?.trim() || "Unknown User",
       at: now,
-      reason: reviveReason.trim()
+      reason: reviveReason.trim(),
     });
 
     ticket.status = "Open";
@@ -505,7 +707,7 @@ This ticket is now OPEN again and requires attention.
         reopenedBy: ticket.reopenedBy,
         reviveReason: ticket.reviveReason,
         reopenedAt: ticket.reopenedAt,
-        history: ticket.history
+        history: ticket.history,
       },
     });
   } catch (err) {
