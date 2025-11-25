@@ -93,7 +93,7 @@ function TicketDetails() {
       }
     };
     fetchTicket();
-  }, [id, accounts]);
+  }, [id, accounts, instance]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
@@ -110,46 +110,66 @@ function TicketDetails() {
   // Derived: show inline "Waiting for Approval" banner if category head and ticket pending/open
   const needsApprovalBanner = isCategoryHead && ticket && (ticket.status === 'Pending' || ticket.status === 'Open') && !showApprovalModal;
 
-  // ⭐ APPROVE Handler
-  const handleApprove = async () => {
+  // copy password helper (for admin)
+  const copyToClipboard = (text) => {
     try {
-      setApproveLoading(true);
+      navigator.clipboard.writeText(text);
+      alert('Password copied to clipboard');
+    } catch (e) {
+      console.error('Copy failed', e);
+    }
+  };
 
+  // ⭐ APPROVE Handler (fixed: show password popup when returned, otherwise close modal then navigate)
+  const handleApprove = async () => {
+    setApproveLoading(true);
+    try {
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
         approvedBy: accounts[0]?.name || accounts[0]?.username,
         note: adminNote
       });
 
-      // If backend returned password → show in popup
+      // Close the approval modal state (unmount UI)
+      setShowApprovalModal(false);
+
+      // If backend returned password → show popup (admin copies or clicks Done which navigates)
       if (res.data?.newPassword) {
         setReturnedPassword(res.data.newPassword);
         setShowPasswordPopup(true);
+        // do not navigate now — admin will click Done which navigates
+      } else {
+        // No password returned — navigate back after small timeout so modal unmounts cleanly
+        setTimeout(() => {
+          navigate("/", { state: { refresh: true } });
+        }, 200);
       }
-
-      setShowApprovalModal(false);
-      // refresh / navigate to home to refresh lists
-      navigate("/", { state: { refresh: true } });
 
     } catch (err) {
       console.error("Approve error:", err);
       alert("Approval failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
     } finally {
       setApproveLoading(false);
+      setAdminNote('');
     }
   };
 
-  // ⭐ REJECT Handler
+  // ⭐ REJECT Handler (fixed: close modal then navigate after short delay)
   const handleReject = async () => {
+    setRejectLoading(true);
     try {
-      setRejectLoading(true);
-
       await axios.post(`${backendBase}/tickets/${id}/reject`, {
         rejectedBy: accounts[0]?.name || accounts[0]?.username,
         reason: adminNote
       });
 
+      // close modal first
       setShowApprovalModal(false);
-      navigate("/", { state: { refresh: true } });
+      setAdminNote('');
+
+      // navigate after tiny delay so modal unmounts visually
+      setTimeout(() => {
+        navigate("/", { state: { refresh: true } });
+      }, 200);
 
     } catch (err) {
       console.error("Reject error:", err);
@@ -177,13 +197,23 @@ function TicketDetails() {
         closeReason: closeReason.trim(),
         closedBy: accounts[0]?.name || accounts[0]?.username
       });
+
+      // FIX: close modal states before navigating
       setConfirmModal(false);
+      setShowReasonInput(false);
       setCloseReason('');
-      navigate('/', { state: { refresh: true } });
+      setCloseError('');
+
+      setTimeout(() => {
+        navigate('/', { state: { refresh: true } });
+      }, 200);
+
     } catch (err) {
       setCloseError("Failed to close ticket. Please try again.");
+      console.error("Close error:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const cancelClose = () => {
@@ -211,13 +241,23 @@ function TicketDetails() {
         revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
         reviveReason: reviveReason.trim()
       });
+
+      // FIX: close modals then navigate
       setConfirmReviveModal(false);
+      setShowReviveReasonInput(false);
       setReviveReason('');
-      navigate('/', { state: { refresh: true } });
+      setReviveError('');
+
+      setTimeout(() => {
+        navigate('/', { state: { refresh: true } });
+      }, 200);
+
     } catch (err) {
       setReviveError("Failed to revive ticket. Please try again.");
+      console.error("Revive error:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const cancelRevive = () => {
@@ -249,16 +289,6 @@ function TicketDetails() {
         ...(ticket.closedAt ? [{ action: "closed", by: ticket.closedBy || "Unknown", at: ticket.closedAt, reason: ticket.closeReason }] : []),
         ...(ticket.reopenedAt ? [{ action: "revived", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reviveReason }] : [])
       ];
-
-  // copy password helper (for admin)
-  const copyToClipboard = (text) => {
-    try {
-      navigator.clipboard.writeText(text);
-      alert('Password copied to clipboard');
-    } catch (e) {
-      console.error('Copy failed', e);
-    }
-  };
 
   return (
     <>
