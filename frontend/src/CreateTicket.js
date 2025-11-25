@@ -326,7 +326,15 @@ export default function CreateTicket() {
                     <button onClick={handleVerifyClick} type="button" style={styles.primarySmallButton} disabled={verifyLoading}>{verifyLoading ? "Verifying..." : "Verify"}</button>
                   </div>
 
-                  {verifyMessage && <div style={{ marginTop: 8, color: onBehalfUser ? "green" : "crimson" }}>{verifyMessage}</div>}
+                  {verifyMessage && (
+                    <div style={{
+                      marginTop: 8,
+                      color: onBehalfUser ? "green" : "crimson",
+                      fontWeight: "bold"
+                    }}>
+                      {verifyMessage}
+                    </div>
+                  )}
 
                   {/* Raw JSON response for debugging */}
                   {verifyRaw && <pre style={{ marginTop: 8, background: "#f3f4f6", padding: 8, borderRadius: 6, fontSize: 12, maxHeight: 160, overflow: "auto" }}>{JSON.stringify(verifyRaw, null, 2)}</pre>}
@@ -360,7 +368,18 @@ export default function CreateTicket() {
           </div>
 
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-            <button type="submit" style={{ ...styles.primaryButton, flex: 1 }} disabled={loading}>{loading ? "Creating..." : "Create Ticket"}</button>
+            <button type="submit" style={{ ...styles.primaryButton, flex: 1 }} 
+              disabled={
+                loading ||
+                (
+                  formData.category === "Password Reset" &&
+                  onBehalfType === "Others" &&
+                  !onBehalfUser
+                )
+              }
+            >
+              {loading ? "Creating..." : "Create Ticket"}
+            </button>
             <button type="button" onClick={() => navigate("/")} style={{ ...styles.ghostButton }}>Cancel</button>
           </div>
         </form>
