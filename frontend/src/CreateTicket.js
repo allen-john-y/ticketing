@@ -15,14 +15,18 @@ function PasswordPopup({ password, onClose }) {
   return (
     <div style={styles.overlay}>
       <div style={styles.passwordBox}>
-        <h2 style={{ marginBottom: '1rem' }}>🎉 Ticket Created!</h2>
+        <h2 style={{ marginBottom: '1rem' }}>🎉 Password Created</h2>
         <p><strong>Your new password:</strong></p>
         <p style={styles.passwordText}>{password}</p>
-        <button onClick={handleCopy} style={styles.copyButton}>
-          Copy Password
-        </button>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: '1rem' }}>
+          <button onClick={handleCopy} style={styles.copyButton}>
+            Copy
+          </button>
+          <button onClick={onClose} style={styles.closeButton}>
+            Close
+          </button>
+        </div>
         {copied && <p style={{ color: 'green', marginTop: '0.5rem' }}>Copied!</p>}
-        <button onClick={onClose} style={styles.modalCloseButton}>✖</button>
       </div>
     </div>
   );
@@ -43,6 +47,9 @@ function CreateTicket() {
   const [loading, setLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
+
+  // Ensure once closed the popup cannot be reopened for that password
+  const [passwordSeen, setPasswordSeen] = useState(false);
 
   // Modal for success/error messages (replaces window.alert)
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
@@ -152,10 +159,16 @@ function CreateTicket() {
         type: 'success'
       });
 
-      // If password reset, show popup with new password
-      if (formData.category === 'Password Reset' && response.data?.newPassword) {
-        setNewPassword(response.data.newPassword);
-        setShowPasswordPopup(true);
+      // If password reset and backend returned newPassword:
+      // - If the requester asked "Self" -> show popup immediately (only if not seen)
+      // - If "Other" -> do NOT show the password popup here (presumably handled by admins/other flow)
+      const returnedPassword = response.data?.newPassword;
+      if (formData.category === 'Password Reset' && returnedPassword) {
+        setNewPassword(returnedPassword);
+        if (formData.onBehalf === 'Self' && !passwordSeen) {
+          setShowPasswordPopup(true);
+        }
+        // if onBehalf === 'Other' we store it but do NOT show the popup here
       }
     } catch (error) {
       console.error('Error creating ticket:', error);
@@ -190,6 +203,13 @@ function CreateTicket() {
       // fallback: go home to refresh list
       navigate('/', { state: { refresh: true } });
     }
+  };
+
+  // Password popup close handler — mark password as seen and clear it so it cannot be reopened
+  const handlePasswordPopupClose = () => {
+    setShowPasswordPopup(false);
+    setPasswordSeen(true);
+    setNewPassword('');
   };
 
   // small helper to render user's initials as an avatar
@@ -359,10 +379,10 @@ function CreateTicket() {
         </div>
       )}
 
-      {showPasswordPopup && (
+      {showPasswordPopup && newPassword && !passwordSeen && (
         <PasswordPopup
           password={newPassword}
-          onClose={() => setShowPasswordPopup(false)}
+          onClose={handlePasswordPopupClose}
         />
       )}
     </div>
@@ -508,7 +528,6 @@ const styles = {
     borderRadius: '6px'
   },
   copyButton: {
-    marginTop: '1rem',
     background: '#3498db',
     color: 'white',
     padding: '8px 16px',
@@ -516,13 +535,12 @@ const styles = {
     borderRadius: '6px',
     cursor: 'pointer'
   },
-  modalCloseButton: {
-    position: 'absolute',
-    top: '10px',
-    right: '10px',
-    background: 'transparent',
+  closeButton: {
+    background: '#e5e7eb',
+    color: '#111827',
+    padding: '8px 16px',
     border: 'none',
-    fontSize: '1.2rem',
+    borderRadius: '6px',
     cursor: 'pointer'
   }
 };
