@@ -15,7 +15,7 @@ function PasswordPopup({ password, onClose }) {
   return (
     <div style={styles.overlay}>
       <div style={styles.passwordBox}>
-        <h2 style={{ marginBottom: '1rem' }}>🎉 Password Reset Complete</h2>
+        <h2 style={{ marginBottom: '1rem' }}>🎉 Password Reset</h2>
         <p><strong>Your new password:</strong></p>
         <p style={styles.passwordText}>{password}</p>
         <button onClick={handleCopy} style={styles.copyButton}>
@@ -32,6 +32,7 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
+  // Added onBehalf and onBehalfEmail to formData (onBehalf defaults to 'Self')
   const [formData, setFormData] = useState({
     category: '',
     description: '',
@@ -43,15 +44,17 @@ function CreateTicket() {
   const [newPassword, setNewPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
-  // New: flag to ensure once the password popup is closed it cannot be reopened
-  const [passwordViewed, setPasswordViewed] = useState(false);
-
+  // Modal for success/error messages (replaces window.alert)
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
+
+  // store created ticket id (if backend returns it) so we can offer "View Ticket"
   const [createdTicketId, setCreatedTicketId] = useState(null);
 
+  // Displayed user info (read-only in the form)
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
 
+  // Fetch up-to-date name/email from Graph when component mounts (if possible)
   useEffect(() => {
     let mounted = true;
     const fetchUser = async () => {
@@ -68,6 +71,7 @@ function CreateTicket() {
                       accounts[0]?.username || '';
         setDisplayEmail(email);
       } catch (err) {
+        // Silent fail — keep values from accounts if Graph call fails (no interrupt for user)
         console.debug('Could not fetch user profile for form display:', err?.message || err);
       }
     };
@@ -80,6 +84,7 @@ function CreateTicket() {
     setLoading(true);
     setCreatedTicketId(null);
 
+    // Validation: if Password Reset and selecting Other, require onBehalfEmail
     if (formData.category === 'Password Reset' && formData.onBehalf === 'Other' && !formData.onBehalfEmail.trim()) {
       setModal({
         open: true,
@@ -92,9 +97,10 @@ function CreateTicket() {
     }
 
     try {
+      // Acquire token for Graph API (and to authenticate backend)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
 
-      // attempt to refresh name/email (graceful fallback)
+      // Try to get the latest displayName and email (graceful fallback to earlier values)
       let latestName = displayName;
       let latestEmail = displayEmail;
       try {
@@ -106,14 +112,20 @@ function CreateTicket() {
                       (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
                       latestEmail || '';
       } catch (err) {
-        // ignore
+        // ignore, we'll use existing displayName/displayEmail
       }
 
+      // Determine on-behalf details
       const onBehalf = formData.category === 'Password Reset' ? formData.onBehalf : undefined;
       const onBehalfEmail = formData.category === 'Password Reset'
         ? (formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail)
         : undefined;
 
+      // If the requester chose "Self" for a Password Reset, request the backend to return the generated password
+      // NOTE: This requires backend support. The backend must return the new password in response.data.newPassword.
+      const returnPasswordToRequester = formData.category === 'Password Reset' && formData.onBehalf === 'Self';
+
+      // Prepare ticket data (phone removed)
       const ticketData = {
         category: formData.category,
         description: formData.description,
@@ -122,31 +134,63 @@ function CreateTicket() {
         userName: latestName || accounts[0]?.username,
         userEmail: latestEmail,
         status: 'Open',
+        // include on-behalf info for password resets
         ...(onBehalf ? { onBehalf } : {}),
-        ...(onBehalfEmail ? { onBehalfEmail } : {})
+        ...(onBehalfEmail ? { onBehalfEmail } : {}),
+        // flag asking backend to return the new password in the response when appropriate
+        ...(returnPasswordToRequester ? { returnPasswordToRequester: true } : {})
       };
 
+      // Post ticket to backend
       const response = await axios.post('https://ticketing-production-5334.up.railway.app/tickets', ticketData, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
+      // capture returned ticket id (backend may return different property names)
       const id = response?.data?._id || response?.data?.id || response?.data?.ticketId || null;
       if (id) setCreatedTicketId(id);
 
-      setModal({
-        open: true,
-        title: 'Ticket Created',
-        message: 'Ticket created successfully!',
-        type: 'success'
-      });
+      // If password reset for Self and backend returned newPassword, show popup immediately
+      if (formData.category === 'Password Reset' && formData.onBehalf === 'Self') {
+        const returnedPassword = response?.data?.newPassword || response?.data?.password || null;
+        if (returnedPassword) {
+          setNewPassword(returnedPassword);
+          setShowPasswordPopup(true);
+          // Also show a success modal but keep it subtle since popup is visible
+          setModal({
+            open: true,
+            title: 'Password Reset Delivered',
+            message: 'The new password is shown on screen. Please change it after first sign-in.',
+            type: 'success'
+          });
+        } else {
+          // Backend didn't return the password in the response; fallback to email behavior and inform the user
+          setModal({
+            open: true,
+            title: 'Password Reset Requested',
+            message: 'Password reset was requested. The new password will be delivered via email or your organization’s preferred channel.',
+            type: 'success'
+          });
+        }
+      } else {
+        // Regular non-self password reset or other categories
+        setModal({
+          open: true,
+          title: 'Ticket Created',
+          message: 'Ticket created successfully!',
+          type: 'success'
+        });
 
-      // Show password popup if backend returned newPassword AND it's a self-reset AND user hasn't viewed it yet
-      if (formData.category === 'Password Reset' && formData.onBehalf === 'Self' && response.data?.newPassword && !passwordViewed) {
-        setNewPassword(response.data.newPassword);
-        setShowPasswordPopup(true);
+        // If password reset and backend returned newPassword for "Other", still show popup so admins can see it
+        if (formData.category === 'Password Reset' && response.data?.newPassword) {
+          setNewPassword(response.data.newPassword);
+          setShowPasswordPopup(true);
+        }
       }
     } catch (error) {
       console.error('Error creating ticket:', error);
+
+      // Show error modal instead of alert
       const message = error?.response?.data?.message || error.message || 'Failed to create ticket.';
       setModal({
         open: true,
@@ -159,6 +203,7 @@ function CreateTicket() {
     setLoading(false);
   };
 
+  // Close modal handler: if success and user clicks OK we navigate home; user can also view the ticket
   const handleCloseModal = () => {
     const wasSuccess = modal.type === 'success';
     setModal({ open: false, title: '', message: '', type: 'info' });
@@ -169,20 +214,15 @@ function CreateTicket() {
 
   const handleViewTicket = () => {
     if (createdTicketId) {
+      // navigate to the ticket details page
       navigate(`/ticket/${createdTicketId}`);
     } else {
+      // fallback: go home to refresh list
       navigate('/', { state: { refresh: true } });
     }
   };
 
-  // When password popup closes, mark as viewed so it cannot be reopened
-  const handlePasswordPopupClose = () => {
-    setShowPasswordPopup(false);
-    setPasswordViewed(true);
-    // Optionally, clear newPassword from state for security (keeps it out of memory)
-    // setNewPassword('');
-  };
-
+  // small helper to render user's initials as an avatar
   const initials = (displayName || displayEmail || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   return (
@@ -210,6 +250,8 @@ function CreateTicket() {
                 value={formData.category}
                 onChange={(e) => {
                   const val = e.target.value;
+                  // if selecting Password Reset, ensure onBehalf is set to Self by default;
+                  // if switching away, clear onBehalfEmail
                   setFormData({
                     ...formData,
                     category: val,
@@ -245,6 +287,7 @@ function CreateTicket() {
             </div>
           </div>
 
+          {/* Conditional: On behalf dropdown & optional input shown only for Password Reset */}
           {formData.category === 'Password Reset' && (
             <div style={{ marginBottom: 12 }}>
               <label style={styles.label}>On behalf of *</label>
@@ -258,6 +301,7 @@ function CreateTicket() {
                   <option value="Other">Other</option>
                 </select>
 
+                {/* If Other is selected, show an input to capture the target user's email/username */}
                 {formData.onBehalf === 'Other' && (
                   <input
                     type="text"
@@ -302,6 +346,7 @@ function CreateTicket() {
         </form>
       </div>
 
+      {/* Notification Modal (replaces window.alert) */}
       {modal.open && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
@@ -323,6 +368,7 @@ function CreateTicket() {
                 OK
               </button>
 
+              {/* Offer to view newly created ticket if the backend returned an ID */}
               {modal.type === 'success' && createdTicketId && (
                 <button
                   onClick={handleViewTicket}
@@ -343,10 +389,10 @@ function CreateTicket() {
         </div>
       )}
 
-      {showPasswordPopup && !passwordViewed && (
+      {showPasswordPopup && (
         <PasswordPopup
           password={newPassword}
-          onClose={handlePasswordPopupClose}
+          onClose={() => setShowPasswordPopup(false)}
         />
       )}
     </div>
@@ -354,7 +400,6 @@ function CreateTicket() {
 }
 
 /* --- styles --- */
-/* (unchanged from your original; omitted here for brevity in the message — keep the same styles object you already have) */
 const styles = {
   pageWrap: {
     padding: '2rem',
