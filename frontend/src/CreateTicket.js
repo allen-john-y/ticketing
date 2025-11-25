@@ -1,26 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// Password Popup Component (kept for potential admin flows where password is returned)
+// Password Popup Component (kept)
 function PasswordPopup({ password, onClose }) {
   const [copied, setCopied] = useState(false);
-
   const handleCopy = () => {
     navigator.clipboard.writeText(password);
     setCopied(true);
   };
-
   return (
     <div style={styles.overlay}>
       <div style={styles.passwordBox}>
         <h2 style={{ marginBottom: '1rem' }}>🎉 Password Reset</h2>
         <p><strong>Your new password:</strong></p>
         <p style={styles.passwordText}>{password}</p>
-        <button onClick={handleCopy} style={styles.copyButton}>
-          Copy Password
-        </button>
+        <button onClick={handleCopy} style={styles.copyButton}>Copy Password</button>
         {copied && <p style={{ color: 'green', marginTop: '0.5rem' }}>Copied!</p>}
         <button onClick={onClose} style={styles.modalCloseButton}>✖</button>
       </div>
@@ -32,20 +28,30 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
+  const backendBase = "https://ticketing-production-5334.up.railway.app";
+
   const [formData, setFormData] = useState({
     category: '',
     description: '',
     priority: 'Medium',
-    onBehalf: 'Self',
-    onBehalfEmail: '',
-    alternativeEmail: '' // user-provided alternative delivery address
+    onBehalf: 'Self',        // Self or Other
+    onBehalfEmail: '',       // for Other: company email to verify
+    alternativeEmail: ''     // delivery email (for Self or Other)
   });
   const [loading, setLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [showPasswordPopup, setShowPasswordPopup] = useState(false);
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
   const [createdTicketId, setCreatedTicketId] = useState(null);
 
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
+
+  // --- States for verification of "Other" on-behalf email
+  // verifyStatus: 'idle' | 'verifying' | 'verified' | 'notfound' | 'error'
+  const [verifyStatus, setVerifyStatus] = useState('idle');
+  const [verifiedName, setVerifiedName] = useState('');
+  const [verifyError, setVerifyError] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -70,55 +76,91 @@ function CreateTicket() {
     return () => { mounted = false; };
   }, [instance, accounts]);
 
+  // Call backend to verify an "onBehalfEmail" exists in Azure AD
+  const handleVerifyOther = async () => {
+    const email = (formData.onBehalfEmail || '').trim();
+    setVerifyError('');
+    setVerifiedName('');
+    setVerifyStatus('idle');
+
+    if (!email) {
+      setVerifyError('Please enter the target user\'s company email to verify.');
+      return;
+    }
+    setVerifyStatus('verifying');
+    try {
+      // Acquire a token for auth to backend (backend will call Graph using client credentials)
+      const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
+
+      const res = await axios.post(`${backendBase}/verify-user`, { email }, {
+        headers: { Authorization: `Bearer ${token.accessToken}` }
+      });
+
+      if (res.data && res.data.exists) {
+        setVerifyStatus('verified');
+        setVerifiedName(res.data.displayName || res.data.mail || email);
+        // If the backend returned a canonical mail, use it as the onBehalfEmail (helps normalize UPN)
+        setFormData(prev => ({ ...prev, onBehalfEmail: res.data.mail || email }));
+      } else {
+        setVerifiedName('');
+        setVerifyStatus('notfound');
+        setVerifyError('User not found in Azure AD. Please check the email and try again.');
+      }
+    } catch (err) {
+      console.error('Verify error', err);
+      setVerifyStatus('error');
+      const msg = err?.response?.data?.message || err.message || 'Verification failed';
+      setVerifyError(msg);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setCreatedTicketId(null);
 
-    // Frontend validation:
-    // If Password Reset + Other -> require onBehalfEmail (already present in current UI)
-    if (formData.category === 'Password Reset' && formData.onBehalf === 'Other' && !formData.onBehalfEmail.trim()) {
-      setModal({
-        open: true,
-        title: 'Validation',
-        message: 'Please provide the email or username of the person you are requesting the password reset for.',
-        type: 'error'
-      });
-      setLoading(false);
-      return;
-    }
-
-    // If Password Reset + Self -> alternative email is now MANDATORY
-    if (formData.category === 'Password Reset' && formData.onBehalf === 'Self') {
-      const alt = (formData.alternativeEmail || '').trim();
-      if (!alt) {
-        setModal({
-          open: true,
-          title: 'Validation',
-          message: 'Please provide an alternative email address to receive the reset password.',
-          type: 'error'
-        });
+    // Validation
+    if (formData.category === 'Password Reset' && formData.onBehalf === 'Other') {
+      if (!formData.onBehalfEmail.trim()) {
+        setModal({ open: true, title: 'Validation', message: 'Please enter the company email of the person you are requesting the reset for.', type: 'error' });
         setLoading(false);
         return;
       }
+      // require verification for Other
+      if (verifyStatus !== 'verified') {
+        setModal({ open: true, title: 'Validation', message: 'Please verify the target user\'s email using the Verify button before submitting.', type: 'error' });
+        setLoading(false);
+        return;
+      }
+      // delivery email required for Other as well
+      const del = (formData.alternativeEmail || '').trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!del || !emailRegex.test(del)) {
+        setModal({ open: true, title: 'Validation', message: 'Please provide a valid alternative email address to receive the reset password for the target user.', type: 'error' });
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Self flow: alternative email mandatory (your requirement)
+    if (formData.category === 'Password Reset' && formData.onBehalf === 'Self') {
+      const alt = (formData.alternativeEmail || '').trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!alt) {
+        setModal({ open: true, title: 'Validation', message: 'Please provide an alternative email address to receive the reset password.', type: 'error' });
+        setLoading(false);
+        return;
+      }
       if (!emailRegex.test(alt)) {
-        setModal({
-          open: true,
-          title: 'Validation',
-          message: 'Please enter a valid alternative email address.',
-          type: 'error'
-        });
+        setModal({ open: true, title: 'Validation', message: 'Please enter a valid alternative email address.', type: 'error' });
         setLoading(false);
         return;
       }
     }
 
     try {
-      // Acquire token for auth (same as before)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
 
-      // Try to get latest display name & email (graceful fallback)
       let latestName = displayName;
       let latestEmail = displayEmail;
       try {
@@ -133,7 +175,13 @@ function CreateTicket() {
         // ignore
       }
 
-      // Prepare payload
+      const onBehalf = formData.category === 'Password Reset' ? formData.onBehalf : undefined;
+      const onBehalfEmail = formData.category === 'Password Reset'
+        ? (formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail)
+        : undefined;
+
+      const returnPasswordToRequester = formData.category === 'Password Reset' && formData.onBehalf === 'Self';
+
       const ticketData = {
         category: formData.category,
         description: formData.description,
@@ -141,39 +189,33 @@ function CreateTicket() {
         userId: accounts[0]?.localAccountId,
         userName: latestName || accounts[0]?.username,
         userEmail: latestEmail,
-        onBehalf: formData.category === 'Password Reset' ? formData.onBehalf : undefined,
-        onBehalfEmail: formData.category === 'Password Reset' && formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : undefined,
-        // For Self password reset, send the mandatory alternative email as deliveryEmail
-        ...(formData.category === 'Password Reset' && formData.onBehalf === 'Self' ? { deliveryEmail: formData.alternativeEmail.trim() } : {})
+        status: 'Pending',
+        ...(onBehalf ? { onBehalf } : {}),
+        ...(onBehalfEmail ? { onBehalfEmail } : {}),
+        ...(formData.alternativeEmail && formData.alternativeEmail.trim() ? { deliveryEmail: formData.alternativeEmail.trim() } : {}),
+        ...(returnPasswordToRequester ? { returnPasswordToRequester: true } : {})
       };
 
-      // POST to backend
-      const response = await axios.post('https://ticketing-production-5334.up.railway.app/tickets', ticketData, {
+      const response = await axios.post(`${backendBase}/tickets`, ticketData, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
       const id = response?.data?._id || response?.data?.id || response?.data?.ticketId || null;
       if (id) setCreatedTicketId(id);
 
-      // Inform user that ticket is created and pending admin approval
       setModal({
         open: true,
         title: 'Ticket Created',
         message:
           formData.category === 'Password Reset'
-            ? 'Your password reset ticket has been created and is pending department approval. If approved, the new password will be sent to both your primary email and the alternative email you provided.'
+            ? 'Your password reset ticket has been created and is now pending category head approval. If approved, the new password will be sent to the delivery email you provided.'
             : 'Ticket created successfully!',
         type: 'success'
       });
     } catch (error) {
       console.error('Error creating ticket:', error);
       const message = error?.response?.data?.message || error.message || 'Failed to create ticket.';
-      setModal({
-        open: true,
-        title: 'Failed',
-        message: `⚠️ ${message}`,
-        type: 'error'
-      });
+      setModal({ open: true, title: 'Failed', message: `⚠️ ${message}`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -182,17 +224,12 @@ function CreateTicket() {
   const handleCloseModal = () => {
     const wasSuccess = modal.type === 'success';
     setModal({ open: false, title: '', message: '', type: 'info' });
-    if (wasSuccess) {
-      navigate('/', { state: { refresh: true } });
-    }
+    if (wasSuccess) navigate('/', { state: { refresh: true } });
   };
 
   const handleViewTicket = () => {
-    if (createdTicketId) {
-      navigate(`/ticket/${createdTicketId}`);
-    } else {
-      navigate('/', { state: { refresh: true } });
-    }
+    if (createdTicketId) navigate(`/ticket/${createdTicketId}`);
+    else navigate('/', { state: { refresh: true } });
   };
 
   const initials = (displayName || displayEmail || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
@@ -229,6 +266,10 @@ function CreateTicket() {
                     onBehalfEmail: val === 'Password Reset' ? formData.onBehalfEmail : '',
                     alternativeEmail: val === 'Password Reset' ? formData.alternativeEmail : ''
                   });
+                  // reset verification when switching category
+                  setVerifyStatus('idle');
+                  setVerifiedName('');
+                  setVerifyError('');
                 }}
                 required
                 style={styles.select}
@@ -258,30 +299,79 @@ function CreateTicket() {
             </div>
           </div>
 
+          {/* Password Reset - conditional UI */}
           {formData.category === 'Password Reset' && (
             <div style={{ marginBottom: 12 }}>
               <label style={styles.label}>On behalf of *</label>
               <div style={{ display: 'flex', gap: 12 }}>
                 <select
                   value={formData.onBehalf}
-                  onChange={(e) => setFormData({ ...formData, onBehalf: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({ ...formData, onBehalf: val });
+                    // reset verification when user toggles between Self/Other
+                    setVerifyStatus('idle');
+                    setVerifiedName('');
+                    setVerifyError('');
+                    setFormData(prev => ({ ...prev, onBehalfEmail: '' }));
+                  }}
                   style={{ ...styles.select, flex: '0 0 220px' }}
                 >
                   <option value="Self">Self</option>
                   <option value="Other">Other</option>
                 </select>
 
+                {/* If Other -> show email + verify */}
                 {formData.onBehalf === 'Other' && (
-                  <input
-                    type="text"
-                    placeholder="Email or username of the other user"
-                    value={formData.onBehalfEmail}
-                    onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
-                    style={{ ...styles.input, flex: 1 }}
-                    required
-                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Enter company email of target user"
+                        value={formData.onBehalfEmail}
+                        onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
+                        style={{ ...styles.input, flex: 1 }}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyOther}
+                        style={{ padding: '10px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#2563eb', color: 'white', fontWeight: 700 }}
+                        disabled={verifyStatus === 'verifying'}
+                      >
+                        {verifyStatus === 'verifying' ? 'Verifying...' : 'Verify'}
+                      </button>
+                    </div>
+
+                    {/* Verification feedback */}
+                    <div style={{ marginTop: 8, fontSize: 13 }}>
+                      {verifyStatus === 'idle' && <span style={{ color: '#6b7280' }}>Click Verify to confirm the user exists in Azure AD.</span>}
+                      {verifyStatus === 'verifying' && <span style={{ color: '#0ea5e9' }}>Verifying presence in Azure AD...</span>}
+                      {verifyStatus === 'verified' && <span style={{ color: '#16a34a' }}>✅ User verified: <strong>{verifiedName}</strong></span>}
+                      {verifyStatus === 'notfound' && <span style={{ color: '#dc2626' }}>❌ User not found in Azure AD. Check the email.</span>}
+                      {verifyStatus === 'error' && <span style={{ color: '#dc2626' }}>❌ Verification error: {verifyError}</span>}
+                    </div>
+
+                    {/* If verified -> ask for delivery email (alternative) */}
+                    {verifyStatus === 'verified' && (
+                      <div style={{ marginTop: 10 }}>
+                        <input
+                          type="email"
+                          placeholder="Alternative email to receive reset (required)"
+                          value={formData.alternativeEmail}
+                          onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
+                          style={{ ...styles.input }}
+                          required
+                        />
+                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+                          The reset password will be sent to both the requester's primary email (if applicable) and this alternative email.
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
+                {/* If Self -> alternative email mandatory as before */}
                 {formData.onBehalf === 'Self' && (
                   <input
                     type="email"
@@ -293,9 +383,9 @@ function CreateTicket() {
                   />
                 )}
               </div>
+
               <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
-                Choose who the password reset is for. If "Other", provide their email or username.
-                {formData.onBehalf === 'Self' && ' You must provide an alternative email to receive the reset password.'}
+                Choose who the password reset is for. If "Other", provide their company email and click Verify.
               </div>
             </div>
           )}
@@ -327,6 +417,7 @@ function CreateTicket() {
         </form>
       </div>
 
+      {/* Notification Modal */}
       {modal.open && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
@@ -368,166 +459,34 @@ function CreateTicket() {
         </div>
       )}
 
+      {showPasswordPopup && (
+        <PasswordPopup password={newPassword} onClose={() => setShowPasswordPopup(false)} />
+      )}
     </div>
   );
 }
 
-/* --- styles (unchanged) --- */
+/* --- styles --- (same as before) */
 const styles = {
-  pageWrap: {
-    padding: '2rem',
-    maxWidth: 820,
-    margin: '0 auto',
-    boxSizing: 'border-box'
-  },
-  card: {
-    background: 'white',
-    padding: '1.25rem 1.5rem',
-    borderRadius: 12,
-    boxShadow: '0 6px 30px rgba(2,6,23,0.08)',
-    boxSizing: 'border-box',
-    overflow: 'hidden'
-  },
-  headerRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    background: '#eef2ff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 700,
-    color: '#4338ca',
-    fontSize: 18
-  },
-  gridRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 12,
-    alignItems: 'start',
-    marginBottom: 12
-  },
-  field: {
-    marginBottom: 12
-  },
-  label: {
-    display: 'block',
-    marginBottom: 6,
-    fontSize: 13,
-    color: '#374151',
-    fontWeight: 600
-  },
-  input: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #e6e9ee',
-    borderRadius: 8,
-    background: '#fafafa',
-    boxSizing: 'border-box'
-  },
-  select: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #e6e9ee',
-    borderRadius: 8,
-    background: 'white',
-    boxSizing: 'border-box'
-  },
-  textarea: {
-    width: '100%',
-    minHeight: 140,
-    maxHeight: 300,
-    padding: '12px',
-    border: '1px solid #e6e9ee',
-    borderRadius: 8,
-    background: 'white',
-    resize: 'vertical',
-    overflow: 'auto',
-    boxSizing: 'border-box'
-  },
-  primaryButton: {
-    background: '#2563eb',
-    color: 'white',
-    padding: '12px 18px',
-    border: 'none',
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontWeight: 700
-  },
-  ghostButton: {
-    background: '#f3f4f6',
-    color: '#374151',
-    padding: '12px 18px',
-    border: 'none',
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontWeight: 600
-  },
-  modalOverlay: {
-    position: "fixed",
-    top: 0, left: 0,
-    width: "100vw", height: "100vh",
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10000
-  },
-  modalBox: {
-    background: "white",
-    padding: "28px",
-    borderRadius: "10px",
-    width: "380px",
-    textAlign: "center",
-    boxShadow: "0 6px 24px rgba(2,6,23,0.12)"
-  },
-  overlay: {
-    position: 'fixed',
-    top: 0, left: 0, right: 0, bottom: 0,
-    background: 'rgba(0,0,0,0.5)',
-    display: 'flex', justifyContent: 'center', alignItems: 'center',
-    zIndex: 9999
-  },
-  passwordBox: {
-    background: 'white',
-    padding: '2rem',
-    borderRadius: '10px',
-    textAlign: 'center',
-    width: '400px',
-    boxShadow: '0 8px 30px rgba(2,6,23,0.12)',
-    position: 'relative'
-  },
-  passwordText: {
-    fontFamily: 'monospace',
-    fontSize: '1.1rem',
-    background: '#f1f1f1',
-    padding: '10px',
-    borderRadius: '6px'
-  },
-  copyButton: {
-    marginTop: '1rem',
-    background: '#3498db',
-    color: 'white',
-    padding: '8px 16px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer'
-  },
-  modalCloseButton: {
-    position: 'absolute',
-    top: '10px',
-    right: '10px',
-    background: 'transparent',
-    border: 'none',
-    fontSize: '1.2rem',
-    cursor: 'pointer'
-  }
+  pageWrap: { padding: '2rem', maxWidth: 820, margin: '0 auto', boxSizing: 'border-box' },
+  card: { background: 'white', padding: '1.25rem 1.5rem', borderRadius: 12, boxShadow: '0 6px 30px rgba(2,6,23,0.08)', boxSizing: 'border-box', overflow: 'hidden' },
+  headerRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 },
+  avatar: { width: 56, height: 56, borderRadius: 10, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#4338ca', fontSize: 18 },
+  gridRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start', marginBottom: 12 },
+  field: { marginBottom: 12 },
+  label: { display: 'block', marginBottom: 6, fontSize: 13, color: '#374151', fontWeight: 600 },
+  input: { width: '100%', padding: '10px 12px', border: '1px solid #e6e9ee', borderRadius: 8, background: '#fafafa', boxSizing: 'border-box' },
+  select: { width: '100%', padding: '10px 12px', border: '1px solid #e6e9ee', borderRadius: 8, background: 'white', boxSizing: 'border-box' },
+  textarea: { width: '100%', minHeight: 140, maxHeight: 300, padding: '12px', border: '1px solid #e6e9ee', borderRadius: 8, background: 'white', resize: 'vertical', overflow: 'auto', boxSizing: 'border-box' },
+  primaryButton: { background: '#2563eb', color: 'white', padding: '12px 18px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 },
+  ghostButton: { background: '#f3f4f6', color: '#374151', padding: '12px 18px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 },
+  modalOverlay: { position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10000 },
+  modalBox: { background: "white", padding: "28px", borderRadius: "10px", width: "380px", textAlign: "center", boxShadow: "0 6px 24px rgba(2,6,23,0.12)" },
+  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
+  passwordBox: { background: 'white', padding: '2rem', borderRadius: '10px', textAlign: 'center', width: '400px', boxShadow: '0 8px 30px rgba(2,6,23,0.12)', position: 'relative' },
+  passwordText: { fontFamily: 'monospace', fontSize: '1.1rem', background: '#f1f1f1', padding: '10px', borderRadius: '6px' },
+  copyButton: { marginTop: '1rem', background: '#3498db', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer' },
+  modalCloseButton: { position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }
 };
 
 export default CreateTicket;
