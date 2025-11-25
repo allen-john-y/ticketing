@@ -1,5 +1,6 @@
-// ---------------------- PART 1 ----------------------
-// ---------------------- Imports -------------------------
+// server.js
+// Full file — Option A (HTML email templates, send to category head on all creations)
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -77,7 +78,7 @@ const ticketSchema = new mongoose.Schema(
     reopenedBy: String,
     reopenedAt: Date,
 
-    // new fields to support "on behalf" password reset flow
+    // "on behalf" flow
     onBehalf: { type: String }, // 'Self' or 'Other'
     onBehalfEmail: { type: String }, // when onBehalf === 'Other'
     deliveryEmail: { type: String },
@@ -143,36 +144,56 @@ const getGraphToken = async () => {
   return data.access_token;
 };
 
-// ---------------------- Send Email ----------------------
-const sendEmail = async (to, subject, bodyText, cc) => {
+// ---------------------- Send Email (HTML capable) ----------------------
+/*
+  sendEmail(to, subject, bodyText, cc, bodyHtmlOptional)
+  - to: string or array of strings
+  - cc: string or array of strings (optional)
+  - bodyText: plain-text fallback
+  - bodyHtmlOptional: HTML string (if provided, will be used as HTML body)
+*/
+const sendEmail = async (to, subject, bodyText, cc, bodyHtmlOptional) => {
   try {
-    console.log(`\n📧 [MAIL] Preparing email...`);
-    console.log("To:", to);
-    console.log("CC:", cc);
+    // normalize recipients for logging
+    const norm = (addr) => {
+      if (!addr) return [];
+      if (Array.isArray(addr)) return addr;
+      return [addr];
+    };
+    const toLog = norm(to).join(", ");
+    const ccLog = norm(cc).join(", ") || "(none)";
+
+    console.log("\n📧 [MAIL] Preparing email...");
+    console.log("To:", toLog);
+    console.log("CC:", ccLog);
     console.log("Subject:", subject);
 
     const token = await getGraphToken();
     console.log("🔵 [MAIL] Sending email via Microsoft Graph...");
 
-    const normalize = (addr) => {
+    const normalizeForGraph = (addr) => {
       if (!addr) return [];
-      if (Array.isArray(addr))
-        return addr.map((a) => ({ emailAddress: { address: a } }));
+      if (Array.isArray(addr)) return addr.map((a) => ({ emailAddress: { address: a } }));
       return [{ emailAddress: { address: addr } }];
     };
 
-    const mailBody = {
-      message: {
-        subject,
-        body: { contentType: "Text", content: bodyText.trim() },
-        toRecipients: normalize(to),
-        ccRecipients: normalize(cc),
+    // Build message content; prefer HTML if provided
+    const message = {
+      subject,
+      body: {
+        contentType: bodyHtmlOptional ? "HTML" : "Text",
+        content: bodyHtmlOptional ? bodyHtmlOptional : bodyText,
       },
+      toRecipients: normalizeForGraph(to),
+      ccRecipients: normalizeForGraph(cc),
+    };
+
+    const mailBody = {
+      message,
       saveToSentItems: "true",
     };
 
     const sender = process.env.AZURE_SENDER_EMAIL || "helpdesk@sandeza-inc.com";
-
     const res = await fetch(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`,
       {
@@ -191,7 +212,7 @@ const sendEmail = async (to, subject, bodyText, cc) => {
     console.log("🔍 [MAIL] Graph Response Body:", responseText);
 
     if (res.status === 202) {
-      console.log(`✅ [MAIL] Email sent SUCCESSFULLY to: ${Array.isArray(to) ? to.join(", ") : to}`);
+      console.log(`✅ [MAIL] Email sent SUCCESSFULLY to: ${toLog}`);
       return true;
     } else {
       console.log("❌ [MAIL] Email FAILED");
@@ -241,15 +262,56 @@ const resetAzurePassword = async (userIdentifier) => {
   return newPassword;
 };
 
+// ---------------------- Helpers for HTML emails ----------------------
+const renderTicketHtml = ({ ticket, title, actionButtonText, actionButtonUrl }) => {
+  // escape minimal to avoid accidental HTML injection; in practice sanitize better
+  const esc = (s) => (s ? String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "");
+  const now = new Date(ticket.createdAt || Date.now()).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+  return `
+    <html>
+      <body style="font-family:Segoe UI, Roboto, Arial, sans-serif; color:#0f172a; line-height:1.45;">
+        <div style="max-width:700px;margin:0 auto;padding:20px;border:1px solid #e6eef9;border-radius:8px;">
+          <h2 style="margin:0 0 12px;color:#0b61b5;font-weight:800;">${esc(title)}</h2>
+          <div style="padding:12px 14px;background:#f8fafc;border-radius:6px;border:1px solid #e6eef9;">
+            <div style="margin-bottom:8px;"><strong>Ticket No:</strong> ${esc(ticket.ticketNumber)}</div>
+            <div style="margin-bottom:8px;"><strong>Category:</strong> ${esc(ticket.category)}</div>
+            <div style="margin-bottom:8px;"><strong>Priority:</strong> ${esc(ticket.priority)}</div>
+            <div style="margin-bottom:8px;"><strong>Created By:</strong> ${esc(ticket.userName)} (${esc(ticket.userEmail)})</div>
+            ${ticket.onBehalf ? `<div style="margin-bottom:8px;"><strong>On Behalf:</strong> ${esc(ticket.onBehalf)} ${ticket.onBehalfEmail ? `(${esc(ticket.onBehalfEmail)})` : ""}</div>` : ""}
+            ${ticket.deliveryEmail ? `<div style="margin-bottom:8px;"><strong>Delivery Email:</strong> ${esc(ticket.deliveryEmail)}</div>` : ""}
+            <div style="margin-bottom:8px;"><strong>Created On:</strong> ${esc(now)}</div>
+          </div>
+
+          <h3 style="margin:18px 0 8px;color:#0b61b5;font-weight:700;">Description</h3>
+          <div style="padding:12px;background:#ffffff;border-radius:6px;border:1px solid #eef2f7;white-space:pre-wrap;">${esc(ticket.description)}</div>
+
+          ${actionButtonUrl ? `
+            <div style="text-align:center;margin-top:18px;">
+              <a href="${actionButtonUrl}" style="display:inline-block;background:#0b61b5;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:700;">
+                ${esc(actionButtonText || "Open Ticket")}
+              </a>
+            </div>
+          ` : ""}
+
+          <hr style="margin:20px 0;border:none;border-top:1px solid #eef2f7;" />
+
+          <div style="font-size:13px;color:#475569;">
+            <div style="margin-bottom:6px;">This is an auto-generated email. Do not reply to this message.</div>
+            <div>If you have questions about this ticket, please sign in at <a href="https://ticketing-psi-tawny.vercel.app">ticketing portal</a>.</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
 // ---------------------- Routes ----------------------------
 
 // Health Check
 app.get("/", (req, res) => res.send("Sandeza Helpdesk API Running"));
 
-// ---------------------- NEW: Verify User endpoint ----------------------
-// POST /verify-user
-// body: { email: "target@company.com" }
-// returns: { exists: true/false, displayName?: string, mail?: string }
+// ---------------------- Verify User ----------------------
 app.post("/verify-user", async (req, res) => {
   try {
     const { email } = req.body;
@@ -258,8 +320,6 @@ app.post("/verify-user", async (req, res) => {
     }
 
     const token = await getGraphToken();
-
-    // Query Graph for user by UPN (email). If not found, Graph returns 404.
     const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=displayName,mail,userPrincipalName`;
     const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
@@ -285,10 +345,8 @@ app.post("/verify-user", async (req, res) => {
     return res.status(500).json({ message: 'Server error during verification' });
   }
 });
-// ---------------------- END PART 1 ----------------------
-// ---------------------- PART 2 ----------------------
 
-// Get Tickets
+// ---------------------- Tickets: GET ----------------------
 app.get("/tickets", async (req, res) => {
   try {
     const filter = req.query.userId ? { userId: req.query.userId } : {};
@@ -311,7 +369,7 @@ app.get("/tickets/:id", async (req, res) => {
   }
 });
 
-// Create Ticket (ensure this uses status: "Pending" only for Password Reset and accepts deliveryEmail/onBehalfEmail)
+// ---------------------- Create Ticket ----------------------
 app.post("/tickets", async (req, res) => {
   try {
     const {
@@ -327,7 +385,7 @@ app.post("/tickets", async (req, res) => {
     } = req.body;
     if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
-    // Defensive validation: If Password Reset + Self -> deliveryEmail (alternative) is required
+    // Defensive validation: If Password Reset + Self -> deliveryEmail required
     if (category === "Password Reset" && (onBehalf === "Self" || !onBehalf) ) {
       if (!deliveryEmail || !deliveryEmail.trim()) {
         return res.status(400).json({ message: "Alternative delivery email is required for self password reset." });
@@ -343,13 +401,12 @@ app.post("/tickets", async (req, res) => {
       if (!onBehalfEmail || !onBehalfEmail.trim()) {
         return res.status(400).json({ message: "On-behalf email is required for other password reset." });
       }
-      // deliveryEmail still required
       if (!deliveryEmail || !deliveryEmail.trim()) {
         return res.status(400).json({ message: "Delivery email is required when requesting for other user." });
       }
     }
 
-    // Decide initial status based on category
+    // Decide initial status: only Password Reset requires "Pending"
     const initialStatus = category === "Password Reset" ? "Pending" : "Open";
 
     ticketCounter++;
@@ -378,70 +435,62 @@ app.post("/tickets", async (req, res) => {
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Notify the ticket creator (different copy depending on whether approval is needed)
-    const creatorBodyPending = `
-Hi ${userName},
+    // Prepare creator email (HTML)
+    const prodUrl = "https://ticketing-psi-tawny.vercel.app";
+    const ticketLink = `${prodUrl}/ticket/${ticket._id}`;
 
-Your ticket has been created and is currently PENDING department approval.
+    const creatorTitle = initialStatus === "Pending" ? `Ticket #${ticketCounter} Created (Pending Approval)` : `Ticket #${ticketCounter} Created`;
+    const creatorHtml = renderTicketHtml({
+      ticket,
+      title: creatorTitle,
+      actionButtonText: "View Ticket",
+      actionButtonUrl: ticketLink
+    });
 
-Ticket No: ${ticketCounter}
-Category: ${category}
-Priority: ${priority}
-Description: ${description}
-Time: ${nowIST}
+    const creatorPlain = initialStatus === "Pending" ?
+      `Hi ${userName},\n\nYour ticket has been created and is currently PENDING department approval.\n\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}\n\nYou will be notified when the ticket is processed.\n\nThis is an auto-generated email. Do not reply.` :
+      `Hi ${userName},\n\nYour ticket has been created.\n\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}\n\nThis ticket is now in the queue and will be processed normally.\n\nThis is an auto-generated email. Do not reply.`;
 
-If approved, the new password (for password reset) will be delivered to both your primary email and the alternative email you provided.
-You will be notified when the ticket is processed.
-    `.trim();
-
-    const creatorBodyOpen = `
-Hi ${userName},
-
-Your ticket has been created.
-
-Ticket No: ${ticketCounter}
-Category: ${category}
-Priority: ${priority}
-Description: ${description}
-Time: ${nowIST}
-
-This ticket is now in the queue and will be processed normally.
-    `.trim();
-
+    // Notify the ticket creator
     await sendEmail(
       userEmail,
       `Ticket #${ticketCounter} Created`,
-      (initialStatus === "Pending" ? creatorBodyPending : creatorBodyOpen),
-      itHead
+      creatorPlain,
+      itHead,
+      creatorHtml
     );
 
-    // If Password Reset -> send email to department head to ask for approval
-    if (initialStatus === "Pending") {
-      const prodUrl = "https://ticketing-psi-tawny.vercel.app";
-      const ticketLink = `${prodUrl}/ticket/${ticket._id}`;
+    // -------------------------
+    // IMPORTANT: Notify category head for ALL categories (your request)
+    // -------------------------
+    const headEmail = deptEmails[category];
+    if (headEmail) {
+      // Head email subject and HTML: different wording if Password Reset (action required)
+      const headTitle = category === "Password Reset"
+        ? `[ACTION REQUIRED] Ticket #${ticketCounter} - ${category}`
+        : `New Ticket #${ticketCounter} - ${category}`;
 
-      const deptMessage = `
-New Ticket #${ticketCounter}
-Created By: ${userName} (${userEmail})
-Category: ${category}
-Priority: ${priority}
-Description: ${description}
-Time: ${nowIST}
-Delivery Email: ${ticket.deliveryEmail || '—'}
+      // For heads, add special instruction when Password Reset (approve/reject)
+      const headHtml = renderTicketHtml({
+        ticket,
+        title: headTitle,
+        actionButtonText: category === "Password Reset" ? "Review & Approve" : "Open Ticket",
+        actionButtonUrl: ticketLink
+      });
 
-To review and take action, open this link in your browser (please sign in with your admin account):
-${ticketLink}
-
-If you click Approve, the requested password reset will be performed and the new password will be sent to both the requester and the alternative email provided. The ticket will be closed automatically.
-If you click Reject, the requester will be notified and the ticket will be closed.
-      `.trim();
+      const headPlain = category === "Password Reset" ?
+        `New ticket requires action: Ticket #${ticketCounter}\nCategory: ${category}\nCreated By: ${userName} (${userEmail})\nDelivery Email: ${ticket.deliveryEmail || "—"}\n\nOpen: ${ticketLink}\n\nThis is an auto-generated email. Do not reply.` :
+        `New ticket created: Ticket #${ticketCounter}\nCategory: ${category}\nCreated By: ${userName} (${userEmail})\n\nOpen: ${ticketLink}\n\nThis is an auto-generated email. Do not reply.`;
 
       await sendEmail(
-        deptEmails[category],
-        `[TICKET #${ticketCounter}] ${category} - Action Required`,
-        deptMessage,
-        itHead
+        headEmail,
+        headTitle,
+        headPlain,
+        itHead,
+        headHtml
       );
+    } else {
+      console.warn(`⚠️ No department head configured for category: ${category}`);
     }
 
     res.status(201).json(ticket);
@@ -450,10 +499,8 @@ If you click Reject, the requester will be notified and the ticket will be close
     res.status(500).json({ error: "Server error" });
   }
 });
-// ---------------------- END PART 2 ----------------------
-// ---------------------- PART 3 ----------------------
 
-// Approve endpoint
+// ---------------------- Approve endpoint ----------------------
 app.post("/tickets/:id/approve", async (req, res) => {
   try {
     const { approvedBy, note } = req.body;
@@ -469,7 +516,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(400).json({ message: "Approval is only allowed for Password Reset tickets." });
     }
 
-    // Determine which user to reset: if onBehalfEmail provided use it, else try userId then userEmail
     const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
     if (!userIdentifier) {
       return res.status(400).json({ message: "No user identifier available to reset password" });
@@ -521,8 +567,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    const userBody = `
-Hi ${ticket.userName},
+    const userBodyPlain = `Hi ${ticket.userName},
 
 Your password reset request (Ticket #${ticket.ticketNumber}) has been approved by ${ticket.closedBy} on ${nowIST}.
 The new temporary password is:
@@ -535,25 +580,37 @@ Ticket: #${ticket.ticketNumber}
 Category: ${ticket.category}
 
 If you did not request this, please contact IT immediately.
-    `.trim();
+
+This is an auto-generated email. Do not reply.`;
+
+    const userHtml = `
+      <html><body style="font-family:Segoe UI, Roboto, Arial, sans-serif;">
+        <h2 style="color:#0b61b5;font-weight:800;">Password Reset Approved</h2>
+        <p>Hi ${ticket.userName},</p>
+        <p>Your password reset request (Ticket #${ticket.ticketNumber}) has been <strong>approved</strong> by ${ticket.closedBy} on ${nowIST}.</p>
+        <div style="padding:12px;background:#f1f5f9;border-radius:6px;font-family:monospace;">${newPassword}</div>
+        <p>Please sign in and change your password immediately (force change on next sign-in).</p>
+        <p>This is an auto-generated email. Do not reply.</p>
+      </body></html>
+    `;
 
     // Notify requestor primary email
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBody, itHead);
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBodyPlain, itHead, userHtml);
 
     // Notify deliveryEmail if provided and different
     if (ticket.deliveryEmail && ticket.deliveryEmail.trim() && ticket.deliveryEmail.trim() !== ticket.userEmail.trim()) {
-      await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBody, itHead);
+      await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBodyPlain, itHead, userHtml);
     }
 
     // Notify department (confirmation)
-    const deptBody = `
-Ticket #${ticket.ticketNumber} has been approved and password reset performed by ${ticket.closedBy} on ${nowIST}.
+    const deptBodyPlain = `Ticket #${ticket.ticketNumber} has been approved and password reset performed by ${ticket.closedBy} on ${nowIST}.
 
 Affected user: ${ticket.onBehalfEmail || ticket.userEmail}
 Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
-    `.trim();
 
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptBody, itHead);
+This is an auto-generated email. Do not reply.`;
+
+    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptBodyPlain, itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
 
@@ -576,7 +633,7 @@ Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
   }
 });
 
-// Reject endpoint (keeps behavior: closes and notifies)
+// ---------------------- Reject endpoint ----------------------
 app.post("/tickets/:id/reject", async (req, res) => {
   try {
     const { rejectedBy, reason } = req.body;
@@ -622,8 +679,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    const userBody = `
-Hi ${ticket.userName},
+    const userBodyPlain = `Hi ${ticket.userName},
 
 Your request (Ticket #${ticket.ticketNumber}) has been reviewed by ${ticket.closedBy} on ${nowIST} and has been rejected.
 
@@ -634,17 +690,28 @@ Ticket: #${ticket.ticketNumber}
 Category: ${ticket.category}
 
 If you believe this is in error, please contact the department or raise a new ticket.
-    `.trim();
 
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Request Rejected`, userBody, itHead);
+This is an auto-generated email. Do not reply.`;
 
-    const deptBody = `
-Ticket #${ticket.ticketNumber} has been rejected by ${ticket.closedBy} on ${nowIST}.
+    const userHtml = `
+      <html><body style="font-family:Segoe UI, Roboto, Arial, sans-serif;">
+        <h2 style="color:#0b61b5;font-weight:800;">Request Rejected</h2>
+        <p>Hi ${ticket.userName},</p>
+        <p>Your request (Ticket #${ticket.ticketNumber}) has been reviewed by <strong>${ticket.closedBy}</strong> on ${nowIST} and has been <strong>rejected</strong>.</p>
+        <p><strong>Reason:</strong><br/>${reason || "No reason provided."}</p>
+        <p>This is an auto-generated email. Do not reply.</p>
+      </body></html>
+    `;
+
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Request Rejected`, userBodyPlain, itHead, userHtml);
+
+    const deptBodyPlain = `Ticket #${ticket.ticketNumber} has been rejected by ${ticket.closedBy} on ${nowIST}.
 
 Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
-    `.trim();
 
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptBody, itHead);
+This is an auto-generated email. Do not reply.`;
+
+    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptBodyPlain, itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} rejected by ${ticket.closedBy} and closed.`);
 
@@ -665,10 +732,8 @@ Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
-// ---------------------- END PART 3 ----------------------
-// ---------------------- PART 4 ----------------------
 
-// Close Ticket (manual close - unchanged but kept tidy)
+// ---------------------- Close Ticket ----------------------
 app.put("/tickets/:id/close", async (req, res) => {
   try {
     const { closedBy, closeReason } = req.body;
@@ -712,27 +777,36 @@ app.put("/tickets/:id/close", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    const emailBody = `
-TICKET #${ticket.ticketNumber} HAS BEEN CLOSED
+    const emailHtml = `
+      <html><body style="font-family:Segoe UI, Roboto, Arial, sans-serif;">
+        <h2 style="color:#0b61b5;font-weight:800;">TICKET #${ticket.ticketNumber} - Closed</h2>
+        <div style="padding:12px;background:#f8fafc;border-radius:6px;">
+          <div><strong>Category:</strong> ${ticket.category}</div>
+          <div><strong>Priority:</strong> ${ticket.priority}</div>
+          <div><strong>Created by:</strong> ${ticket.userName} (${ticket.userEmail})</div>
+          <div><strong>Closed by:</strong> ${ticket.closedBy}</div>
+          <div><strong>Closed on:</strong> ${nowIST}</div>
+          <div style="margin-top:8px;"><strong>Reason:</strong><br/>${ticket.closeReason}</div>
+        </div>
+        <p style="font-size:13px;color:#475569;">This is an auto-generated email. Do not reply.</p>
+      </body></html>
+    `;
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Category       : ${ticket.category}
-Priority       : ${ticket.priority}
-Created by     : ${ticket.userName} (${ticket.userEmail})
-Ticket Number  : #${ticket.ticketNumber}
+    const emailPlain = `TICKET #${ticket.ticketNumber} HAS BEEN CLOSED
 
-Closed by      : ${ticket.closedBy}
-Closed on      : ${nowIST}
+Category: ${ticket.category}
+Priority: ${ticket.priority}
+Created by: ${ticket.userName} (${ticket.userEmail})
+Closed by: ${ticket.closedBy}
+Closed on: ${nowIST}
 
-Reason for closing:
+Reason:
 ${ticket.closeReason}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This ticket is now officially closed.
-    `.trim();
+This is an auto-generated email. Do not reply.`;
 
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailBody, itHead);
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailPlain, itHead, emailHtml);
+    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailPlain, itHead, emailHtml);
 
     console.log(`Ticket #${ticket.ticketNumber} closed by ${ticket.closedBy}`);
 
@@ -754,7 +828,7 @@ This ticket is now officially closed.
   }
 });
 
-// Revive Ticket
+// ---------------------- Revive Ticket ----------------------
 app.put("/tickets/:id/revive", async (req, res) => {
   try {
     const { revivedBy, reviveReason } = req.body;
@@ -801,27 +875,36 @@ app.put("/tickets/:id/revive", async (req, res) => {
     const dept = deptEmails[ticket.category] || "helpdesk@sandeza-inc.com";
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    const emailBody = `
-TICKET #${ticket.ticketNumber} HAS BEEN REVIVED (Reopened)
+    const emailHtml = `
+      <html><body style="font-family:Segoe UI, Roboto, Arial, sans-serif;">
+        <h2 style="color:#0b61b5;font-weight:800;">TICKET #${ticket.ticketNumber} - Revived</h2>
+        <div style="padding:12px;background:#f8fafc;border-radius:6px;">
+          <div><strong>Category:</strong> ${ticket.category}</div>
+          <div><strong>Priority:</strong> ${ticket.priority}</div>
+          <div><strong>Created by:</strong> ${ticket.userName} (${ticket.userEmail})</div>
+          <div><strong>Revived by:</strong> ${ticket.reopenedBy}</div>
+          <div><strong>Revived on:</strong> ${nowIST}</div>
+          <div style="margin-top:8px;"><strong>Reason:</strong><br/>${ticket.reviveReason}</div>
+        </div>
+        <p style="font-size:13px;color:#475569;">This is an auto-generated email. Do not reply.</p>
+      </body></html>
+    `;
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Category       : ${ticket.category}
-Priority       : ${ticket.priority}
-Created by     : ${ticket.userName} (${ticket.userEmail})
-Ticket Number  : #${ticket.ticketNumber}
+    const emailPlain = `TICKET #${ticket.ticketNumber} HAS BEEN REVIVED (Reopened)
 
-Revived by     : ${ticket.reopenedBy}
-Revived on     : ${nowIST}
+Category: ${ticket.category}
+Priority: ${ticket.priority}
+Created by: ${ticket.userName} (${ticket.userEmail})
+Revived by: ${ticket.reopenedBy}
+Revived on: ${nowIST}
 
-Reason for reviving:
+Reason:
 ${ticket.reviveReason}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This ticket is now OPEN again and requires attention.
-    `.trim();
+This is an auto-generated email. Do not reply.`;
 
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailBody, itHead);
-    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailBody, itHead);
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailPlain, itHead, emailHtml);
+    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailPlain, itHead, emailHtml);
 
     console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
 
@@ -847,4 +930,3 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Server running on port ${PORT} (Full History Enabled)`)
 );
-// ---------------------- END PART 4 ----------------------
