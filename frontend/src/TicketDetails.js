@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 
+// ⭐ CATEGORY HEAD EMAIL MAP (mirrors backend deptEmails)
 const deptEmails = {
   "Password Reset": "allenj@sandeza-inc.com",
   "Admin Access": "vigneshm@sandeza-inc.com",
@@ -17,50 +18,50 @@ function TicketDetails() {
   const navigate = useNavigate();
   const { accounts, instance } = useMsal();
   const [ticket, setTicket] = useState(null);
+  const [authority, setAuthority] = useState('basic');
+  const [loading, setLoading] = useState(false);
 
-  const [authority, setAuthority] = useState("basic");
-
+  // Close states
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [closeReason, setCloseReason] = useState('');
-  const [closeError, setCloseError] = useState('');
-  const [confirmModal, setConfirmModal] = useState(false);
+  const [closeError, setCloseError] = useState('');  // Professional error
 
+  // Revive states
   const [showReviveReasonInput, setShowReviveReasonInput] = useState(false);
   const [reviveReason, setReviveReason] = useState('');
-  const [reviveError, setReviveError] = useState('');
+  const [reviveError, setReviveError] = useState('');  // Professional error
+
+  const [confirmModal, setConfirmModal] = useState(false);
   const [confirmReviveModal, setConfirmReviveModal] = useState(false);
-
-  const [showApprovalModal, setShowApprovalModal] = useState(false);
-  const [rejectLoading, setRejectLoading] = useState(false);
-  const [approveLoading, setApproveLoading] = useState(false);
-  const [adminNote, setAdminNote] = useState('');
-  const [isCategoryHead, setIsCategoryHead] = useState(false);
-
-  const [returnedPassword, setReturnedPassword] = useState('');
-  const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
   const backendBase = "https://ticketing-production-5334.up.railway.app";
 
+  // ⭐ NEW: Category head / approval states
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [isCategoryHead, setIsCategoryHead] = useState(false);
+  const [approveLoading, setApproveLoading] = useState(false);
+  const [rejectLoading, setRejectLoading] = useState(false);
+  const [adminNote, setAdminNote] = useState('');
+  const [returnedPassword, setReturnedPassword] = useState('');
+  const [showPasswordPopup, setShowPasswordPopup] = useState(false);
+
+  // fetch authority (admin group)
   useEffect(() => {
     const fetchAuthority = async () => {
       if (!accounts[0]) return;
       try {
         const tokenResponse = await instance.acquireTokenSilent({
-          scopes: ["User.Read", "GroupMember.Read.All"],
+          scopes: ['User.Read', 'GroupMember.Read.All'],
           account: accounts[0]
         });
-
-        const groupsRes = await axios.get(
-          "https://graph.microsoft.com/v1.0/me/memberOf",
-          { headers: { Authorization: `Bearer ${tokenResponse.accessToken}` } }
-        );
-
+        const groupsRes = await axios.get('https://graph.microsoft.com/v1.0/me/memberOf', {
+          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
+        });
         const groups = groupsRes.data.value.map(g => g.displayName);
-        const isAdmin = groups.includes("GS_Fortingate_VPN");
-        setAuthority(isAdmin ? "admin" : "basic");
-
+        const isAdmin = groups.includes('GS_Fortingate_VPN');
+        setAuthority(isAdmin ? 'admin' : 'basic');
       } catch (err) {
-        console.error("Authority error:", err);
+        console.error('Authority error:', err);
       }
     };
     fetchAuthority();
@@ -72,122 +73,214 @@ function TicketDetails() {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
 
-        const logged = (accounts[0]?.username || "").toLowerCase().trim();
-        const head = (deptEmails[res.data.category] || "").toLowerCase().trim();
+        // ⭐ CATEGORY HEAD CHECK
+        if (accounts[0] && res.data) {
+          const loggedEmail = (accounts[0].username || accounts[0].upn || '').toLowerCase().trim();
+          const headEmail = (deptEmails[res.data.category] || '').toLowerCase().trim();
 
-        if (logged === head) {
-          setIsCategoryHead(true);
-          if (res.data.category === "Password Reset" && res.data.status === "Pending") {
-            setShowApprovalModal(true);
+          if (loggedEmail && headEmail && loggedEmail === headEmail) {
+            setIsCategoryHead(true);
+
+            // Show popup ONLY if ticket still requires approval (Pending or Open) AND category is Password Reset
+            const status = (res.data.status || '').toString();
+            if (res.data.category === "Password Reset" && (status === "Pending" || status === "Open")) {
+              setShowApprovalModal(true);
+            }
           }
         }
 
-      } catch (err) { console.error("Ticket fetch error:", err); }
+      } catch (err) {
+        console.error('Error fetching ticket:', err);
+      }
     };
-
     fetchTicket();
-  }, [id, accounts]);
+  }, [id, accounts, instance]);
 
-  const formatDate = (d) => {
-    if (!d) return "—";
-    return new Date(d).toLocaleDateString("en-IN", {
-      day: "numeric", month: "short", year: "numeric",
-      hour: "2-digit", minute: "2-digit", hour12: true
+  const formatDate = (dateString) => {
+    if (!dateString) return "—";
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
     });
   };
 
-  const needsApprovalBanner =
-    isCategoryHead &&
-    ticket &&
-    ticket.category === "Password Reset" &&
-    ticket.status === "Pending" &&
-    !showApprovalModal;
+  // Derived: show inline "Waiting for Approval" banner if category head and ticket pending/open
+  const needsApprovalBanner = isCategoryHead && ticket && (ticket.status === 'Pending' || ticket.status === 'Open') && !showApprovalModal && ticket.category === "Password Reset";
 
-  const handleApprove = async () => {
+  // copy password helper (for admin)
+  const copyToClipboard = (text) => {
     try {
-      setApproveLoading(true);
+      navigator.clipboard.writeText(text);
+      alert('Password copied to clipboard');
+    } catch (e) {
+      console.error('Copy failed', e);
+    }
+  };
+
+  // ⭐ APPROVE Handler (fixed: show password popup when returned, otherwise close modal then navigate)
+  const handleApprove = async () => {
+    setApproveLoading(true);
+    try {
+      // Protect: only allow approve for Password Reset category from UI, but backend also enforces.
+      if (!ticket || ticket.category !== "Password Reset") {
+        alert("Approve is only for Password Reset tickets.");
+        setShowApprovalModal(false);
+        setApproveLoading(false);
+        return;
+      }
+
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
         approvedBy: accounts[0]?.name || accounts[0]?.username,
         note: adminNote
       });
 
-      if (res.data.newPassword) {
-        setReturnedPassword(res.data.newPassword);
-        setShowPasswordPopup(true);
-      }
+      // Close the approval modal state (unmount UI)
       setShowApprovalModal(false);
 
+      // If backend returned password → show popup (admin copies or clicks Done which navigates)
+      if (res.data?.newPassword) {
+        setReturnedPassword(res.data.newPassword);
+        setShowPasswordPopup(true);
+        // do not navigate now — admin will click Done which navigates
+      } else {
+        // No password returned — navigate back after small timeout so modal unmounts cleanly
+        setTimeout(() => {
+          navigate("/", { state: { refresh: true } });
+        }, 200);
+      }
+
     } catch (err) {
-      alert("Approval failed: " + (err.response?.data?.message || err.message));
+      console.error("Approve error:", err);
+      alert("Approval failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
     } finally {
       setApproveLoading(false);
+      setAdminNote('');
     }
   };
 
+  // ⭐ REJECT Handler (fixed: close modal then navigate after short delay)
   const handleReject = async () => {
+    setRejectLoading(true);
     try {
-      setRejectLoading(true);
+      if (!ticket) throw new Error('Ticket missing');
+
+      // Protect: only reject Password Reset via this flow (UI shows only for Password Reset)
       await axios.post(`${backendBase}/tickets/${id}/reject`, {
         rejectedBy: accounts[0]?.name || accounts[0]?.username,
         reason: adminNote
       });
+
+      // close modal first
       setShowApprovalModal(false);
+      setAdminNote('');
+
+      // navigate after tiny delay so modal unmounts visually
+      setTimeout(() => {
+        navigate("/", { state: { refresh: true } });
+      }, 200);
 
     } catch (err) {
-      alert("Rejection failed: " + (err.response?.data?.message || err.message));
+      console.error("Reject error:", err);
+      alert("Rejection failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
     } finally {
       setRejectLoading(false);
     }
   };
 
+  // PROFESSIONAL CLOSE HANDLING
   const handleSubmitReason = () => {
-    if (!closeReason.trim()) return setCloseError("Reason required.");
+    if (!closeReason.trim()) {
+      setCloseError("Please provide a reason for closing this ticket.");
+      return;
+    }
     setCloseError('');
-    setConfirmModal(true);
     setShowReasonInput(false);
+    setConfirmModal(true);
   };
 
   const confirmCloseTicket = async () => {
+    setLoading(true);
     try {
+      // Only admin should reach here: UI hides Close for non-admins
       await axios.put(`${backendBase}/tickets/${id}/close`, {
         closeReason: closeReason.trim(),
         closedBy: accounts[0]?.name || accounts[0]?.username
       });
+
+      // FIX: close modal states before navigating
       setConfirmModal(false);
-      navigate(0);
+      setShowReasonInput(false);
+      setCloseReason('');
+      setCloseError('');
+
+      setTimeout(() => {
+        navigate('/', { state: { refresh: true } });
+      }, 200);
+
     } catch (err) {
-      setCloseError("Close failed.");
+      setCloseError("Failed to close ticket. Please try again.");
+      console.error("Close error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const cancelClose = () => {
+    setShowReasonInput(false);
+    setConfirmModal(false);
+    setCloseReason('');
+    setCloseError('');
+  };
+
+  // PROFESSIONAL REVIVE HANDLING
   const handleSubmitReviveReason = () => {
-    if (!reviveReason.trim()) return setReviveError("Reason required.");
+    if (!reviveReason.trim()) {
+      setReviveError("Please provide a reason for reviving this ticket.");
+      return;
+    }
     setReviveError('');
-    setConfirmReviveModal(true);
     setShowReviveReasonInput(false);
+    setConfirmReviveModal(true);
   };
 
   const confirmReviveTicket = async () => {
+    setLoading(true);
     try {
       await axios.put(`${backendBase}/tickets/${id}/revive`, {
-        revivedBy:
-          accounts[0]?.name ||
-          accounts[0]?.username ||
-          "User",
+        revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
         reviveReason: reviveReason.trim()
       });
+
+      // FIX: close modals then navigate
       setConfirmReviveModal(false);
-      navigate(0);
+      setShowReviveReasonInput(false);
+      setReviveReason('');
+      setReviveError('');
+
+      setTimeout(() => {
+        navigate('/', { state: { refresh: true } });
+      }, 200);
+
     } catch (err) {
-      setReviveError("Revive failed.");
+      setReviveError("Failed to revive ticket. Please try again.");
+      console.error("Revive error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!ticket)
-    return <p style={{ textAlign: "center", padding: "2rem" }}>Loading...</p>;
+  const cancelRevive = () => {
+    setShowReviveReasonInput(false);
+    setConfirmReviveModal(false);
+    setReviveReason('');
+    setReviveError('');
+  };
 
-  const isCreator =
-    accounts?.[0]?.username?.toLowerCase() === ticket.userEmail?.toLowerCase();
+  if (!ticket) return <p style={{ textAlign: 'center', padding: '2rem' }}>Loading ticket...</p>;
 
   const statusColorStyles = {
     background:
@@ -202,166 +295,298 @@ function TicketDetails() {
       "#0369a1"
   };
 
-  const historyEvents = ticket.history || [];
+  const historyEvents = ticket.history && ticket.history.length > 0
+    ? ticket.history
+    : [
+        { action: "created", by: ticket.userName, at: ticket.createdAt, reason: null },
+        ...(ticket.closedAt ? [{ action: "closed", by: ticket.closedBy || "Unknown", at: ticket.closedAt, reason: ticket.closeReason }] : []),
+        ...(ticket.reopenedAt ? [{ action: "revived", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reviveReason }] : [])
+      ];
+
+  // Determine if logged-in user is the creator (for revive)
+  const loggedEmail = (accounts[0]?.username || accounts[0]?.upn || '').toLowerCase().trim();
+  const isCreator = ticket.userEmail && (loggedEmail === ticket.userEmail.toLowerCase().trim());
 
   return (
     <>
-      <style>
-        {`
-        .overlay {
-          position: fixed; top:0; left:0; width:100vw; height:100vh;
-          background: rgba(0,0,0,0.55);
-          display:flex; justify-content:center; align-items:center;
-          z-index:10000;
-        }
-        .modal-box {
-          background:white; padding:24px; border-radius:12px;
-          max-width:450px; width:90%;
-        }
-      `}
-      </style>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoomIn { from { transform: scale(0.8); } to { transform: scale(1); } }
+        .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.3s; }
+        .modal-box { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 760px; text-align: center; box-shadow: 0 15px 50px rgba(0,0,0,0.25); animation: zoomIn 0.3s; }
+        .reason-input { width: 80%; padding: 12px; margin: 12px 0; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; }
+        .error-text { color: #dc2626; font-size: 14px; margin-top: 8px; font-weight: 500; }
+      `}</style>
 
+      {/* BACK BUTTON */}
       <div style={{ padding: "1rem", maxWidth: 720, margin: "0 auto" }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{ padding: "10px 18px", borderRadius: 10 }}
-        >
-          Back
-        </button>
+        <button onClick={() => navigate('/')} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
+          borderRadius: 12, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer',
+          fontWeight: 600, boxShadow: '0 2px 10px rgba(0,0,0,0.06)', fontSize: '15px'
+        }}>Back to Tickets</button>
       </div>
 
+      {/* MAIN CARD */}
       <div style={{
-        padding: "2rem",
-        maxWidth: 720,
-        margin: "0 auto",
-        background: "#fff",
-        borderRadius: 16,
-        borderLeft: `8px solid ${
-          ticket.status === "Closed" ? "#dc2626" : "#16a34a"
-        }`,
-        boxShadow: "0 4px 20px rgba(0,0,0,0.1)"
+        padding: '2.5rem',
+        maxWidth: '720px',
+        margin: '0 auto',
+        background: '#ffffff',
+        borderRadius: '16px',
+        borderLeft: `8px solid ${ticket.status === "Closed" ? "#dc2626" : "#16a34a"}`,
+        boxShadow: '0 12px 40px rgba(2,6,23,0.08)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 18,
+        position: 'relative'
       }}>
-        <h2>{ticket.category}</h2>
 
-        <p><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
-        <p><strong>Created By:</strong> {ticket.userName} ({ticket.userEmail})</p>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1 }}>
+            <div style={{
+              width: 72,
+              height: 72,
+              borderRadius: 12,
+              background: 'linear-gradient(135deg,#4f46e5 0%, #06b6d4 100%)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: '20px',
+              boxShadow: '0 8px 30px rgba(79,70,229,0.12)'
+            }}>
+              {ticket.userName ? ticket.userName.split(' ').map(n => n[0]).slice(0,2).join('') : 'U'}
+            </div>
 
+            <div style={{ flex: 1 }}>
+              <h1 style={{ margin: 0, fontSize: '1.65rem', color: '#0f172a', fontWeight: 800 }}>
+                {ticket.category}
+              </h1>
+
+              <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{
+                  padding: '10px 14px',
+                  borderRadius: 14,
+                  background: 'linear-gradient(90deg, #eef2ff 0%, #f0f9ff 100%)',
+                  color: '#3730a3',
+                  fontWeight: 800,
+                  fontSize: 13,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  boxShadow: '0 6px 18px rgba(99,102,241,0.08)'
+                }}>
+                  <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 700 }}>Ticket #</span>
+                  <span style={{ fontSize: 20, marginTop: 4, letterSpacing: '0.6px' }}>{ticket.ticketNumber}</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    background: ticket.priority === 'High' ? '#fff1f2' : ticket.priority === 'Medium' ? '#fff7ed' : '#f0fdf4',
+                    color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#166534',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.02)'
+                  }}>{ticket.priority}</span>
+
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 10px',
+                    borderRadius: 999,
+                    fontWeight: 700,
+                    fontSize: 13,
+                    ...statusColorStyles
+                  }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : (ticket.status === 'Approved' ? '#16a34a' : (ticket.status === 'Pending' ? '#f59e0b' : '#06b6d4')) }} />
+                    {ticket.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: '#64748b', fontSize: 13 }}>Created by</div>
+              <div style={{ fontWeight: 800, color: '#0f172a' }}>{ticket.userName}</div>
+              <a href={`mailto:${ticket.userEmail}`} style={{ color: '#2563eb', fontSize: 13, textDecoration: 'none' }}>{ticket.userEmail}</a>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 8 }}>
+              {authority === 'admin' && ticket.status !== 'Closed' && (
+                <button onClick={() => setShowReasonInput(true)} style={{
+                  width: '100%', background: '#dc2626', color: 'white', padding: '12px 14px',
+                  border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
+                  boxShadow: '0 8px 24px rgba(220,38,38,0.18)'
+                }}>Close Ticket</button>
+              )}
+
+              {ticket.status === 'Closed' && (
+                <button onClick={() => setShowReviveReasonInput(true)} style={{
+                  width: '100%', background: '#16a34a', color: 'white', padding: '12px 14px',
+                  border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
+                  boxShadow: '0 8px 24px rgba(16,185,129,0.12)'
+                }}>Revive Ticket</button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ⭐ Waiting for approval banner (shown inline to category head who opens from homepage) */}
         {needsApprovalBanner && (
           <div style={{
             background: "#fef3c7",
             border: "1px solid #fcd34d",
-            padding: "12px",
-            borderRadius: 10,
-            marginTop: 10
+            padding: "15px",
+            borderRadius: 12,
+            marginBottom: 20,
+            textAlign: "center",
+            boxShadow: "0 3px 10px rgba(0,0,0,0.06)"
           }}>
-            <h3>⏳ Waiting for Your Approval</h3>
+            <h3 style={{ margin: 0, color: "#92400e", fontWeight: 800 }}>
+              ⏳ Waiting for Your Approval
+            </h3>
+            <p style={{ color: "#92400e", marginTop: 6 }}>
+              This ticket requires action from <strong>Category Head ({ticket.category})</strong>.
+            </p>
+
             <button
               onClick={() => setShowApprovalModal(true)}
               style={{
-                background: "#d97706", color: "white",
-                padding: "10px 20px", borderRadius: 8
+                marginTop: 10,
+                background: "#d97706",
+                color: "white",
+                borderRadius: 10,
+                padding: "10px 22px",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 700
               }}
             >
-              Review Ticket
+              Review & Take Action
             </button>
           </div>
         )}
 
+        {/* Description block */}
         <div style={{
-          marginTop: 20,
+          marginTop: 4,
+          background: '#f8fafc',
           padding: 20,
-          background: "#f8fafc",
-          borderRadius: 12
+          borderRadius: 14,
+          display: 'block',
+          border: '1px solid #edf2f7',
+          color: '#334155',
+          lineHeight: 1.7,
+          fontSize: 15
         }}>
-          <strong>Description:</strong>
-          <p style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
-            {ticket.description}
-          </p>
+          <strong style={{ display: 'block', marginBottom: 8, fontSize: 15 }}>Description</strong>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
         </div>
-
-        {/* CLOSE BUTTON = ONLY ADMIN */}
-        {ticket.status !== "Closed" && authority === "admin" && (
-          <button
-            onClick={() => setShowReasonInput(true)}
-            style={{
-              marginTop: 20,
-              background: "#dc2626",
-              color: "white",
-              padding: "12px",
-              width: "100%",
-              borderRadius: 10
-            }}
-          >
-            Close Ticket
-          </button>
-        )}
-
-        {/* REVIVE = CREATOR OR ADMIN */}
-        {ticket.status === "Closed" && (authority === "admin" || isCreator) && (
-          <button
-            onClick={() => setShowReviveReasonInput(true)}
-            style={{
-              marginTop: 20,
-              background: "#16a34a",
-              color: "white",
-              padding: "12px",
-              width: "100%",
-              borderRadius: 10
-            }}
-          >
-            Revive Ticket
-          </button>
-        )}
-
       </div>
 
-      <div style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
-        <h2 style={{ textAlign: "center" }}>Ticket History</h2>
+      {/* FULL HISTORY TIMELINE */}
+      <div style={{ maxWidth: '720px', margin: '3rem auto', padding: '0 1rem' }}>
+        <h2 style={{ fontSize: '1.9rem', color: '#1e293b', marginBottom: '2.5rem', textAlign: 'center', fontWeight: 700 }}>
+          Ticket History
+        </h2>
+        <div>
+          {historyEvents.map((event, index) => (
+            <div key={index} style={{ marginBottom: 20, padding: 20, background: event.action === 'closed' ? '#fff1f2' : '#f1f5f9', borderRadius: 12 }}>
+              <strong style={{ display: 'block', marginBottom: 8, textTransform: 'capitalize' }}>
+                {event.action === 'created' ? 'Ticket Created' : event.action === 'closed' ? 'Ticket Closed' : event.action === 'revived' ? 'Ticket Revived' : event.action}
+              </strong>
+              <small style={{ color: '#475569', fontWeight: 600 }}>{formatDate(event.at)} by <strong>{event.by || "Unknown"}</strong></small>
+              {event.reason && (
+                <div style={{ marginTop: 12, padding: 12, background: '#e2e8f0', borderRadius: 8 }}>
+                  <strong>Reason:</strong> {event.reason}
+                </div>
+              )}
+            </div>
+          ))}
 
-        {historyEvents.map((ev, i) => (
-          <div key={i} style={{
-            padding: 16,
-            background: "#f1f5f9",
-            borderRadius: 10,
-            marginBottom: 12
-          }}>
-            <strong>{ev.action}</strong>
-            <p>{formatDate(ev.at)} by {ev.by}</p>
-            {ev.reason && (
-              <div style={{ background: "#e2e8f0", padding: 10, borderRadius: 8 }}>
-                <strong>Reason:</strong> {ev.reason}
-              </div>
-            )}
+          <div style={{ marginTop: 12, padding: 20, background: ticket.status === "Closed" ? '#fee2e2' : '#f0fdf4', borderRadius: 12 }}>
+            <strong style={{ fontSize: '1.2rem', color: ticket.status === "Closed" ? '#b91c1c' : '#166534' }}>
+              Current Status: {ticket.status}
+            </strong>
           </div>
-        ))}
+        </div>
       </div>
 
-      {/* APPROVAL MODAL */}
-      {showApprovalModal && (
+      {/* ⭐ CATEGORY HEAD APPROVAL MODAL (rich ticket summary inside modal) */}
+      {showApprovalModal && isCategoryHead && ticket.category === "Password Reset" && (
         <div className="overlay">
-          <div className="modal-box">
-            <h2>Approval Needed</h2>
-            <p>You are the Category Head. Review this Password Reset request.</p>
+          <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+            <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
+            <p style={{ color: "#475569", marginBottom: 20 }}>
+              You are the <strong>Category Head</strong> for <strong>{ticket.category}</strong>.<br />
+              Review the ticket details below before taking action.
+            </p>
 
-            <p><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
-            <p><strong>User:</strong> {ticket.userName} ({ticket.userEmail})</p>
-            <p><strong>On Behalf:</strong> {ticket.onBehalf}</p>
-            {ticket.onBehalfEmail && <p><strong>Email:</strong> {ticket.onBehalfEmail}</p>}
-            <p><strong>Delivery Email:</strong> {ticket.deliveryEmail}</p>
+            {/* TICKET DETAILS */}
+            <div style={{
+              background: "#f8fafc",
+              padding: 18,
+              borderRadius: 12,
+              textAlign: "left",
+              marginBottom: 16,
+              border: "1px solid #e2e8f0"
+            }}>
+              <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700 }}>Ticket Summary</h3>
 
+              <p style={{ margin: '6px 0' }}><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
+              <p style={{ margin: '6px 0' }}><strong>Created By:</strong> {ticket.userName} ({ticket.userEmail})</p>
+              <p style={{ margin: '6px 0' }}><strong>Category:</strong> {ticket.category}</p>
+              <p style={{ margin: '6px 0' }}><strong>Priority:</strong> {ticket.priority}</p>
+              <p style={{ margin: '6px 0' }}><strong>On Behalf:</strong> {ticket.onBehalf || "Self"}</p>
+              {ticket.onBehalfEmail && <p style={{ margin: '6px 0' }}><strong>On Behalf Email:</strong> {ticket.onBehalfEmail}</p>}
+              {ticket.deliveryEmail && <p style={{ margin: '6px 0' }}><strong>Delivery Email:</strong> {ticket.deliveryEmail}</p>}
+              <p style={{ margin: '6px 0' }}><strong>Created On:</strong> {formatDate(ticket.createdAt)}</p>
+
+              <div style={{ marginTop: 12 }}>
+                <strong>Description:</strong>
+                <div style={{
+                  background: "#e2e8f0",
+                  padding: 10,
+                  borderRadius: 8,
+                  marginTop: 6,
+                  whiteSpace: "pre-wrap"
+                }}>
+                  {ticket.description}
+                </div>
+              </div>
+            </div>
+
+            {/* ADMIN NOTE */}
             <textarea
-              placeholder="Optional note..."
-              rows={4}
+              className="reason-input"
+              placeholder="Optional note to requester..."
               value={adminNote}
-              onChange={e => setAdminNote(e.target.value)}
-              style={{ width: "100%", marginTop: 10 }}
+              onChange={(e) => setAdminNote(e.target.value)}
+              rows={4}
+              style={{ width: "100%", marginBottom: 10 }}
             />
 
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+            {/* ACTION BUTTONS */}
+            <div style={{ display: "flex", gap: 12, marginTop: 10, justifyContent: "center" }}>
               <button
                 onClick={handleApprove}
                 disabled={approveLoading}
-                style={{ flex: 1, background: "#16a34a", color: "white", padding: 10 }}
+                style={{
+                  padding: "12px 22px",
+                  background: "#16a34a",
+                  color: "white",
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  minWidth: 120
+                }}
               >
                 {approveLoading ? "Approving..." : "Approve"}
               </button>
@@ -369,134 +594,159 @@ function TicketDetails() {
               <button
                 onClick={handleReject}
                 disabled={rejectLoading}
-                style={{ flex: 1, background: "#dc2626", color: "white", padding: 10 }}
+                style={{
+                  padding: "12px 22px",
+                  background: "#dc2626",
+                  color: "white",
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  minWidth: 120
+                }}
               >
                 {rejectLoading ? "Rejecting..." : "Reject"}
+              </button>
+
+              <button
+                onClick={() => { setShowApprovalModal(false); setAdminNote(''); }}
+                style={{
+                  padding: "12px 22px",
+                  background: "#64748b",
+                  color: "white",
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                Dismiss
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* PASSWORD POPUP */}
+      {/* PASSWORD POPUP FOR CATEGORY HEAD (after approve) */}
       {showPasswordPopup && (
         <div className="overlay">
-          <div className="modal-box">
-            <h2>Password Reset Done</h2>
-            <p>Temporary Password:</p>
+          <div className="modal-box" style={{ maxWidth: 560 }}>
+            <h2>Password Reset Successful</h2>
+            <p>The new temporary password generated for the target account is shown below. Please copy it and share as needed.</p>
 
             <div style={{
-              padding: 10,
+              padding: "12px",
               background: "#f1f5f9",
               borderRadius: 8,
               fontFamily: "monospace",
               fontSize: 18,
-              marginBottom: 12
+              marginTop: 10
             }}>
               {returnedPassword}
             </div>
 
-            <button
-              onClick={() => navigator.clipboard.writeText(returnedPassword)}
-              style={{ background: "#2563eb", color: "white", padding: 10, marginRight: 10 }}
-            >
-              Copy
-            </button>
-
-            <button
-              onClick={() => setShowPasswordPopup(false)}
-              style={{ background: "#16a34a", color: "white", padding: 10 }}
-            >
-              Done
-            </button>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 18 }}>
+              <button
+                onClick={() => copyToClipboard(returnedPassword)}
+                style={{ padding: "10px 18px", background: "#2563eb", color: 'white', borderRadius: 10 }}
+              >
+                Copy
+              </button>
+              <button
+                onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }}
+                style={{ padding: "10px 18px", background: "#10b981", color: 'white', borderRadius: 10 }}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* CLOSE MODAL */}
+      {/* PROFESSIONAL CLOSE MODAL */}
       {showReasonInput && (
-        <div className="overlay">
-          <div className="modal-box">
-            <h3>Close Ticket</h3>
+        <div className="overlay" onClick={cancelClose}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 20px', color: '#1e293b', fontSize: '1.5rem', fontWeight: 700 }}>
+              Close Ticket #{ticket.ticketNumber}
+            </h3>
+            <p style={{ color: '#475569', marginBottom: 20 }}>Please provide a reason for closing this ticket.</p>
             <textarea
-              placeholder="Reason..."
+              className="reason-input"
+              rows="6"
+              placeholder="Explain why this ticket is being closed..."
               value={closeReason}
               onChange={(e) => setCloseReason(e.target.value)}
-              style={{ width: "100%", marginTop: 10 }}
-              rows={4}
+              autoFocus
             />
-            {closeError && <p style={{ color: "red" }}>{closeError}</p>}
-            <button
-              onClick={handleSubmitReason}
-              style={{ marginTop: 10, background: "#dc2626", color: "#fff", padding: 10 }}
-            >
-              Continue
-            </button>
+            {closeError && <div className="error-text">{closeError}</div>}
+            <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <button onClick={handleSubmitReason} style={{ padding: '14px 28px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+                Continue to Close
+              </button>
+              <button onClick={cancelClose} style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* CONFIRM CLOSE */}
       {confirmModal && (
-        <div className="overlay">
-          <div className="modal-box">
-            <h3>Confirm Close?</h3>
-            <button
-              onClick={confirmCloseTicket}
-              style={{ background: "#dc2626", color: "#fff", padding: 10, width: "100%" }}
-            >
-              Close Ticket
-            </button>
-            <button
-              onClick={() => setConfirmModal(false)}
-              style={{ marginTop: 10, padding: 10, width: "100%" }}
-            >
-              Cancel
-            </button>
+        <div className="overlay" onClick={cancelClose}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 20px', color: '#dc2626', fontSize: '1.6rem', fontWeight: 700 }}>Permanently Close Ticket?</h3>
+            <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>Are you sure?</p>
+            <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+              <button onClick={confirmCloseTicket} disabled={loading} style={{ padding: '16px 36px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+                {loading ? 'Closing...' : 'Yes, Close It'}
+              </button>
+              <button onClick={cancelClose} style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* REVIVE MODAL */}
+      {/* PROFESSIONAL REVIVE MODAL */}
       {showReviveReasonInput && (
-        <div className="overlay">
-          <div className="modal-box">
-            <h3>Revive Ticket</h3>
+        <div className="overlay" onClick={cancelRevive}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 20px', color: '#1e293b', fontSize: '1.5rem', fontWeight: 700 }}>
+              Revive Ticket #{ticket.ticketNumber}
+            </h3>
+            <p style={{ color: '#475569', marginBottom: 20 }}>Please explain why this ticket needs to be reopened.</p>
             <textarea
-              placeholder="Reason..."
+              className="reason-input"
+              rows="6"
+              placeholder="Why is this ticket being revived?"
               value={reviveReason}
               onChange={(e) => setReviveReason(e.target.value)}
-              style={{ width: "100%", marginTop: 10 }}
-              rows={4}
+              autoFocus
             />
-            {reviveError && <p style={{ color: "red" }}>{reviveError}</p>}
-            <button
-              onClick={handleSubmitReviveReason}
-              style={{ marginTop: 10, background: "#16a34a", color: "#fff", padding: 10 }}
-            >
-              Continue
-            </button>
+            {reviveError && <div className="error-text">{reviveError}</div>}
+            <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <button onClick={handleSubmitReviveReason} style={{ padding: '14px 28px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+                Continue to Revive
+              </button>
+              <button onClick={cancelRevive} style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* CONFIRM REVIVE */}
       {confirmReviveModal && (
-        <div className="overlay">
-          <div className="modal-box">
-            <h3>Confirm Revive?</h3>
-
-            <button
-              onClick={confirmReviveTicket}
-              style={{ background: "#16a34a", color: "#fff", padding: 10, width: "100%" }}
-            >
-              Revive Ticket
-            </button>
-
-            <button
-              onClick={() => setConfirmReviveModal(false)}
-              style={{ marginTop: 10, padding: 10, width: "100%" }}
-            >
-              Cancel
-            </button>
+        <div className="overlay" onClick={cancelRevive}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 20px', color: '#16a34a', fontSize: '1.6rem', fontWeight: 700 }}>Revive This Ticket?</h3>
+            <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
+            <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+              <button onClick={confirmReviveTicket} disabled={loading} style={{ padding: '16px 36px', background: '#16a34a', color: 'white', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+                {loading ? 'Reviving...' : 'Yes, Revive It'}
+              </button>
+              <button onClick={cancelRevive} style={{ padding: '16px 36px', background: '#64748b', color: 'white', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
