@@ -59,6 +59,7 @@ const connectDB = async () => {
 connectDB();
 
 // ---------------------- Schema ----------------------------
+// Added deliveryEmail field to support alternative email sending
 const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: { type: Number, unique: true },
@@ -79,6 +80,7 @@ const ticketSchema = new mongoose.Schema(
     // new fields to support "on behalf" password reset flow
     onBehalf: { type: String }, // 'Self' or 'Other'
     onBehalfEmail: { type: String }, // when onBehalf === 'Other'
+    deliveryEmail: { type: String }, // alternative email provided by requester for delivery
 
     history: [
       {
@@ -216,7 +218,6 @@ const getAccessToken = async () => {
 };
 
 const resetAzurePassword = async (userIdentifier) => {
-  // userIdentifier can be UPN (email) or id depending on what caller provides.
   const token = await getAccessToken();
   const newPassword = Math.random().toString(36).slice(-10) + "A1!";
   const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userIdentifier)}`, {
@@ -280,10 +281,23 @@ app.post("/tickets", async (req, res) => {
       userEmail,
       onBehalf,
       onBehalfEmail,
+      deliveryEmail, // optional unless password reset self
     } = req.body;
+
     if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
-    // Increment ticket counter and create ticket
+    // Defensive validation: If Password Reset + Self -> deliveryEmail (alternative) is required
+    if (category === "Password Reset" && (onBehalf === "Self" || !onBehalf) ) {
+      if (!deliveryEmail || !deliveryEmail.trim()) {
+        return res.status(400).json({ message: "Alternative delivery email is required for self password reset." });
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(deliveryEmail.trim())) {
+        return res.status(400).json({ message: "Alternative delivery email is not valid." });
+      }
+    }
+
+    // Increment ticket counter and create ticket with status "Pending"
     ticketCounter++;
     const ticket = await Ticket.create({
       ticketNumber: ticketCounter,
@@ -293,9 +307,10 @@ app.post("/tickets", async (req, res) => {
       category,
       description,
       priority,
-      status: "Open",
+      status: "Pending", // <-- change: ticket is pending admin approval
       onBehalf: onBehalf || "Self",
       onBehalfEmail: onBehalfEmail || "",
+      deliveryEmail: deliveryEmail || "",
       history: [
         {
           action: "created",
@@ -313,7 +328,7 @@ app.post("/tickets", async (req, res) => {
     await sendEmail(
       userEmail,
       `Ticket #${ticketCounter} Created`,
-      `Hi ${userName},\n\nYour ticket has been created.\n\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}\n\nYou will be notified when the ticket is processed.`,
+      `Hi ${userName},\n\nYour ticket has been created and is currently PENDING department approval.\n\nTicket No: ${ticketCounter}\nCategory: ${category}\nPriority: ${priority}\nDescription: ${description}\nTime: ${nowIST}\n\nIf approved, the new password (for password reset) will be delivered to both your primary email and the alternative email you provided.\n\nYou will be notified when the ticket is processed.`,
       itHead
     );
 
@@ -328,11 +343,13 @@ Category: ${category}
 Priority: ${priority}
 Description: ${description}
 Time: ${nowIST}
+Delivery Email: ${ticket.deliveryEmail || '—'}
 
 To review and take action, open this link in your browser (please sign in with your admin account):
 ${ticketLink}
 
-If you click Approve, the requested password reset will be performed and the new password will be sent to the requester. If you click Reject, the requester will be notified and the ticket will be closed.
+If you click Approve, the requested password reset will be performed and the new password will be sent to both the requester and the alternative email provided. The ticket will be closed automatically.
+If you click Reject, the requester will be notified and the ticket will be closed.
     `.trim();
 
     await sendEmail(
@@ -342,9 +359,7 @@ If you click Approve, the requested password reset will be performed and the new
       itHead
     );
 
-    // IMPORTANT: Do NOT auto-reset password or auto-close ticket here.
-    // Approval or rejection must be done by the category head via the UI (which will call the endpoints below).
-
+    // Return created ticket (no password should ever be returned at creation time)
     res.status(201).json(ticket);
   } catch (err) {
     console.error("Error creating ticket:", err.message);
@@ -378,8 +393,9 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(500).json({ message: "Password reset failed", error: err.message });
     }
 
-    // Update ticket to closed + history
     const now = new Date();
+
+    // Add 'approved' history entry
     ticket.history.push({
       action: "approved",
       by: approvedBy || "Department Head",
@@ -387,10 +403,20 @@ app.post("/tickets/:id/approve", async (req, res) => {
       reason: note || "Approved and password reset performed",
     });
 
-    ticket.status = "Closed";
+    // Update intermediate status to Approved (for audit) then close
+    ticket.status = "Approved";
     ticket.closedBy = approvedBy || "Department Head";
     ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
     ticket.closedAt = now;
+
+    // Now mark as Closed (keeps Approved in history)
+    ticket.history.push({
+      action: "closed",
+      by: approvedBy || "Department Head",
+      at: now,
+      reason: ticket.closeReason,
+    });
+    ticket.status = "Closed";
 
     await ticket.save();
 
@@ -406,7 +432,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Notify requester with the new password
+    // Notify requester with the new password (to both userEmail and deliveryEmail)
     const userBody = `
 Hi ${ticket.userName},
 
@@ -423,7 +449,13 @@ Category: ${ticket.category}
 If you did not request this, please contact IT immediately.
     `.trim();
 
+    // send to user's primary email
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBody, itHead);
+
+    // also send to delivery/alternative email if provided and different
+    if (ticket.deliveryEmail && ticket.deliveryEmail.trim() && ticket.deliveryEmail.trim() !== ticket.userEmail.trim()) {
+      await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userBody, itHead);
+    }
 
     // Notify department (confirmation)
     const deptBody = `
@@ -437,7 +469,7 @@ Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
 
     console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
 
-    // Return the new password to the caller (so the frontend modal can display it).
+    // Return the new password to the caller (so the frontend modal for admin can display it if needed).
     res.json({
       message: "Ticket approved and password reset performed",
       ticket: {
@@ -449,7 +481,7 @@ Ticket link: https://ticketing-psi-tawny.vercel.app/ticket/${ticket._id}
         closedAt: ticket.closedAt,
         history: ticket.history,
       },
-      newPassword, // sensitive: only returned on approve flow to admin caller
+      newPassword, // sensitive: only returned in approve flow to admin caller
     });
   } catch (err) {
     console.error("Approve error:", err.message);
@@ -470,6 +502,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     const now = new Date();
 
+    // Add 'rejected' history entry
     ticket.history.push({
       action: "rejected",
       by: rejectedBy || "Department Head",
@@ -477,10 +510,20 @@ app.post("/tickets/:id/reject", async (req, res) => {
       reason: reason || "Rejected by Department Head",
     });
 
-    ticket.status = "Closed";
+    // Mark rejected then close (for audit/history)
+    ticket.status = "Rejected";
     ticket.closedBy = rejectedBy || "Department Head";
     ticket.closeReason = reason ? `Rejected: ${reason}` : "Rejected by Department Head";
     ticket.closedAt = now;
+
+    // Add closed history entry
+    ticket.history.push({
+      action: "closed",
+      by: ticket.closedBy,
+      at: now,
+      reason: ticket.closeReason,
+    });
+    ticket.status = "Closed";
 
     await ticket.save();
 
@@ -513,7 +556,7 @@ If you believe this is in error, please contact the department or raise a new ti
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Request Rejected`, userBody, itHead);
 
-    // Notify department (confirmation)
+    // Also notify department (confirmation)
     const deptBody = `
 Ticket #${ticket.ticketNumber} has been rejected by ${ticket.closedBy} on ${nowIST}.
 
@@ -712,7 +755,7 @@ This ticket is now OPEN again and requires attention.
     });
   } catch (err) {
     console.error("Revive ticket error:", err.message);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 
