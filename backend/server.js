@@ -615,7 +615,7 @@ This is an auto-generated email. Do not reply.`;
     console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
 
     res.json({
-      message: "Ticket approved and password reset performed",
+      message: "Ticket approved and password reset performed sucessfully",
       ticket: {
         _id: ticket._id,
         ticketNumber: ticket.ticketNumber,
