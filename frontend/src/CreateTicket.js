@@ -32,8 +32,14 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  // removed phone from formData
-  const [formData, setFormData] = useState({ category: '', description: '', priority: 'Medium' });
+  // Added onBehalf and onBehalfEmail to formData (onBehalf defaults to 'Self')
+  const [formData, setFormData] = useState({
+    category: '',
+    description: '',
+    priority: 'Medium',
+    onBehalf: 'Self',
+    onBehalfEmail: ''
+  });
   const [loading, setLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
@@ -78,6 +84,18 @@ function CreateTicket() {
     setLoading(true);
     setCreatedTicketId(null);
 
+    // Validation: if Password Reset and selecting Other, require onBehalfEmail
+    if (formData.category === 'Password Reset' && formData.onBehalf === 'Other' && !formData.onBehalfEmail.trim()) {
+      setModal({
+        open: true,
+        title: 'Validation',
+        message: 'Please provide the email or username of the person you are requesting the password reset for.',
+        type: 'error'
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       // Acquire token for Graph API (and to authenticate backend)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
@@ -97,6 +115,12 @@ function CreateTicket() {
         // ignore, we'll use existing displayName/displayEmail
       }
 
+      // Determine on-behalf details
+      const onBehalf = formData.category === 'Password Reset' ? formData.onBehalf : undefined;
+      const onBehalfEmail = formData.category === 'Password Reset'
+        ? (formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail)
+        : undefined;
+
       // Prepare ticket data (phone removed)
       const ticketData = {
         category: formData.category,
@@ -105,7 +129,10 @@ function CreateTicket() {
         userId: accounts[0]?.localAccountId,
         userName: latestName || accounts[0]?.username,
         userEmail: latestEmail,
-        status: 'Open'
+        status: 'Open',
+        // include on-behalf info for password resets
+        ...(onBehalf ? { onBehalf } : {}),
+        ...(onBehalfEmail ? { onBehalfEmail } : {})
       };
 
       // Post ticket to backend
@@ -191,7 +218,17 @@ function CreateTicket() {
               <label style={styles.label}>Category *</label>
               <select
                 value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  // if selecting Password Reset, ensure onBehalf is set to Self by default;
+                  // if switching away, clear onBehalfEmail
+                  setFormData({
+                    ...formData,
+                    category: val,
+                    onBehalf: val === 'Password Reset' ? 'Self' : formData.onBehalf,
+                    onBehalfEmail: val === 'Password Reset' ? formData.onBehalfEmail : ''
+                  });
+                }}
                 required
                 style={styles.select}
               >
@@ -219,6 +256,38 @@ function CreateTicket() {
               </select>
             </div>
           </div>
+
+          {/* Conditional: On behalf dropdown & optional input shown only for Password Reset */}
+          {formData.category === 'Password Reset' && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={styles.label}>On behalf of *</label>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <select
+                  value={formData.onBehalf}
+                  onChange={(e) => setFormData({ ...formData, onBehalf: e.target.value })}
+                  style={{ ...styles.select, flex: '0 0 220px' }}
+                >
+                  <option value="Self">Self</option>
+                  <option value="Other">Other</option>
+                </select>
+
+                {/* If Other is selected, show an input to capture the target user's email/username */}
+                {formData.onBehalf === 'Other' && (
+                  <input
+                    type="text"
+                    placeholder="Email or username of the other user"
+                    value={formData.onBehalfEmail}
+                    onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
+                    style={{ ...styles.input, flex: 1 }}
+                    required
+                  />
+                )}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
+                Choose who the password reset is for. If "Other", provide their email or username.
+              </div>
+            </div>
+          )}
 
           <div style={styles.field}>
             <label style={styles.label}>Description *</label>
