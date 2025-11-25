@@ -15,18 +15,14 @@ function PasswordPopup({ password, onClose }) {
   return (
     <div style={styles.overlay}>
       <div style={styles.passwordBox}>
-        <h2 style={{ marginBottom: '1rem' }}>🎉 Password Created</h2>
+        <h2 style={{ marginBottom: '1rem' }}>🎉 Password Reset Complete</h2>
         <p><strong>Your new password:</strong></p>
         <p style={styles.passwordText}>{password}</p>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: '1rem' }}>
-          <button onClick={handleCopy} style={styles.copyButton}>
-            Copy
-          </button>
-          <button onClick={onClose} style={styles.closeButton}>
-            Close
-          </button>
-        </div>
+        <button onClick={handleCopy} style={styles.copyButton}>
+          Copy Password
+        </button>
         {copied && <p style={{ color: 'green', marginTop: '0.5rem' }}>Copied!</p>}
+        <button onClick={onClose} style={styles.modalCloseButton}>✖</button>
       </div>
     </div>
   );
@@ -36,7 +32,6 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  // Added onBehalf and onBehalfEmail to formData (onBehalf defaults to 'Self')
   const [formData, setFormData] = useState({
     category: '',
     description: '',
@@ -48,20 +43,15 @@ function CreateTicket() {
   const [newPassword, setNewPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
-  // Ensure once closed the popup cannot be reopened for that password
-  const [passwordSeen, setPasswordSeen] = useState(false);
+  // New: flag to ensure once the password popup is closed it cannot be reopened
+  const [passwordViewed, setPasswordViewed] = useState(false);
 
-  // Modal for success/error messages (replaces window.alert)
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
-
-  // store created ticket id (if backend returns it) so we can offer "View Ticket"
   const [createdTicketId, setCreatedTicketId] = useState(null);
 
-  // Displayed user info (read-only in the form)
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
 
-  // Fetch up-to-date name/email from Graph when component mounts (if possible)
   useEffect(() => {
     let mounted = true;
     const fetchUser = async () => {
@@ -78,7 +68,6 @@ function CreateTicket() {
                       accounts[0]?.username || '';
         setDisplayEmail(email);
       } catch (err) {
-        // Silent fail — keep values from accounts if Graph call fails (no interrupt for user)
         console.debug('Could not fetch user profile for form display:', err?.message || err);
       }
     };
@@ -91,7 +80,6 @@ function CreateTicket() {
     setLoading(true);
     setCreatedTicketId(null);
 
-    // Validation: if Password Reset and selecting Other, require onBehalfEmail
     if (formData.category === 'Password Reset' && formData.onBehalf === 'Other' && !formData.onBehalfEmail.trim()) {
       setModal({
         open: true,
@@ -104,10 +92,9 @@ function CreateTicket() {
     }
 
     try {
-      // Acquire token for Graph API (and to authenticate backend)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
 
-      // Try to get the latest displayName and email (graceful fallback to earlier values)
+      // attempt to refresh name/email (graceful fallback)
       let latestName = displayName;
       let latestEmail = displayEmail;
       try {
@@ -119,16 +106,14 @@ function CreateTicket() {
                       (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
                       latestEmail || '';
       } catch (err) {
-        // ignore, we'll use existing displayName/displayEmail
+        // ignore
       }
 
-      // Determine on-behalf details
       const onBehalf = formData.category === 'Password Reset' ? formData.onBehalf : undefined;
       const onBehalfEmail = formData.category === 'Password Reset'
         ? (formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail)
         : undefined;
 
-      // Prepare ticket data (phone removed)
       const ticketData = {
         category: formData.category,
         description: formData.description,
@@ -137,21 +122,17 @@ function CreateTicket() {
         userName: latestName || accounts[0]?.username,
         userEmail: latestEmail,
         status: 'Open',
-        // include on-behalf info for password resets
         ...(onBehalf ? { onBehalf } : {}),
         ...(onBehalfEmail ? { onBehalfEmail } : {})
       };
 
-      // Post ticket to backend
       const response = await axios.post('https://ticketing-production-5334.up.railway.app/tickets', ticketData, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
-      // capture returned ticket id (backend may return different property names)
       const id = response?.data?._id || response?.data?.id || response?.data?.ticketId || null;
       if (id) setCreatedTicketId(id);
 
-      // Show success modal instead of alert
       setModal({
         open: true,
         title: 'Ticket Created',
@@ -159,21 +140,13 @@ function CreateTicket() {
         type: 'success'
       });
 
-      // If password reset and backend returned newPassword:
-      // - If the requester asked "Self" -> show popup immediately (only if not seen)
-      // - If "Other" -> do NOT show the password popup here (presumably handled by admins/other flow)
-      const returnedPassword = response.data?.newPassword;
-      if (formData.category === 'Password Reset' && returnedPassword) {
-        setNewPassword(returnedPassword);
-        if (formData.onBehalf === 'Self' && !passwordSeen) {
-          setShowPasswordPopup(true);
-        }
-        // if onBehalf === 'Other' we store it but do NOT show the popup here
+      // Show password popup if backend returned newPassword AND it's a self-reset AND user hasn't viewed it yet
+      if (formData.category === 'Password Reset' && formData.onBehalf === 'Self' && response.data?.newPassword && !passwordViewed) {
+        setNewPassword(response.data.newPassword);
+        setShowPasswordPopup(true);
       }
     } catch (error) {
       console.error('Error creating ticket:', error);
-
-      // Show error modal instead of alert
       const message = error?.response?.data?.message || error.message || 'Failed to create ticket.';
       setModal({
         open: true,
@@ -186,7 +159,6 @@ function CreateTicket() {
     setLoading(false);
   };
 
-  // Close modal handler: if success and user clicks OK we navigate home; user can also view the ticket
   const handleCloseModal = () => {
     const wasSuccess = modal.type === 'success';
     setModal({ open: false, title: '', message: '', type: 'info' });
@@ -197,22 +169,20 @@ function CreateTicket() {
 
   const handleViewTicket = () => {
     if (createdTicketId) {
-      // navigate to the ticket details page
       navigate(`/ticket/${createdTicketId}`);
     } else {
-      // fallback: go home to refresh list
       navigate('/', { state: { refresh: true } });
     }
   };
 
-  // Password popup close handler — mark password as seen and clear it so it cannot be reopened
+  // When password popup closes, mark as viewed so it cannot be reopened
   const handlePasswordPopupClose = () => {
     setShowPasswordPopup(false);
-    setPasswordSeen(true);
-    setNewPassword('');
+    setPasswordViewed(true);
+    // Optionally, clear newPassword from state for security (keeps it out of memory)
+    // setNewPassword('');
   };
 
-  // small helper to render user's initials as an avatar
   const initials = (displayName || displayEmail || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   return (
@@ -240,8 +210,6 @@ function CreateTicket() {
                 value={formData.category}
                 onChange={(e) => {
                   const val = e.target.value;
-                  // if selecting Password Reset, ensure onBehalf is set to Self by default;
-                  // if switching away, clear onBehalfEmail
                   setFormData({
                     ...formData,
                     category: val,
@@ -277,7 +245,6 @@ function CreateTicket() {
             </div>
           </div>
 
-          {/* Conditional: On behalf dropdown & optional input shown only for Password Reset */}
           {formData.category === 'Password Reset' && (
             <div style={{ marginBottom: 12 }}>
               <label style={styles.label}>On behalf of *</label>
@@ -291,7 +258,6 @@ function CreateTicket() {
                   <option value="Other">Other</option>
                 </select>
 
-                {/* If Other is selected, show an input to capture the target user's email/username */}
                 {formData.onBehalf === 'Other' && (
                   <input
                     type="text"
@@ -336,7 +302,6 @@ function CreateTicket() {
         </form>
       </div>
 
-      {/* Notification Modal (replaces window.alert) */}
       {modal.open && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
@@ -358,7 +323,6 @@ function CreateTicket() {
                 OK
               </button>
 
-              {/* Offer to view newly created ticket if the backend returned an ID */}
               {modal.type === 'success' && createdTicketId && (
                 <button
                   onClick={handleViewTicket}
@@ -379,7 +343,7 @@ function CreateTicket() {
         </div>
       )}
 
-      {showPasswordPopup && newPassword && !passwordSeen && (
+      {showPasswordPopup && !passwordViewed && (
         <PasswordPopup
           password={newPassword}
           onClose={handlePasswordPopupClose}
@@ -390,6 +354,7 @@ function CreateTicket() {
 }
 
 /* --- styles --- */
+/* (unchanged from your original; omitted here for brevity in the message — keep the same styles object you already have) */
 const styles = {
   pageWrap: {
     padding: '2rem',
@@ -528,6 +493,7 @@ const styles = {
     borderRadius: '6px'
   },
   copyButton: {
+    marginTop: '1rem',
     background: '#3498db',
     color: 'white',
     padding: '8px 16px',
@@ -535,12 +501,13 @@ const styles = {
     borderRadius: '6px',
     cursor: 'pointer'
   },
-  closeButton: {
-    background: '#e5e7eb',
-    color: '#111827',
-    padding: '8px 16px',
+  modalCloseButton: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    background: 'transparent',
     border: 'none',
-    borderRadius: '6px',
+    fontSize: '1.2rem',
     cursor: 'pointer'
   }
 };
