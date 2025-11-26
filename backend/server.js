@@ -581,13 +581,15 @@ app.post("/tickets/:id/approve", async (req, res) => {
       { label: "Category", value: ticket.category },
       { label: "Approved By", value: ticket.closedBy },
       { label: "Approved On", value: nowIST },
+      { label: "New Password", value: newPassword},
+      { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail }
     ];
     const userHtml = buildHtmlEmail({
       title: userTitle,
       subtitle: "Temporary password generated — change on next sign-in",
       statusColor: "#16a34a", // green for approved
       fields: userFields,
-      description: `The new temporary password is:\n\n${newPassword}\n\nPlease sign in and change your password immediately.`,
+      description: `The new temporary password has appreoved aand resetted sucessfullty, Please sign in and change your password immediately.`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
@@ -613,7 +615,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       subtitle: "Password reset performed and ticket closed",
       statusColor: "#16a34a",
       fields: deptFields,
-      description: `Ticket link: ${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      description: `Password restted successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
@@ -717,7 +719,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
         { label: "Rejected By", value: ticket.closedBy },
         { label: "Rejected On", value: nowIST },
       ],
-      description: `Ticket link: ${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      description: `The ticket has been rejected'}`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
