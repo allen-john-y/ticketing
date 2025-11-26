@@ -623,7 +623,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
     console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
 
     res.json({
-      message: "Ticket approved and password reset performed sucess",
+      message: "Ticket approved and password reset performed sucessfully.",
       ticket: {
         _id: ticket._id,
         ticketNumber: ticket.ticketNumber,
