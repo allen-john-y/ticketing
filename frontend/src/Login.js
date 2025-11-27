@@ -27,7 +27,7 @@ function Toast({ open, type = 'info', message = '' }) {
         pointerEvents: 'none',
         transition: 'opacity 300ms ease, transform 300ms ease',
         zIndex: 10001,
-        fontFamily: 'Open Sans'
+        fontFamily: 'Open Sans, sans-serif'
       }}
     >
       <div style={{ fontWeight: 600 }}>{message}</div>
@@ -52,9 +52,7 @@ function Login() {
       clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
     }
-
     setToast({ open: true, type, message });
-
     hideTimerRef.current = setTimeout(() => {
       setToast(prev => ({ ...prev, open: false }));
       hideTimerRef.current = null;
@@ -108,95 +106,100 @@ function Login() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#002060', // company blue background
-        fontFamily: 'Open Sans',
-      }}
-    >
+    <>
+      {/* ✅ Importing brand fonts (patched, non-logic change) */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link
+        rel="stylesheet"
+        href="sandbox:/fonts.googleapis.com/css2?family=Red+Hat+Display:wght@700;900&family=Open+Sans:wght@400;600;800&display=swap"
+      />
+
       <div
         style={{
-          background: 'white',
-          padding: '3rem',
-          borderRadius: '15px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-          textAlign: 'center',
-          maxWidth: '400px',
-          width: '100%',
-          fontFamily: 'Open Sans',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#002060',
+          fontFamily: 'Open Sans, sans-serif',
         }}
       >
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-            marginBottom: 12,
+            background: 'white',
+            padding: '3rem',
+            borderRadius: '15px',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+            textAlign: 'center',
+            maxWidth: '400px',
+            width: '100%',
+            fontFamily: 'Open Sans, sans-serif',
           }}
         >
-          <img
-            src={logo}
-            alt="Sandeza logo"
-            style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }}
-          />
-          <h1
+          <div
             style={{
-              margin: 0,
-              fontFamily: 'Red Hat Display',
-              color: '#002060', // company blue
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              marginBottom: 12,
             }}
           >
-            SANDEZA INC
-          </h1>
+            <img
+              src={logo}
+              alt="Sandeza logo"
+              style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }}
+            />
+            {/* ✅ Fixed heading font */}
+            <h1
+              style={{
+                margin: 0,
+                fontFamily: 'Red Hat Display, sans-serif',
+                fontWeight: 900,
+                color: '#002060',
+              }}
+            >
+              SANDEZA INC
+            </h1>
+          </div>
+
+          <h2
+            style={{
+              marginBottom: '2rem',
+              fontFamily: 'Red Hat Display, sans-serif',
+              fontWeight: 900,
+              color: '#e98404',
+            }}
+          >
+            IT Ticket Portal
+          </h2>
+
+          <button
+            onClick={login}
+            style={{
+              background: '#e98404',
+              color: 'white',
+              border: 'none',
+              padding: '15px 30px',
+              borderRadius: '8px',
+              fontSize: '1.1rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              width: '100%',
+              fontFamily: 'Open Sans, sans-serif',
+            }}
+          >
+            🔐 Login with Company Account
+          </button>
+
+          <p style={{ marginTop: 20, color: '#7f8c8d', fontSize: 14 }}>
+            Secure Azure AD Authentication
+          </p>
         </div>
 
-        <h2
-          style={{
-            marginBottom: '2rem',
-            fontFamily: 'Red Hat Display',
-            color: '#e98404', // company orange
-          }}
-        >
-          IT Ticket Portal
-        </h2>
-
-        <button
-          onClick={login}
-          style={{
-            background: '#e98404', // company orange
-            color: 'white',
-            border: 'none',
-            padding: '15px 30px',
-            borderRadius: '8px',
-            fontSize: '1.1rem',
-            fontWeight: '600',
-            cursor: 'pointer',
-            width: '100%',
-            fontFamily: 'Open Sans',
-          }}
-        >
-          🔐 Login with Company Account
-        </button>
-
-        <p
-          style={{
-            marginTop: '1.5rem',
-            color: '#7f8c8d',
-            fontSize: '0.9rem',
-            fontFamily: 'Open Sans',
-          }}
-        >
-          Secure Azure AD Authentication
-        </p>
+        <Toast open={toast.open} type={toast.type} message={toast.message} />
       </div>
-
-      <Toast open={toast.open} type={toast.type} message={toast.message} />
-    </div>
+    </>
   );
 }
 
