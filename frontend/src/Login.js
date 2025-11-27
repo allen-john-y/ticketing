@@ -8,7 +8,7 @@ function Toast({ open, type = 'info', message = '' }) {
       ? '#27ae60'
       : type === 'error'
       ? '#e74c3c'
-      : '#3498db';
+      : '#002060'; // company blue for info
 
   return (
     <div
@@ -27,6 +27,7 @@ function Toast({ open, type = 'info', message = '' }) {
         pointerEvents: 'none',
         transition: 'opacity 300ms ease, transform 300ms ease',
         zIndex: 10001,
+        fontFamily: 'Open Sans'
       }}
     >
       <div style={{ fontWeight: 600 }}>{message}</div>
@@ -36,6 +37,7 @@ function Toast({ open, type = 'info', message = '' }) {
 
 function Login() {
   const { instance } = useMsal();
+
   const [toast, setToast] = useState({ open: false, type: 'info', message: '' });
   const hideTimerRef = useRef(null);
 
@@ -46,123 +48,155 @@ function Login() {
   }, []);
 
   const showToast = (type, message, duration = 2000) => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+
     setToast({ open: true, type, message });
-    hideTimerRef.current = setTimeout(() => setToast(prev => ({ ...prev, open: false })), duration);
+
+    hideTimerRef.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, open: false }));
+      hideTimerRef.current = null;
+    }, duration);
   };
 
   const login = async () => {
-    console.log('🔍 === LOGIN DEBUG START ===');
     try {
-      await instance.loginPopup({ scopes: ['User.Read'], prompt: 'select_account' });
-      showToast('success', 'Login successful', 2000);
-    } catch (err) {
-      console.error('❌ Login failed:', err);
-      showToast('error', err.message || 'Login failed', 3000);
+      let loginResponse = null;
+      let popupError = null;
+
+      try {
+        loginResponse = await instance.loginPopup({
+          scopes: ['User.Read'],
+          prompt: 'select_account',
+        });
+      } catch (err) {
+        popupError = err;
+        console.warn('Login popup error:', err);
+      }
+
+      const accounts = instance.getAllAccounts() || [];
+      const signedIn = Boolean(loginResponse || accounts.length > 0);
+
+      if (signedIn) {
+        showToast('success', 'Login successful', 2000);
+        return;
+      }
+
+      if (popupError) {
+        const msg = String(
+          popupError.errorCode ||
+            popupError.error ||
+            popupError.message ||
+            ''
+        ).toLowerCase();
+
+        const cancelled =
+          msg.includes('cancel') ||
+          msg.includes('popup') ||
+          msg.includes('user_cancel');
+
+        if (cancelled) return;
+
+        showToast('error', popupError.message || 'Login failed', 3000);
+        return;
+      }
+    } catch (error) {
+      showToast('error', error?.message || 'Unexpected error', 3000);
     }
   };
 
   return (
-    <>
-      {/* ✅ APPLY FONTS GLOBALLY IN LOGIN */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@700;900&family=Open+Sans:wght@400;600;800&display=swap" />
-
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#002060', // company blue background
+        fontFamily: 'Open Sans',
+      }}
+    >
       <div
         style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#f8fafc',
-          fontFamily: 'Open Sans, sans-serif', /* Default for text */
+          background: 'white',
+          padding: '3rem',
+          borderRadius: '15px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+          textAlign: 'center',
+          maxWidth: '400px',
+          width: '100%',
+          fontFamily: 'Open Sans',
         }}
       >
         <div
           style={{
-            background: 'white',
-            padding: '3rem',
-            borderRadius: 14,
-            boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
-            textAlign: 'center',
-            maxWidth: '380px',
-            width: '100%',
-            borderTop: '6px solid #002060', /* strong Sandeza blue accent */
-            animation: 'fadeIn 0.4s ease-in-out'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            marginBottom: 12,
           }}
         >
-          {/* LOGO + TITLE */}
-          <div
+          <img
+            src={logo}
+            alt="Sandeza logo"
+            style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }}
+          />
+          <h1
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
-              marginBottom: 20,
+              margin: 0,
+              fontFamily: 'Red Hat Display',
+              color: '#002060', // company blue
             }}
           >
-            <img
-              src={logo}
-              alt="Sandeza logo"
-              style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 10 }}
-            />
-
-            <div style={{ textAlign: 'left', lineHeight: 1 }}>
-              {/* ✅ Heading font applied */}
-              <h1
-                style={{
-                  margin: 0,
-                  color: '#002060',
-                  fontSize: '1.6rem',
-                  fontWeight: 900,
-                  fontFamily: 'Red Hat Display, sans-serif',
-                }}
-              >
-                SANDEZA INC
-              </h1>
-              <p style={{ marginTop: 4, color: '#64748b', fontSize: '0.8rem' }}>IT Ticket Portal</p>
-            </div>
-          </div>
-
-          {/* LOGIN BUTTON */}
-          <button
-            onClick={login}
-            style={{
-              background: '#e98404', /* Sandeza Orange */
-              color: 'white',
-              border: 'none',
-              padding: '14px 22px',
-              borderRadius: 10,
-              fontSize: '1.05rem',
-              fontWeight: 700,
-              fontFamily: 'Red Hat Display, sans-serif', /* bold button label */
-              cursor: 'pointer',
-              width: '100%',
-              boxShadow: '0 4px 14px rgba(233,132,4,0.22)',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            🔐 Login with Company Account
-          </button>
-
-          <p style={{ marginTop: 16, color: '#64748b', fontSize: '0.85rem' }}>
-            Secure Azure AD Authentication
-          </p>
+            SANDEZA INC
+          </h1>
         </div>
 
-        {/* Toast */}
-        <Toast open={toast.open} type={toast.type} message={toast.message} />
+        <h2
+          style={{
+            marginBottom: '2rem',
+            fontFamily: 'Red Hat Display',
+            color: '#e98404', // company orange
+          }}
+        >
+          IT Ticket Portal
+        </h2>
+
+        <button
+          onClick={login}
+          style={{
+            background: '#e98404', // company orange
+            color: 'white',
+            border: 'none',
+            padding: '15px 30px',
+            borderRadius: '8px',
+            fontSize: '1.1rem',
+            fontWeight: '600',
+            cursor: 'pointer',
+            width: '100%',
+            fontFamily: 'Open Sans',
+          }}
+        >
+          🔐 Login with Company Account
+        </button>
+
+        <p
+          style={{
+            marginTop: '1.5rem',
+            color: '#7f8c8d',
+            fontSize: '0.9rem',
+            fontFamily: 'Open Sans',
+          }}
+        >
+          Secure Azure AD Authentication
+        </p>
       </div>
 
-      {/* Animation keyframes preserved */}
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeInZoom { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
-      `}</style>
-    </>
+      <Toast open={toast.open} type={toast.type} message={toast.message} />
+    </div>
   );
 }
 
