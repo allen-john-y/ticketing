@@ -1,10 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  MsalProvider,
-  AuthenticatedTemplate,
-  UnauthenticatedTemplate,
-  useMsal,
-} from '@azure/msal-react';
+import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import Login from './Login';
@@ -13,8 +8,6 @@ import CreateTicket from './CreateTicket';
 import TicketDetails from './TicketDetails';
 import Dashboard from './Dashboard';
 import logo from './sandeza.jpg';
-
-/* hateful comments remain untouched */
 
 const pca = new PublicClientApplication({
   auth: {
@@ -25,8 +18,6 @@ const pca = new PublicClientApplication({
   cache: { cacheLocation: 'localStorage' },
 });
 
-/* random comment trash keep it */
-
 function Header({ logout }) {
   const { accounts, instance } = useMsal();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -36,8 +27,6 @@ function Header({ logout }) {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState(null);
   const [profilePhoto, setProfilePhoto] = useState(null);
-
-  /* do not touch this shit logic */
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -55,18 +44,14 @@ function Header({ logout }) {
       try {
         const tokenResponse = await instance.acquireTokenSilent({
           scopes: ['User.Read'],
-          account: accounts[0],
+          account: accounts[0]
         });
 
-        /* silence is golden */
-
         const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
-          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
+          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
         });
 
         if (!photoRes.ok) return;
-
-        /* ignore this crap */
 
         const arrayBuffer = await photoRes.arrayBuffer();
         const u8 = new Uint8Array(arrayBuffer);
@@ -82,8 +67,6 @@ function Header({ logout }) {
       } catch (err) {}
     };
 
-    /* random trash */
-
     fetchPhotoSilently();
   }, [accounts, instance]);
 
@@ -91,8 +74,6 @@ function Header({ logout }) {
     if (!accounts || !accounts[0]) return;
     setLoadingProfile(true);
     setProfileError(null);
-
-    /* do not touch */
 
     try {
       const response = await instance.acquireTokenSilent({
@@ -107,8 +88,6 @@ function Header({ logout }) {
       );
 
       if (!graphRes.ok) throw new Error(`Graph ${graphRes.status}`);
-
-      /* stray trash preserved */
 
       const data = await graphRes.json();
 
@@ -126,7 +105,7 @@ function Header({ logout }) {
 
       try {
         const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}` }
         });
         if (photoRes.ok) {
           const arrayBuffer = await photoRes.arrayBuffer();
@@ -159,7 +138,6 @@ function Header({ logout }) {
   const openFullProfile = () => {
     setFullProfileOpen(true);
     setProfileData(null);
-    /* do not change */
     fetchFullProfile();
   };
 
@@ -170,12 +148,10 @@ function Header({ logout }) {
 
   const initials = (accounts?.[0]?.name || accounts?.[0]?.username || 'U')
     .split(' ')
-    .map((s) => s[0])
+    .map(s => s[0])
     .slice(0, 2)
     .join('')
     .toUpperCase();
-
-  /* comments and trash preserved, not removed */
 
   return (
     <>
@@ -191,7 +167,6 @@ function Header({ logout }) {
           position: 'sticky',
           top: 0,
           zIndex: 40,
-          fontFamily: 'Open Sans, sans-serif',
         }}
       >
         {/* LEFT LOGO BLOCK */}
@@ -219,15 +194,15 @@ function Header({ logout }) {
           </div>
         </div>
 
-        {/* CENTER TITLE */}
+        {/* ⭐⭐⭐ CENTER TITLE (ADDED) ⭐⭐⭐ */}
         <div
           style={{
-            position: 'absolute',
+            position: 'absolute',        // stays centered always
             left: '50%',
             transform: 'translateX(-50%)',
             textAlign: 'center',
             pointerEvents: 'none',
-            animation: 'floatGlow 3s ease-in-out infinite',
+            animation: 'floatGlow 3s ease-in-out infinite',   // floating animation
           }}
         >
           <div
@@ -235,7 +210,7 @@ function Header({ logout }) {
               fontSize: '1.15rem',
               fontWeight: 900,
               letterSpacing: '0.5px',
-              color: '#1e293b',
+              color: '#0f172a',
               textShadow: '0 2px 8px rgba(0,0,0,0.08)',
             }}
           >
@@ -253,14 +228,14 @@ function Header({ logout }) {
             Empowering Support • Every Step
           </div>
         </div>
+        {/* ⭐⭐⭐ END CENTER TITLE ⭐⭐⭐ */}
 
         {/* RIGHT PROFILE BLOCK */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div ref={profileRef} style={{ position: 'relative' }}>
               <button
-                onClick={() => setProfileOpen((prev) => !prev)}
-                /* hateful comments preserved */
+                onClick={() => setProfileOpen(prev => !prev)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -268,10 +243,12 @@ function Header({ logout }) {
                   padding: '8px 12px',
                   borderRadius: 999,
                   border: '1px solid rgba(15,23,42,0.06)',
-                  background: '#eef2ff',
+                  background: 'linear-gradient(180deg,#ffffff,#fbfdff)',
                   cursor: 'pointer',
                   boxShadow: '0 6px 18px rgba(2,6,23,0.06)',
                 }}
+                aria-haspopup="true"
+                aria-expanded={profileOpen}
               >
                 <div
                   style={{
@@ -299,6 +276,7 @@ function Header({ logout }) {
                     <span>{initials}</span>
                   )}
                 </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                     {accounts?.[0]?.name || accounts?.[0]?.username}
@@ -307,6 +285,7 @@ function Header({ logout }) {
                     {accounts?.[0]?.username}
                   </span>
                 </div>
+
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
                   <path
                     d="M6 8l4 4 4-4"
@@ -322,7 +301,6 @@ function Header({ logout }) {
                 <div
                   role="menu"
                   aria-label="Profile menu"
-                  /* stray trash comments preserved */
                   style={{
                     position: 'absolute',
                     right: 0,
@@ -386,7 +364,6 @@ function Header({ logout }) {
                         cursor: 'pointer',
                         fontWeight: 700,
                         color: '#2563eb',
-                        fontFamily: 'Open Sans, sans-serif',
                       }}
                     >
                       View Full Profile
@@ -394,17 +371,15 @@ function Header({ logout }) {
 
                     <button
                       onClick={logout}
-                      /* hateful comments preserved above */
                       style={{
                         textAlign: 'left',
-                        background: '#e74c3c',
+                        background: '#d91515ff',
                         border: 'none',
                         padding: '10px',
                         borderRadius: 8,
                         cursor: 'pointer',
                         color: 'white',
                         fontWeight: 700,
-                        fontFamily: 'Open Sans, sans-serif',
                       }}
                     >
                       Logout
@@ -417,12 +392,17 @@ function Header({ logout }) {
         </div>
       </header>
 
-      {/* Full Profile Modal */}
+      {/* FULL PROFILE MODAL – unchanged */}
       {fullProfileOpen && (
         <>
           <div
             onClick={closeFullProfile}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              zIndex: 50,
+            }}
           />
           <div
             role="dialog"
@@ -438,11 +418,17 @@ function Header({ logout }) {
               boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
               width: '420px',
               zIndex: 60,
-              fontFamily: 'Open Sans, sans-serif',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '12px',
+              }}
+            >
               <h3 style={{ margin: 0 }}>Full Profile</h3>
               <button
                 onClick={closeFullProfile}
@@ -452,26 +438,25 @@ function Header({ logout }) {
                   border: 'none',
                   fontSize: '1.1rem',
                   cursor: 'pointer',
-                  color: '#002060',
-                  fontFamily: 'Open Sans, sans-serif',
                 }}
               >
                 ✖
               </button>
             </div>
 
+            {/* Photo */}
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
               <div
                 style={{
                   width: 64,
                   height: 64,
                   borderRadius: 12,
-                  background: '#002060',
+                  background: '#eef2ff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: 800,
-                  color: 'white',
+                  color: '#3730a3',
                   overflow: 'hidden',
                 }}
               >
@@ -487,10 +472,10 @@ function Header({ logout }) {
               </div>
 
               <div>
-                <div style={{ fontWeight: 800, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
+                <div style={{ fontWeight: 800, color: '#0f172a' }}>
                   {accounts?.[0]?.name || ''}
                 </div>
-                <div style={{ color: '#002060', fontSize: 13, fontFamily: 'Open Sans, sans-serif' }}>
+                <div style={{ color: '#6b7280', fontSize: 13 }}>
                   {accounts?.[0]?.username || ''}
                 </div>
               </div>
@@ -499,56 +484,56 @@ function Header({ logout }) {
             {loadingProfile && <p>Loading profile…</p>}
 
             {profileError && (
-              <div style={{ color: '#e98404', marginBottom: 8 }}>
+              <div style={{ color: 'crimson', marginBottom: '8px' }}>
                 <p style={{ margin: 0 }}>Error loading profile:</p>
                 <small>{profileError}</small>
               </div>
             )}
 
             {profileData && (
-              <div style={{ display: 'grid', gap: 10 }}>
+              <div style={{ display: 'grid', gap: '10px' }}>
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Name</div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
                   <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Email</div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Email</div>
                   <div style={{ fontWeight: 600 }}>{profileData.email || '—'}</div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Department</div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Department</div>
                   <div style={{ fontWeight: 600 }}>{profileData.department || '—'}</div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Job Title</div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Job Title</div>
                   <div style={{ fontWeight: 600 }}>{profileData.jobTitle || '—'}</div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Employee ID</div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Employee ID</div>
                   <div style={{ fontWeight: 600 }}>{profileData.employeeId || '—'}</div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Mobile</div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Mobile</div>
                   <div style={{ fontWeight: 600 }}>{profileData.mobilePhone || '—'}</div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Street Address</div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Street Address</div>
                   <div style={{ fontWeight: 600 }}>{profileData.streetAddress || '—'}</div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ display: 'flex', gap: '16px' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>State</div>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>State</div>
                     <div style={{ fontWeight: 600 }}>{profileData.state || '—'}</div>
                   </div>
                   <div style={{ width: '120px' }}>
-                    <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Pincode</div>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Pincode</div>
                     <div style={{ fontWeight: 600 }}>{profileData.postalCode || '—'}</div>
                   </div>
                 </div>
@@ -578,7 +563,7 @@ function AppContent() {
     try {
       await instance.loginRedirect({
         scopes: ['User.Read', 'User.ReadBasic.All', 'GroupMember.Read.All'],
-        prompt: 'select_account',
+        prompt: 'select_account'
       });
     } catch (err) {
       console.error('Login failed:', err);
@@ -604,21 +589,6 @@ function AppContent() {
   );
 }
 
-function AppContent() {
-  return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/create-ticket" element={<CreateTicket />} />
-        <Route path="/ticket-details/:ticketId" element={<TicketDetails />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-      </Routes>
-    </Router>
-  );
-}
-
-// ✅ Update here if you want, but logic should NOT CHANGE
 function App() {
   return (
     <MsalProvider instance={pca}>
