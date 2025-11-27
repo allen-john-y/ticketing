@@ -478,7 +478,7 @@ function CreateTicket() {
               required
               rows="5"
               style={styles.textarea}
-              placeholder="Describe your issue... Be specific: steps to reproduce, error messages, affected systems"
+              placeholder="Describe your request in detail..."
             />
           </div>
 
