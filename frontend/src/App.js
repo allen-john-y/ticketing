@@ -1,19 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  MsalProvider,
-  AuthenticatedTemplate,
-  UnauthenticatedTemplate,
-  useMsal
-} from '@azure/msal-react';
-import {
-  PublicClientApplication,
-  InteractionRequiredAuthError
-} from '@azure/msal-browser';
-import {
-  BrowserRouter as Router,
-  Route,
-  Routes
-} from 'react-router-dom';
+import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
+import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
+import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
@@ -167,18 +155,11 @@ function Header({ logout }) {
 
   return (
     <>
-      {/* Font links just like Login.js */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@700;900&family=Open+Sans:wght@400;600;800&display=swap"
-      />
-
       <header
         style={{
           background: 'white',
           padding: '14px 20px',
-          borderBottom: '1px solid rgba(15,23,42,0.08)',
+          borderBottom: '1px solid rgba(15,23,42,0.06)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -186,7 +167,6 @@ function Header({ logout }) {
           position: 'sticky',
           top: 0,
           zIndex: 40,
-          fontFamily: 'Open Sans, sans-serif'
         }}
       >
         {/* LEFT LOGO BLOCK */}
@@ -200,33 +180,29 @@ function Header({ logout }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <h1
                 style={{
-                  color: '#002060',
+                  color: '#0f172a',
                   margin: 0,
                   fontSize: '1.05rem',
-                  fontWeight: 900,
-                  fontFamily: 'Red Hat Display, sans-serif',
+                  fontWeight: 800,
                   letterSpacing: 0.2,
                 }}
               >
                 SANDEZA INC
               </h1>
             </div>
-            <div style={{ color: '#e98404', fontSize: 12, fontWeight: 700, fontFamily: 'Red Hat Display, sans-serif' }}>
-              IT Ticket Portal
-            </div>
+            <div style={{ color: '#6b7280', fontSize: 12 }}>IT Ticket Portal</div>
           </div>
         </div>
 
-        {/* ⭐⭐⭐ CENTER TITLE (BRANDED) ⭐⭐⭐ */}
+        {/* ⭐⭐⭐ CENTER TITLE (ADDED) ⭐⭐⭐ */}
         <div
           style={{
-            position: 'absolute',
+            position: 'absolute',        // stays centered always
             left: '50%',
             transform: 'translateX(-50%)',
             textAlign: 'center',
             pointerEvents: 'none',
-            animation: 'floatGlow 3s ease-in-out infinite',
-            fontFamily: 'Red Hat Display, sans-serif',
+            animation: 'floatGlow 3s ease-in-out infinite',   // floating animation
           }}
         >
           <div
@@ -234,21 +210,19 @@ function Header({ logout }) {
               fontSize: '1.15rem',
               fontWeight: 900,
               letterSpacing: '0.5px',
-              color: '#002060',
+              color: '#0f172a',
               textShadow: '0 2px 8px rgba(0,0,0,0.08)',
-              fontFamily: 'Red Hat Display, sans-serif',
             }}
           >
             SANDEZA HELPDESK
           </div>
           <div
             style={{
-              fontSize: '0.81rem',
+              fontSize: '0.75rem',
               marginTop: 2,
-              fontWeight: 700,
-              color: '#e98404',
+              fontWeight: 600,
+              color: '#64748b',
               letterSpacing: '0.3px',
-              fontFamily: 'Open Sans, sans-serif',
             }}
           >
             Empowering Support • Every Step
@@ -256,7 +230,7 @@ function Header({ logout }) {
         </div>
         {/* ⭐⭐⭐ END CENTER TITLE ⭐⭐⭐ */}
 
-        {/* RIGHT PROFILE BLOCK — unchanged, except font family */}
+        {/* RIGHT PROFILE BLOCK */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div ref={profileRef} style={{ position: 'relative' }}>
@@ -272,7 +246,6 @@ function Header({ logout }) {
                   background: 'linear-gradient(180deg,#ffffff,#fbfdff)',
                   cursor: 'pointer',
                   boxShadow: '0 6px 18px rgba(2,6,23,0.06)',
-                  fontFamily: 'Open Sans, sans-serif'
                 }}
                 aria-haspopup="true"
                 aria-expanded={profileOpen}
@@ -291,7 +264,6 @@ function Header({ logout }) {
                     fontSize: 14,
                     flexShrink: 0,
                     overflow: 'hidden',
-                    fontFamily: 'Red Hat Display, sans-serif'
                   }}
                 >
                   {profilePhoto ? (
@@ -306,10 +278,10 @@ function Header({ logout }) {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#002060', fontFamily: 'Red Hat Display, sans-serif' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                     {accounts?.[0]?.name || accounts?.[0]?.username}
                   </span>
-                  <span style={{ fontSize: 11, color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>
                     {accounts?.[0]?.username}
                   </span>
                 </div>
@@ -340,7 +312,6 @@ function Header({ logout }) {
                     padding: 12,
                     width: 300,
                     zIndex: 60,
-                    fontFamily: 'Open Sans, sans-serif'
                   }}
                 >
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
@@ -356,29 +327,23 @@ function Header({ logout }) {
                         fontWeight: 800,
                         color: '#3730a3',
                         overflow: 'hidden',
-                        fontFamily: 'Red Hat Display, sans-serif'
                       }}
                     >
                       {profilePhoto ? (
                         <img
                           src={profilePhoto}
                           alt="profile"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block'
-                          }}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                         />
                       ) : (
                         <span style={{ fontSize: 18 }}>{initials}</span>
                       )}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 800, color: '#002060', fontFamily: 'Red Hat Display, sans-serif' }}>
+                      <div style={{ fontWeight: 800, color: '#0f172a' }}>
                         {accounts?.[0]?.name || 'Unknown'}
                       </div>
-                      <div style={{ color: '#6b7280', fontSize: 13, fontFamily: 'Open Sans, sans-serif' }}>
+                      <div style={{ color: '#6b7280', fontSize: 13 }}>
                         {accounts?.[0]?.username}
                       </div>
                     </div>
@@ -398,8 +363,7 @@ function Header({ logout }) {
                         borderRadius: 8,
                         cursor: 'pointer',
                         fontWeight: 700,
-                        color: '#e98404',
-                        fontFamily: 'Red Hat Display, sans-serif'
+                        color: '#2563eb',
                       }}
                     >
                       View Full Profile
@@ -409,14 +373,13 @@ function Header({ logout }) {
                       onClick={logout}
                       style={{
                         textAlign: 'left',
-                        background: '#002060',
+                        background: '#d91515ff',
                         border: 'none',
                         padding: '10px',
                         borderRadius: 8,
                         cursor: 'pointer',
                         color: 'white',
                         fontWeight: 700,
-                        fontFamily: 'Open Sans, sans-serif'
                       }}
                     >
                       Logout
@@ -429,9 +392,162 @@ function Header({ logout }) {
         </div>
       </header>
 
-      {/* FULL PROFILE MODAL – unchanged, add font family if you want */}
-      {/* ... existing modal code unchanged ... */}
-      {/* For brevity, omitted modal here. Keep your modal as-is. */}
+      {/* FULL PROFILE MODAL – unchanged */}
+      {fullProfileOpen && (
+        <>
+          <div
+            onClick={closeFullProfile}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              zIndex: 50,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'white',
+              borderRadius: '10px',
+              padding: '20px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              width: '420px',
+              zIndex: 60,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '12px',
+              }}
+            >
+              <h3 style={{ margin: 0 }}>Full Profile</h3>
+              <button
+                onClick={closeFullProfile}
+                aria-label="Close profile"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '1.1rem',
+                  cursor: 'pointer',
+                }}
+              >
+                ✖
+              </button>
+            </div>
+
+            {/* Photo */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 12,
+                  background: '#eef2ff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 800,
+                  color: '#3730a3',
+                  overflow: 'hidden',
+                }}
+              >
+                {profilePhoto ? (
+                  <img
+                    src={profilePhoto}
+                    alt="profile"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                ) : (
+                  <span style={{ fontSize: 20 }}>{initials}</span>
+                )}
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                  {accounts?.[0]?.name || ''}
+                </div>
+                <div style={{ color: '#6b7280', fontSize: 13 }}>
+                  {accounts?.[0]?.username || ''}
+                </div>
+              </div>
+            </div>
+
+            {loadingProfile && <p>Loading profile…</p>}
+
+            {profileError && (
+              <div style={{ color: 'crimson', marginBottom: '8px' }}>
+                <p style={{ margin: 0 }}>Error loading profile:</p>
+                <small>{profileError}</small>
+              </div>
+            )}
+
+            {profileData && (
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Email</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.email || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Department</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.department || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Job Title</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.jobTitle || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Employee ID</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.employeeId || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Mobile</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.mobilePhone || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Street Address</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.streetAddress || '—'}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>State</div>
+                    <div style={{ fontWeight: 600 }}>{profileData.state || '—'}</div>
+                  </div>
+                  <div style={{ width: '120px' }}>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Pincode</div>
+                    <div style={{ fontWeight: 600 }}>{profileData.postalCode || '—'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!loadingProfile && !profileData && !profileError && (
+              <div style={{ textAlign: 'center' }}>
+                <small>No profile data available.</small>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </>
   );
 }
@@ -454,48 +570,19 @@ function AppContent() {
     }
   };
 
-  // Branded main container
   return (
     <Router>
       <AuthenticatedTemplate>
         <Header logout={handleLogout} />
-        {/* Branded app main area */}
-        <main
-          style={{
-            minHeight: '100vh',
-            background: '#f6f8fa',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            margin: 0,
-            padding: '40px 0',
-            fontFamily: 'Open Sans, sans-serif'
-          }}
-        >
-          <div
-            style={{
-              background: 'white',
-              width: '100%',
-              maxWidth: 1100,
-              minHeight: 500,
-              borderRadius: 18,
-              boxShadow: '0 8px 48px rgba(0,32,96,0.22)',
-              padding: '40px 32px 30px 32px',
-              fontFamily: 'Open Sans, sans-serif'
-            }}
-          >
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/create" element={<CreateTicket />} />
-              <Route path="/ticket/:id" element={<TicketDetails />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-            </Routes>
-          </div>
-        </main>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/create" element={<CreateTicket />} />
+          <Route path="/ticket/:id" element={<TicketDetails />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Routes>
       </AuthenticatedTemplate>
 
       <UnauthenticatedTemplate>
-        {/* Use Login.js branding directly */}
         <Login login={handleLogin} />
       </UnauthenticatedTemplate>
     </Router>
@@ -505,19 +592,20 @@ function AppContent() {
 function App() {
   return (
     <MsalProvider instance={pca}>
-      {/* Global animation (for floating header center-title only!) */}
-      <style>
-        {`
-        @keyframes floatGlow {
-          0% { transform: translateX(-50%) translateY(0); opacity: 0.92; }
-          50% { transform: translateX(-50%) translateY(-3px); opacity: 1; }
-          100% { transform: translateX(-50%) translateY(0); opacity: 0.92; }
-        }
-      `}
-      </style>
       <AppContent />
     </MsalProvider>
   );
 }
 
 export default App;
+
+/* ⭐⭐⭐ GLOBAL ANIMATION (ADDED) ⭐⭐⭐ */
+<style>
+{`
+@keyframes floatGlow {
+  0% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
+  50% { transform: translateX(-50%) translateY(-3px); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
+}
+`}
+</style>
