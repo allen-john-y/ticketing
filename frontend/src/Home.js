@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import logo from './sandeza.jpg'; // Make sure this path is correct
+import logo from './sandeza.jpg';
 
 function Home() {
   const { accounts, instance } = useMsal();
@@ -70,7 +70,6 @@ function Home() {
             headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
             responseType: 'arraybuffer'
           });
-
           const u8 = new Uint8Array(photoRes.data);
           let binary = '';
           const chunkSize = 0x8000;
@@ -79,9 +78,9 @@ function Home() {
             binary += String.fromCharCode.apply(null, slice);
           }
           const b64 = btoa(binary);
-          const contentType = (photoRes.headers && photoRes.headers['content-type']) || 'image/jpeg';
+          const contentType = photoRes.headers?.['content-type'] || 'image/jpeg';
           setProfilePhoto(`data:${contentType};base64,${b64}`);
-        } catch (photoErr) { }
+        } catch (photoErr) {}
 
         const groupsRes = await axios.get('https://graph.microsoft.com/v1.0/me/memberOf', {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
@@ -208,276 +207,153 @@ function Home() {
   const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   return (
-    <>
-      {/* Brand Fonts */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@700;900&family=Open+Sans:wght@400;600;800&display=swap" />
-
+    <div style={{
+      minHeight: '100vh',
+      background: '#002060',
+      fontFamily: '"Open Sans", sans-serif',
+      color: '#333'
+    }}>
+      {/* Header - Exactly like Login.js */}
       <div style={{
-        minHeight: '100vh',
         background: '#002060',
-        color: '#333',
-        fontFamily: 'Open Sans, sans-serif',
-        padding: '2rem 1rem'
+        color: 'white',
+        padding: '2rem',
+        textAlign: 'center'
       }}>
         <div style={{
-          maxWidth: '1200px',
+          maxWidth: '500px',
           margin: '0 auto',
           background: 'white',
-          borderRadius: '16px',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.18)',
-          overflow: 'hidden'
+          borderRadius: '15px',
+          padding: '2.5rem',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+          color: '#002060'
         }}>
-          {/* Header */}
-          <div style={{
-            background: '#002060',
-            color: 'white',
-            padding: '1.8rem 2.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '1rem'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <img src={logo} alt="Sandeza logo" style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover' }} />
-              <div>
-                <h1 style={{
-                  margin: 0,
-                  fontFamily: 'Red Hat Display, sans-serif',
-                  fontWeight: 900,
-                  fontSize: '2rem',
-                  letterSpacing: '0.5px'
-                }}>SANDEZA INC</h1>
-                <p style={{ margin: '4px 0 0', fontSize: '1.1rem', opacity: 0.9 }}>IT Ticket Portal • Welcome, {userName}</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              {profilePhoto ? (
-                <img src={profilePhoto} alt="Profile" style={{ width: 52, height: 52, borderRadius: '50%', border: '3px solid #e98404' }} />
-              ) : (
-                <div style={{
-                  width: 52, height: 52, borderRadius: '50%', background: '#e98404', color: 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.2rem'
-                }}>{initials}</div>
-              )}
-              <span style={{
-                background: authority === 'admin' ? '#e98404' : '#002060',
-                padding: '8px 16px',
-                borderRadius: 30,
-                fontWeight: 700,
-                fontSize: '0.9rem'
-              }}>
-                {authority.toUpperCase()}
-              </span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
+            <img src={logo} alt="Sandeza" style={{ width: 64, height: 64, borderRadius: 12 }} />
+            <h1 style={{ margin: 0, fontFamily: '"Red Hat Display", sans-serif', fontWeight: 900, fontSize: '2.2rem' }}>
+              SANDEZA INC
+            </h1>
           </div>
-
-          {/* Main Content */}
-          <div style={{ padding: '2.5rem' }}>
-            {/* KPIs */}
-            <div style={{ display: 'flex', gap: 20, marginBottom: '2rem', flexWrap: 'wrap' }}>
-              <div style={{ background: '#f8f9fa', padding: '1rem 1.5rem', borderRadius: 12, flex: 1, minWidth: 180, textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#e98404' }}>{openTickets.length}</div>
-                <div style={{ fontWeight: 600, color: '#002060' }}>Open Tickets</div>
-              </div>
-              <div style={{ background: '#f8f9fa', padding: '1rem 1.5rem', borderRadius: 12, flex: 1, minWidth: 180, textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#27ae60' }}>{closedTickets.length}</div>
-                <div style={{ fontWeight: 600, color: '#002060' }}>Closed Tickets</div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: '2rem', flexWrap: 'wrap' }}>
-              <Link to="/create" style={{ textDecoration: 'none' }}>
-                <button style={{
-                  background: '#e98404',
-                  color: 'white',
-                  border: 'none',
-                  padding: '14px 28px',
-                  borderRadius: 10,
-                  fontSize: '1.1rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  boxShadow: '0 6px 18px rgba(233,132,4,0.3)'
-                }}>Create New Ticket</button>
-              </Link>
-              <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-                <button style={{
-                  background: '#002060',
-                  color: 'white',
-                  border: 'none',
-                  padding: '14px 28px',
-                  borderRadius: 10,
-                  fontSize: '1.1rem',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}>View All Closed</button>
-              </Link>
-            </div>
-
-            {/* Admin: My Tickets Toggle */}
-            {authority === 'admin' && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, color: '#002060', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={showMyTickets} onChange={() => setShowMyTickets(!showMyTickets)} />
-                  Show only my tickets
-                </label>
-              </div>
-            )}
-
-            {/* Search */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <input
-                type="text"
-                placeholder="Search by ticket number, category, or description..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '14px 18px',
-                  border: '2px solid #e0e0e0',
-                  borderRadius: 12,
-                  fontSize: '1rem',
-                  outline: 'none',
-                  transition: '0.2s'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#e98404'}
-                onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
-              />
-            </div>
-
-            {/* Filters */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-              <button ref={categoryBtnRef} onClick={() => openDropdown('category')} style={{
-                padding: '10px 16px',
-                background: 'white',
-                border: '2px solid #002060',
-                color: '#002060',
-                borderRadius: 10,
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}>
-                Category Filter ▼
-              </button>
-              {authority === 'admin' && (
-                <button ref={userBtnRef} onClick={() => openDropdown('user')} style={{
-                  padding: '10px 16px',
-                  background: 'white',
-                  border: '2px solid #002060',
-                  color: '#002060',
-                  borderRadius: 10,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}>
-                  User Filter ▼
-                </button>
-              )}
-            </div>
-
-            {/* Dropdown */}
-            {dropdownOpen && (
-              <div ref={dropdownRef} style={{
-                position: 'fixed',
-                top: dropdownPos.top,
-                left: dropdownPos.left,
-                background: 'white',
-                border: '1px solid #ddd',
-                borderRadius: 12,
-                boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
-                padding: '1rem',
-                zIndex: 9999,
-                minWidth: 260
-              }}>
-                {(dropdownOpen === 'category' ? categories : users).map(item => (
-                  <label key={item} style={{ display: 'block', margin: '8px 0' }}>
-                    <input
-                      type="checkbox"
-                      checked={dropdownOpen === 'category' ? selectedCategories.includes(item) : selectedUsers.includes(item)}
-                      onChange={() => handleSelect(dropdownOpen, item)}
-                    /> {item}
-                  </label>
-                ))}
-                <div style={{ marginTop: '1rem', display: 'flex', gap: 8 }}>
-                  <button onClick={applyFilters} style={{ background: '#002060', color: 'white', padding: '8px 14px', borderRadius: 8, border: 'none', fontWeight: 600 }}>Apply</button>
-                  <button onClick={() => setDropdownOpen(null)} style={{ background: '#eee', padding: '8px 14px', borderRadius: 8, border: 'none' }}>Cancel</button>
-                </div>
-              </div>
-            )}
-
-            {/* Applied Filters */}
-            {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
-              <div style={{ marginBottom: '1.5rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {appliedCategories.map(c => (
-                  <span key={c} style={{ background: '#e98404', color: 'white', padding: '6px 12px', borderRadius: 20, fontSize: '0.9rem' }}>
-                    {c} <button onClick={() => removeFilter('category', c)} style={{ background: 'none', border: 'none', color: 'white', marginLeft: 6, cursor: 'pointer' }}>×</button>
-                  </span>
-                ))}
-                {appliedUsers.map(u => (
-                  <span key={u} style={{ background: '#002060', color: 'white', padding: '6px 12px', borderRadius: 20, fontSize: '0.9rem' }}>
-                    {u} <button onClick={() => removeFilter('user', u)} style={{ background: 'none', border: 'none', color: 'white', marginLeft: 6, cursor: 'pointer' }}>×</button>
-                  </span>
-                ))}
-                <button onClick={clearAllFilters} style={{ color: '#e74c3c', fontWeight: 600, background: 'none', border: 'none' }}>Clear All</button>
-              </div>
-            )}
-
-            {/* Ticket List */}
-            <h2 style={{
-              fontFamily: 'Red Hat Display, sans-serif',
-              fontWeight: 900,
-              color: '#002060',
-              fontSize: '1.8rem',
-              margin: '2rem 0 1.5rem'
-            }}>
-              {authority === 'admin'
-                ? showMyTickets ? `My Open Tickets (${openTickets.length})` : `All Open Tickets (${openTickets.length})`
-                : `Your Open Tickets (${openTickets.length})`}
-            </h2>
-
-            {openTickets.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem', color: '#777' }}>
-                <h3>No tickets found</h3>
-                <p>Try adjusting your search or filters.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gap: '1.2rem' }}>
-                {openTickets.map(ticket => (
-                  <Link key={ticket._id} to={`/ticket/${ticket._id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{
-                      background: '#fff',
-                      border: '1px solid #eee',
-                      borderLeft: `5px solid ${categoryColor(ticket.category)}`,
-                      borderRadius: 12,
-                      padding: '1.5rem',
-                      transition: '0.2s',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-                    >
-                      <h3 style={{ margin: 0, color: '#002060', fontWeight: 800, fontSize: '1.3rem' }}>
-                        #{ticket.ticketNumber} • {ticket.category}
-                      </h3>
-                      <p style={{ color: '#444', margin: '0.8rem 0', lineHeight: 1.5 }}>{ticket.description}</p>
-                      {authority === 'admin' && (
-                        <p style={{ color: '#666', fontSize: '0.95rem' }}>
-                          <strong>By:</strong> {ticket.userName} ({ticket.userEmail})
-                        </p>
-                      )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', fontSize: '0.95rem' }}>
-                        <span style={{ color: '#27ae60', fontWeight: 700 }}>Status: {ticket.status}</span>
-                        <span style={{ color: '#002060', fontWeight: 600 }}>Priority: {ticket.priority}</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+          <h2 style={{ margin: '1rem 0 0', fontFamily: '"Red Hat Display", sans-serif', fontWeight: 900, color: '#e98404' }}>
+            IT Ticket Portal
+          </h2>
+          <p style={{ margin: '1rem 0 0', fontSize: '1.1rem', opacity: 0.9 }}>
+            Welcome back, <strong>{userName}</strong> • {authority === 'admin' ? 'Administrator' : 'User'}
+          </p>
         </div>
       </div>
-    </>
+
+      {/* Main Content Card */}
+      <div style={{ padding: '2rem', maxWidth: '1100px', margin: '0 auto' }}>
+        <div style={{ background: 'white', borderRadius: '15px', padding: '2.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.15)' }}>
+
+          {/* KPIs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+            <div style={{ textAlign: 'center', padding: '1.5rem', background: '#f9f9f9', borderRadius: 12 }}>
+              <div style={{ fontSize: '3rem', fontWeight: 900, color: '#e98404' }}>{openTickets.length}</div>
+              <div style={{ fontWeight: 600, color: '#002060' }}>Open Tickets</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '1.5rem', background: '#f9f9f9', borderRadius: 12 }}>
+              <div style={{ fontSize: '3rem', fontWeight: 900, color: '#27ae60' }}>{closedTickets.length}</div>
+              <div style={{ fontWeight: 600, color: '#002060' }}>Closed Tickets</div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link to="/create"><button style={{ background: '#e98404', color: 'white', border: 'none', padding: '15px 32px', borderRadius: 8, fontSize: '1.1rem', fontWeight: 600, cursor: 'pointer' }}>Create New Ticket</button></Link>
+            <Link to="/dashboard"><button style={{ background: '#002060', color: 'white', border: 'none', padding: '15px 32px', borderRadius: 8, fontSize: '1.1rem', fontWeight: 600, cursor: 'pointer' }}>View All Closed</button></Link>
+          </div>
+
+          {/* Admin Toggle */}
+          {authority === 'admin' && (
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <label style={{ fontWeight: 600 }}>
+                <input type="checkbox" checked={showMyTickets} onChange={() => setShowMyTickets(!showMyTickets)} style={{ marginRight: 8 }} />
+                Show only my tickets
+              </label>
+            </div>
+          )}
+
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="Search tickets..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            style={{ width: '100%', padding: '14px', border: '2px solid #ddd', borderRadius: 8, fontSize: '1rem', marginBottom: '1.5rem' }}
+          />
+
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+            <button ref={categoryBtnRef} onClick={() => openDropdown('category')} style={{ padding: '10px 20px', background: 'white', border: '2px solid #002060', color: '#002060', borderRadius: 8, fontWeight: 600 }}>Category Filter</button>
+            {authority === 'admin' && <button ref={userBtnRef} onClick={() => openDropdown('user')} style={{ padding: '10px 20px', background: 'white', border: '2px solid #002060', color: '#002060', borderRadius: 8, fontWeight: 600 }}>User Filter</button>}
+          </div>
+
+          {/* Dropdown & Filters UI - kept functional, styled simply */}
+          {dropdownOpen && (
+            <div ref={dropdownRef} style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, background: 'white', border: '1px solid #ddd', borderRadius: 8, padding: '1rem', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', zIndex: 9999, minWidth: 260 }}>
+              {(dropdownOpen === 'category' ? categories : users).map(item => (
+                <label key={item} style={{ display: 'block', margin: '8px 0' }}>
+                  <input type="checkbox" checked={dropdownOpen === 'category' ? selectedCategories.includes(item) : selectedUsers.includes(item)} onChange={() => handleSelect(dropdownOpen, item)} /> {item}
+                </label>
+              ))}
+              <div style={{ marginTop: '1rem', textAlign: 'right' }}>
+                <button onClick={applyFilters} style={{ background: '#002060', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 6, marginRight: 8 }}>Apply</button>
+                <button onClick={() => setDropdownOpen(null)} style={{ background: '#eee', padding: '8px 16px', borderRadius: 6 }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Applied Filters */}
+          {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
+            <div style={{ marginBottom: '1.5rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {appliedCategories.map(c => <span key={c} style={{ background: '#e98404', color: 'white', padding: '6px 12px', borderRadius: 20 }}>#{c} <button onClick={() => removeFilter('category', c)} style={{ background: 'none', border: 'none', color: 'white', marginLeft: 6 }}>×</button></span>)}
+              {appliedUsers.map(u => <span key={u} style={{ background: '#002060', color: 'white', padding: '6px 12px', borderRadius: 20 }}>@ {u} <button onClick={() => removeFilter('user', u)} style={{ background: 'none', border: 'none', color: 'white', marginLeft: 6 }}>×</button></span>)}
+              <button onClick={clearAllFilters} style={{ color: '#e74c3c', fontWeight: 600 }}>Clear All</button>
+            </div>
+          )}
+
+          {/* Tickets List */}
+          <h2 style={{ fontFamily: '"Red Hat Display", sans-serif', fontWeight: 900, color: '#002060', margin: '2rem 0 1rem' }}>
+            {authority === 'admin' ? (showMyTickets ? 'My Open Tickets' : 'All Open Tickets') : 'Your Open Tickets'} ({openTickets.length})
+          </h2>
+
+          {openTickets.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#777', padding: '3rem 0' }}>No tickets found.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              {openTickets.map(ticket => (
+                <Link key={ticket._id} to={`/ticket/${ticket._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div style={{
+                    background: 'white',
+                    border: '1px solid #eee',
+                    borderLeft: `6px solid ${categoryColor(ticket.category)}`,
+                    borderRadius: 10,
+                    padding: '1.5rem',
+                    transition: '0.2s'
+                  }}>
+                    <h3 style={{ margin: '0 0 0.5rem', color: '#002060', fontWeight: 800 }}>
+                      #{ticket.ticketNumber} - {ticket.category}
+                    </h3>
+                    <p style={{ margin: '0.5rem 0', color: '#444' }}>{ticket.description}</p>
+                    {authority === 'admin' && (
+                      <p style={{ fontSize: '0.9rem', color: '#666', margin: '0.5rem 0' }}>
+                        <strong>By:</strong> {ticket.userName} • {ticket.userEmail}
+                      </p>
+                    )}
+                    <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#002060', fontWeight: 600 }}>
+                      Status: {ticket.status} • Priority: {ticket.priority}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
