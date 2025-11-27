@@ -13,17 +13,21 @@ function CreateTicket() {
     category: '',
     subCategory: '',
     priority: 'Medium',
-    description: ''
+    description: '',
+    onBehalf: 'Self',
+    onBehalfEmail: '',
+    deliveryEmail: '' // unified field for alternate email
   });
 
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
-  const [createdTicketId, setCreatedTicketId] = useState(null);
+  const [createdRequestId, setCreatedRequestId] = useState(null);
 
-  const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
-  const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
+  // verification states for Others
+  const [verifyStatus, setVerifyStatus] = useState('idle'); // idle | verifying | verified | notfound | error
+  const [verifiedName, setVerifiedName] = useState('');
+  const [verifyError, setVerifyError] = useState('');
 
-  // Category → Sub-category map (from manager table)
   const categoryOptions = {
     "Hardware": [
       "Laptop not booting",
@@ -61,99 +65,120 @@ function CreateTicket() {
     ]
   };
 
-  // Fetch profile from Graph to show name/email
-  useEffect(() => {
-    let mounted = true;
-    const fetchUser = async () => {
-      if (!accounts || !accounts[0]) return;
-      try {
-        const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
-        const resp = await axios.get('https://graph.microsoft.com/v1.0/me', {
-          headers: { Authorization: `Bearer ${tokenResp.accessToken}` }
-        });
-        if (!mounted) return;
-        setDisplayName(resp.data.displayName || accounts[0]?.name || '');
-        const email = (resp.data.mail && resp.data.mail.trim()) ||
-                      (resp.data.userPrincipalName && resp.data.userPrincipalName.trim()) ||
-                      accounts[0]?.username || '';
-        setDisplayEmail(email);
-      } catch (err) {
-        console.debug('Could not fetch user profile for form display:', err?.message || err);
-      }
-    };
-    fetchUser();
-    return () => { mounted = false; };
-  }, [instance, accounts]);
+  const subCategoryList = formData.category ? categoryOptions[formData.category] || [] : [];
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setCreatedTicketId(null);
+  const handleVerifyOther = async () => {
+    const email = (formData.onBehalfEmail || '').trim();
+    setVerifyError('');
+    setVerifiedName('');
+    setVerifyStatus('idle');
 
-    // Basic validation
-    if (!formData.category) {
-      setModal({ open: true, title: 'Validation', message: 'Please select a category.', type: 'error' });
-      setLoading(false);
+    if (!email) {
+      setVerifyError("Enter company email to verify.");
+      setVerifyStatus('error');
       return;
     }
-    if (!formData.subCategory) {
-      setModal({ open: true, title: 'Validation', message: 'Please select a sub-category.', type: 'error' });
-      setLoading(false);
-      return;
-    }
-    if (!formData.description.trim()) {
-      setModal({ open: true, title: 'Validation', message: 'Please provide a short description of the issue.', type: 'error' });
-      setLoading(false);
-      return;
-    }
+
+    setVerifyStatus('verifying');
 
     try {
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
 
-      let latestName = displayName;
-      let latestEmail = displayEmail;
-      try {
-        const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', {
-          headers: { Authorization: `Bearer ${token.accessToken}` }
-        });
-        latestName = userRes.data.displayName || latestName || 'User';
-        latestEmail = (userRes.data.mail && userRes.data.mail.trim()) ||
-                      (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
-                      latestEmail || '';
-      } catch (err) {
-        // ignore, fallback to already set values
+      const res = await axios.post(`${backendBase}/verify-user`, { email }, {
+        headers: { Authorization: `Bearer ${token.accessToken}` }
+      });
+
+      if (res.data && res.data.exists) {
+        setVerifyStatus('verified');
+        setVerifiedName(res.data.displayName || res.data.mail || email);
+        setFormData(prev => ({ ...prev, onBehalfEmail: res.data.mail || email }));
+      } else {
+        setVerifyStatus('notfound');
+        setVerifyError("User not found in Azure AD.");
+      }
+    } catch (err) {
+      console.error("Verification failed:", err);
+      setVerifyStatus('error');
+      setVerifyError(err?.response?.data?.message || err.message || 'Verification failed.');
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setCreatedRequestId(null);
+
+    // --- PASSWORD RESET FLOW VALIDATION ---
+    if (formData.subCategory === 'Password reset') {
+      const alt = formData.deliveryEmail.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (formData.onBehalf === 'Self') {
+        if (!alt || !emailRegex.test(alt)) {
+          setModal({ open: true, title: 'Validation', message: 'Enter valid alternate email to receive temp password.', type: 'error' });
+          setLoading(false);
+          return;
+        }
       }
 
-      // TODO: later you can plug category+subCategory → auto priority logic here
-      const requestData = {
-        type: 'IT_REQUEST',   // just a marker – adjust as needed
+      if (formData.onBehalf === 'Others') {
+        if (verifyStatus !== 'verified') {
+          setModal({ open: true, title: 'Validation', message: 'Verify the user before submitting.', type: 'error' });
+          setLoading(false);
+          return;
+        }
+        if (!alt || !emailRegex.test(alt)) {
+          setModal({ open: true, title: 'Validation', message: 'Enter valid alternate email to receive temp password for target user.', type: 'error' });
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
+    // --- NORMAL VALIDATION FOR OTHER REQUESTS ---
+    if (!formData.category || !formData.subCategory || !formData.description.trim()) {
+      setModal({ open: true, title: 'Validation', message: 'Fill all required fields.', type: 'error' });
+      setLoading(false);
+      return;
+    }
+
+    // --- SUBMIT TO BACKEND ---
+    try {
+      const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
+
+      const ticketData = {
         category: formData.category,
         subCategory: formData.subCategory,
         description: formData.description,
         priority: formData.priority,
         userId: accounts[0]?.localAccountId,
-        userName: latestName || accounts[0]?.username,
-        userEmail: latestEmail,
-        status: 'Pending'
+        userName: accounts[0]?.name,
+        userEmail: accounts[0]?.username,
+        status: "Pending",
+
+        ...(formData.subCategory === 'Password reset' && {
+          onBehalf: formData.onBehalf,
+          onBehalfEmail: formData.onBehalf === 'Others' ? formData.onBehalfEmail.trim() : accounts[0]?.username,
+          deliveryEmail: alt,
+          returnPasswordToRequester: formData.onBehalf === 'Self'
+        })
       };
 
-      const response = await axios.post(`${backendBase}/tickets`, requestData, {
+      const response = await axios.post(`${backendBase}/tickets`, ticket_data, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
-      const id = response?.data?._id || response?.data?.id || response?.data?.ticketId || null;
-      if (id) setCreatedTicketId(id);
+      const id = response?.data?._id || null;
+      if (id) {
+        setCreatedRequestId(id);
+      }
 
-      setModal({
-        open: true,
-        title: 'Request Raised',
-        message: 'Your request has been submitted successfully and is now pending review.',
-        type: 'success'
-      });
+      setModal({ open: true, title: 'Request Raised', message: 'Request submitted successfully!', type: 'success' });
+
     } catch (error) {
-      console.error('Error creating request:', error);
-      const message = error?.response?.data?.message || error.message || 'Failed to raise request.';
-      setModal({ open: true, title: 'Failed', message: `⚠️ ${message}`, type: 'error' });
+      console.error('Submit error:', error);
+      const msg = error?.response?.data?.message || error.message || 'Failed';
+      setModal({ open: true, title: 'Failed', message: `⚠ ${msg}`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -165,96 +190,135 @@ function CreateTicket() {
     if (wasSuccess) navigate('/', { state: { refresh: true } });
   };
 
-  const handleViewTicket = () => {
-    if (createdTicketId) navigate(`/ticket/${createdTicketId}`);
-    else navigate('/', { state: { refresh: true } });
-  };
-
-  const initials = (displayName || displayEmail || 'U')
+  // --- AVATAR INITIALS ---
+  const initials = (accounts?.[0]?.name || accounts?.[0]?.username || 'U')
     .split(' ')
     .map(s => s[0])
-    .slice(0, 2)
+    .slice(0,2)
     .join('')
     .toUpperCase();
-
-  const subCategoryList = formData.category ? categoryOptions[formData.category] || [] : [];
 
   return (
     <div style={styles.pageWrap}>
       <div style={styles.card}>
-        {/* Header with user info */}
         <div style={styles.headerRow}>
           <div style={styles.avatar}>{initials}</div>
           <div style={{ flex: 1 }}>
-            <div style={styles.userNameText}>{displayName || displayEmail || 'Unknown User'}</div>
-            <div style={styles.userEmailText}>{displayEmail || '—'}</div>
-          </div>
-          <div style={{ marginLeft: 12, textAlign: 'right' }}>
-            <div style={styles.statusLabel}>Status</div>
-            <div style={styles.statusValue}>Signed in</div>
+            <div style={styles.userNameText}>{accounts?.[0]?.name || 'Unknown User'}</div>
+            <div style={styles.userEmailText}>{accounts?.[0]?.username || '—'}</div>
           </div>
         </div>
 
-        {/* Main title */}
         <h1 style={styles.pageTitle}>Raise New Request</h1>
-        <p style={styles.pageSubtitle}>
-          Please select the appropriate category and sub-category for your issue,
-          then provide a brief description. This helps IT route your request to the right team.
-        </p>
 
         <form onSubmit={handleSubmit}>
-          {/* Category + Subcategory */}
           <div style={styles.gridRow}>
-            <div style={styles.field}>
+            <div>
               <label style={styles.label}>Category *</label>
               <select
                 value={formData.category}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setFormData(prev => ({
-                    ...prev,
-                    category: val,
-                    subCategory: '' // reset sub-category when category changes
-                  }));
-                }}
+                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value, subCategory: '' }))}
                 required
                 style={styles.select}
               >
                 <option value="">Select Category</option>
-                <option value="Hardware">Hardware</option>
-                <option value="Software/Application">Software / Application</option>
-                <option value="Network">Network</option>
-                <option value="Email & Messaging">Email & Messaging</option>
-                <option value="Access & Authentication">Access & Authentication</option>
-                <option value="Security">Security</option>
+                {Object.keys(categoryOptions).map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
             </div>
 
-            <div style={styles.field}>
+            <div>
               <label style={styles.label}>Sub-Category *</label>
               <select
                 value={formData.subCategory}
                 onChange={(e) => setFormData(prev => ({ ...prev, subCategory: e.target.value }))}
                 required
                 disabled={!formData.category}
-                style={{
-                  ...styles.select,
-                  background: !formData.category ? '#f3f4f6' : 'white',
-                  cursor: !formData.category ? 'not-allowed' : 'pointer'
-                }}
+                style={styles.select}
               >
-                <option value="">
-                  {formData.category ? 'Select Sub-Category' : 'Select category first'}
-                </option>
-                {subCategoryList.map((sub) => (
+                <option value="">Select category first</option>
+                {subCategoryList.map(sub => (
                   <option key={sub} value={sub}>{sub}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Priority */}
-          <div style={styles.field}>
+          {/* PASSWORD RESET BLOCK */}
+          {formData.subCategory === 'Password reset' && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={styles.label}>On behalf of *</label>
+              <select
+                value={formData.onBehalf}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData(prev => ({ ...prev, onBehalf: val, onBehalfEmail: '', deliveryEmail: '' }));
+                  setVerifyStatus('idle');
+                  setVerifiedName('');
+                  setVerifyError('');
+                }}
+                style={{ ...styles.select, maxWidth: 240 }}
+              >
+                <option value="Self">Self</option>
+                <option value="Others">Others</option>
+              </select>
+
+              {formData.onBehalf === 'Others' && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="text"
+                      placeholder="Enter company email of target user"
+                      value={formData.onBehalfEmail}
+                      onChange={(e) => setFormData(prev => ({ ...prev, onBehalfEmail: e.target.value }))}
+                      style={{ ...styles.input, flex: 1 }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyOther}
+                      style={styles.verifyButton}
+                      disabled={verifyStatus === 'verifying'}
+                    >
+                      {verifyStatus === 'verifying' ? 'Verifying...' : 'Verify'}
+                    </button>
+                  </div>
+
+                  {/* Feedback */}
+                  <div style={{ marginTop: 6, fontSize: 13 }}>
+                    {verifyStatus === 'verified' && <span style={{ color: 'green' }}>User verified: <strong>{verifiedName}</strong></span>}
+                    {verifyStatus === 'notfound' && <span style={{ color: 'red' }}>{verifyError}</span>}
+                    {verifyStatus === 'error' && <span style={{ color: 'red' }}>{verifyError}</span>}
+                  </div>
+
+                  {verifyStatus === 'verified' && (
+                    <input
+                      type="email"
+                      placeholder="Alternate email to receive temp password"
+                      value={formData.deliveryEmail}
+                      onChange={(e) => setFormData(prev => ({ ...prev, deliveryEmail: e.target.value }))}
+                      style={{ ...styles.input, marginTop: 8 }}
+                      required
+                    />
+                  )}
+                </div>
+              )}
+
+              {formData.onBehalf === 'Self' && (
+                <input
+                  type="email"
+                  placeholder="Alternate email to receive temp password"
+                  value={formData.deliveryEmail}
+                  onChange={(e) => setFormData(prev => ({ ...prev, deliveryEmail: e.target.value }))}
+                  style={{ ...styles.input, marginTop: 8 }}
+                  required
+                />
+              )}
+            </div>
+          )}
+
+          <div>
             <label style={styles.label}>Priority *</label>
             <select
               value={formData.priority}
@@ -266,13 +330,9 @@ function CreateTicket() {
               <option value="Medium">Medium</option>
               <option value="High">High</option>
             </select>
-            <div style={styles.helperText}>
-              Later we can auto-set this based on category & description if needed.
-            </div>
           </div>
 
-          {/* Description */}
-          <div style={styles.field}>
+          <div>
             <label style={styles.label}>Description *</label>
             <textarea
               value={formData.description}
@@ -280,70 +340,29 @@ function CreateTicket() {
               required
               rows="5"
               style={styles.textarea}
-              placeholder="Example: My laptop is not booting since morning. I see a black screen with a blinking cursor..."
+              placeholder="Describe your issue..."
             />
           </div>
 
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-            <button
-              type="submit"
-              style={{ ...styles.primaryButton, flex: 1 }}
-              disabled={loading}
-            >
+          <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+            <button type="submit" style={styles.primaryButton} disabled={loading}>
               {loading ? 'Submitting...' : 'Raise Request'}
             </button>
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              style={styles.ghostButton}
-            >
-              Cancel
-            </button>
+            <button type="button" onClick={() => navigate('/')} style={styles.ghostButton}>Cancel</button>
           </div>
         </form>
       </div>
 
-      {/* Notification Modal */}
+      {/* MODAL */}
       {modal.open && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
             <h3 style={styles.modalTitle}>{modal.title}</h3>
-            <p style={styles.modalText}>{modal.message}</p>
-
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
-              <button
-                onClick={handleCloseModal}
-                style={{
-                  padding: '10px 18px',
-                  background: modal.type === 'success' ? '#27ae60' : '#e74c3c',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontFamily: 'Open Sans, system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
-                }}
-              >
-                OK
-              </button>
-
-              {modal.type === 'success' && createdTicketId && (
-                <button
-                  onClick={handleViewTicket}
-                  style={{
-                    padding: '10px 18px',
-                    background: '#002060',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    fontFamily: 'Open Sans, system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
-                  }}
-                >
-                  View Request
-                </button>
-              )}
-            </div>
+            <p>{modal.message}</p>
+            <button onClick={handleCloseModal} style={styles.primaryButton}>OK</button>
+            {modal.type === 'success' && createdRequestId && (
+              <button onClick={() => navigate(`/ticket/${createdRequestId}`)} style={styles.secondaryButton}>View Request</button>
+            )}
           </div>
         </div>
       )}
@@ -351,187 +370,37 @@ function CreateTicket() {
   );
 }
 
-/* --- styles with your colours + fonts --- */
 const styles = {
   pageWrap: {
     padding: '2rem',
-    maxWidth: 900,
+    maxWidth: 880,
     margin: '0 auto',
-    boxSizing: 'border-box',
-    fontFamily: 'Open Sans, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-    background: '#f3f4f6'
+    background: '#f8fafc',
+    fontFamily: 'Open Sans'
   },
   card: {
     background: 'white',
-    padding: '1.75rem 2rem',
+    padding: 24,
     borderRadius: 16,
-    boxShadow: '0 12px 35px rgba(0,0,0,0.08)',
-    boxSizing: 'border-box',
-    overflow: 'hidden',
-    borderTop: '6px solid #e98404'
+    borderTop: '6px solid #e98404',
+    boxShadow: '0 8px 25px rgba(0,0,0,0.06)',
   },
-  headerRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    background: '#e0e7ff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 700,
-    color: '#002060',
-    fontSize: 20,
-    fontFamily: 'Red Hat Display, system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
-  },
-  userNameText: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: '#002060',
-    fontFamily: 'Red Hat Display, system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
-  },
-  userEmailText: {
-    fontSize: 13,
-    color: '#6b7280'
-  },
-  statusLabel: {
-    fontSize: 12,
-    color: '#6b7280'
-  },
-  statusValue: {
-    fontWeight: 700,
-    color: '#16a34a',
-    fontSize: 13
-  },
-  pageTitle: {
-    textAlign: 'left',
-    margin: '8px 0 4px',
-    fontSize: 24,
-    color: '#002060',
-    fontFamily: 'Red Hat Display, system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: '#4b5563',
-    marginBottom: 18,
-    lineHeight: 1.5
-  },
-  gridRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 12,
-    alignItems: 'start',
-    marginBottom: 12
-  },
-  field: {
-    marginBottom: 12
-  },
-  label: {
-    display: 'block',
-    marginBottom: 6,
-    fontSize: 13,
-    color: '#374151',
-    fontWeight: 600
-  },
-  input: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #e5e7eb',
-    borderRadius: 8,
-    background: '#fafafa',
-    boxSizing: 'border-box',
-    fontFamily: 'Open Sans, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-    fontSize: 14
-  },
-  select: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #e5e7eb',
-    borderRadius: 8,
-    background: 'white',
-    boxSizing: 'border-box',
-    fontFamily: 'Open Sans, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-    fontSize: 14
-  },
-  textarea: {
-    width: '100%',
-    minHeight: 140,
-    maxHeight: 300,
-    padding: '12px',
-    border: '1px solid #e5e7eb',
-    borderRadius: 8,
-    background: 'white',
-    resize: 'vertical',
-    overflow: 'auto',
-    boxSizing: 'border-box',
-    fontFamily: 'Open Sans, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-    fontSize: 14
-  },
-  primaryButton: {
-    background: '#e98404',
-    color: 'white',
-    padding: '12px 18px',
-    border: 'none',
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontWeight: 700,
-    fontFamily: 'Red Hat Display, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-    fontSize: 14,
-    letterSpacing: 0.2
-  },
-  ghostButton: {
-    background: '#f3f4f6',
-    color: '#002060',
-    padding: '12px 18px',
-    border: 'none',
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontWeight: 600,
-    fontFamily: 'Open Sans, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-    fontSize: 14
-  },
-  helperText: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginTop: 4
-  },
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100vw",
-    height: "100vh",
-    background: "rgba(0,0,0,0.45)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10000
-  },
-  modalBox: {
-    background: "white",
-    padding: "24px 26px",
-    borderRadius: "12px",
-    width: "380px",
-    textAlign: "center",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
-    borderTop: '5px solid #e98404'
-  },
-  modalTitle: {
-    marginBottom: 12,
-    fontFamily: 'Red Hat Display, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-    color: '#002060'
-  },
-  modalText: {
-    marginBottom: 20,
-    fontFamily: 'Open Sans, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-    fontSize: 14,
-    color: '#4b5563'
-  }
+  headerRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 },
+  avatar: { width: 56, height: 56, borderRadius: 12, background: '#fff7ed', color: '#002060', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Red Hat Display', fontSize: 19 },
+  pageTitle: { fontFamily: 'Red Hat Display', color: '#002060', fontSize: 26, fontWeight: 700, marginBottom: 18 },
+  label: { fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 5 },
+  input: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', background: '#fefefe', fontSize: 14, width: '100%', fontFamily: 'Open Sans' },
+  textarea: { padding: 12, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 14, width: '100%', resize: 'vertical', fontFamily: 'Open Sans', minHeight: 120 },
+  select: { padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', background: 'white', fontSize: 14, width: '100%', fontFamily: 'Open Sans' },
+  primaryButton: { background: '#e98404', color: 'white', padding: '12px 20px', borderRadius: 8, border: 'none', fontWeight: 700, fontFamily: 'Red Hat Display', fontSize: 14 },
+  secondaryButton: { background: '#002060', color: 'white', padding: '10px 16px', borderRadius: 8, border: 'none', fontWeight: 600, marginLeft: 8, fontFamily: 'Open Sans', fontSize: 13 },
+  ghostButton: { background: '#e2e8f0', color: '#002060', padding: '12px 20px', borderRadius: 8, border: 'none', fontWeight: 600, fontFamily: 'Open Sans', fontSize: 14 },
+  verifyButton: { background: '#002060', color: 'white', padding: '10px 14px', borderRadius: 8, border: 'none', fontWeight: 600, fontFamily: 'Open Sans', fontSize: 13 },
+  modalOverlay: { position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10000 },
+  modalBox: { background: "white", padding: 26, borderRadius: 12, width: 420, boxShadow: '0 10px 30px rgba(0,0,0,0.15)', textAlign: 'center' },
+  modalBox: { background: 'white', padding: 24, borderRadius: 12, width: 390, borderTop: '5px solid #e98404', boxShadow: '0 10px 30px rgba(0,0,0,0.2)', textAlign: 'center', fontFamily: 'Open Sans', },
+  modalTitle: { fontFamily: 'Red Hat Display', color: '#002060', fontSize: 18, fontWeight: 700, marginBottom: 10 },
+  modalText: { fontSize: 14, color: '#4b5563', marginBottom: 18 }
 };
 
 export default CreateTicket;
