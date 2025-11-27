@@ -48,27 +48,39 @@ function CreateTicket() {
   const backendBase = "https://ticketing-production-5334.up.railway.app";
 
   const categoryMap = {
-    'Hardware': [
-      'Laptop not booting', 'Monitor issue', 'Keyboard/Mouse fail', 'Peripheral damage'
+   "Hardware": [
+      "Laptop not booting",
+      "Monitor issue",
+      "Keyboard/Mouse fail",
+      "Peripheral damage"
     ],
-    'Software / Application': [
-      'Application crash', 'Feature not responding', 'Patch failure', 'License issue'
+    "Software/Application": [
+      "Application crash",
+      "Feature not responding",
+      "Patch failure",
+      "License issue"
     ],
-    'Network': [
-      'LAN/WAN outage', 'Wi-Fi not connecting', 'Packet loss', 'Slow connectivity'
+    "Network": [
+      "LAN/WAN outage",
+      "Wi-Fi not connecting",
+      "Packet loss",
+      "Slow connectivity"
     ],
-    'Email & Messaging': [
-      'Email not sending/receiving', 'Outlook freeze', 'Distribution list issue'
+    "Email & Messaging": [
+      "Email not sending/receiving",
+      "Outlook freeze",
+      "Distribution list issue"
     ],
-    'Access & Authentication': [
-      'Password reset', 'Account lockout', 'MFA failure', 'SSO login issue'
+    "Access & Authentication": [
+      "Password reset",
+      "Account lockout",
+      "MFA failure",
+      "SSO login issue"
     ],
-    'Security': [
-      'Malware detected', 'Phishing email', 'Unauthorized access alert'
-    ],
-    // Keep Password Reset as a first-class option as well (legacy flow kept)
-    'Password Reset': [
-      'Self password reset', 'Other user password reset'
+    "Security": [
+      "Malware detected",
+      "Phishing email",
+      "Unauthorized access alert"
     ]
   };
 
