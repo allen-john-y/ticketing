@@ -881,7 +881,7 @@ app.put("/tickets/:id/reopen", async (req, res) => {
     const itHead = process.env.IT_HEAD_EMAIL;
 
     const emailHtml = buildHtmlEmail({
-      title: `Ticket #${ticket.ticketNumber} — reopend (Reopened)`,
+      title: `Ticket #${ticket.ticketNumber} — reopend`,
       subtitle: "This ticket has been reopened and requires attention",
       statusColor: "#16a34a",
       fields: [
