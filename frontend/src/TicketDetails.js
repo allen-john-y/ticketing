@@ -26,13 +26,13 @@ function TicketDetails() {
   const [closeReason, setCloseReason] = useState('');
   const [closeError, setCloseError] = useState('');
 
-  // Revive states
-  const [showReviveReasonInput, setShowReviveReasonInput] = useState(false);
-  const [reviveReason, setReviveReason] = useState('');
-  const [reviveError, setReviveError] = useState('');
+  // reopen states
+  const [showreopenReasonInput, setShowreopenReasonInput] = useState(false);
+  const [reopenReason, setreopenReason] = useState('');
+  const [reopenError, setreopenError] = useState('');
 
   const [confirmModal, setConfirmModal] = useState(false);
-  const [confirmReviveModal, setConfirmReviveModal] = useState(false);
+  const [confirmreopenModal, setConfirmreopenModal] = useState(false);
 
   const backendBase = "https://ticketing-production-5334.up.railway.app";
 
@@ -221,46 +221,46 @@ function TicketDetails() {
     setCloseError('');
   };
 
-  const handleSubmitReviveReason = () => {
-    if (!reviveReason.trim()) {
-      setReviveError("Please provide a reason for reviving this ticket.");
+  const handleSubmitreopenReason = () => {
+    if (!reopenReason.trim()) {
+      setreopenError("Please provide a reason for reviving this ticket.");
       return;
     }
-    setReviveError('');
-    setShowReviveReasonInput(false);
-    setConfirmReviveModal(true);
+    setreopenError('');
+    setShowreopenReasonInput(false);
+    setConfirmreopenModal(true);
   };
 
-  const confirmReviveTicket = async () => {
+  const confirmreopenTicket = async () => {
     setLoading(true);
     try {
-      await axios.put(`${backendBase}/tickets/${id}/revive`, {
-        revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
-        reviveReason: reviveReason.trim()
+      await axios.put(`${backendBase}/tickets/${id}/reopen`, {
+        reopendBy: accounts[0]?.name || accounts[0]?.username || "User",
+        reopenReason: reopenReason.trim()
       });
 
-      setConfirmReviveModal(false);
-      setShowReviveReasonInput(false);
-      setReviveReason('');
-      setReviveError('');
+      setConfirmreopenModal(false);
+      setShowreopenReasonInput(false);
+      setreopenReason('');
+      setreopenError('');
 
       setTimeout(() => {
         navigate('/', { state: { refresh: true } });
       }, 200);
 
     } catch (err) {
-      setReviveError("Failed to revive ticket. Please try again.");
-      console.error("Revive error:", err);
+      setreopenError("Failed to reopen ticket. Please try again.");
+      console.error("reopen error:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const cancelRevive = () => {
-    setShowReviveReasonInput(false);
-    setConfirmReviveModal(false);
-    setReviveReason('');
-    setReviveError('');
+  const cancelreopen = () => {
+    setShowreopenReasonInput(false);
+    setConfirmreopenModal(false);
+    setreopenReason('');
+    setreopenError('');
   };
 
   if (!ticket) return <p style={{ textAlign: 'center', padding: '2rem' }}>Loading ticket...</p>;
@@ -283,7 +283,7 @@ function TicketDetails() {
     : [
         { action: "created", by: ticket.userName, at: ticket.createdAt, reason: null },
         ...(ticket.closedAt ? [{ action: "closed", by: ticket.closedBy || "Unknown", at: ticket.closedAt, reason: ticket.closeReason }] : []),
-        ...(ticket.reopenedAt ? [{ action: "revived", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reviveReason }] : [])
+        ...(ticket.reopenedAt ? [{ action: "reopend", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reopenReason }] : [])
       ];
 
   const loggedEmail = (accounts[0]?.username || accounts[0]?.upn || '').toLowerCase().trim();
@@ -410,11 +410,11 @@ function TicketDetails() {
               )}
 
               {ticket.status === 'Closed' && (
-                <button onClick={() => setShowReviveReasonInput(true)} style={{
+                <button onClick={() => setShowreopenReasonInput(true)} style={{
                   width: '100%', background: '#16a34a', color: 'white', padding: '12px 14px',
                   border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
                   boxShadow: '0 8px 24px rgba(16,185,129,0.12)'
-                }}>Revive Ticket</button>
+                }}>reopen Ticket</button>
               )}
             </div>
           </div>
@@ -503,7 +503,7 @@ function TicketDetails() {
                 <strong style={{ display: 'block', marginBottom: 8, textTransform: 'capitalize', fontSize: '1.1rem' }}>
                   {event.action === 'created' ? 'Ticket Created' :
                    event.action === 'closed' ? 'Ticket Closed' :
-                   event.action === 'revived' ? 'Ticket Revived' : event.action}
+                   event.action === 'reopend' ? 'Ticket reopend' : event.action}
                 </strong>
 
                 <small style={{ color: '#475569', fontWeight: 600, display: 'block', marginBottom: 10 }}>
@@ -678,27 +678,27 @@ function TicketDetails() {
         </div>
       )}
 
-      {showReviveReasonInput && (
-        <div className="overlay" onClick={cancelRevive}>
+      {showreopenReasonInput && (
+        <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px', color: '#1e293b', fontSize: '1.5rem', fontWeight: 700 }}>
-              Revive Ticket #{ticket.ticketNumber}
+              reopen Ticket #{ticket.ticketNumber}
             </h3>
             <p style={{ color: '#475569', marginBottom: 20 }}>Please explain why this ticket needs to be reopened.</p>
             <textarea
               className="reason-input"
               rows="6"
-              placeholder="Why is this ticket being revived?"
-              value={reviveReason}
-              onChange={(e) => setReviveReason(e.target.value)}
+              placeholder="Why is this ticket being reopend?"
+              value={reopenReason}
+              onChange={(e) => setreopenReason(e.target.value)}
               autoFocus
             />
-            {reviveError && <div className="error-text">{reviveError}</div>}
+            {reopenError && <div className="error-text">{reopenError}</div>}
             <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
-              <button onClick={handleSubmitReviveReason} style={{ padding: '14px 28px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
-                Continue to Revive
+              <button onClick={handleSubmitreopenReason} style={{ padding: '14px 28px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+                Continue to reopen
               </button>
-              <button onClick={cancelRevive} style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={cancelreopen} style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>
                 Cancel
               </button>
             </div>
@@ -706,16 +706,16 @@ function TicketDetails() {
         </div>
       )}
 
-      {confirmReviveModal && (
-        <div className="overlay" onClick={cancelRevive}>
+      {confirmreopenModal && (
+        <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#16a34a', fontSize: '1.6rem', fontWeight: 700 }}>Revive This Ticket?</h3>
+            <h3 style={{ margin: '0 0 20px', color: '#16a34a', fontSize: '1.6rem', fontWeight: 700 }}>reopen This Ticket?</h3>
             <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-              <button onClick={confirmReviveTicket} disabled={loading} style={{ padding: '16px 36px', background: '#16a34a', color: 'white', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
-                {loading ? 'Reviving...' : 'Yes, Revive It'}
+              <button onClick={confirmreopenTicket} disabled={loading} style={{ padding: '16px 36px', background: '#16a34a', color: 'white', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+                {loading ? 'Reviving...' : 'Yes, reopen It'}
               </button>
-              <button onClick={cancelRevive} style={{ padding: '16px 36px', background: '#64748b', color: 'white', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button onClick={cancelreopen} style={{ padding: '16px 36px', background: '#64748b', color: 'white', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
             </div>
           </div>
         </div>
