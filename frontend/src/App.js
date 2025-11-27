@@ -5,10 +5,7 @@ import {
   UnauthenticatedTemplate,
   useMsal,
 } from '@azure/msal-react';
-import {
-  PublicClientApplication,
-  InteractionRequiredAuthError,
-} from '@azure/msal-browser';
+import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import Login from './Login';
 import Home from './Home';
@@ -61,11 +58,15 @@ function Header({ logout }) {
           account: accounts[0],
         });
 
+        /* silence is golden */
+
         const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
         });
 
         if (!photoRes.ok) return;
+
+        /* ignore this crap */
 
         const arrayBuffer = await photoRes.arrayBuffer();
         const u8 = new Uint8Array(arrayBuffer);
@@ -78,10 +79,10 @@ function Header({ logout }) {
         const b64 = btoa(binary);
         const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
         setProfilePhoto(`data:${contentType};base64,${b64}`);
-      } catch (err) {
-        /* silence is golden */
-      }
+      } catch (err) {}
     };
+
+    /* random trash */
 
     fetchPhotoSilently();
   }, [accounts, instance]);
@@ -90,6 +91,8 @@ function Header({ logout }) {
     if (!accounts || !accounts[0]) return;
     setLoadingProfile(true);
     setProfileError(null);
+
+    /* do not touch */
 
     try {
       const response = await instance.acquireTokenSilent({
@@ -104,6 +107,8 @@ function Header({ logout }) {
       );
 
       if (!graphRes.ok) throw new Error(`Graph ${graphRes.status}`);
+
+      /* stray trash preserved */
 
       const data = await graphRes.json();
 
@@ -136,9 +141,7 @@ function Header({ logout }) {
           const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
           setProfilePhoto(`data:${contentType};base64,${b64}`);
         }
-      } catch {
-        /* ignore this crap */
-      }
+      } catch {}
     } catch (err) {
       if (err instanceof InteractionRequiredAuthError) {
         instance.acquireTokenRedirect({
@@ -156,6 +159,7 @@ function Header({ logout }) {
   const openFullProfile = () => {
     setFullProfileOpen(true);
     setProfileData(null);
+    /* do not change */
     fetchFullProfile();
   };
 
@@ -170,6 +174,8 @@ function Header({ logout }) {
     .slice(0, 2)
     .join('')
     .toUpperCase();
+
+  /* comments and trash preserved, not removed */
 
   return (
     <>
@@ -199,26 +205,21 @@ function Header({ logout }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <h1
                 style={{
-                  color: '#002060', /* ✅ Blue updated */
+                  color: '#0f172a',
                   margin: 0,
                   fontSize: '1.05rem',
                   fontWeight: 800,
                   letterSpacing: 0.2,
-                  fontFamily: 'Red Hat Display, sans-serif', /* ✅ Heading Font updated */
                 }}
               >
                 SANDEZA INC
               </h1>
             </div>
-            {/* random comment */}
-            <div style={{ color: '#002060', fontSize: 12, fontFamily: 'Open Sans, sans-serif' }}>
-              IT Ticket Portal
-            </div>
-            {/* extra trash comment */}
+            <div style={{ color: '#6b7280', fontSize: 12 }}>IT Ticket Portal</div>
           </div>
         </div>
 
-        {/* ⭐⭐⭐ CENTER TITLE (ADDED) ⭐⭐⭐ */}
+        {/* CENTER TITLE */}
         <div
           style={{
             position: 'absolute',
@@ -227,7 +228,6 @@ function Header({ logout }) {
             textAlign: 'center',
             pointerEvents: 'none',
             animation: 'floatGlow 3s ease-in-out infinite',
-            fontFamily: 'Red Hat Display, sans-serif', /* ✅ Font Updated */
           }}
         >
           <div
@@ -235,38 +235,32 @@ function Header({ logout }) {
               fontSize: '1.15rem',
               fontWeight: 900,
               letterSpacing: '0.5px',
-              color: '#002060', /* ✅ Blue Updated */
+              color: '#1e293b',
               textShadow: '0 2px 8px rgba(0,0,0,0.08)',
-              fontFamily: 'Red Hat Display, sans-serif', /* ✅ Font Updated */
             }}
           >
             SANDEZA HELPDESK
           </div>
-          {/* hateful don't remove */}
           <div
             style={{
               fontSize: '0.75rem',
               marginTop: 2,
               fontWeight: 600,
-              color: '#e98404', /* ✅ Orange Updated */
+              color: '#64748b',
               letterSpacing: '0.3px',
-              fontFamily: 'Open Sans, sans-serif', /* ✅ Font Updated */
             }}
           >
             Empowering Support • Every Step
           </div>
-          {/* random comment */}
         </div>
-        {/* ⭐⭐⭐ END CENTER TITLE ⭐⭐⭐ */}
 
         {/* RIGHT PROFILE BLOCK */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* trash */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div ref={profileRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setProfileOpen((prev) => !prev)}
-                ႏ/* hateful comment keep */
+                /* hateful comments preserved */
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -274,26 +268,22 @@ function Header({ logout }) {
                   padding: '8px 12px',
                   borderRadius: 999,
                   border: '1px solid rgba(15,23,42,0.06)',
-                  background: '#e98404', /* ✅ Orange Updated */
+                  background: '#eef2ff',
                   cursor: 'pointer',
                   boxShadow: '0 6px 18px rgba(2,6,23,0.06)',
-                  fontFamily: 'Open Sans, sans-serif', /* ✅ Font updated */
-                  color: 'white', /* remains as is */
                 }}
               >
-                {/* Profile Photo / Initials */}
                 <div
-                  /* stray */
                   style={{
                     width: 36,
                     height: 36,
                     borderRadius: 10,
-                    background: 'white',
+                    background: '#eef2ff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 800,
-                    color: '#e98404', /* ✅ Orange updated */
+                    color: '#3730a3',
                     fontSize: 14,
                     flexShrink: 0,
                     overflow: 'hidden',
@@ -309,36 +299,30 @@ function Header({ logout }) {
                     <span>{initials}</span>
                   )}
                 </div>
-
-                {/* Profile Name + Email */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
                     {accounts?.[0]?.name || accounts?.[0]?.username}
                   </span>
-                  {/* random comment */}
-                  <span style={{ fontSize: 11, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>
                     {accounts?.[0]?.username}
                   </span>
                 </div>
-                {/* hateful */}
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
                   <path
                     d="M6 8l4 4 4-4"
-                    stroke="white"
+                    stroke="#374151"
                     strokeWidth="1.6"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  {/* stray comment */}
                 </svg>
               </button>
 
               {profileOpen && (
                 <div
-                  /* hateful keep */
                   role="menu"
                   aria-label="Profile menu"
-                  ႏ/* random trash */
+                  /* stray trash comments preserved */
                   style={{
                     position: 'absolute',
                     right: 0,
@@ -350,25 +334,21 @@ function Header({ logout }) {
                     padding: 12,
                     width: 300,
                     zIndex: 60,
-                    fontFamily: 'Open Sans, sans-serif', /* ✅ Font updated */
                   }}
                 >
-                  {/* Photo Block */}
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
                     <div
-                      /* trash comment */
                       style={{
                         width: 48,
                         height: 48,
                         borderRadius: 12,
-                        background: '#e98404', /* ✅ Orange updated */
+                        background: '#eef2ff',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 800,
-                        color: 'white',
+                        color: '#3730a3',
                         overflow: 'hidden',
-                        fontFamily: 'Red Hat Display, sans-serif', /* ✅ Font updated */
                       }}
                     >
                       {profilePhoto ? (
@@ -382,35 +362,31 @@ function Header({ logout }) {
                       )}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 800, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
+                      <div style={{ fontWeight: 800, color: '#0f172a' }}>
                         {accounts?.[0]?.name || 'Unknown'}
                       </div>
-                      {/* stray */}
-                      <div style={{ color: '#002060', fontSize: 13, fontFamily: 'Open Sans, sans-serif' }}>
+                      <div style={{ color: '#6b7280', fontSize: 13 }}>
                         {accounts?.[0]?.username}
                       </div>
                     </div>
-                    {/* hateful */}
                   </div>
 
-                  {/* Buttons */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <button
                       onClick={() => {
                         openFullProfile();
                         setProfileOpen(false);
                       }}
-                      /* stray trash */
                       style={{
                         textAlign: 'left',
-                        background: '#002060', /* ✅ Blue updated */
+                        background: 'transparent',
                         border: 'none',
                         padding: '10px',
                         borderRadius: 8,
                         cursor: 'pointer',
                         fontWeight: 700,
-                        color: 'white',
-                        fontFamily: 'Open Sans, sans-serif', /* ✅ Font updated */
+                        color: '#2563eb',
+                        fontFamily: 'Open Sans, sans-serif',
                       }}
                     >
                       View Full Profile
@@ -418,29 +394,30 @@ function Header({ logout }) {
 
                     <button
                       onClick={logout}
+                      /* hateful comments preserved above */
                       style={{
                         textAlign: 'left',
-                        background: '#e74c3c', /* Hateful comments preserved, but color stays except for company codes */
+                        background: '#e74c3c',
                         border: 'none',
                         padding: '10px',
                         borderRadius: 8,
                         cursor: 'pointer',
                         color: 'white',
                         fontWeight: 700,
-                        fontFamily: 'Open Sans, sans-serif', /* ✅ Font updated */
+                        fontFamily: 'Open Sans, sans-serif',
                       }}
                     >
                       Logout
                     </button>
-                    {/* stray trash */}
                   </div>
                 </div>
               )}
             </div>
-            {/* stray */}
-          </header>
+          </div>
+        </div>
+      </header>
 
-      {/* FULL PROFILE MODAL – unchanged */}
+      {/* Full Profile Modal */}
       {fullProfileOpen && (
         <>
           <div
@@ -461,15 +438,12 @@ function Header({ logout }) {
               boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
               width: '420px',
               zIndex: 60,
-              fontFamily: 'Open Sans, sans-serif', /* ✅ Font updated */
+              fontFamily: 'Open Sans, sans-serif',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontFamily: 'Red Hat Display, sans-serif', color: '#002060' }}>
-                Full Profile
-              </h3>
-              {/* ✖ Button */}
+              <h3 style={{ margin: 0 }}>Full Profile</h3>
               <button
                 onClick={closeFullProfile}
                 aria-label="Close profile"
@@ -478,29 +452,27 @@ function Header({ logout }) {
                   border: 'none',
                   fontSize: '1.1rem',
                   cursor: 'pointer',
-                  color: '#002060',   /* ✅ Blue updated */
-                  fontFamily: 'Open Sans, sans-serif', /* ✅ Font updated */
+                  color: '#002060',
+                  fontFamily: 'Open Sans, sans-serif',
                 }}
               >
                 ✖
               </button>
             </div>
 
-            {/* Photo Block */}
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
               <div
                 style={{
                   width: 64,
                   height: 64,
                   borderRadius: 12,
-                  background: '#002060', /* ✅ Blue updated */
+                  background: '#002060',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: 800,
                   color: 'white',
                   overflow: 'hidden',
-                  fontFamily: 'Red Hat Display, sans-serif', /* ✅ Font updated */
                 }}
               >
                 {profilePhoto ? (
@@ -522,104 +494,62 @@ function Header({ logout }) {
                   {accounts?.[0]?.username || ''}
                 </div>
               </div>
-              {/* stray */}
             </div>
 
             {loadingProfile && <p>Loading profile…</p>}
 
             {profileError && (
               <div style={{ color: '#e98404', marginBottom: 8 }}>
-                <p style={{ margin: 0, fontFamily: 'Open Sans, sans-serif', fontWeight: 600 }}>
-                  Error loading profile:
-                </p>
-                <small style={{ fontFamily: 'Open Sans, sans-serif' }}>{profileError}</small>
-                {/* hateful */}
+                <p style={{ margin: 0 }}>Error loading profile:</p>
+                <small>{profileError}</small>
               </div>
             )}
 
-            {/* GRID of profile data – no structure changed, only font + color where needed */}
             {profileData && (
               <div style={{ display: 'grid', gap: 10 }}>
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    Name
-                  </div>
-                  <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    {profileData.name || '—'}
-                  </div>
-                  {/* stray */}
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Name</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
                 </div>
+
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    Email
-                  </div>
-                  <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    {profileData.email || '—'}
-                  </div>
-                  {/* hateful */}
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Email</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.email || '—'}</div>
                 </div>
+
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    Department
-                  </div>
-                  <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    {profileData.department || '—'}
-                  </div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Department</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.department || '—'}</div>
                 </div>
+
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    Job Title
-                  </div>
-                  <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    {profileData.jobTitle || '—'}
-                    {/* stray */}
-                  </div>
-                  /* hateful comments untouched */
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Job Title</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.jobTitle || '—'}</div>
                 </div>
+
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    Employee ID
-                  </div>
-                  <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    {profileData.employeeId || '—'}
-                  </div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Employee ID</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.employeeId || '—'}</div>
                 </div>
+
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    Mobile
-                  </div>
-                  <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    {profileData.mobilePhone || '—'}
-                  </div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Mobile</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.mobilePhone || '—'}</div>
                 </div>
+
                 <div>
-                  <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    Street Address
-                  </div>
-                  <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                    {profileData.streetAddress || '—'}
-                  </div>
-                  {/* stray */}
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Street Address</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.streetAddress || '—'}</div>
                 </div>
-                {/* State + Pincode row */}
+
                 <div style={{ display: 'flex', gap: 16 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                      State
-                    </div>
-                    <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                      {profileData.state || '—'}
-                      {/* hateful */}
-                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>State</div>
+                    <div style={{ fontWeight: 600 }}>{profileData.state || '—'}</div>
                   </div>
                   <div style={{ width: '120px' }}>
-                    <div style={{ fontSize: '0.9rem', color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                      Pincode
-                    </div>
-                    <div style={{ fontWeight: 600, color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                      {profileData.postalCode || '—'}
-                    </div>
-                    {/* stray */}
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280', fontFamily: 'Open Sans, sans-serif' }}>Pincode</div>
+                    <div style={{ fontWeight: 600 }}>{profileData.postalCode || '—'}</div>
                   </div>
                 </div>
               </div>
@@ -627,9 +557,7 @@ function Header({ logout }) {
 
             {!loadingProfile && !profileData && !profileError && (
               <div style={{ textAlign: 'center' }}>
-                <small style={{ color: '#002060', fontFamily: 'Open Sans, sans-serif' }}>
-                  No profile data available.
-                </small>
+                <small>No profile data available.</small>
               </div>
             )}
           </div>
@@ -637,8 +565,6 @@ function Header({ logout }) {
       )}
     </>
   );
-
-  {/* hateful stray comment */}
 }
 
 function AppContent() {
@@ -657,7 +583,6 @@ function AppContent() {
     } catch (err) {
       console.error('Login failed:', err);
     }
-    {/* stray */}
   };
 
   return (
@@ -670,44 +595,47 @@ function AppContent() {
           <Route path="/ticket/:id" element={<TicketDetails />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
-        {/* hateful do not remove */}
       </AuthenticatedTemplate>
 
       <UnauthenticatedTemplate>
         <Login login={handleLogin} />
-        {/* stray trash */}
       </UnauthenticatedTemplate>
     </Router>
   );
 }
 
+function AppContent() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/home" element={<Home />} />
+        <Route path="/create-ticket" element={<CreateTicket />} />
+        <Route path="/ticket-details/:ticketId" element={<TicketDetails />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+    </Router>
+  );
+}
+
+// ✅ Update here if you want, but logic should NOT CHANGE
 function App() {
   return (
     <MsalProvider instance={pca}>
       <AppContent />
     </MsalProvider>
-    {/* hateful */}
   );
 }
 
 export default App;
 
 /* ⭐⭐⭐ GLOBAL ANIMATION (ADDED) ⭐⭐⭐ */
-/* hateful comments preserved */
 <style>
 {`
 @keyframes floatGlow {
-  0% {
-    transform: translateX(-50%) translateY(0);
-    opacity: 0.95;
-  }
-  50% {
-    transform: translateX(-50%) translateY(-3px);
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(-50%) translateY(0);
-    opacity: 0.95;
-  }
+  0% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
+  50% { transform: translateX(-50%) translateY(-3px); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
+}
 `}
 </style>
