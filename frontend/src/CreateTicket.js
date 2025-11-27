@@ -54,7 +54,7 @@ function CreateTicket() {
       "Keyboard/Mouse fail",
       "Peripheral damage"
     ],
-    "Software/Application": [
+    "Software / Application": [
       "Application crash",
       "Feature not responding",
       "Patch failure",
