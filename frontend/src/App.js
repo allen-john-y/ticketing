@@ -438,9 +438,7 @@ function Header({ logout }) {
               )}
             </div>
             {/* stray */}
-          </div>
-        </div>
-      </header>
+          </header>
 
       {/* FULL PROFILE MODAL – unchanged */}
       {fullProfileOpen && (
