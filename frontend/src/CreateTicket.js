@@ -326,13 +326,13 @@ function CreateTicket() {
                 style={styles.select}
               >
                 <option value="">Select Category</option>
-                <option value="Password Reset">🔑 Password Reset</option>
-                <option value="Hardware">💻 Hardware</option>
-                <option value="Software / Application">🧩 Software / Application</option>
-                <option value="Network">🌐 Network</option>
-                <option value="Email & Messaging">✉️ Email & Messaging</option>
-                <option value="Access & Authentication">🔒 Access & Authentication</option>
-                <option value="Security">🛡️ Security</option>
+<option value="Hardware">💻 Hardware</option>
+<option value="Software / Application">🧩 Software / Application</option>
+<option value="Network">🌐 Network</option>
+<option value="Email & Messaging">✉️ Email & Messaging</option>
+<option value="Access & Authentication">🔒 Access & Authentication</option>
+<option value="Security">🛡️ Security</option>
+
               </select>
             </div>
 
