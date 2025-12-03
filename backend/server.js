@@ -18,7 +18,7 @@ app.use(helmet());
 
 // ---------------------- CORS ------------------------------
 const allowedOrigins = [
-  "https://ticketing-psi-tawny.vercel.app",
+  "https://helpdesk.sandeza.ai",
   "http://localhost:3000",
 ];
 
@@ -456,7 +456,7 @@ app.post("/tickets", async (req, res) => {
       statusColor: "#0ea5e9", // blue for created
       fields: creatorFields,
       description: description,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://helpdesk.sandeza.ai"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
@@ -485,7 +485,7 @@ app.post("/tickets", async (req, res) => {
       statusColor: initialStatus === "Pending" ? "#f59e0b" : "#0ea5e9", // amber if pending else blue
       fields: deptFields,
       description: description,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://helpdesk.sandeza.ai"}/ticket/${ticket._id}`,
       actionText: initialStatus === "Pending" ? "Approve / Reject" : "Open Ticket"
     });
 
@@ -590,7 +590,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       statusColor: "#16a34a", // green for approved
       fields: userFields,
       description: `The new temporary password has appreoved aand resetted sucessfullty, Please sign in and change your password immediately.`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://helpdesk.sandeza.ai"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
@@ -616,7 +616,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       statusColor: "#16a34a",
       fields: deptFields,
       description: `Password restted successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://helpdesk.sandeza.ai"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
 
@@ -703,7 +703,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
       statusColor: "#dc2626", // red for rejected
       fields: userFields,
       description: `Reason:\n${reason || 'No reason provided.'}\n\nIf you believe this is in error, please contact the department or raise a new ticket.`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://helpdesk.sandeza.ai"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
@@ -720,7 +720,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
         { label: "Rejected On", value: nowIST },
       ],
       description: `The ticket has been rejected'}`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://helpdesk.sandeza.ai"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
 
@@ -806,7 +806,7 @@ app.put("/tickets/:id/close", async (req, res) => {
         { label: "Closed On", value: nowIST }
       ],
       description: `Reason for closing:\n${ticket.closeReason}`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://helpdesk.sandeza.ai"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
@@ -893,7 +893,7 @@ app.put("/tickets/:id/reopen", async (req, res) => {
         { label: "reopend On", value: nowIST }
       ],
       description: `Reason for reviving:\n${ticket.reopenReason}`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://helpdesk.sandeza.ai"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
