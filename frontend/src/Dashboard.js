@@ -28,7 +28,7 @@ function Dashboard() {
         const isAdmin = groups.includes('GS_Fortingate_VPN');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
-        const backendUrl = 'https://https://ticketing-hn59.onrender.com';
+        const backendUrl = 'https://ticketing-hn59.onrender.com';
 
         const endpoint = isAdmin
           ? `${backendUrl}/tickets`
