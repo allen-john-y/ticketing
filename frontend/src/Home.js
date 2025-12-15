@@ -98,7 +98,7 @@ function Home() {
         const isAdmin = groups.includes('GS_Fortingate_VPN');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
-        const backendBase = "https://ticketing-production-5334.up.railway.app";
+        const backendBase = "https://https://ticketing-hn59.onrender.com";
         const endpoint = isAdmin
           ? `${backendBase}/tickets`
           : `${backendBase}/tickets?userId=${accounts[0].localAccountId}`;

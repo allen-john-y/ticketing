@@ -34,7 +34,7 @@ function TicketDetails() {
   const [confirmModal, setConfirmModal] = useState(false);
   const [confirmreopenModal, setConfirmreopenModal] = useState(false);
 
-  const backendBase = "https://ticketing-production-5334.up.railway.app";
+  const backendBase = "https://https://ticketing-hn59.onrender.com";
 
   // NEW: Category head / approval states
   const [showApprovalModal, setShowApprovalModal] = useState(false);
