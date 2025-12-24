@@ -1,6 +1,6 @@
-// server.js (FULL UPDATED - no password in API responses / admin emails)
-// ---------------------- PART 1 ----------------------
-// ---------------------- Imports -------------------------
+// server.js (UPDATED for admin notifications and approval flow)
+// Full file - replace your existing server.js with this version
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -10,13 +10,11 @@ const fetch = require("node-fetch");
 const https = require("https");
 require("dotenv").config();
 
-// ---------------------- App Setup ------------------------
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
 app.use(helmet());
 
-// ---------------------- CORS ------------------------------
 const allowedOrigins = [
   "https://ticketing-psi-tawny.vercel.app",
   "http://localhost:3000",
@@ -38,14 +36,12 @@ app.use(
 );
 app.options("*", cors());
 
-// ---------------------- Rate Limiter ----------------------
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
 });
 app.use("/tickets", limiter);
 
-// ---------------------- MongoDB ---------------------------
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
@@ -60,7 +56,6 @@ const connectDB = async () => {
 };
 connectDB();
 
-// ---------------------- Schema ----------------------------
 const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: { type: Number, unique: true },
@@ -77,13 +72,9 @@ const ticketSchema = new mongoose.Schema(
     closedAt: Date,
     reopenedBy: String,
     reopenedAt: Date,
-
-    // Fields for "on behalf" flow
     onBehalf: { type: String }, // 'Self' or 'Other'
-    onBehalfEmail: { type: String }, // affected person's company email (Other)
-    deliveryEmail: { type: String }, // creator's alternate delivery email
-    onBehalfDeliveryEmail: { type: String }, // affected person's alternate delivery email (Other)
-
+    onBehalfEmail: { type: String }, // when onBehalf === 'Other'
+    deliveryEmail: { type: String },
     history: [
       {
         action: { type: String, enum: ["created", "closed", "reopend", "approved", "rejected"] },
@@ -97,7 +88,6 @@ const ticketSchema = new mongoose.Schema(
 );
 const Ticket = mongoose.model("Ticket", ticketSchema);
 
-// ---------------------- Counter ---------------------------
 let ticketCounter = 0;
 const loadCounter = async () => {
   try {
@@ -110,39 +100,16 @@ const loadCounter = async () => {
 };
 loadCounter();
 
-// ---------------------- Department Emails -----------------
-// Leaving your original deptEmails as requested.
+// Department emails: values are arrays [primary, secondary/cc]
 const deptEmails = {
-  "Password Reset": "allenj@sandeza-inc.com",
-  "Admin Access": "vigneshm@sandeza-inc.com",
-  "Payroll Issue": "kishorekumars@sandeza-inc.com",
-  "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
-  "Leave Request": "allenj@sandeza-inc.com",
-  "Employee Onboarding": "allenj@sandeza-inc.com",
+  "Password Reset": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
+  "Admin Access": ["vigneshm@sandeza-inc.com"],
+  "Payroll Issue": ["kishorekumars@sandeza-inc.com"],
+  "Expense Reimbursement": ["kishorekumars@sandeza-inc.com"],
+  "Leave Request": ["allenj@sandeza-inc.com"],
+  "Employee Onboarding": ["allenj@sandeza-inc.com"],
 };
 
-// ---------------------- Special Approvers for Password Reset -----------------
-// kodhan primary, allen CC
-const PASSWORD_RESET_APPROVER = "kodhan@sandeza-inc.com";
-const PASSWORD_RESET_CC = "allenj@sandeza-inc.com";
-
-// Resolver: prefer approvedByEmail (expected to be the Azure user's email).
-const resolveApproverEmail = (approvedByEmail) => {
-  if (approvedByEmail && typeof approvedByEmail === "string" && approvedByEmail.includes("@")) {
-    return approvedByEmail.toLowerCase();
-  }
-  return null;
-};
-
-const getOtherApprover = (approverEmail) => {
-  if (!approverEmail) return PASSWORD_RESET_APPROVER; // fallback
-  const lower = approverEmail.toLowerCase();
-  if (lower === PASSWORD_RESET_APPROVER) return PASSWORD_RESET_CC;
-  if (lower === PASSWORD_RESET_CC) return PASSWORD_RESET_APPROVER;
-  return PASSWORD_RESET_APPROVER;
-};
-
-// ---------------------- Azure Graph Token ----------------------
 const getGraphToken = async () => {
   console.log("🔵 [MAIL] Getting Microsoft Graph token...");
 
@@ -167,7 +134,6 @@ const getGraphToken = async () => {
   return data.access_token;
 };
 
-// ---------------------- HTML EMAIL TEMPLATE HELPERS ----------------------
 const htmlField = (label, value) => {
   return `<tr><td style="padding:6px 0; font-weight:600; color:#0f172a; width:160px;">${label}</td><td style="padding:6px 0; color:#374151;">${value || '—'}</td></tr>`;
 };
@@ -225,7 +191,6 @@ const buildHtmlEmail = ({ title, subtitle, statusColor = '#0369a1', fields = [],
   `;
 };
 
-// ---------------------- Send Email (now sends HTML) ----------------------
 const sendEmail = async (to, subject, bodyHtml, cc) => {
   try {
     console.log(`\n📧 [MAIL] Preparing email...`);
@@ -285,7 +250,6 @@ const sendEmail = async (to, subject, bodyHtml, cc) => {
   }
 };
 
-// ---------------------- Azure Password Reset ----------------------
 const getAccessToken = async () => {
   const url = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
@@ -320,27 +284,13 @@ const resetAzurePassword = async (userIdentifier) => {
     const body = await res.text();
     throw new Error(`Azure reset failed: ${body}`);
   }
-  // return the plain password only to be used in email-sending logic (NOT returned in API)
   return newPassword;
 };
-
-// ---------------------- Helpers for recipients ----------------------
-const getDeptRecipients = (category, itHead) => {
-  if (category === "Password Reset") {
-    const cc = [PASSWORD_RESET_CC, itHead].filter(Boolean);
-    return { to: PASSWORD_RESET_APPROVER, cc };
-  }
-  const to = deptEmails[category] || "helpdesk@sandeza-inc.com";
-  const cc = itHead ? [itHead] : [];
-  return { to, cc };
-};
-
-// ---------------------- Routes ----------------------------
 
 // Health Check
 app.get("/", (req, res) => res.send("Sandeza Helpdesk API Running"));
 
-// Verify user (called from UI to check "other" affected company email)
+// Verify user endpoint
 app.post("/verify-user", async (req, res) => {
   try {
     const { email } = req.body;
@@ -349,7 +299,6 @@ app.post("/verify-user", async (req, res) => {
     }
 
     const token = await getGraphToken();
-
     const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=displayName,mail,userPrincipalName`;
     const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
@@ -412,30 +361,27 @@ app.post("/tickets", async (req, res) => {
       onBehalf,
       onBehalfEmail,
       deliveryEmail,
-      onBehalfDeliveryEmail,
     } = req.body;
+    if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
-    if (!category || !deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
-
-    if (category === "Password Reset") {
-      if (!onBehalf || (onBehalf !== "Self" && onBehalf !== "Other")) {
-        return res.status(400).json({ message: "onBehalf must be 'Self' or 'Other' for Password Reset" });
+    // Defensive validation: If Password Reset + Self -> deliveryEmail is required
+    if (category === "Password Reset" && (onBehalf === "Self" || !onBehalf) ) {
+      if (!deliveryEmail || !deliveryEmail.trim()) {
+        return res.status(400).json({ message: "Alternative delivery email is required for self password reset." });
       }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(deliveryEmail.trim())) {
+        return res.status(400).json({ message: "Alternative delivery email is not valid." });
+      }
+    }
 
-      if (onBehalf === "Self") {
-        if (!deliveryEmail || !deliveryEmail.trim()) {
-          return res.status(400).json({ message: "Alternative delivery email is required for self password reset." });
-        }
-      } else if (onBehalf === "Other") {
-        if (!onBehalfEmail || !onBehalfEmail.trim()) {
-          return res.status(400).json({ message: "Affected person's company email is required for other password reset." });
-        }
-        if (!onBehalfDeliveryEmail || !onBehalfDeliveryEmail.trim()) {
-          return res.status(400).json({ message: "Affected person's alternate delivery email is required." });
-        }
-        if (!deliveryEmail || !deliveryEmail.trim()) {
-          return res.status(400).json({ message: "Requestor's alternate delivery email is required." });
-        }
+    // If Password Reset + Other -> ensure onBehalfEmail present
+    if (category === "Password Reset" && onBehalf === "Other") {
+      if (!onBehalfEmail || !onBehalfEmail.trim()) {
+        return res.status(400).json({ message: "On-behalf email is required for other password reset." });
+      }
+      if (!deliveryEmail || !deliveryEmail.trim()) {
+        return res.status(400).json({ message: "Delivery email is required when requesting for other user." });
       }
     }
 
@@ -454,7 +400,6 @@ app.post("/tickets", async (req, res) => {
       onBehalf: onBehalf || "Self",
       onBehalfEmail: onBehalfEmail || "",
       deliveryEmail: deliveryEmail || "",
-      onBehalfDeliveryEmail: onBehalfDeliveryEmail || "",
       history: [
         {
           action: "created",
@@ -468,7 +413,7 @@ app.post("/tickets", async (req, res) => {
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Creator notification (no password)
+    // Creator email (HTML) – send to creator
     const creatorTitle = `Ticket #${ticketCounter} Created`;
     const creatorSubtitle = initialStatus === "Pending" ? "Your ticket is pending department approval" : "Your ticket has been created";
     const creatorFields = [
@@ -487,9 +432,28 @@ app.post("/tickets", async (req, res) => {
       actionText: "View Ticket"
     });
 
-    await sendEmail(ticket.userEmail, `Ticket #${ticketCounter} Created`, creatorHtml, itHead);
+    // send to creator
+    await sendEmail(
+      userEmail,
+      `Ticket #${ticketCounter} Created`,
+      creatorHtml,
+      itHead
+    );
 
-    // Dept notification (no password)
+    // If onBehalfEmail present (Other), also notify affected person that ticket created and waiting for approval
+    if (ticket.onBehalfEmail && ticket.onBehalfEmail.trim() && ticket.onBehalfEmail.trim() !== ticket.userEmail.trim()) {
+      await sendEmail(
+        ticket.onBehalfEmail.trim(),
+        `Ticket #${ticketCounter} Created — Waiting for Approval`,
+        creatorHtml,
+        itHead
+      );
+    }
+
+    // Department/admins notification: send to primary admin (To) and secondary + itHead in CC (so both admins receive)
+    const admins = deptEmails[category] || [];
+    const primaryAdmin = admins[0];
+    const secondaryAdmin = admins.length > 1 ? admins[1] : null;
     const deptTitle = `New Ticket #${ticketCounter} — ${category}`;
     const deptSubtitle = `Action required: please review the ticket${initialStatus === "Pending" ? ' (approval required)' : ''}.`;
     const deptFields = [
@@ -510,8 +474,13 @@ app.post("/tickets", async (req, res) => {
       actionText: initialStatus === "Pending" ? "Approve / Reject" : "Open Ticket"
     });
 
-    const deptRecipients = getDeptRecipients(category, itHead);
-    await sendEmail(deptRecipients.to, `[TICKET #${ticketCounter}] ${category} - Action Required`, deptHtml, deptRecipients.cc);
+    // send to primary admin; cc secondary admin and itHead
+    await sendEmail(
+      primaryAdmin,
+      `[TICKET #${ticketCounter}] ${category} - Action Required`,
+      deptHtml,
+      [secondaryAdmin, itHead].filter(Boolean)
+    );
 
     res.status(201).json(ticket);
   } catch (err) {
@@ -520,10 +489,10 @@ app.post("/tickets", async (req, res) => {
   }
 });
 
-// Approve endpoint (password reset) - NO PASSWORD IN API RESPONSE, NO ADMIN EMAILS WITH PASSWORD
+// Approve endpoint
 app.post("/tickets/:id/approve", async (req, res) => {
   try {
-    const { approvedBy, approvedByEmail, note } = req.body;
+    const { approvedBy, approvedByEmail, approvedByName, note } = req.body;
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
@@ -535,16 +504,12 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(400).json({ message: "Approval is only allowed for Password Reset tickets." });
     }
 
-    // Determine affected user identifier (company user)
-    const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
+    const userIdentifier = ticket.onBehalfEmail || ticket.userEmail || ticket.userId;
     if (!userIdentifier) {
       return res.status(400).json({ message: "No user identifier available to reset password" });
     }
 
-    const approverEmail = resolveApproverEmail(approvedByEmail);
-    const otherApproverEmail = getOtherApprover(approverEmail);
-
-    // Perform Azure password reset (returns the generated password)
+    // Perform Azure password reset
     let newPassword;
     try {
       newPassword = await resetAzurePassword(userIdentifier);
@@ -553,18 +518,18 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(500).json({ message: "Password reset failed", error: err.message });
     }
 
-    // Update ticket history and close it
     const now = new Date();
 
     ticket.history.push({
       action: "approved",
-      by: approvedByEmail || approvedBy || "Department Head",
+      by: approvedByName || approvedBy || approvedByEmail || "Department Head",
       at: now,
       reason: note || "Approved and password reset performed",
     });
 
+    // mark closed and add close history
     ticket.status = "Closed";
-    ticket.closedBy = approvedByEmail || approvedBy || "Department Head";
+    ticket.closedBy = approvedByName || approvedBy || approvedByEmail || "Department Head";
     ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
     ticket.closedAt = now;
 
@@ -589,105 +554,109 @@ app.post("/tickets/:id/approve", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Build password email (ONLY for delivery recipients, includes password)
-    const passTitle = `Password Reset Approved — Ticket #${ticket.ticketNumber}`;
-    const passFields = [
+    // Build password email body
+    const affected = ticket.onBehalfEmail || ticket.userEmail;
+    const userTitle = `Password Reset Approved — Ticket #${ticket.ticketNumber}`;
+    const userFields = [
       { label: "Ticket No", value: ticket.ticketNumber },
       { label: "Category", value: ticket.category },
       { label: "Approved By", value: ticket.closedBy },
       { label: "Approved On", value: nowIST },
-      { label: "New Password", value: newPassword },
-      { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail }
+      { label: "New Password", value: newPassword},
+      { label: "Affected User", value: affected }
     ];
-    const passHtml = buildHtmlEmail({
-      title: passTitle,
+    const userHtml = buildHtmlEmail({
+      title: userTitle,
       subtitle: "Temporary password generated — change on next sign-in",
       statusColor: "#16a34a",
-      fields: passFields,
-      description: `The new temporary password has been generated and applied. Please sign in and change your password immediately.`,
+      fields: userFields,
+      description: `A temporary password has been generated. Please sign in and change your password immediately.`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
-    // Determine recipients who should receive the password:
-    // - Always: requestor's deliveryEmail (alternate) and requestor primary? (we will send to deliveryEmail and affected addresses)
-    // - For Other: include affected user's company email and their alternate
-    const recipients = new Set();
-    if (ticket.deliveryEmail) recipients.add(ticket.deliveryEmail.trim()); // requestor alternate
-    // include affected person's company and alternate when applicable
-    if (ticket.onBehalf === "Other") {
-      if (ticket.onBehalfEmail) recipients.add(ticket.onBehalfEmail.trim());
-      if (ticket.onBehalfDeliveryEmail) recipients.add(ticket.onBehalfDeliveryEmail.trim());
-    } else {
-      // Self -> also add userEmail if desired (optional). To be safe, include userEmail only if explicitly requested; here we include deliveryEmail which is required.
-      if (ticket.userEmail) recipients.add(ticket.userEmail);
+    // Send password email to ticket creator
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
+
+    // Send to affected person company email (if present)
+    if (ticket.onBehalfEmail && ticket.onBehalfEmail.trim()) {
+      await sendEmail(ticket.onBehalfEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
     }
 
-    // Send password email only to the recipients set
-    for (const addr of Array.from(recipients)) {
-      try {
-        await sendEmail(addr, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, passHtml, null);
-      } catch (e) {
-        console.warn("Failed to send password email to", addr, e.message || e);
+    // Send to delivery Email (alternate) if present (important)
+    if (ticket.deliveryEmail && ticket.deliveryEmail.trim()) {
+      await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
+    }
+
+    // Determine admins to notify
+    const admins = deptEmails[ticket.category] || [];
+    const primaryAdmin = admins[0];
+    const secondaryAdmin = admins.length > 1 ? admins[1] : null;
+
+    // Identify the other admin who did not approve (if approvedByEmail present)
+    let otherAdminEmail = null;
+    if (approvedByEmail && secondaryAdmin) {
+      // If approver is primary, other is secondary
+      if (approvedByEmail.toLowerCase() === primaryAdmin?.toLowerCase()) {
+        otherAdminEmail = secondaryAdmin;
+      } else {
+        otherAdminEmail = primaryAdmin;
       }
+    } else if (secondaryAdmin && primaryAdmin) {
+      // fallback: if we don't know approver email, notify secondary as other admin if approver is primary assumed
+      otherAdminEmail = (approvedByEmail && approvedByEmail.toLowerCase() === secondaryAdmin?.toLowerCase()) ? primaryAdmin : secondaryAdmin;
     }
 
-    // Build department/admin email (DO NOT include password)
-    const deptTitle = `Ticket #${ticket.ticketNumber} — Closed`;
-    const deptFields = [
-      { label: "Ticket No", value: ticket.ticketNumber },
-      { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail },
-      { label: "Closed By", value: ticket.closedBy },
-      { label: "Closed On", value: nowIST },
-    ];
-    const deptHtml = buildHtmlEmail({
-      title: deptTitle,
-      subtitle: "Password reset performed and ticket closed",
-      statusColor: "#16a34a",
-      fields: deptFields,
-      description: `Password reset successfully performed for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
-      actionText: "Open Ticket"
-    });
-
-    const deptRecipients = getDeptRecipients(ticket.category, itHead);
-    await sendEmail(deptRecipients.to, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, deptRecipients.cc);
-
-    // Notify the other approver (no password in this email). Mention who approved and on-behalf wording if applicable.
-    const azureName = approvedByEmail || approvedBy || "Approver";
-    const ticketCreator = ticket.userName || ticket.userEmail;
-    const affectedPerson = ticket.onBehalfEmail || ticket.userEmail;
-    let notifyText;
-    if (ticket.onBehalf && ticket.onBehalf === "Other" && ticket.onBehalfEmail) {
-      notifyText = `${azureName} has approved the password reset request of ${ticketCreator} on behalf of ${affectedPerson}.`;
-    } else {
-      notifyText = `${azureName} has approved the password reset request of ${ticketCreator}.`;
-    }
-
-    const notifyHtml = buildHtmlEmail({
-      title: `Password Reset Approved — Ticket #${ticket.ticketNumber}`,
-      subtitle: `Approved by ${azureName}`,
-      statusColor: "#16a34a",
-      fields: [
+    // Notify the other admin that approval happened and password was sent
+    if (otherAdminEmail) {
+      const notifTitle = `Password Reset Approved — Ticket #${ticket.ticketNumber}`;
+      const approverDisplay = approvedByName || approvedByEmail || approvedBy || "Department Head";
+      const notifFields = [
         { label: "Ticket No", value: ticket.ticketNumber },
-        { label: "Approved By", value: azureName },
+        { label: "Affected User", value: affected },
+        { label: "Approved By", value: approverDisplay },
         { label: "Approved On", value: nowIST },
-        { label: "Affected User", value: affectedPerson }
-      ],
-      description: notifyText,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
-      actionText: "View Ticket"
-    });
+        { label: "Delivery Email", value: ticket.deliveryEmail || '—' },
+      ];
+      const notifDescription = ticket.onBehalf === "Other"
+        ? `${approverDisplay} has approved the password reset request of ${ticket.userName} on behalf of ${affected}. The password was sent to ${ticket.deliveryEmail || '—'}.`
+        : `${approverDisplay} has approved the password reset request of ${ticket.userName}. The password was sent to ${ticket.deliveryEmail || '—'}.`;
 
-    if (otherApproverEmail) {
-      const ccList = [itHead].filter(Boolean);
-      if (approverEmail) ccList.push(approverEmail);
-      await sendEmail(otherApproverEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved by ${azureName}`, notifyHtml, ccList);
+      const notifHtml = buildHtmlEmail({
+        title: notifTitle,
+        subtitle: "Approval finished and password distributed",
+        statusColor: "#0ea5e9",
+        fields: notifFields,
+        description: notifDescription,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+        actionText: "View Ticket"
+      });
+
+      await sendEmail(otherAdminEmail, `[TICKET #${ticket.ticketNumber}] Approval Notification`, notifHtml, [itHead]);
+    }
+
+    // Send closed confirmation to the approver (if approver email provided)
+    if (approvedByEmail) {
+      const closedHtml = buildHtmlEmail({
+        title: `Ticket #${ticket.ticketNumber} — Closed`,
+        subtitle: "You approved and the ticket is closed",
+        statusColor: "#16a34a",
+        fields: [
+          { label: "Ticket No", value: ticket.ticketNumber },
+          { label: "Affected User", value: affected },
+          { label: "Closed By", value: ticket.closedBy },
+          { label: "Closed On", value: nowIST },
+        ],
+        description: `The password reset was performed and the temporary password sent to the delivered address: ${ticket.deliveryEmail || '—'}.`,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+        actionText: "Open Ticket"
+      });
+
+      await sendEmail(approvedByEmail, `[TICKET #${ticket.ticketNumber}] Ticket Closed`, closedHtml, itHead);
     }
 
     console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
 
-    // IMPORTANT: DO NOT return the password in the API response
     res.json({
       message: "Ticket approved and password reset performed successfully.",
       ticket: {
@@ -699,6 +668,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
         closedAt: ticket.closedAt,
         history: ticket.history,
       },
+      newPassword,
     });
   } catch (err) {
     console.error("Approve error:", err.message);
@@ -706,7 +676,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
   }
 });
 
-// Reject endpoint (unchanged logic but uses dept recipients)
+// Reject endpoint
 app.post("/tickets/:id/reject", async (req, res) => {
   try {
     const { rejectedBy, reason } = req.body;
@@ -752,7 +722,6 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Build HTML user notification (rejected)
     const userTitle = `Ticket #${ticket.ticketNumber} — Request Rejected`;
     const userFields = [
       { label: "Ticket No", value: ticket.ticketNumber },
@@ -763,7 +732,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
     const userHtml = buildHtmlEmail({
       title: userTitle,
       subtitle: "Your request has been reviewed and rejected",
-      statusColor: "#dc2626", // red for rejected
+      statusColor: "#dc2626",
       fields: userFields,
       description: `Reason:\n${reason || 'No reason provided.'}\n\nIf you believe this is in error, please contact the department or raise a new ticket.`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
@@ -771,9 +740,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
     });
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Request Rejected`, userHtml, itHead);
-    if (ticket.deliveryEmail) await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Request Rejected`, userHtml, itHead);
 
-    const deptRecipients = getDeptRecipients(ticket.category, itHead);
     const deptHtml = buildHtmlEmail({
       title: `Ticket #${ticket.ticketNumber} — Rejected and Closed`,
       subtitle: `${ticket.closedBy} rejected the request`,
@@ -788,7 +755,9 @@ app.post("/tickets/:id/reject", async (req, res) => {
       actionText: "Open Ticket"
     });
 
-    await sendEmail(deptRecipients.to, `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptHtml, deptRecipients.cc);
+    const admins = deptEmails[ticket.category] || [];
+    const primaryAdmin = admins[0];
+    await sendEmail(primaryAdmin, `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptHtml, itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} rejected by ${ticket.closedBy} and closed.`);
 
@@ -810,10 +779,91 @@ app.post("/tickets/:id/reject", async (req, res) => {
   }
 });
 
-// Close, Reopen endpoints unchanged (kept as before)...
-// START omitted block for brevity (they remain the same as previous file)
+// Close Ticket
+app.put("/tickets/:id/close", async (req, res) => {
+  try {
+    const { closedBy, closeReason } = req.body;
 
-// Reopen Ticket
+    if (!closeReason || closeReason.trim() === "") {
+      return res.status(400).json({ message: "Close reason is required" });
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    if (ticket.status === "Closed") {
+      return res.status(400).json({ message: "Ticket is already closed" });
+    }
+
+    const now = new Date();
+
+    ticket.history.push({
+      action: "closed",
+      by: closedBy?.trim() || "IT Head",
+      at: now,
+      reason: closeReason.trim(),
+    });
+
+    ticket.status = "Closed";
+    ticket.closedBy = closedBy?.trim() || "IT Head";
+    ticket.closeReason = closeReason.trim();
+    ticket.closedAt = now;
+
+    await ticket.save();
+
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    const emailHtml = buildHtmlEmail({
+      title: `Ticket #${ticket.ticketNumber} — Closed`,
+      subtitle: "This ticket has been closed",
+      statusColor: "#dc2626",
+      fields: [
+        { label: "Category", value: ticket.category },
+        { label: "Priority", value: ticket.priority },
+        { label: "Created By", value: `${ticket.userName} (${ticket.userEmail})` },
+        { label: "Ticket Number", value: `#${ticket.ticketNumber}` },
+        { label: "Closed By", value: ticket.closedBy },
+        { label: "Closed On", value: nowIST }
+      ],
+      description: `Reason for closing:\n${ticket.closeReason}`,
+      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionText: "View Ticket"
+    });
+
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailHtml, itHead);
+    await sendEmail(deptEmails[ticket.category][0], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, itHead);
+
+    console.log(`Ticket #${ticket.ticketNumber} closed by ${ticket.closedBy}`);
+
+    res.json({
+      message: "Ticket closed successfully",
+      ticket: {
+        _id: ticket._id,
+        ticketNumber: ticket.ticketNumber,
+        status: ticket.status,
+        closedBy: ticket.closedBy,
+        closeReason: ticket.closeReason,
+        closedAt: ticket.closedAt,
+        history: ticket.history,
+      },
+    });
+  } catch (err) {
+    console.error("Close ticket error:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// reopen Ticket
 app.put("/tickets/:id/reopen", async (req, res) => {
   try {
     const { reopendBy, reopenReason } = req.body;
@@ -857,7 +907,7 @@ app.put("/tickets/:id/reopen", async (req, res) => {
       second: "2-digit",
     });
 
-    const dept = deptEmails[ticket.category] || "helpdesk@sandeza-inc.com";
+    const dept = deptEmails[ticket.category] ? deptEmails[ticket.category][0] : "helpdesk@sandeza-inc.com";
     const itHead = process.env.IT_HEAD_EMAIL;
 
     const emailHtml = buildHtmlEmail({
@@ -899,9 +949,7 @@ app.put("/tickets/:id/reopen", async (req, res) => {
   }
 });
 
-// ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Server running on port ${PORT} (Full History Enabled)`)
 );
-// ---------------------- END PART 4 ----------------------
