@@ -43,15 +43,14 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  //const backendBase = "ticketing-production-backend";
-
   const [formData, setFormData] = useState({
     category: "",
     description: "",
     priority: "Medium",
-    onBehalf: "Self",
-    onBehalfEmail: "",
-    alternativeEmail: "",
+    onBehalf: "Self", // Self or Other
+    onBehalfEmail: "", // affected person's company email
+    deliveryEmail: "", // creator's alternate delivery email
+    onBehalfDeliveryEmail: "", // affected person's alternate email (for Other)
   });
 
   const [loading, setLoading] = useState(false);
@@ -84,7 +83,8 @@ function CreateTicket() {
           account: accounts[0],
         });
 
-        const resp = await axios.get("graph-user-profile", {
+        // this endpoint should return your signed-in user's Graph profile
+        const resp = await axios.get("/graph-user-profile", {
           headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
         });
 
@@ -123,8 +123,9 @@ function CreateTicket() {
         account: accounts[0],
       });
 
+      // call server verify endpoint (server uses /verify-user)
       const res = await axios.post(
-        "azure-user-verify-endpoint",
+        "/verify-user",
         { email },
         {
           headers: { Authorization: `Bearer ${token.accessToken}` },
@@ -152,16 +153,36 @@ function CreateTicket() {
     e.preventDefault();
     setLoading(true);
 
-    if (formData.category === "Password Reset" && formData.onBehalf === "Other") {
-      if (!formData.onBehalfEmail) {
-        setModal({
-          open: true,
-          title: "Validation Error",
-          message: "Please verify the company email first.",
-          type: "error",
-        });
+    // Basic validation matching server rules
+    if (formData.category === "Password Reset") {
+      if (!formData.onBehalf || (formData.onBehalf !== "Self" && formData.onBehalf !== "Other")) {
+        setModal({ open: true, title: "Validation Error", message: "Select Self or Other", type: "error" });
         setLoading(false);
         return;
+      }
+      if (formData.onBehalf === "Self") {
+        if (!formData.deliveryEmail || !formData.deliveryEmail.trim()) {
+          setModal({ open: true, title: "Validation Error", message: "Please provide an alternate delivery email for self.", type: "error" });
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Other
+        if (!formData.onBehalfEmail || !formData.onBehalfEmail.trim()) {
+          setModal({ open: true, title: "Validation Error", message: "Please verify affected person's company email first.", type: "error" });
+          setLoading(false);
+          return;
+        }
+        if (!formData.onBehalfDeliveryEmail || !formData.onBehalfDeliveryEmail.trim()) {
+          setModal({ open: true, title: "Validation Error", message: "Please provide affected person's alternate delivery email.", type: "error" });
+          setLoading(false);
+          return;
+        }
+        if (!formData.deliveryEmail || !formData.deliveryEmail.trim()) {
+          setModal({ open: true, title: "Validation Error", message: "Please provide your (requestor) alternate delivery email.", type: "error" });
+          setLoading(false);
+          return;
+        }
       }
     }
 
@@ -171,16 +192,22 @@ function CreateTicket() {
         account: accounts[0],
       });
 
+      // Build payload exactly how server expects it
       const ticketData = {
-        ...formData,
+        category: formData.category,
+        description: formData.description,
+        priority: formData.priority,
+        onBehalf: formData.onBehalf,
+        onBehalfEmail: formData.onBehalf === "Other" ? formData.onBehalfEmail : "",
+        deliveryEmail: formData.deliveryEmail,
+        onBehalfDeliveryEmail: formData.onBehalf === "Other" ? formData.onBehalfDeliveryEmail : "",
         userId: accounts[0]?.localAccountId,
         userName: displayName,
         userEmail: displayEmail,
-        status: "Pending",
       };
 
       const response = await axios.post(
-        "ticket-create-endpoint",
+        "/tickets",
         ticketData,
         { headers: { Authorization: `Bearer ${token.accessToken}` } }
       );
@@ -194,15 +221,16 @@ function CreateTicket() {
         type: "success",
       });
 
-      if (response.data.password) {
-        setNewPassword(response.data.password);
+      // If server returns password (for testing), show popup
+      if (response.data.newPassword || response.data.password) {
+        setNewPassword(response.data.newPassword || response.data.password);
         setShowPasswordPopup(true);
       }
     } catch (error) {
       setModal({
         open: true,
         title: "Failed ❌",
-        message: `⚠ ${error.message}`,
+        message: `⚠ ${error.response?.data?.message || error.message}`,
         type: "error",
       });
     } finally {
@@ -231,33 +259,24 @@ function CreateTicket() {
   return (
     <div style={styles.pageWrap}>
       <div style={styles.card}>
-
-        {/* Header */}
         <div style={styles.headerRow}>
           <div style={styles.avatar}>{initials}</div>
-
           <div style={{ flex: 1 }}>
             <div style={styles.userName}>
               {displayName || "Unknown User"}
             </div>
-
             <div style={styles.userEmail}>{displayEmail || "—"}</div>
           </div>
-
           <div style={{ textAlign: "right", marginLeft: 12 }}>
             <div style={styles.statusLabel}>Status</div>
             <div style={styles.signedIn}>Signed in</div>
           </div>
         </div>
 
-        {/* Form */}
         <h1 style={styles.title}>Create New Request</h1>
 
         <form onSubmit={handleSubmit}>
-
-          {/* Row 1 */}
           <div style={styles.gridRow}>
-
             <div>
               <label style={styles.label}>Category *</label>
               <select
@@ -288,10 +307,8 @@ function CreateTicket() {
                 <option value="High">High</option>
               </select>
             </div>
-
           </div>
 
-          {/* Description */}
           <div>
             <label style={styles.label}>Description *</label>
             <textarea
@@ -307,8 +324,94 @@ function CreateTicket() {
             />
           </div>
 
-          {/* Buttons */}
-          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+          {/* Password Reset specific UI */}
+          {formData.category === "Password Reset" && (
+            <>
+              <div style={{ marginTop: 12 }}>
+                <label style={styles.label}>Request For *</label>
+                <div style={{ display: "flex", gap: 12 }}>
+                  <label>
+                    <input
+                      type="radio"
+                      name="onBehalf"
+                      value="Self"
+                      checked={formData.onBehalf === "Self"}
+                      onChange={() => setFormData({ ...formData, onBehalf: "Self" })}
+                    />{" "}
+                    Self (my own account)
+                  </label>
+
+                  <label>
+                    <input
+                      type="radio"
+                      name="onBehalf"
+                      value="Other"
+                      checked={formData.onBehalf === "Other"}
+                      onChange={() => setFormData({ ...formData, onBehalf: "Other" })}
+                    />{" "}
+                    Other (someone else)
+                  </label>
+                </div>
+              </div>
+
+              {formData.onBehalf === "Self" && (
+                <div style={{ marginTop: 12 }}>
+                  <label style={styles.label}>Alternate delivery email (where password should be sent) *</label>
+                  <input
+                    value={formData.deliveryEmail}
+                    onChange={(e) => setFormData({ ...formData, deliveryEmail: e.target.value })}
+                    placeholder="your.alternate@domain.com"
+                    style={styles.input}
+                    required
+                  />
+                </div>
+              )}
+
+              {formData.onBehalf === "Other" && (
+                <>
+                  <div style={{ marginTop: 12 }}>
+                    <label style={styles.label}>Affected person's company email *</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        value={formData.onBehalfEmail}
+                        onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
+                        placeholder="affected.user@company.com"
+                        style={{ ...styles.input, flex: 1 }}
+                      />
+                      <button type="button" onClick={handleVerifyOther} style={styles.ghostButton}>
+                        {verifyStatus === "verifying" ? "Verifying..." : "Verify"}
+                      </button>
+                    </div>
+                    {verifyStatus === "verified" && <div style={{ color: "green", marginTop: 6 }}>Verified: {verifiedName}</div>}
+                    {verifyStatus === "notfound" && <div style={{ color: "orange", marginTop: 6 }}>{verifyError}</div>}
+                    {verifyStatus === "error" && <div style={{ color: "red", marginTop: 6 }}>{verifyError}</div>}
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <label style={styles.label}>Affected person's alternate delivery email *</label>
+                    <input
+                      value={formData.onBehalfDeliveryEmail}
+                      onChange={(e) => setFormData({ ...formData, onBehalfDeliveryEmail: e.target.value })}
+                      placeholder="affected.alternate@domain.com"
+                      style={styles.input}
+                    />
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <label style={styles.label}>Your (requestor) alternate delivery email *</label>
+                    <input
+                      value={formData.deliveryEmail}
+                      onChange={(e) => setFormData({ ...formData, deliveryEmail: e.target.value })}
+                      placeholder="your.alternate@domain.com"
+                      style={styles.input}
+                    />
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
             <button
               type="submit"
               style={styles.primaryButton}
@@ -325,18 +428,15 @@ function CreateTicket() {
               Cancel
             </button>
           </div>
-
         </form>
       </div>
 
-      {/* View Ticket Button */}
       {createdTicketId && (
         <button onClick={handleViewTicket} style={styles.viewButton}>
           View Request
         </button>
       )}
 
-      {/* Modal */}
       {modal.open && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalBox}>
@@ -354,7 +454,6 @@ function CreateTicket() {
         </div>
       )}
 
-      {/* Password Popup */}
       {showPasswordPopup && (
         <PasswordPopup
           password={newPassword}
@@ -365,7 +464,7 @@ function CreateTicket() {
   );
 }
 
-// ---- Styles (no changes, only formatted) ----
+// ---- Styles (kept) ----
 const styles = {
   pageWrap: {
     padding: "2rem",
@@ -444,6 +543,36 @@ const styles = {
   userName: { fontSize: 18, fontWeight: 700 },
   userEmail: { fontSize: 13, color: "#6b7280" },
   title: { textAlign: "center", margin: "18px 0 8px", fontSize: 22, fontWeight: 700 },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" },
+  passwordBox: { background: "white", padding: 28, borderRadius: 8, width: 420, textAlign: "center" },
+  passwordText: { fontFamily: "monospace", fontSize: 18, marginTop: 8 },
+  copyButton: { marginTop: 8, padding: "8px 10px", background: "#2563eb", color: "white", border: "none", borderRadius: 6, cursor: "pointer" },
+  modalCloseButton: { marginTop: 10, background: "#f3f4f6", border: "none", padding: 8, borderRadius: 6, cursor: "pointer" },
 };
 
 export default CreateTicket;
+// ``` ````
+
+// // What changed (short):
+// // - UI now asks Self / Other and collects required alternate emails and verifies affected user via Graph (server /verify-user).
+// // - Server stores onBehalfDeliveryEmail and uses it in approvals.
+// // - Approve flow sends the new password to all required recipients depending on Self vs Other, and notifies both admins and the other approver explicitly naming who approved.
+// // - Ticket history records approved and closed with approver identity.
+
+// // Next steps for you
+// // 1. Replace the server.js and CreateTicket.js files with the above.
+// // 2. Make sure environment variables are set: MONGO_URI, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_SENDER_EMAIL (optional), IT_HEAD_EMAIL, PROD_URL.
+// // 3. In your frontend, ensure the MSAL-protected endpoints are proxied to the server (the axios calls use relative paths /verify-user and /tickets). If your frontend proxy or base URL differs, adjust accordingly.
+// // 4. When calling the Approve endpoint, send:
+// //    {
+// //      "approvedBy": "<Full Name (optional)>",
+// //      "approvedByEmail": "kodhan@sandeza-inc.com" // or "allenj@sandeza-inc.com"
+// //    }
+// //    This makes it deterministic who approved and triggers the "notify other admin" message.
+
+// // If you want I can:
+// // - Remove newPassword from API response so passwords are never returned by API (recommended for prod).
+// // - Add server-side logging to a file or Slack.
+// // - Provide an example approve button/flow in your admin UI that posts approvedByEmail automatically from the approver's Azure identity.
+
+// // Tell me which next action you want and I’ll produce the patch or the approve-end UI example.
