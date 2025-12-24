@@ -110,6 +110,7 @@ const loadCounter = async () => {
 loadCounter();
 
 // ---------------------- Department Emails -----------------
+// Leaving your original deptEmails as requested.
 const deptEmails = {
   "Password Reset": "allenj@sandeza-inc.com",
   "Admin Access": "vigneshm@sandeza-inc.com",
@@ -117,6 +118,29 @@ const deptEmails = {
   "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
   "Leave Request": "allenj@sandeza-inc.com",
   "Employee Onboarding": "allenj@sandeza-inc.com",
+};
+
+// ---------------------- Special Approvers for Password Reset -----------------
+// Per your request: kodhan is primary (main) and allen should be CC'd
+const PASSWORD_RESET_APPROVER = "kodhan@sandeza-inc.com";
+const PASSWORD_RESET_CC = "allenj@sandeza-inc.com";
+
+// Resolver: prefer approvedByEmail (expected to be the Azure user's email).
+// No short-name mapping — we only accept the approver email from Azure/front-end.
+const resolveApproverEmail = (approvedByEmail) => {
+  if (approvedByEmail && typeof approvedByEmail === "string" && approvedByEmail.includes("@")) {
+    return approvedByEmail.toLowerCase();
+  }
+  return null;
+};
+
+const getOtherApprover = (approverEmail) => {
+  if (!approverEmail) return PASSWORD_RESET_APPROVER; // fallback
+  const lower = approverEmail.toLowerCase();
+  if (lower === PASSWORD_RESET_APPROVER) return PASSWORD_RESET_CC;
+  if (lower === PASSWORD_RESET_CC) return PASSWORD_RESET_APPROVER;
+  // If unknown approver, notify primary (kodhan) as the "other"
+  return PASSWORD_RESET_APPROVER;
 };
 
 // ---------------------- Azure Graph Token ----------------------
@@ -304,6 +328,19 @@ const resetAzurePassword = async (userIdentifier) => {
   return newPassword;
 };
 
+// ---------------------- Helpers for recipients ----------------------
+const getDeptRecipients = (category, itHead) => {
+  // For Password Reset, use special approver / cc per request
+  if (category === "Password Reset") {
+    const cc = [PASSWORD_RESET_CC, itHead].filter(Boolean);
+    return { to: PASSWORD_RESET_APPROVER, cc };
+  }
+  // default: deptEmails[category] as to, and itHead as cc
+  const to = deptEmails[category] || "helpdesk@sandeza-inc.com";
+  const cc = itHead ? [itHead] : [];
+  return { to, cc };
+};
+
 // ---------------------- Routes ----------------------------
 
 // Health Check
@@ -468,7 +505,7 @@ app.post("/tickets", async (req, res) => {
     );
 
     // ---------- SEND DEPARTMENT HEAD EMAIL (HTML) FOR ALL CATEGORIES ----------
-    // Previously dept notification was only sent for Pending (Password Reset). Now send for all.
+    // Use special recipients for Password Reset (kodhan main, allen CC)
     const deptTitle = `New Ticket #${ticketCounter} — ${category}`;
     const deptSubtitle = `Action required: please review the ticket${initialStatus === "Pending" ? ' (approval required)' : ''}.`;
     const deptFields = [
@@ -489,12 +526,13 @@ app.post("/tickets", async (req, res) => {
       actionText: initialStatus === "Pending" ? "Approve / Reject" : "Open Ticket"
     });
 
-    // send to category head (always) — use deptEmails mapping
+    // send to category head (always) — use getDeptRecipients to handle special-case Password Reset
+    const deptRecipients = getDeptRecipients(category, itHead);
     await sendEmail(
-      deptEmails[category],
+      deptRecipients.to,
       `[TICKET #${ticketCounter}] ${category} - Action Required`,
       deptHtml,
-      itHead
+      deptRecipients.cc
     );
 
     res.status(201).json(ticket);
@@ -509,7 +547,8 @@ app.post("/tickets", async (req, res) => {
 // Approve endpoint
 app.post("/tickets/:id/approve", async (req, res) => {
   try {
-    const { approvedBy, note } = req.body;
+    // Expect approvedByEmail to be provided (Azure email of the approver)
+    const { approvedBy, approvedByEmail, note } = req.body;
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
@@ -528,6 +567,10 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(400).json({ message: "No user identifier available to reset password" });
     }
 
+    // Resolve approver email (must come from frontend/Azure). If missing, we'll still proceed but use fallback.
+    const approverEmail = resolveApproverEmail(approvedByEmail);
+    const otherApproverEmail = getOtherApprover(approverEmail);
+
     // Perform Azure password reset
     let newPassword;
     try {
@@ -542,14 +585,14 @@ app.post("/tickets/:id/approve", async (req, res) => {
 
     ticket.history.push({
       action: "approved",
-      by: approvedBy || "Department Head",
+      by: approvedByEmail || approvedBy || "Department Head",
       at: now,
       reason: note || "Approved and password reset performed",
     });
 
     // Mark closed and add close history entry
     ticket.status = "Closed";
-    ticket.closedBy = approvedBy || "Department Head";
+    ticket.closedBy = approvedByEmail || approvedBy || "Department Head";
     ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
     ticket.closedAt = now;
 
@@ -589,7 +632,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       subtitle: "Temporary password generated — change on next sign-in",
       statusColor: "#16a34a", // green for approved
       fields: userFields,
-      description: `The new temporary password has appreoved aand resetted sucessfullty, Please sign in and change your password immediately.`,
+      description: `The new temporary password has been generated and applied. Please sign in and change your password immediately.`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
@@ -602,7 +645,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
     }
 
-    // Notify department (confirmation)
+    // Notify department (confirmation) - use special recipients for Password Reset
     const deptTitle = `Ticket #${ticket.ticketNumber} — Closed`;
     const deptFields = [
       { label: "Ticket No", value: ticket.ticketNumber },
@@ -615,17 +658,52 @@ app.post("/tickets/:id/approve", async (req, res) => {
       subtitle: "Password reset performed and ticket closed",
       statusColor: "#16a34a",
       fields: deptFields,
-      description: `Password restted successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
+      description: `Password reset successfully performed for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
 
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, itHead);
+    const deptRecipients = getDeptRecipients(ticket.category, itHead);
+    await sendEmail(deptRecipients.to, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, deptRecipients.cc);
+
+    // Notify the other approver that this approver performed the reset
+    const azureName = approvedByEmail || approvedBy || "Approver";
+    const ticketCreator = ticket.userName || ticket.userEmail;
+    const affectedPerson = ticket.onBehalfEmail || ticket.userEmail;
+    let notifyText;
+    if (ticket.onBehalf && ticket.onBehalf === "Other" && ticket.onBehalfEmail) {
+      notifyText = `${azureName} has approved the password reset request of ${ticketCreator} on behalf of ${affectedPerson}.`;
+    } else {
+      notifyText = `${azureName} has approved the password reset request of ${ticketCreator}.`;
+    }
+
+    const notifyHtml = buildHtmlEmail({
+      title: `Password Reset Approved — Ticket #${ticket.ticketNumber}`,
+      subtitle: `Approved by ${azureName}`,
+      statusColor: "#16a34a",
+      fields: [
+        { label: "Ticket No", value: ticket.ticketNumber },
+        { label: "Approved By", value: azureName },
+        { label: "Approved On", value: nowIST },
+        { label: "Affected User", value: affectedPerson }
+      ],
+      description: notifyText,
+      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+      actionText: "View Ticket"
+    });
+
+    // Send notification to the other approver (if email available)
+    if (otherApproverEmail) {
+      // CC IT Head and also CC the approver who performed the action (so both see it if desired)
+      const ccList = [itHead];
+      if (approverEmail) ccList.push(approverEmail);
+      await sendEmail(otherApproverEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved by ${azureName}`, notifyHtml, ccList.filter(Boolean));
+    }
 
     console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
 
     res.json({
-      message: "Ticket approved and password reset performed sucessfully.",
+      message: "Ticket approved and password reset performed successfully.",
       ticket: {
         _id: ticket._id,
         ticketNumber: ticket.ticketNumber,
@@ -724,7 +802,8 @@ app.post("/tickets/:id/reject", async (req, res) => {
       actionText: "Open Ticket"
     });
 
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptHtml, itHead);
+    const deptRecipients = getDeptRecipients(ticket.category, itHead);
+    await sendEmail(deptRecipients.to, `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptHtml, deptRecipients.cc);
 
     console.log(`Ticket #${ticket.ticketNumber} rejected by ${ticket.closedBy} and closed.`);
 
@@ -811,7 +890,8 @@ app.put("/tickets/:id/close", async (req, res) => {
     });
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailHtml, itHead);
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, itHead);
+    const deptRecipients = getDeptRecipients(ticket.category, itHead);
+    await sendEmail(deptRecipients.to, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptRecipients.cc);
 
     console.log(`Ticket #${ticket.ticketNumber} closed by ${ticket.closedBy}`);
 

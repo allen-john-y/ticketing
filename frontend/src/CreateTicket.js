@@ -43,7 +43,7 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  const backendBase = "ticketing-production-backend";
+  //const backendBase = "ticketing-production-backend";
 
   const [formData, setFormData] = useState({
     category: "",
@@ -189,7 +189,7 @@ function CreateTicket() {
 
       setModal({
         open: true,
-        title: "Ticket Created ✅",
+        title: "Ticket Created",
         message: "Your request is pending approval.",
         type: "success",
       });
@@ -270,8 +270,6 @@ function CreateTicket() {
               >
                 <option value="">Select Category</option>
                 <option value="Password Reset">🔑 Password Reset</option>
-                <option value="Admin Access">👨‍💼 Admin Access</option>
-                <option value="Payroll Issue">💰 Payroll Issue</option>
               </select>
             </div>
 
@@ -303,6 +301,7 @@ function CreateTicket() {
               }
               placeholder="Describe the issue..."
               rows="5"
+              width="95%"
               style={styles.textarea}
               required
             />
