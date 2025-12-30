@@ -116,6 +116,11 @@ const passwordResetSecondary = "allenj@sandeza-inc.com";
 
 const deptEmails = {
   "Password Reset": passwordResetPrimary,
+  "Admin Access": "vigneshm@sandeza-inc.com",
+  "Payroll Issue": "kishorekumars@sandeza-inc.com",
+  "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
+  "Leave Request": "allenj@sandeza-inc.com",
+  "Employee Onboarding": "allenj@sandeza-inc.com",
 };
 
 // ---------------------- Azure Graph Token ----------------------
@@ -921,7 +926,7 @@ app.put("/tickets/:id/revive", async (req, res) => {
     const { revivedBy, reviveReason } = req.body;
 
     if (!reviveReason || reviveReason.trim() === "") {
-      return res.status(400).json({ message: "Reopen reason is required" });
+      return res.status(400).json({ message: "Revive reason is required" });
     }
 
     const ticket = await Ticket.findById(req.params.id);
@@ -963,7 +968,7 @@ app.put("/tickets/:id/revive", async (req, res) => {
     const itHead = process.env.IT_HEAD_EMAIL;
 
     const emailHtml = buildHtmlEmail({
-      title: `Ticket #${ticket.ticketNumber} — Reopened`,
+      title: `Ticket #${ticket.ticketNumber} — Revived (Reopened)`,
       subtitle: "This ticket has been reopened and requires attention",
       statusColor: "#16a34a",
       fields: [
@@ -971,27 +976,27 @@ app.put("/tickets/:id/revive", async (req, res) => {
         { label: "Priority", value: ticket.priority },
         { label: "Created By", value: `${ticket.userName} (${ticket.userEmail})` },
         { label: "Ticket Number", value: `#${ticket.ticketNumber}` },
-        { label: "Reopened By", value: ticket.reopenedBy },
-        { label: "Reopened On", value: nowIST }
+        { label: "Revived By", value: ticket.reopenedBy },
+        { label: "Revived On", value: nowIST }
       ],
       description: `Reason for reviving:\n${ticket.reviveReason}`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Reopened`, emailHtml, itHead);
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailHtml, itHead);
     // dept send — include secondary if password reset
     const deptCcList = [];
     if (ticket.category === "Password Reset") {
       deptCcList.push(passwordResetSecondary);
     }
     if (itHead) deptCcList.push(itHead);
-    await sendEmail(dept, `[REOPENED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptCcList.length ? deptCcList : itHead);
+    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptCcList.length ? deptCcList : itHead);
 
-    console.log(`Ticket #${ticket.ticketNumber} Reopened by ${ticket.reopenedBy}`);
+    console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
 
     res.json({
-      message: "Ticket Reopened successfully",
+      message: "Ticket revived successfully",
       ticket: {
         _id: ticket._id,
         status: "Open",
