@@ -231,12 +231,13 @@ function TicketDetails() {
     setConfirmreopenModal(true);
   };
 
+  // <-- FIXED: call correct backend endpoint (/revive) and send expected field names (revivedBy, reviveReason)
   const confirmreopenTicket = async () => {
     setLoading(true);
     try {
-      await axios.put(`${backendBase}/tickets/${id}/reopen`, {
-        reopendBy: accounts[0]?.name || accounts[0]?.username || "User",
-        reopenReason: reopenReason.trim()
+      await axios.put(`${backendBase}/tickets/${id}/revive`, {
+        revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
+        reviveReason: reopenReason.trim()
       });
 
       setConfirmreopenModal(false);
