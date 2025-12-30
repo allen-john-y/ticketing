@@ -82,7 +82,7 @@ function TicketDetails() {
             setIsCategoryHead(true);
 
             const status = (res.data.status || '').toString();
-            if (res.data.category === "Password Reset" && (status === "Pending" || status === "Open")) {
+            if (res.data.category === "Password Reset" && (status === "Waiting for approval" || status === "Open")) {
               setShowApprovalModal(true);
             }
           }
@@ -108,7 +108,7 @@ function TicketDetails() {
   };
 
   // Derived: show inline "Waiting for Approval" banner
-  const needsApprovalBanner = isCategoryHead && ticket && (ticket.status === 'Pending' || ticket.status === 'Open') && !showApprovalModal && ticket.category === "Password Reset";
+  const needsApprovalBanner = isCategoryHead && ticket && (ticket.status === 'Waiting for approval' || ticket.status === 'Open') && !showApprovalModal && ticket.category === "Password Reset";
 
   const copyToClipboard = (text) => {
     try {
@@ -269,12 +269,12 @@ function TicketDetails() {
     background:
       ticket.status === "Closed" ? "#fee2e2" :
       ticket.status === "Approved" ? "#dcfce7" :
-      ticket.status === "Pending" ? "#fef3c7" :
+      ticket.status === "Waiting for approval" ? "#fef3c7" :
       "#e0f2fe",
     color:
       ticket.status === "Closed" ? "#b91c1c" :
       ticket.status === "Approved" ? "#166534" :
-      ticket.status === "Pending" ? "#92400e" :
+      ticket.status === "Waiting for approval" ? "#92400e" :
       "#0369a1"
   };
 
@@ -385,7 +385,7 @@ function TicketDetails() {
                     fontSize: 13,
                     ...statusColorStyles
                   }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : (ticket.status === 'Approved' ? '#16a34a' : (ticket.status === 'Pending' ? '#f59e0b' : '#06b6d4')) }} />
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : (ticket.status === 'Approved' ? '#16a34a' : (ticket.status === 'Waiting for approval' ? '#f59e0b' : '#06b6d4')) }} />
                     {ticket.status}
                   </span>
                 </div>

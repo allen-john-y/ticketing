@@ -110,8 +110,12 @@ const loadCounter = async () => {
 loadCounter();
 
 // ---------------------- Department Emails -----------------
+// Password Reset primary should be Kodhan and Allen in CC
+const passwordResetPrimary = "kodhan@sandeza-inc.com";
+const passwordResetSecondary = "allenj@sandeza-inc.com";
+
 const deptEmails = {
-  "Password Reset": "allenj@sandeza-inc.com",
+  "Password Reset": passwordResetPrimary,
   "Admin Access": "vigneshm@sandeza-inc.com",
   "Payroll Issue": "kishorekumars@sandeza-inc.com",
   "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
@@ -374,7 +378,7 @@ app.get("/tickets/:id", async (req, res) => {
   }
 });
 
-// Create Ticket (ensure this uses status: "Pending" only for Password Reset and accepts deliveryEmail/onBehalfEmail)
+// Create Ticket (ensure this uses status: "Waiting for approval" only for Password Reset and accepts deliveryEmail/onBehalfEmail)
 app.post("/tickets", async (req, res) => {
   try {
     const {
@@ -413,7 +417,7 @@ app.post("/tickets", async (req, res) => {
     }
 
     // Decide initial status based on category
-    const initialStatus = category === "Password Reset" ? "Pending" : "Open";
+    const initialStatus = category === "Password Reset" ? "Waiting for approval" : "Open";
 
     ticketCounter++;
     const ticket = await Ticket.create({
@@ -443,7 +447,7 @@ app.post("/tickets", async (req, res) => {
 
     // ---------- SEND CREATOR EMAIL (HTML) ----------
     const creatorTitle = `Ticket #${ticketCounter} Created`;
-    const creatorSubtitle = initialStatus === "Pending" ? "Your ticket is pending department approval" : "Your ticket has been created";
+    const creatorSubtitle = initialStatus === "Waiting for approval" ? "Your ticket is Waiting for approval department approval" : "Your ticket has been created";
     const creatorFields = [
       { label: "Ticket No", value: ticketCounter },
       { label: "Category", value: category },
@@ -468,9 +472,9 @@ app.post("/tickets", async (req, res) => {
     );
 
     // ---------- SEND DEPARTMENT HEAD EMAIL (HTML) FOR ALL CATEGORIES ----------
-    // Previously dept notification was only sent for Pending (Password Reset). Now send for all.
+    // Previously dept notification was only sent for Waiting for approval (Password Reset). Now send for all.
     const deptTitle = `New Ticket #${ticketCounter} — ${category}`;
-    const deptSubtitle = `Action required: please review the ticket${initialStatus === "Pending" ? ' (approval required)' : ''}.`;
+    const deptSubtitle = `Action required: please review the ticket${initialStatus === "Waiting for approval" ? ' (approval required)' : ''}.`;
     const deptFields = [
       { label: "Ticket No", value: ticketCounter },
       { label: "Created By", value: `${userName} (${userEmail})` },
@@ -482,19 +486,27 @@ app.post("/tickets", async (req, res) => {
     const deptHtml = buildHtmlEmail({
       title: deptTitle,
       subtitle: deptSubtitle,
-      statusColor: initialStatus === "Pending" ? "#f59e0b" : "#0ea5e9", // amber if pending else blue
+      statusColor: initialStatus === "Waiting for approval" ? "#f59e0b" : "#0ea5e9", // amber if Waiting for approval else blue
       fields: deptFields,
       description: description,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
-      actionText: initialStatus === "Pending" ? "Approve / Reject" : "Open Ticket"
+      actionText: initialStatus === "Waiting for approval" ? "Approve / Reject" : "Open Ticket"
     });
 
     // send to category head (always) — use deptEmails mapping
+    const deptTo = deptEmails[category];
+    const deptCcList = [];
+    // If password reset, include the secondary head in CC
+    if (category === "Password Reset") {
+      deptCcList.push(passwordResetSecondary);
+    }
+    if (itHead) deptCcList.push(itHead);
+
     await sendEmail(
-      deptEmails[category],
+      deptTo,
       `[TICKET #${ticketCounter}] ${category} - Action Required`,
       deptHtml,
-      itHead
+      deptCcList.length ? deptCcList : itHead
     );
 
     res.status(201).json(ticket);
@@ -589,7 +601,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       subtitle: "Temporary password generated — change on next sign-in",
       statusColor: "#16a34a", // green for approved
       fields: userFields,
-      description: `The new temporary password has appreoved aand resetted sucessfullty, Please sign in and change your password immediately.`,
+      description: `The new temporary password has been generated and applied successfully. Please sign in and change your password immediately.`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
@@ -602,7 +614,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
     }
 
-    // Notify department (confirmation)
+    // Notify department (confirmation) — send to primary and CC secondary + IT Head
     const deptTitle = `Ticket #${ticket.ticketNumber} — Approved and Closed`;
     const deptFields = [
       { label: "Ticket No", value: ticket.ticketNumber },
@@ -615,17 +627,77 @@ app.post("/tickets/:id/approve", async (req, res) => {
       subtitle: "Password reset performed and ticket closed",
       statusColor: "#16a34a",
       fields: deptFields,
-      description: `Password restted successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
+      description: `Password reset performed successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
 
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, itHead);
+    // Dept recipients and CCs
+    const deptTo = deptEmails[ticket.category];
+    const deptCcList = [passwordResetSecondary];
+    if (itHead) deptCcList.push(itHead);
+
+    await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, deptCcList);
+
+    // Notify the other head (the one who did NOT approve) that approval happened
+    try {
+      const approverLower = (approvedBy || "").toLowerCase();
+      const approverEmailGuess = approverLower.includes("kodhan") ? passwordResetPrimary
+        : approverLower.includes("allen") ? passwordResetSecondary
+        : null;
+
+      let notifyTargets = [];
+      // If we could determine approver, notify the other head only. Otherwise notify both.
+      if (approverEmailGuess === passwordResetPrimary) {
+        notifyTargets = [passwordResetSecondary];
+      } else if (approverEmailGuess === passwordResetSecondary) {
+        notifyTargets = [passwordResetPrimary];
+      } else {
+        // fallback: notify both heads
+        notifyTargets = [passwordResetPrimary, passwordResetSecondary];
+      }
+
+      // Construct human-friendly message
+      const approverDisplay = approvedBy || "Department Head";
+      const ticketCreator = ticket.userName || ticket.userEmail;
+      const affectedPerson = ticket.onBehalfEmail && ticket.onBehalfEmail.trim() ? ticket.onBehalfEmail : null;
+
+      const otherDesc = affectedPerson
+        ? `${approverDisplay} has approved the password reset request of ${ticketCreator} on behalf of ${affectedPerson}.`
+        : `${approverDisplay} has approved the password reset request of ${ticketCreator}.`;
+
+      const otherFields = [
+        { label: "Ticket No", value: ticket.ticketNumber },
+        { label: "Category", value: ticket.category },
+        { label: "Approved By", value: approverDisplay },
+        { label: "Approved On", value: nowIST },
+        { label: "Requested By", value: ticketCreator },
+        { label: "Affected User", value: affectedPerson || ticket.userEmail }
+      ];
+
+      const otherHtml = buildHtmlEmail({
+        title: `Password Reset Approved — Ticket #${ticket.ticketNumber}`,
+        subtitle: `${approverDisplay} approved the request`,
+        statusColor: "#0ea5e9",
+        fields: otherFields,
+        description: otherDesc,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+        actionText: "View Ticket"
+      });
+
+      // send to whoever should be notified (non-approver)
+      for (const t of notifyTargets) {
+        // avoid sending duplicate to the approver if we guessed incorrectly
+        await sendEmail(t, `[TICKET #${ticket.ticketNumber}] Password Reset Approved by ${approverDisplay}`, otherHtml, itHead);
+      }
+    } catch (notifyErr) {
+      console.error("Error notifying the other head:", notifyErr.message);
+    }
 
     console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
 
     res.json({
-      message: "Ticket approved and password reset performed sucessfully.",
+      message: "Ticket approved and password reset performed successfully.",
       ticket: {
         _id: ticket._id,
         ticketNumber: ticket.ticketNumber,
@@ -724,7 +796,15 @@ app.post("/tickets/:id/reject", async (req, res) => {
       actionText: "Open Ticket"
     });
 
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptHtml, itHead);
+    // dept send — include secondary if password reset
+    const deptTo = deptEmails[ticket.category];
+    const deptCcList = [];
+    if (ticket.category === "Password Reset") {
+      deptCcList.push(passwordResetSecondary);
+    }
+    if (itHead) deptCcList.push(itHead);
+
+    await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptHtml, deptCcList.length ? deptCcList : itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} rejected by ${ticket.closedBy} and closed.`);
 
@@ -811,7 +891,14 @@ app.put("/tickets/:id/close", async (req, res) => {
     });
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailHtml, itHead);
-    await sendEmail(deptEmails[ticket.category], `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, itHead);
+    // dept send — include secondary if password reset
+    const deptTo = deptEmails[ticket.category];
+    const deptCcList = [];
+    if (ticket.category === "Password Reset") {
+      deptCcList.push(passwordResetSecondary);
+    }
+    if (itHead) deptCcList.push(itHead);
+    await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptCcList.length ? deptCcList : itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} closed by ${ticket.closedBy}`);
 
@@ -898,7 +985,13 @@ app.put("/tickets/:id/revive", async (req, res) => {
     });
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailHtml, itHead);
-    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, itHead);
+    // dept send — include secondary if password reset
+    const deptCcList = [];
+    if (ticket.category === "Password Reset") {
+      deptCcList.push(passwordResetSecondary);
+    }
+    if (itHead) deptCcList.push(itHead);
+    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptCcList.length ? deptCcList : itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
 

@@ -189,7 +189,7 @@ function CreateTicket() {
         userId: accounts[0]?.localAccountId,
         userName: latestName || accounts[0]?.username,
         userEmail: latestEmail,
-        status: 'Pending',
+        status: 'Waiting for approval',
         ...(onBehalf ? { onBehalf } : {}),
         ...(onBehalfEmail ? { onBehalfEmail } : {}),
         ...(formData.alternativeEmail && formData.alternativeEmail.trim() ? { deliveryEmail: formData.alternativeEmail.trim() } : {}),
@@ -208,7 +208,7 @@ function CreateTicket() {
         title: 'Ticket Created',
         message:
           formData.category === 'Password Reset'
-            ? 'Your password reset ticket has been created and is now pending category head approval. If approved, the new password will be sent to the delivery email you provided.'
+            ? 'Your password reset ticket has been created and is now Waiting for approval category head approval. If approved, the new password will be sent to the delivery email you provided.'
             : 'Ticket created successfully!',
         type: 'success'
       });
