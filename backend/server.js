@@ -73,7 +73,7 @@ const ticketSchema = new mongoose.Schema(
     status: String,
     closedBy: String,
     closeReason: String,
-    reopenReason: String,
+    reviveReason: String,
     closedAt: Date,
     reopenedBy: String,
     reopenedAt: Date,
@@ -85,7 +85,7 @@ const ticketSchema = new mongoose.Schema(
 
     history: [
       {
-        action: { type: String, enum: ["created", "closed", "reopend", "approved", "rejected"] },
+        action: { type: String, enum: ["created", "closed", "revived", "approved", "rejected"] },
         by: String,
         at: { type: Date, default: Date.now },
         reason: String,
@@ -603,7 +603,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
     }
 
     // Notify department (confirmation)
-    const deptTitle = `Ticket #${ticket.ticketNumber} — Closed`;
+    const deptTitle = `Ticket #${ticket.ticketNumber} — Approved and Closed`;
     const deptFields = [
       { label: "Ticket No", value: ticket.ticketNumber },
       { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail },
@@ -833,13 +833,13 @@ app.put("/tickets/:id/close", async (req, res) => {
   }
 });
 
-// reopen Ticket
-app.put("/tickets/:id/reopen", async (req, res) => {
+// Revive Ticket
+app.put("/tickets/:id/revive", async (req, res) => {
   try {
-    const { reopendBy, reopenReason } = req.body;
+    const { revivedBy, reviveReason } = req.body;
 
-    if (!reopenReason || reopenReason.trim() === "") {
-      return res.status(400).json({ message: "reopen reason is required" });
+    if (!reviveReason || reviveReason.trim() === "") {
+      return res.status(400).json({ message: "Revive reason is required" });
     }
 
     const ticket = await Ticket.findById(req.params.id);
@@ -848,22 +848,22 @@ app.put("/tickets/:id/reopen", async (req, res) => {
     }
 
     if (ticket.status !== "Closed") {
-      return res.status(400).json({ message: "Only closed tickets can be reopend" });
+      return res.status(400).json({ message: "Only closed tickets can be revived" });
     }
 
     const now = new Date();
 
     ticket.history.push({
-      action: "reopend",
-      by: reopendBy?.trim() || "Unknown User",
+      action: "revived",
+      by: revivedBy?.trim() || "Unknown User",
       at: now,
-      reason: reopenReason.trim(),
+      reason: reviveReason.trim(),
     });
 
     ticket.status = "Open";
-    ticket.reopenedBy = reopendBy?.trim() || "Unknown User";
+    ticket.reopenedBy = revivedBy?.trim() || "Unknown User";
     ticket.reopenedAt = now;
-    ticket.reopenReason = reopenReason.trim();
+    ticket.reviveReason = reviveReason.trim();
 
     await ticket.save();
 
@@ -881,7 +881,7 @@ app.put("/tickets/:id/reopen", async (req, res) => {
     const itHead = process.env.IT_HEAD_EMAIL;
 
     const emailHtml = buildHtmlEmail({
-      title: `Ticket #${ticket.ticketNumber} — reopend`,
+      title: `Ticket #${ticket.ticketNumber} — Revived (Reopened)`,
       subtitle: "This ticket has been reopened and requires attention",
       statusColor: "#16a34a",
       fields: [
@@ -889,32 +889,32 @@ app.put("/tickets/:id/reopen", async (req, res) => {
         { label: "Priority", value: ticket.priority },
         { label: "Created By", value: `${ticket.userName} (${ticket.userEmail})` },
         { label: "Ticket Number", value: `#${ticket.ticketNumber}` },
-        { label: "reopend By", value: ticket.reopenedBy },
-        { label: "reopend On", value: nowIST }
+        { label: "Revived By", value: ticket.reopenedBy },
+        { label: "Revived On", value: nowIST }
       ],
-      description: `Reason for reviving:\n${ticket.reopenReason}`,
+      description: `Reason for reviving:\n${ticket.reviveReason}`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] reopend`, emailHtml, itHead);
-    await sendEmail(dept, `[reopenD] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, itHead);
+    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailHtml, itHead);
+    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, itHead);
 
-    console.log(`Ticket #${ticket.ticketNumber} reopend by ${ticket.reopenedBy}`);
+    console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
 
     res.json({
-      message: "Ticket reopend successfully",
+      message: "Ticket revived successfully",
       ticket: {
         _id: ticket._id,
         status: "Open",
         reopenedBy: ticket.reopenedBy,
-        reopenReason: ticket.reopenReason,
+        reviveReason: ticket.reviveReason,
         reopenedAt: ticket.reopenedAt,
         history: ticket.history,
       },
     });
   } catch (err) {
-    console.error("reopen ticket error:", err.message);
+    console.error("Revive ticket error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
