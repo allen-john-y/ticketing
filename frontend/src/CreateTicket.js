@@ -28,7 +28,7 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  const backendBase = "ticketing-hn59.onrender.com";
+  const backendBase = "https://ticketing-hn59.onrender.com";
 
   const [formData, setFormData] = useState({
     category: '',
