@@ -5,7 +5,7 @@ import { useMsal } from '@azure/msal-react';
 
 // CATEGORY HEAD EMAIL MAP (mirrors backend deptEmails)
 const deptEmails = {
-  "Password Reset": "allenj@sandeza-inc.com",
+  "Password Reset": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
   "Admin Access": "vigneshm@sandeza-inc.com",
   "Payroll Issue": "kishorekumars@sandeza-inc.com",
   "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
