@@ -1,6 +1,3 @@
-// CreateTicket.js (UPDATED UI for Self / Other, verify and alternate email)
-// Replace your existing CreateTicket.js with this version (adjust imports as needed)
-
 import React, { useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { useNavigate } from "react-router-dom";
@@ -46,16 +43,15 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  // If your API is on a different origin or has a base path, set this via env var
-  const API_BASE = process.env.REACT_APP_API_BASE || "";
+  const backendBase = "ticketing-production-backend";
 
   const [formData, setFormData] = useState({
     category: "",
     description: "",
     priority: "Medium",
-    onBehalf: "Self", // Self or Other
+    onBehalf: "Self",
     onBehalfEmail: "",
-    deliveryEmail: "",
+    alternativeEmail: "",
   });
 
   const [loading, setLoading] = useState(false);
@@ -88,7 +84,7 @@ function CreateTicket() {
           account: accounts[0],
         });
 
-        const resp = await axios.get(`${API_BASE}/graph-user-profile`, {
+        const resp = await axios.get("graph-user-profile", {
           headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
         });
 
@@ -128,7 +124,7 @@ function CreateTicket() {
       });
 
       const res = await axios.post(
-        `${API_BASE}/verify-user`,
+        "azure-user-verify-endpoint",
         { email },
         {
           headers: { Authorization: `Bearer ${token.accessToken}` },
@@ -138,7 +134,6 @@ function CreateTicket() {
       if (res.data?.exists) {
         setVerifyStatus("verified");
         setVerifiedName(res.data.displayName || email);
-        // set canonical email returned by backend
         setFormData((prev) => ({
           ...prev,
           onBehalfEmail: res.data.mail || email,
@@ -157,36 +152,12 @@ function CreateTicket() {
     e.preventDefault();
     setLoading(true);
 
-    // Frontend defensive checks that match server
     if (formData.category === "Password Reset" && formData.onBehalf === "Other") {
       if (!formData.onBehalfEmail) {
         setModal({
           open: true,
           title: "Validation Error",
           message: "Please verify the company email first.",
-          type: "error",
-        });
-        setLoading(false);
-        return;
-      }
-      if (!formData.deliveryEmail || !formData.deliveryEmail.trim()) {
-        setModal({
-          open: true,
-          title: "Validation Error",
-          message: "Please enter an alternate delivery email for the reset password.",
-          type: "error",
-        });
-        setLoading(false);
-        return;
-      }
-    }
-
-    if (formData.category === "Password Reset" && formData.onBehalf === "Self") {
-      if (!formData.deliveryEmail || !formData.deliveryEmail.trim()) {
-        setModal({
-          open: true,
-          title: "Validation Error",
-          message: "Please enter an alternate delivery email for the reset password.",
           type: "error",
         });
         setLoading(false);
@@ -209,7 +180,7 @@ function CreateTicket() {
       };
 
       const response = await axios.post(
-        `${API_BASE}/tickets`,
+        "ticket-create-endpoint",
         ticketData,
         { headers: { Authorization: `Bearer ${token.accessToken}` } }
       );
@@ -337,97 +308,8 @@ function CreateTicket() {
             />
           </div>
 
-          {/* Password Reset specific */}
-          {formData.category === "Password Reset" && (
-            <>
-              <div style={{ marginTop: 12 }}>
-                <label style={styles.label}>Requesting For</label>
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <label>
-                    <input
-                      type="radio"
-                      name="onBehalf"
-                      value="Self"
-                      checked={formData.onBehalf === "Self"}
-                      onChange={() => setFormData({ ...formData, onBehalf: "Self", onBehalfEmail: "" })}
-                    />{" "}
-                    Self
-                  </label>
-
-                  <label>
-                    <input
-                      type="radio"
-                      name="onBehalf"
-                      value="Other"
-                      checked={formData.onBehalf === "Other"}
-                      onChange={() => setFormData({ ...formData, onBehalf: "Other" })}
-                    />{" "}
-                    Other
-                  </label>
-                </div>
-              </div>
-
-              {formData.onBehalf === "Other" ? (
-                <div style={{ marginTop: 12 }}>
-                  <label style={styles.label}>Target user's company email</label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      type="email"
-                      placeholder="user@company.com"
-                      value={formData.onBehalfEmail}
-                      onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
-                      style={styles.input}
-                    />
-                    <button type="button" onClick={handleVerifyOther} style={styles.ghostButton}>
-                      {verifyStatus === "verifying" ? "Verifying..." : "Verify"}
-                    </button>
-                  </div>
-
-                  {verifyStatus === "verified" && (
-                    <div style={{ marginTop: 8, color: "#065f46" }}>
-                      Verified: {verifiedName}
-                    </div>
-                  )}
-                  {verifyStatus === "notfound" && (
-                    <div style={{ marginTop: 8, color: "#b91c1c" }}>{verifyError}</div>
-                  )}
-
-                  <div style={{ marginTop: 12 }}>
-                    <label style={styles.label}>Alternate delivery email for password *</label>
-                    <input
-                      type="email"
-                      placeholder="alternate@example.com"
-                      value={formData.deliveryEmail}
-                      onChange={(e) => setFormData({ ...formData, deliveryEmail: e.target.value })}
-                      style={styles.input}
-                      required={true}
-                    />
-                    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
-                      The temporary password will be sent to this alternate email after approval.
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ marginTop: 12 }}>
-                  <label style={styles.label}>Alternate delivery email for password *</label>
-                  <input
-                    type="email"
-                    placeholder="alternate@example.com"
-                    value={formData.deliveryEmail}
-                    onChange={(e) => setFormData({ ...formData, deliveryEmail: e.target.value })}
-                    style={styles.input}
-                    required={formData.category === "Password Reset"}
-                  />
-                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
-                    The temporary password will be sent to this alternate email after approval.
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
           {/* Buttons */}
-          <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
             <button
               type="submit"
               style={styles.primaryButton}
@@ -563,28 +445,6 @@ const styles = {
   userName: { fontSize: 18, fontWeight: 700 },
   userEmail: { fontSize: 13, color: "#6b7280" },
   title: { textAlign: "center", margin: "18px 0 8px", fontSize: 22, fontWeight: 700 },
-
-  // password popup styles
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.45)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10001,
-  },
-  passwordBox: {
-    background: "white",
-    padding: 22,
-    borderRadius: 10,
-    width: 420,
-    position: "relative",
-    textAlign: "center",
-  },
-  passwordText: { fontSize: 18, marginTop: 8, fontWeight: 700, letterSpacing: 1 },
-  copyButton: { marginTop: 12, padding: "8px 12px", background: "#111827", color: "white", borderRadius: 6, border: "none", cursor: "pointer" },
-  modalCloseButton: { position: "absolute", top: 10, right: 10, border: "none", background: "transparent", cursor: "pointer" },
 };
 
 export default CreateTicket;
