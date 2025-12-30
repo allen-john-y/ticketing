@@ -116,11 +116,6 @@ const passwordResetSecondary = "allenj@sandeza-inc.com";
 
 const deptEmails = {
   "Password Reset": passwordResetPrimary,
-  "Admin Access": "vigneshm@sandeza-inc.com",
-  "Payroll Issue": "kishorekumars@sandeza-inc.com",
-  "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
-  "Leave Request": "allenj@sandeza-inc.com",
-  "Employee Onboarding": "allenj@sandeza-inc.com",
 };
 
 // ---------------------- Azure Graph Token ----------------------

@@ -276,11 +276,6 @@ function CreateTicket() {
               >
                 <option value="">Select Category</option>
                 <option value="Password Reset">🔑 Password Reset</option>
-                <option value="Admin Access">👨‍💼 Admin Access</option>
-                <option value="Payroll Issue">💰 Payroll Issue</option>
-                <option value="Expense Reimbursement">💳 Expense Reimbursement</option>
-                <option value="Leave Request">📅 Leave Request</option>
-                <option value="Employee Onboarding">👋 Employee Onboarding</option>
               </select>
             </div>
 
