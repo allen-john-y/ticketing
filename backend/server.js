@@ -78,7 +78,7 @@ const ticketSchema = new mongoose.Schema(
     reopenedBy: String,
     reopenedAt: Date,
 
-    // new fields to support "on behalf" password reset flow
+    // new fields to support "on behalf" flow
     onBehalf: { type: String }, // 'Self' or 'Other'
     onBehalfEmail: { type: String }, // when onBehalf === 'Other'
     deliveryEmail: { type: String },
@@ -110,13 +110,14 @@ const loadCounter = async () => {
 loadCounter();
 
 // ---------------------- Department Emails -----------------
-// Password Reset primary should be Kodhan and Allen in CC
-const passwordResetPrimary = "kodhan@sandeza-inc.com";
-const passwordResetSecondary = "allenj@sandeza-inc.com";
+// Primary = Kodhan, Secondary = Allen (applies to Password Reset and Admin Access)
+const passwordResetPrimary = process.env.PASSWORD_RESET_PRIMARY || "kodhan@sandeza-inc.com";
+const passwordResetSecondary = process.env.PASSWORD_RESET_SECONDARY || "allenj@sandeza-inc.com";
+const adminAccessPrimary = process.env.ADMIN_ACCESS_PRIMARY || passwordResetPrimary;
 
 const deptEmails = {
   "Password Reset": passwordResetPrimary,
-  "Admin Access": "vigneshm@sandeza-inc.com",
+  "Admin Access": adminAccessPrimary,
   "Payroll Issue": "kishorekumars@sandeza-inc.com",
   "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
   "Leave Request": "allenj@sandeza-inc.com",
@@ -149,15 +150,10 @@ const getGraphToken = async () => {
 };
 
 // ---------------------- HTML EMAIL TEMPLATE HELPERS ----------------------
-
-// returns a small HTML block for a labelled field
 const htmlField = (label, value) => {
   return `<tr><td style="padding:6px 0; font-weight:600; color:#0f172a; width:160px;">${label}</td><td style="padding:6px 0; color:#374151;">${value || '—'}</td></tr>`;
 };
-
-// build professional HTML email with header color
 const buildHtmlEmail = ({ title, subtitle, statusColor = '#0369a1', fields = [], description = '', actionLink = '', actionText = '' }) => {
-  // sanitize simple use (you may improve escaping if needed)
   const fieldsHtml = fields.map(f => htmlField(f.label, f.value)).join("\n");
   const actionButton = actionLink ? `
     <tr>
@@ -210,7 +206,7 @@ const buildHtmlEmail = ({ title, subtitle, statusColor = '#0369a1', fields = [],
   `;
 };
 
-// ---------------------- Send Email (now sends HTML) ----------------------
+// ---------------------- Send Email (HTML) ----------------------
 const sendEmail = async (to, subject, bodyHtml, cc) => {
   try {
     console.log(`\n📧 [MAIL] Preparing email...`);
@@ -270,7 +266,7 @@ const sendEmail = async (to, subject, bodyHtml, cc) => {
   }
 };
 
-// ---------------------- Azure Password Reset ----------------------
+// ---------------------- Azure Helpers (Reset + Group) ----------------------
 const getAccessToken = async () => {
   const url = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
@@ -308,15 +304,54 @@ const resetAzurePassword = async (userIdentifier) => {
   return newPassword;
 };
 
+// Find Azure AD user object id by UPN/email
+const getUserByUpn = async (upn) => {
+  const token = await getAccessToken();
+  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id,mail,displayName,userPrincipalName`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    agent: new https.Agent({ rejectUnauthorized: false }),
+  });
+  if (res.status === 404) {
+    throw new Error(`User not found: ${upn}`);
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Graph lookup failed: ${text}`);
+  }
+  const data = await res.json();
+  return { id: data.id, mail: data.mail || data.userPrincipalName, displayName: data.displayName || null };
+};
+
+// Add a user (objectId) to group (groupId)
+// Use env AZURE_DEVICE_ADMIN_GROUP_ID or fallback to the provided object id
+const AZURE_DEVICE_ADMIN_GROUP_ID = process.env.AZURE_DEVICE_ADMIN_GROUP_ID || "2f32b157-63cd-4486-8136-120c39e030a9";
+const addUserToGroup = async (groupId, userObjectId) => {
+  const token = await getAccessToken();
+  const url = `https://graph.microsoft.com/v1.0/groups/${groupId}/members/$ref`;
+  const body = { "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}` };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    agent: new https.Agent({ rejectUnauthorized: false }),
+  });
+  if (res.status !== 204 && res.status !== 201) {
+    const text = await res.text();
+    throw new Error(`Add to group failed: ${res.status} ${text}`);
+  }
+  return true;
+};
+
 // ---------------------- Routes ----------------------------
 
 // Health Check
 app.get("/", (req, res) => res.send("Sandeza Helpdesk API Running"));
 
-// ---------------------- NEW: Verify User endpoint ----------------------
-// POST /verify-user
-// body: { email: "target@company.com" }
-// returns: { exists: true/false, displayName?: string, mail?: string }
+// Verify User endpoint
 app.post("/verify-user", async (req, res) => {
   try {
     const { email } = req.body;
@@ -325,8 +360,6 @@ app.post("/verify-user", async (req, res) => {
     }
 
     const token = await getGraphToken();
-
-    // Query Graph for user by UPN (email). If not found, Graph returns 404.
     const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}?$select=displayName,mail,userPrincipalName`;
     const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
@@ -352,9 +385,8 @@ app.post("/verify-user", async (req, res) => {
     return res.status(500).json({ message: 'Server error during verification' });
   }
 });
-// ---------------------- END PART 1 ----------------------
-// ---------------------- PART 2 ----------------------
 
+// ---------------------- PART 2 ----------------------
 // Get Tickets
 app.get("/tickets", async (req, res) => {
   try {
@@ -366,19 +398,31 @@ app.get("/tickets", async (req, res) => {
   }
 });
 
-// Get Ticket by ID
+// Get Ticket by ID (adds categoryHeads for frontend convenience)
 app.get("/tickets/:id", async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
-    res.json(ticket);
+
+    // derive heads for the ticket category
+    let heads = [];
+    if (ticket.category === "Password Reset" || ticket.category === "Admin Access") {
+      heads = [passwordResetPrimary, passwordResetSecondary].filter(Boolean);
+    } else if (deptEmails[ticket.category]) {
+      const entry = deptEmails[ticket.category];
+      heads = Array.isArray(entry) ? entry : [entry];
+    }
+
+    const obj = ticket.toObject();
+    obj.categoryHeads = heads.map(h => (h || '').toLowerCase().trim());
+    res.json(obj);
   } catch (err) {
     console.error("Error fetching ticket:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// Create Ticket (ensure this uses status: "Waiting for approval" only for Password Reset and accepts deliveryEmail/onBehalfEmail)
+// Create Ticket
 app.post("/tickets", async (req, res) => {
   try {
     const {
@@ -394,7 +438,7 @@ app.post("/tickets", async (req, res) => {
     } = req.body;
     if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
-    // Defensive validation: If Password Reset + Self -> deliveryEmail (alternative) is required
+    // Defensive validation: Password Reset
     if (category === "Password Reset" && (onBehalf === "Self" || !onBehalf) ) {
       if (!deliveryEmail || !deliveryEmail.trim()) {
         return res.status(400).json({ message: "Alternative delivery email is required for self password reset." });
@@ -405,19 +449,18 @@ app.post("/tickets", async (req, res) => {
       }
     }
 
-    // If Password Reset + Other -> ensure onBehalfEmail present (frontend verifies existence)
     if (category === "Password Reset" && onBehalf === "Other") {
       if (!onBehalfEmail || !onBehalfEmail.trim()) {
         return res.status(400).json({ message: "On-behalf email is required for other password reset." });
       }
-      // deliveryEmail still required
       if (!deliveryEmail || !deliveryEmail.trim()) {
         return res.status(400).json({ message: "Delivery email is required when requesting for other user." });
       }
     }
 
-    // Decide initial status based on category
-    const initialStatus = category === "Password Reset" ? "Waiting for approval" : "Open";
+    // Admin Access - no strict validation here, frontend enforces device-admin block
+    const approvalRequiredCategories = ["Password Reset", "Admin Access"];
+    const initialStatus = approvalRequiredCategories.includes(category) ? "Waiting for approval" : "Open";
 
     ticketCounter++;
     const ticket = await Ticket.create({
@@ -445,36 +488,25 @@ app.post("/tickets", async (req, res) => {
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // ---------- SEND CREATOR EMAIL (HTML) ----------
-    const creatorTitle = `Ticket #${ticketCounter} Created`;
-    const creatorSubtitle = initialStatus === "Waiting for approval" ? "Your ticket is Waiting for approval department approval" : "Your ticket has been created";
-    const creatorFields = [
-      { label: "Ticket No", value: ticketCounter },
-      { label: "Category", value: category },
-      { label: "Priority", value: priority },
-      { label: "Created At", value: nowIST },
-    ];
+    // Creator email
     const creatorHtml = buildHtmlEmail({
-      title: creatorTitle,
-      subtitle: creatorSubtitle,
-      statusColor: "#0ea5e9", // blue for created
-      fields: creatorFields,
+      title: `Ticket #${ticketCounter} Created`,
+      subtitle: initialStatus === "Waiting for approval" ? "Your ticket is Waiting for approval department approval" : "Your ticket has been created",
+      statusColor: "#0ea5e9",
+      fields: [
+        { label: "Ticket No", value: ticketCounter },
+        { label: "Category", value: category },
+        { label: "Priority", value: priority },
+        { label: "Created At", value: nowIST },
+      ],
       description: description,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
-    await sendEmail(
-      userEmail,
-      `Ticket #${ticketCounter} Created`,
-      creatorHtml,
-      itHead
-    );
+    await sendEmail(userEmail, `Ticket #${ticketCounter} Created`, creatorHtml, itHead);
 
-    // ---------- SEND DEPARTMENT HEAD EMAIL (HTML) FOR ALL CATEGORIES ----------
-    // Previously dept notification was only sent for Waiting for approval (Password Reset). Now send for all.
-    const deptTitle = `New Ticket #${ticketCounter} — ${category}`;
-    const deptSubtitle = `Action required: please review the ticket${initialStatus === "Waiting for approval" ? ' (approval required)' : ''}.`;
+    // Department notification
     const deptFields = [
       { label: "Ticket No", value: ticketCounter },
       { label: "Created By", value: `${userName} (${userEmail})` },
@@ -484,30 +516,23 @@ app.post("/tickets", async (req, res) => {
       { label: "Status", value: initialStatus }
     ];
     const deptHtml = buildHtmlEmail({
-      title: deptTitle,
-      subtitle: deptSubtitle,
-      statusColor: initialStatus === "Waiting for approval" ? "#f59e0b" : "#0ea5e9", // amber if Waiting for approval else blue
+      title: `New Ticket #${ticketCounter} — ${category}`,
+      subtitle: `Action required: please review the ticket${initialStatus === "Waiting for approval" ? ' (approval required)' : ''}.`,
+      statusColor: initialStatus === "Waiting for approval" ? "#f59e0b" : "#0ea5e9",
       fields: deptFields,
       description: description,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: initialStatus === "Waiting for approval" ? "Approve / Reject" : "Open Ticket"
     });
 
-    // send to category head (always) — use deptEmails mapping
     const deptTo = deptEmails[category];
     const deptCcList = [];
-    // If password reset, include the secondary head in CC
-    if (category === "Password Reset") {
+    if (category === "Password Reset" || category === "Admin Access") {
       deptCcList.push(passwordResetSecondary);
     }
     if (itHead) deptCcList.push(itHead);
 
-    await sendEmail(
-      deptTo,
-      `[TICKET #${ticketCounter}] ${category} - Action Required`,
-      deptHtml,
-      deptCcList.length ? deptCcList : itHead
-    );
+    await sendEmail(deptTo, `[TICKET #${ticketCounter}] ${category} - Action Required`, deptHtml, deptCcList.length ? deptCcList : itHead);
 
     res.status(201).json(ticket);
   } catch (err) {
@@ -515,9 +540,8 @@ app.post("/tickets", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-// ---------------------- END PART 2 ----------------------
-// ---------------------- PART 3 ----------------------
 
+// ---------------------- PART 3 ----------------------
 // Approve endpoint
 app.post("/tickets/:id/approve", async (req, res) => {
   try {
@@ -529,193 +553,332 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(400).json({ message: "Ticket is already closed" });
     }
 
-    // SAFETY: Only allow approve flow for Password Reset category
-    if (ticket.category !== "Password Reset") {
-      return res.status(400).json({ message: "Approval is only allowed for Password Reset tickets." });
-    }
-
-    // Determine which user to reset: if onBehalfEmail provided use it, else try userId then userEmail
+    // Determine which user identifier to use for operations
     const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
     if (!userIdentifier) {
-      return res.status(400).json({ message: "No user identifier available to reset password" });
+      return res.status(400).json({ message: "No user identifier available for approval action" });
     }
-
-    // Perform Azure password reset
-    let newPassword;
-    try {
-      newPassword = await resetAzurePassword(userIdentifier);
-    } catch (err) {
-      console.error("Password reset failed during approve:", err.message);
-      return res.status(500).json({ message: "Password reset failed", error: err.message });
-    }
-
-    // Update ticket history and close it
-    const now = new Date();
-
-    ticket.history.push({
-      action: "approved",
-      by: approvedBy || "Department Head",
-      at: now,
-      reason: note || "Approved and password reset performed",
-    });
-
-    // Mark closed and add close history entry
-    ticket.status = "Closed";
-    ticket.closedBy = approvedBy || "Department Head";
-    ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
-    ticket.closedAt = now;
-
-    ticket.history.push({
-      action: "closed",
-      by: ticket.closedBy,
-      at: now,
-      reason: ticket.closeReason,
-    });
-
-    await ticket.save();
-
-    const nowIST = new Date().toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
 
     const itHead = process.env.IT_HEAD_EMAIL;
+    const now = new Date();
 
-    // Build HTML bodies
-    const userTitle = `Password Reset Approved — Ticket #${ticket.ticketNumber}`;
-    const userFields = [
-      { label: "Ticket No", value: ticket.ticketNumber },
-      { label: "Category", value: ticket.category },
-      { label: "Approved By", value: ticket.closedBy },
-      { label: "Approved On", value: nowIST },
-      { label: "New Password", value: newPassword},
-      { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail }
-    ];
-    const userHtml = buildHtmlEmail({
-      title: userTitle,
-      subtitle: "Temporary password generated — change on next sign-in",
-      statusColor: "#16a34a", // green for approved
-      fields: userFields,
-      description: `The new temporary password has been generated and applied successfully. Please sign in and change your password immediately.`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
-      actionText: "View Ticket"
-    });
-
-    // Notify requestor primary email (HTML)
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
-
-    // Notify deliveryEmail if provided and different
-    if (ticket.deliveryEmail && ticket.deliveryEmail.trim() && ticket.deliveryEmail.trim() !== ticket.userEmail.trim()) {
-      await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
-    }
-
-    // Notify department (confirmation) — send to primary and CC secondary + IT Head
-    const deptTitle = `Ticket #${ticket.ticketNumber} — Approved and Closed`;
-    const deptFields = [
-      { label: "Ticket No", value: ticket.ticketNumber },
-      { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail },
-      { label: "Closed By", value: ticket.closedBy },
-      { label: "Closed On", value: nowIST },
-    ];
-    const deptHtml = buildHtmlEmail({
-      title: deptTitle,
-      subtitle: "Password reset performed and ticket closed",
-      statusColor: "#16a34a",
-      fields: deptFields,
-      description: `Password reset performed successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
-      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
-      actionText: "Open Ticket"
-    });
-
-    // Dept recipients and CCs
-    const deptTo = deptEmails[ticket.category];
-    const deptCcList = [passwordResetSecondary];
-    if (itHead) deptCcList.push(itHead);
-
-    await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, deptCcList);
-
-    // Notify the other head (the one who did NOT approve) that approval happened
-    try {
-      const approverLower = (approvedBy || "").toLowerCase();
-      const approverEmailGuess = approverLower.includes("kodhan") ? passwordResetPrimary
-        : approverLower.includes("allen") ? passwordResetSecondary
-        : null;
-
-      let notifyTargets = [];
-      // If we could determine approver, notify the other head only. Otherwise notify both.
-      if (approverEmailGuess === passwordResetPrimary) {
-        notifyTargets = [passwordResetSecondary];
-      } else if (approverEmailGuess === passwordResetSecondary) {
-        notifyTargets = [passwordResetPrimary];
-      } else {
-        // fallback: notify both heads
-        notifyTargets = [passwordResetPrimary, passwordResetSecondary];
+    // Branch by category
+    if (ticket.category === "Password Reset") {
+      // Password reset flow
+      let newPassword;
+      try {
+        newPassword = await resetAzurePassword(userIdentifier);
+      } catch (err) {
+        console.error("Password reset failed during approve:", err.message);
+        return res.status(500).json({ message: "Password reset failed", error: err.message });
       }
 
-      // Construct human-friendly message
-      const approverDisplay = approvedBy || "Department Head";
-      const ticketCreator = ticket.userName || ticket.userEmail;
-      const affectedPerson = ticket.onBehalfEmail && ticket.onBehalfEmail.trim() ? ticket.onBehalfEmail : null;
+      ticket.history.push({
+        action: "approved",
+        by: approvedBy || "Department Head",
+        at: now,
+        reason: note || "Approved and password reset performed",
+      });
 
-      const otherDesc = affectedPerson
-        ? `${approverDisplay} has approved the password reset request of ${ticketCreator} on behalf of ${affectedPerson}.`
-        : `${approverDisplay} has approved the password reset request of ${ticketCreator}.`;
+      ticket.status = "Closed";
+      ticket.closedBy = approvedBy || "Department Head";
+      ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
+      ticket.closedAt = now;
 
-      const otherFields = [
+      ticket.history.push({
+        action: "closed",
+        by: ticket.closedBy,
+        at: now,
+        reason: ticket.closeReason,
+      });
+
+      await ticket.save();
+
+      const nowIST = new Date().toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+
+      // Notify requester and delivery
+      const userTitle = `Password Reset Approved — Ticket #${ticket.ticketNumber}`;
+      const userFields = [
         { label: "Ticket No", value: ticket.ticketNumber },
         { label: "Category", value: ticket.category },
-        { label: "Approved By", value: approverDisplay },
+        { label: "Approved By", value: ticket.closedBy },
         { label: "Approved On", value: nowIST },
-        { label: "Requested By", value: ticketCreator },
-        { label: "Affected User", value: affectedPerson || ticket.userEmail }
+        { label: "New Password", value: newPassword},
+        { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail }
       ];
-
-      const otherHtml = buildHtmlEmail({
-        title: `Password Reset Approved — Ticket #${ticket.ticketNumber}`,
-        subtitle: `${approverDisplay} approved the request`,
-        statusColor: "#0ea5e9",
-        fields: otherFields,
-        description: otherDesc,
+      const userHtml = buildHtmlEmail({
+        title: userTitle,
+        subtitle: "Temporary password generated — change on next sign-in",
+        statusColor: "#16a34a",
+        fields: userFields,
+        description: `The new temporary password has been generated and applied successfully. Please sign in and change your password immediately.`,
         actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
         actionText: "View Ticket"
       });
 
-      // send to whoever should be notified (non-approver)
-      for (const t of notifyTargets) {
-        // avoid sending duplicate to the approver if we guessed incorrectly
-        await sendEmail(t, `[TICKET #${ticket.ticketNumber}] Password Reset Approved by ${approverDisplay}`, otherHtml, itHead);
+      await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
+      if (ticket.deliveryEmail && ticket.deliveryEmail.trim() && ticket.deliveryEmail.trim() !== ticket.userEmail.trim()) {
+        await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
       }
-    } catch (notifyErr) {
-      console.error("Error notifying the other head:", notifyErr.message);
+
+      // Dept confirmation + notify other head(s)
+      const deptTitle = `Ticket #${ticket.ticketNumber} — Approved and Closed`;
+      const deptFields = [
+        { label: "Ticket No", value: ticket.ticketNumber },
+        { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail },
+        { label: "Closed By", value: ticket.closedBy },
+        { label: "Closed On", value: nowIST },
+      ];
+      const deptHtml = buildHtmlEmail({
+        title: deptTitle,
+        subtitle: "Password reset performed and ticket closed",
+        statusColor: "#16a34a",
+        fields: deptFields,
+        description: `Password reset performed successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+        actionText: "Open Ticket"
+      });
+
+      const deptTo = deptEmails[ticket.category];
+      const deptCcList = [passwordResetSecondary];
+      if (itHead) deptCcList.push(itHead);
+      await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, deptCcList);
+
+      // Notify non-approver heads
+      try {
+        const approverLower = (approvedBy || "").toLowerCase();
+        const approverEmailGuess = approverLower.includes("kodhan") ? passwordResetPrimary
+          : approverLower.includes("allen") ? passwordResetSecondary
+          : null;
+
+        let notifyTargets = [];
+        if (approverEmailGuess === passwordResetPrimary) notifyTargets = [passwordResetSecondary];
+        else if (approverEmailGuess === passwordResetSecondary) notifyTargets = [passwordResetPrimary];
+        else notifyTargets = [passwordResetPrimary, passwordResetSecondary];
+
+        const approverDisplay = approvedBy || "Department Head";
+        const ticketCreator = ticket.userName || ticket.userEmail;
+        const affectedPerson = ticket.onBehalfEmail && ticket.onBehalfEmail.trim() ? ticket.onBehalfEmail : null;
+
+        const otherDesc = affectedPerson
+          ? `${approverDisplay} has approved the password reset request of ${ticketCreator} on behalf of ${affectedPerson}.`
+          : `${approverDisplay} has approved the password reset request of ${ticketCreator}.`;
+
+        const otherFields = [
+          { label: "Ticket No", value: ticket.ticketNumber },
+          { label: "Category", value: ticket.category },
+          { label: "Approved By", value: approverDisplay },
+          { label: "Approved On", value: nowIST },
+          { label: "Requested By", value: ticketCreator },
+          { label: "Affected User", value: affectedPerson || ticket.userEmail }
+        ];
+
+        const otherHtml = buildHtmlEmail({
+          title: `Password Reset Approved — Ticket #${ticket.ticketNumber}`,
+          subtitle: `${approverDisplay} approved the request`,
+          statusColor: "#0ea5e9",
+          fields: otherFields,
+          description: otherDesc,
+          actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+          actionText: "View Ticket"
+        });
+
+        for (const t of notifyTargets) {
+          await sendEmail(t, `[TICKET #${ticket.ticketNumber}] Password Reset Approved by ${approverDisplay}`, otherHtml, itHead);
+        }
+      } catch (notifyErr) {
+        console.error("Error notifying the other head:", notifyErr.message);
+      }
+
+      console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
+
+      return res.json({
+        message: "Ticket approved and password reset performed successfully.",
+        ticket: {
+          _id: ticket._id,
+          ticketNumber: ticket.ticketNumber,
+          status: ticket.status,
+          closedBy: ticket.closedBy,
+          closeReason: ticket.closeReason,
+          closedAt: ticket.closedAt,
+          history: ticket.history,
+        },
+        newPassword,
+      });
+    } else if (ticket.category === "Admin Access") {
+      // Admin Access approval: add user to group then close ticket
+      const groupId = AZURE_DEVICE_ADMIN_GROUP_ID;
+      if (!groupId) {
+        return res.status(500).json({ message: "Device admin group not configured (AZURE_DEVICE_ADMIN_GROUP_ID missing)" });
+      }
+
+      // Resolve user object id
+      let userObj;
+      try {
+        userObj = await getUserByUpn(userIdentifier);
+      } catch (err) {
+        console.error("Admin approve: user lookup failed:", err.message);
+        return res.status(500).json({ message: "Failed to find user in Azure AD", error: err.message });
+      }
+
+      // Add to group
+      try {
+        await addUserToGroup(groupId, userObj.id);
+      } catch (err) {
+        console.error("Admin approve: add to group failed:", err.message);
+        return res.status(500).json({ message: "Failed to add user to device admin group", error: err.message });
+      }
+
+      // Update ticket history and close
+      ticket.history.push({
+        action: "approved",
+        by: approvedBy || "Department Head",
+        at: now,
+        reason: note || "Approved and device admin access granted",
+      });
+
+      ticket.status = "Closed";
+      ticket.closedBy = approvedBy || "Department Head";
+      ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
+      ticket.closedAt = now;
+
+      ticket.history.push({
+        action: "closed",
+        by: ticket.closedBy,
+        at: now,
+        reason: ticket.closeReason,
+      });
+
+      await ticket.save();
+
+      const nowIST = new Date().toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+
+      // Notify requester
+      const userTitle = `Admin Access Approved — Ticket #${ticket.ticketNumber}`;
+      const userFields = [
+        { label: "Ticket No", value: ticket.ticketNumber },
+        { label: "Category", value: ticket.category },
+        { label: "Approved By", value: ticket.closedBy },
+        { label: "Approved On", value: nowIST },
+        { label: "Added To Group", value: "GS_DeviceAdministrator" },
+      ];
+      const userHtml = buildHtmlEmail({
+        title: userTitle,
+        subtitle: "Admin access granted — you have been added to GS_DeviceAdministrator",
+        statusColor: "#16a34a",
+        fields: userFields,
+        description: `Your account (${userObj.mail || userIdentifier}) has been added to the device administrator group. Please sign out and sign in again for group changes to take effect.`,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+        actionText: "View Ticket"
+      });
+
+      await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Admin Access Approved`, userHtml, itHead);
+
+      // Dept confirmation
+      const deptTitle = `Ticket #${ticket.ticketNumber} — Admin Access Approved and Closed`;
+      const deptFields = [
+        { label: "Ticket No", value: ticket.ticketNumber },
+        { label: "Affected User", value: userObj.mail || userIdentifier },
+        { label: "Closed By", value: ticket.closedBy },
+        { label: "Closed On", value: nowIST },
+      ];
+      const deptHtml = buildHtmlEmail({
+        title: deptTitle,
+        subtitle: "Admin access granted and ticket closed",
+        statusColor: "#16a34a",
+        fields: deptFields,
+        description: `User ${userObj.mail || userIdentifier} was added to GS_DeviceAdministrator by ${ticket.closedBy}.`,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+        actionText: "Open Ticket"
+      });
+
+      const deptTo = deptEmails[ticket.category];
+      const deptCcList = [passwordResetSecondary];
+      if (itHead) deptCcList.push(itHead);
+      await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, deptCcList);
+
+      // Notify other head(s)
+      try {
+        const approverLower = (approvedBy || "").toLowerCase();
+        const approverEmailGuess = approverLower.includes("kodhan") ? passwordResetPrimary
+          : approverLower.includes("allen") ? passwordResetSecondary
+          : null;
+
+        let notifyTargets = [];
+        if (approverEmailGuess === passwordResetPrimary) notifyTargets = [passwordResetSecondary];
+        else if (approverEmailGuess === passwordResetSecondary) notifyTargets = [passwordResetPrimary];
+        else notifyTargets = [passwordResetPrimary, passwordResetSecondary];
+
+        const approverDisplay = approvedBy || "Department Head";
+        const ticketCreator = ticket.userName || ticket.userEmail;
+        const otherDesc = `${approverDisplay} has approved the Admin Access request of ${ticketCreator} and added them to GS_DeviceAdministrator.`;
+
+        const otherFields = [
+          { label: "Ticket No", value: ticket.ticketNumber },
+          { label: "Category", value: ticket.category },
+          { label: "Approved By", value: approverDisplay },
+          { label: "Approved On", value: nowIST },
+          { label: "Requested By", value: ticketCreator },
+          { label: "Affected User", value: userObj.mail || ticket.userEmail }
+        ];
+
+        const otherHtml = buildHtmlEmail({
+          title: `Admin Access Approved — Ticket #${ticket.ticketNumber}`,
+          subtitle: `${approverDisplay} approved the request`,
+          statusColor: "#0ea5e9",
+          fields: otherFields,
+          description: otherDesc,
+          actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
+          actionText: "View Ticket"
+        });
+
+        for (const t of notifyTargets) {
+          await sendEmail(t, `[TICKET #${ticket.ticketNumber}] Admin Access Approved by ${approverDisplay}`, otherHtml, itHead);
+        }
+      } catch (notifyErr) {
+        console.error("Error notifying the other head:", notifyErr.message);
+      }
+
+      console.log(`Ticket #${ticket.ticketNumber} (Admin Access) approved by ${ticket.closedBy} and auto-closed.`);
+
+      return res.json({
+        message: "Admin access approved and user added to GS_DeviceAdministrator.",
+        ticket: {
+          _id: ticket._id,
+          ticketNumber: ticket.ticketNumber,
+          status: ticket.status,
+          closedBy: ticket.closedBy,
+          closeReason: ticket.closeReason,
+          closedAt: ticket.closedAt,
+          history: ticket.history,
+        }
+      });
+    } else {
+      return res.status(400).json({ message: "Approval is only allowed for Password Reset or Admin Access tickets." });
     }
-
-    console.log(`Ticket #${ticket.ticketNumber} approved by ${ticket.closedBy} and auto-closed.`);
-
-    res.json({
-      message: "Ticket approved and password reset performed successfully.",
-      ticket: {
-        _id: ticket._id,
-        ticketNumber: ticket.ticketNumber,
-        status: ticket.status,
-        closedBy: ticket.closedBy,
-        closeReason: ticket.closeReason,
-        closedAt: ticket.closedAt,
-        history: ticket.history,
-      },
-      newPassword,
-    });
   } catch (err) {
     console.error("Approve error:", err.message);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 
-// Reject endpoint (keeps behavior: closes and notifies)
+// Reject endpoint
 app.post("/tickets/:id/reject", async (req, res) => {
   try {
     const { rejectedBy, reason } = req.body;
@@ -761,7 +924,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Build HTML user notification (rejected)
+    // Notify requester
     const userTitle = `Ticket #${ticket.ticketNumber} — Request Rejected`;
     const userFields = [
       { label: "Ticket No", value: ticket.ticketNumber },
@@ -772,7 +935,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
     const userHtml = buildHtmlEmail({
       title: userTitle,
       subtitle: "Your request has been reviewed and rejected",
-      statusColor: "#dc2626", // red for rejected
+      statusColor: "#dc2626",
       fields: userFields,
       description: `Reason:\n${reason || 'No reason provided.'}\n\nIf you believe this is in error, please contact the department or raise a new ticket.`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
@@ -781,7 +944,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Request Rejected`, userHtml, itHead);
 
-    // Notify department (confirmation)
+    // Dept notification
     const deptHtml = buildHtmlEmail({
       title: `Ticket #${ticket.ticketNumber} — Rejected and Closed`,
       subtitle: `${ticket.closedBy} rejected the request`,
@@ -796,12 +959,9 @@ app.post("/tickets/:id/reject", async (req, res) => {
       actionText: "Open Ticket"
     });
 
-    // dept send — include secondary if password reset
     const deptTo = deptEmails[ticket.category];
     const deptCcList = [];
-    if (ticket.category === "Password Reset") {
-      deptCcList.push(passwordResetSecondary);
-    }
+    if (ticket.category === "Password Reset" || ticket.category === "Admin Access") deptCcList.push(passwordResetSecondary);
     if (itHead) deptCcList.push(itHead);
 
     await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - Rejected`, deptHtml, deptCcList.length ? deptCcList : itHead);
@@ -825,10 +985,9 @@ app.post("/tickets/:id/reject", async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
-// ---------------------- END PART 3 ----------------------
-// ---------------------- PART 4 ----------------------
 
-// Close Ticket (manual close - unchanged but kept tidy)
+// ---------------------- PART 4 ----------------------
+// Close Ticket
 app.put("/tickets/:id/close", async (req, res) => {
   try {
     const { closedBy, closeReason } = req.body;
@@ -872,7 +1031,6 @@ app.put("/tickets/:id/close", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // HTML email for closed
     const emailHtml = buildHtmlEmail({
       title: `Ticket #${ticket.ticketNumber} — Closed`,
       subtitle: "This ticket has been closed",
@@ -891,12 +1049,10 @@ app.put("/tickets/:id/close", async (req, res) => {
     });
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Closed`, emailHtml, itHead);
-    // dept send — include secondary if password reset
+
     const deptTo = deptEmails[ticket.category];
     const deptCcList = [];
-    if (ticket.category === "Password Reset") {
-      deptCcList.push(passwordResetSecondary);
-    }
+    if (ticket.category === "Password Reset" || ticket.category === "Admin Access") deptCcList.push(passwordResetSecondary);
     if (itHead) deptCcList.push(itHead);
     await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptCcList.length ? deptCcList : itHead);
 
@@ -985,11 +1141,8 @@ app.put("/tickets/:id/revive", async (req, res) => {
     });
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailHtml, itHead);
-    // dept send — include secondary if password reset
     const deptCcList = [];
-    if (ticket.category === "Password Reset") {
-      deptCcList.push(passwordResetSecondary);
-    }
+    if (ticket.category === "Password Reset" || ticket.category === "Admin Access") deptCcList.push(passwordResetSecondary);
     if (itHead) deptCcList.push(itHead);
     await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptCcList.length ? deptCcList : itHead);
 

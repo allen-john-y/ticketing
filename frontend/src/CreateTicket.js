@@ -428,12 +428,12 @@ function CreateTicket() {
               ) : isDeviceAdmin ? (
                 <div style={{ marginTop: 12, padding: 12, background: '#fffbeb', borderRadius: 8, border: '1px solid #fef3c7', color: '#92400e' }}>
                   <strong>You already have device admin access.</strong>
-                  <div style={{ marginTop: 6 }}>Your account is a member of <code>GS_DeviceAdministrator</code>, so creating an Admin Access ticket is disabled.</div>
+                  <div style={{ marginTop: 6 }}>Your account already have admin access, so creating an Admin Access ticket is disabled.</div>
                 </div>
               ) : (
                 <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e6f0ff', color: '#064e3b' }}>
                   <strong>Need Admin Access?</strong>
-                  <div style={{ marginTop: 6 }}>If you don't have device admin privileges, create an Admin Access ticket and a device admin will review it.</div>
+                  <div style={{ marginTop: 6 }}>create an Admin Access ticket</div>
                 </div>
               )}
             </>
