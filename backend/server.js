@@ -1,3 +1,4 @@
+```js
 // server.js (FULL UPDATED)
 // ---------------------- PART 1 ----------------------
 // ---------------------- Imports -------------------------
@@ -83,6 +84,22 @@ const ticketSchema = new mongoose.Schema(
     onBehalfEmail: { type: String }, // when onBehalf === 'Other'
     deliveryEmail: { type: String },
 
+    // approval tokens map (reserved for future tokenized approve links)
+    // approvalTokens: Map of headEmail => { approve, reject, expiresAt, used }
+    approvalTokens: {
+      type: Map,
+      of: new mongoose.Schema(
+        {
+          approve: String,
+          reject: String,
+          expiresAt: Date,
+          used: { type: Boolean, default: false },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
+
     history: [
       {
         action: { type: String, enum: ["created", "closed", "revived", "approved", "rejected"] },
@@ -114,14 +131,15 @@ loadCounter();
 const passwordResetPrimary = process.env.PASSWORD_RESET_PRIMARY || "kodhan@sandeza-inc.com";
 const passwordResetSecondary = process.env.PASSWORD_RESET_SECONDARY || "allenj@sandeza-inc.com";
 const adminAccessPrimary = process.env.ADMIN_ACCESS_PRIMARY || passwordResetPrimary;
+const adminAccessSecondary = process.env.ADMIN_ACCESS_SECONDARY || passwordResetSecondary;
 
 const deptEmails = {
-  "Password Reset": passwordResetPrimary,
-  "Admin Access": adminAccessPrimary,
-  "Payroll Issue": "kishorekumars@sandeza-inc.com",
-  "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
-  "Leave Request": "allenj@sandeza-inc.com",
-  "Employee Onboarding": "allenj@sandeza-inc.com",
+  "Password Reset": [passwordResetPrimary, passwordResetSecondary].filter(Boolean),
+  "Admin Access": [adminAccessPrimary, adminAccessSecondary].filter(Boolean),
+  "Payroll Issue": ["kishorekumars@sandeza-inc.com"],
+  "Expense Reimbursement": ["kishorekumars@sandeza-inc.com"],
+  "Leave Request": ["allenj@sandeza-inc.com"],
+  "Employee Onboarding": ["allenj@sandeza-inc.com"],
 };
 
 // ---------------------- Azure Graph Token ----------------------
@@ -404,17 +422,23 @@ app.get("/tickets/:id", async (req, res) => {
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    // derive heads for the ticket category
-    let heads = [];
+    // derive heads for the ticket category (original case)
+    let headsRaw = [];
     if (ticket.category === "Password Reset" || ticket.category === "Admin Access") {
-      heads = [passwordResetPrimary, passwordResetSecondary].filter(Boolean);
+      // use deptEmails mapping to ensure consistency
+      headsRaw = deptEmails[ticket.category] ? (Array.isArray(deptEmails[ticket.category]) ? deptEmails[ticket.category] : [deptEmails[ticket.category]]) : [];
     } else if (deptEmails[ticket.category]) {
       const entry = deptEmails[ticket.category];
-      heads = Array.isArray(entry) ? entry : [entry];
+      headsRaw = Array.isArray(entry) ? entry : [entry];
     }
 
+    // normalized version for comparisons (frontend can use this)
+    const headsNormalized = headsRaw.map(h => (h || '').toLowerCase().trim());
+
     const obj = ticket.toObject();
-    obj.categoryHeads = heads.map(h => (h || '').toLowerCase().trim());
+    obj.categoryHeads = headsNormalized;        // normalized (lowercased) for comparisons
+    obj.categoryHeadsRaw = headsRaw;          // original-case emails for display
+    obj.approveRequired = ["Password Reset", "Admin Access"].includes(ticket.category);
     res.json(obj);
   } catch (err) {
     console.error("Error fetching ticket:", err.message);
@@ -528,7 +552,8 @@ app.post("/tickets", async (req, res) => {
     const deptTo = deptEmails[category];
     const deptCcList = [];
     if (category === "Password Reset" || category === "Admin Access") {
-      deptCcList.push(passwordResetSecondary);
+      // ensure secondary is CC'd (if different)
+      if (passwordResetSecondary && !deptTo.includes(passwordResetSecondary)) deptCcList.push(passwordResetSecondary);
     }
     if (itHead) deptCcList.push(itHead);
 
@@ -954,7 +979,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
         { label: "Rejected By", value: ticket.closedBy },
         { label: "Rejected On", value: nowIST },
       ],
-      description: `The ticket has been rejected'}`,
+      description: `The ticket has been rejected`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
