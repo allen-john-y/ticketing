@@ -53,6 +53,10 @@ function CreateTicket() {
   const [verifiedName, setVerifiedName] = useState('');
   const [verifyError, setVerifyError] = useState('');
 
+  // NEW: device admin group check
+  const [isDeviceAdmin, setIsDeviceAdmin] = useState(false);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+
   useEffect(() => {
     let mounted = true;
     const fetchUser = async () => {
@@ -74,6 +78,33 @@ function CreateTicket() {
     };
     fetchUser();
     return () => { mounted = false; };
+  }, [instance, accounts]);
+
+  // NEW: fetch groups and detect GS_DeviceAdministrator membership
+  useEffect(() => {
+    if (!accounts || !accounts[0]) return;
+    const fetchGroups = async () => {
+      setGroupsLoading(true);
+      try {
+        // we request GroupMember.Read.All (same as other components) — ensure consent granted
+        const tokenResp = await instance.acquireTokenSilent({
+          scopes: ['GroupMember.Read.All', 'User.Read'],
+          account: accounts[0]
+        });
+        const res = await axios.get('https://graph.microsoft.com/v1.0/me/memberOf', {
+          headers: { Authorization: `Bearer ${tokenResp.accessToken}` }
+        });
+        const groups = (res.data?.value || []).map(g => (g.displayName || '').toString());
+        const hasDeviceAdmin = groups.some(name => name === 'GS_DeviceAdministrator');
+        setIsDeviceAdmin(hasDeviceAdmin);
+      } catch (err) {
+        console.error('Error fetching groups:', err?.message || err);
+        // Not fatal — leave isDeviceAdmin false
+      } finally {
+        setGroupsLoading(false);
+      }
+    };
+    fetchGroups();
   }, [instance, accounts]);
 
   // Call backend to verify an "onBehalfEmail" exists in Azure AD
@@ -118,6 +149,13 @@ function CreateTicket() {
     e.preventDefault();
     setLoading(true);
     setCreatedTicketId(null);
+
+    // If user is device admin, block creation of Admin Access tickets
+    if (formData.category === 'Admin Access' && isDeviceAdmin) {
+      setModal({ open: true, title: 'Cannot Create Request', message: 'You already have admin access to the device (GS_DeviceAdministrator). Creating an Admin Access ticket is not allowed.', type: 'error' });
+      setLoading(false);
+      return;
+    }
 
     // Validation
     if (formData.category === 'Password Reset' && formData.onBehalf === 'Other') {
@@ -234,6 +272,9 @@ function CreateTicket() {
 
   const initials = (displayName || displayEmail || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
+  // Determine whether to disable the create button:
+  const disableCreateBecauseDeviceAdmin = formData.category === 'Admin Access' && isDeviceAdmin;
+
   return (
     <div style={styles.pageWrap}>
       <div style={styles.card}>
@@ -248,6 +289,15 @@ function CreateTicket() {
             <div style={{ fontWeight: 700, color: '#10b981' }}>Signed in</div>
           </div>
         </div>
+
+        {groupsLoading ? (
+          <div style={{ marginTop: 12, color: '#6b7280' }}>Checking access...</div>
+        ) : isDeviceAdmin ? (
+          <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e6f0ff', color: '#064e3b' }}>
+            <strong>You already have device admin access.</strong>
+            <div style={{ marginTop: 6 }}>Your account is a member of <code>GS_DeviceAdministrator</code>, so Admin Access requests are not required and creating an Admin Access ticket is disabled.</div>
+          </div>
+        ) : null}
 
         <h1 style={{ textAlign: 'center', margin: '18px 0 8px' }}>Create New Ticket</h1>
         <form onSubmit={handleSubmit}>
@@ -276,6 +326,7 @@ function CreateTicket() {
               >
                 <option value="">Select Category</option>
                 <option value="Password Reset">🔑 Password Reset</option>
+                <option value="Admin Access">🛠️ Admin Access</option>
               </select>
             </div>
 
@@ -385,6 +436,13 @@ function CreateTicket() {
             </div>
           )}
 
+          {/* Admin Access note (if category selected and user is device admin we already show header message) */}
+          {formData.category === 'Admin Access' && isDeviceAdmin && (
+            <div style={{ marginBottom: 12, color: '#92400e', background: '#fffbeb', padding: 10, borderRadius: 8, border: '1px solid #fef3c7' }}>
+              Your account already has device admin privileges (GS_DeviceAdministrator). Creating an Admin Access ticket is disabled.
+            </div>
+          )}
+
           <div style={styles.field}>
             <label style={styles.label}>Description *</label>
             <textarea
@@ -398,7 +456,12 @@ function CreateTicket() {
           </div>
 
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-            <button type="submit" style={{ ...styles.primaryButton, flex: 1 }} disabled={loading}>
+            <button
+              type="submit"
+              style={{ ...styles.primaryButton, flex: 1 }}
+              disabled={loading || disableCreateBecauseDeviceAdmin}
+              title={disableCreateBecauseDeviceAdmin ? 'You already have device admin access — cannot create Admin Access ticket' : undefined}
+            >
               {loading ? 'Creating...' : 'Create Ticket'}
             </button>
             <button
