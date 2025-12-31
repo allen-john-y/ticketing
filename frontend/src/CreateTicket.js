@@ -487,7 +487,7 @@ function CreateTicket() {
                   color: 'white',
                   border: 'none',
                   borderRadius: 6,
-                  cursor: 'pointer
+                  cursor: 'pointer'
                 }}
               >
                 OK
