@@ -111,7 +111,7 @@ loadCounter();
 
 // ---------------------- Department Emails -----------------
 // Password Reset primary should be Kodhan and Allen in CC
-const passwordResetPrimary = "kodhan@sandeza-inc.com";
+const passwordResetPrimary = "vigneshm@sandeza-inc.com";
 const passwordResetSecondary = "allenj@sandeza-inc.com";
 
 const deptEmails = {
