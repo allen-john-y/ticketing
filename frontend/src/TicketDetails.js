@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 
 // CATEGORY HEAD EMAIL MAP (mirrors backend deptEmails)
+// Note: values can be a string or an array of strings.
 const deptEmails = {
   "Password Reset": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
   "Admin Access": "vigneshm@sandeza-inc.com",
@@ -73,18 +74,42 @@ function TicketDetails() {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
 
-        // CATEGORY HEAD CHECK
+        // CATEGORY HEAD CHECK - robust: support string or array and multiple MSAL email fields
         if (accounts[0] && res.data) {
-          const loggedEmail = (accounts[0].username || accounts[0].upn || '').toLowerCase().trim();
-          const headEmail = (deptEmails[res.data.category] || '').toLowerCase().trim();
+          // Extract logged user email from common MSAL fields
+          const acct = accounts[0] || {};
+          const possibleEmails = [
+            acct.username,
+            acct.upn,
+            acct.preferred_username,
+            acct.email,
+            acct.name,
+            acct.homeAccountId
+          ].filter(Boolean);
 
-          if (loggedEmail && headEmail && loggedEmail === headEmail) {
+          // Normalize logged email (take the first reasonable-looking email)
+          const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
+            .toLowerCase()
+            .trim();
+
+          // Get head entry from mapping and normalize into an array
+          const headEntry = deptEmails[res.data.category];
+          const headList = Array.isArray(headEntry) ? headEntry : (headEntry ? [headEntry] : []);
+          const normalizedHeadList = headList.map(h => (h || '').toLowerCase().trim()).filter(Boolean);
+
+          // Debugging helpful info (remove in production if you want)
+          console.debug('Logged email:', loggedEmail, 'Category heads:', normalizedHeadList, 'Ticket status:', res.data.status);
+
+          if (loggedEmail && normalizedHeadList.includes(loggedEmail)) {
             setIsCategoryHead(true);
 
             const status = (res.data.status || '').toString();
             if (res.data.category === "Password Reset" && (status === "Waiting for approval" || status === "Open")) {
               setShowApprovalModal(true);
             }
+          } else {
+            setIsCategoryHead(false);
+            setShowApprovalModal(false);
           }
         }
 
@@ -231,7 +256,7 @@ function TicketDetails() {
     setConfirmreopenModal(true);
   };
 
-  // <-- FIXED: call correct backend endpoint (/revive) and send expected field names (revivedBy, reviveReason)
+  // call correct backend endpoint (/revive) and send expected field names (revivedBy, reviveReason)
   const confirmreopenTicket = async () => {
     setLoading(true);
     try {
