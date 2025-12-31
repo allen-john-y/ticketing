@@ -86,7 +86,6 @@ function CreateTicket() {
     const fetchGroups = async () => {
       setGroupsLoading(true);
       try {
-        // we request GroupMember.Read.All (same as other components) — ensure consent granted
         const tokenResp = await instance.acquireTokenSilent({
           scopes: ['GroupMember.Read.All', 'User.Read'],
           account: accounts[0]
@@ -99,7 +98,6 @@ function CreateTicket() {
         setIsDeviceAdmin(hasDeviceAdmin);
       } catch (err) {
         console.error('Error fetching groups:', err?.message || err);
-        // Not fatal — leave isDeviceAdmin false
       } finally {
         setGroupsLoading(false);
       }
@@ -120,7 +118,6 @@ function CreateTicket() {
     }
     setVerifyStatus('verifying');
     try {
-      // Acquire a token for auth to backend (backend will call Graph using client credentials)
       const token = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
 
       const res = await axios.post(`${backendBase}/verify-user`, { email }, {
@@ -130,7 +127,6 @@ function CreateTicket() {
       if (res.data && res.data.exists) {
         setVerifyStatus('verified');
         setVerifiedName(res.data.displayName || res.data.mail || email);
-        // If the backend returned a canonical mail, use it as the onBehalfEmail (helps normalize UPN)
         setFormData(prev => ({ ...prev, onBehalfEmail: res.data.mail || email }));
       } else {
         setVerifiedName('');
@@ -164,13 +160,11 @@ function CreateTicket() {
         setLoading(false);
         return;
       }
-      // require verification for Other
       if (verifyStatus !== 'verified') {
         setModal({ open: true, title: 'Validation', message: 'Please verify the target user\'s email using the Verify button before submitting.', type: 'error' });
         setLoading(false);
         return;
       }
-      // delivery email required for Other as well
       const del = (formData.alternativeEmail || '').trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!del || !emailRegex.test(del)) {
@@ -180,7 +174,6 @@ function CreateTicket() {
       }
     }
 
-    // Self flow: alternative email mandatory (your requirement)
     if (formData.category === 'Password Reset' && formData.onBehalf === 'Self') {
       const alt = (formData.alternativeEmail || '').trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -289,15 +282,6 @@ function CreateTicket() {
             <div style={{ fontWeight: 700, color: '#10b981' }}>Signed in</div>
           </div>
         </div>
-
-        {groupsLoading ? (
-          <div style={{ marginTop: 12, color: '#6b7280' }}>Checking access...</div>
-        ) : isDeviceAdmin ? (
-          <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e6f0ff', color: '#064e3b' }}>
-            <strong>You already have device admin access.</strong>
-            <div style={{ marginTop: 6 }}>Your account is a member of <code>GS_DeviceAdministrator</code>, so Admin Access requests are not required and creating an Admin Access ticket is disabled.</div>
-          </div>
-        ) : null}
 
         <h1 style={{ textAlign: 'center', margin: '18px 0 8px' }}>Create New Ticket</h1>
         <form onSubmit={handleSubmit}>
@@ -436,11 +420,23 @@ function CreateTicket() {
             </div>
           )}
 
-          {/* Admin Access note (if category selected and user is device admin we already show header message) */}
-          {formData.category === 'Admin Access' && isDeviceAdmin && (
-            <div style={{ marginBottom: 12, color: '#92400e', background: '#fffbeb', padding: 10, borderRadius: 8, border: '1px solid #fef3c7' }}>
-              Your account already has device admin privileges (GS_DeviceAdministrator). Creating an Admin Access ticket is disabled.
-            </div>
+          {/* Admin Access note - ONLY show when user selected Admin Access */}
+          {formData.category === 'Admin Access' && (
+            <>
+              {groupsLoading ? (
+                <div style={{ marginTop: 12, color: '#6b7280' }}>Checking access...</div>
+              ) : isDeviceAdmin ? (
+                <div style={{ marginTop: 12, padding: 12, background: '#fffbeb', borderRadius: 8, border: '1px solid #fef3c7', color: '#92400e' }}>
+                  <strong>You already have device admin access.</strong>
+                  <div style={{ marginTop: 6 }}>Your account is a member of <code>GS_DeviceAdministrator</code>, so creating an Admin Access ticket is disabled.</div>
+                </div>
+              ) : (
+                <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e6f0ff', color: '#064e3b' }}>
+                  <strong>Need Admin Access?</strong>
+                  <div style={{ marginTop: 6 }}>If you don't have device admin privileges, create an Admin Access ticket and a device admin will review it.</div>
+                </div>
+              )}
+            </>
           )}
 
           <div style={styles.field}>
@@ -491,7 +487,7 @@ function CreateTicket() {
                   color: 'white',
                   border: 'none',
                   borderRadius: 6,
-                  cursor: 'pointer'
+                  cursor: 'pointer
                 }}
               >
                 OK
