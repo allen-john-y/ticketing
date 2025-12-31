@@ -7,7 +7,7 @@ import { useMsal } from '@azure/msal-react';
 // Note: values can be a string or an array of strings.
 const deptEmails = {
   "Password Reset": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
-  "Admin Access": "vigneshm@sandeza-inc.com",
+  "Admin Access": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
   "Payroll Issue": "kishorekumars@sandeza-inc.com",
   "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
   "Leave Request": "allenj@sandeza-inc.com",
