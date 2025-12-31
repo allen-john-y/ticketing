@@ -25,7 +25,7 @@ function Dashboard() {
         });
 
         const groups = groupsRes.data.value.map(g => g.displayName);
-        const isAdmin = groups.includes('GS_Fortingate_VPN');
+        const isAdmin = groups.includes('Helpdesk_Admin');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
         const backendUrl = 'https://ticketing-hn59.onrender.com';

@@ -59,7 +59,7 @@ function TicketDetails() {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
         });
         const groups = groupsRes.data.value.map(g => g.displayName);
-        const isAdmin = groups.includes('GS_Fortingate_VPN');
+        const isAdmin = groups.includes('Helpdesk_Admin');
         setAuthority(isAdmin ? 'admin' : 'basic');
       } catch (err) {
         console.error('Authority error:', err);

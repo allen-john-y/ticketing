@@ -95,7 +95,7 @@ function Home() {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
         });
         const groups = groupsRes.data.value.map(g => g.displayName);
-        const isAdmin = groups.includes('GS_Fortingate_VPN');
+        const isAdmin = groups.includes('Helpdesk_Admin');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
         const backendBase = "https://ticketing-hn59.onrender.com";
