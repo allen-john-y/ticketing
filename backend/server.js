@@ -111,7 +111,7 @@ loadCounter();
 
 // ---------------------- Department Emails -----------------
 // Password Reset primary should be Kodhan and Allen in CC
-const passwordResetPrimary = "vigneshm@sandeza-inc.com";
+const passwordResetPrimary = "kodhan@sandeza-inc.com";
 const passwordResetSecondary = "allenj@sandeza-inc.com";
 
 const deptEmails = {
@@ -480,8 +480,6 @@ app.post("/tickets", async (req, res) => {
       { label: "Created By", value: `${userName} (${userEmail})` },
       { label: "Category", value: category },
       { label: "Priority", value: priority },
-      { label: "On Behalf", value: onBehalf === "Other" ? `Other (${onBehalfEmail})` : "Self" },
-      { label: "Affected User", value: onBehalf === "Other" ? onBehalfEmail : userEmail },
       { label: "Delivery Email", value: ticket.deliveryEmail || '—' },
       { label: "Status", value: initialStatus }
     ];
