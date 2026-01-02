@@ -406,9 +406,14 @@ app.get("/tickets/:id", async (req, res) => {
 
     // derive heads for the ticket category
     let heads = [];
-    if (ticket.category === "Password Reset" || ticket.category === "Admin Access") {
-      heads = [passwordResetPrimary, passwordResetSecondary].filter(Boolean);
-    } else if (deptEmails[ticket.category]) {
+    if (ticket.category === "Password Reset") {
+  heads = [passwordResetPrimary, passwordResetSecondary].filter(Boolean);
+}
+
+if (ticket.category === "Admin Access") {
+  heads = [adminAccessPrimary, passwordResetSecondary].filter(Boolean);
+}
+ else if (deptEmails[ticket.category]) {
       const entry = deptEmails[ticket.category];
       heads = Array.isArray(entry) ? entry : [entry];
     }
@@ -858,7 +863,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       console.log(`Ticket #${ticket.ticketNumber} (Admin Access) approved by ${ticket.closedBy} and auto-closed.`);
 
       return res.json({
-        message: "Admin access approved and user added to GS_DeviceAdministrator.",
+        message: "Admin access approved and user is now a device administrator.",
         ticket: {
           _id: ticket._id,
           ticketNumber: ticket.ticketNumber,
@@ -893,14 +898,14 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     ticket.history.push({
       action: "rejected",
-      by: rejectedBy || "Department Head",
+      by: rejectedBy ,
       at: now,
       reason: reason || "Rejected by Department Head",
     });
 
     ticket.status = "Closed";
-    ticket.closedBy = rejectedBy || "Department Head";
-    ticket.closeReason = reason ? `Rejected: ${reason}` : "Rejected by Department Head";
+    ticket.closedBy = rejectedBy ;
+    ticket.closeReason = reason ? `Rejected: ${reason}` : "Reason not specified";
     ticket.closedAt = now;
 
     ticket.history.push({
@@ -1166,7 +1171,7 @@ app.put("/tickets/:id/revive", async (req, res) => {
 });
 
 // ---------------------- Start Server ----------------------
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8080;a
 app.listen(PORT, "0.0.0.0", () =>
   console.log(`Server running on port ${PORT} (Full History Enabled)`)
 );

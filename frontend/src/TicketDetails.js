@@ -461,7 +461,7 @@ function TicketDetails() {
               Waiting for Your Approval
             </h3>
             <p style={{ color: "#92400e", marginTop: 6 }}>
-              This ticket requires action from <strong>Category Head ({ticket.category})</strong>.
+              This ticket requires action from <strong>you ({ticket.category})</strong>.
             </p>
 
             <button
