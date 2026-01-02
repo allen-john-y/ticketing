@@ -104,9 +104,13 @@ function TicketDetails() {
             setIsCategoryHead(true);
 
             const status = (res.data.status || '').toString();
-            if (res.data.category === "Password Reset" && (status === "Waiting for approval" || status === "Open")) {
-              setShowApprovalModal(true);
-            }
+            if (
+  approvalCategories.includes(res.data.category) &&
+  (status === "Waiting for approval" || status === "Open")
+) {
+  setShowApprovalModal(true);
+}
+
           } else {
             setIsCategoryHead(false);
             setShowApprovalModal(false);
@@ -133,7 +137,12 @@ function TicketDetails() {
   };
 
   // Derived: show inline "Waiting for Approval" banner
-  const needsApprovalBanner = isCategoryHead && ticket && (ticket.status === 'Waiting for approval' || ticket.status === 'Open') && !showApprovalModal && ticket.category === "Password Reset";
+  const needsApprovalBanner =
+  isCategoryHead &&
+  ticket &&
+  (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
+  !showApprovalModal &&
+  ["Password Reset", "Admin Access"].includes(ticket.category);
 
   const copyToClipboard = (text) => {
     try {
@@ -147,12 +156,11 @@ function TicketDetails() {
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
-      if (!ticket || ticket.category !== "Password Reset") {
-        alert("Approve is only for Password Reset tickets.");
-        setShowApprovalModal(false);
-        setApproveLoading(false);
-        return;
-      }
+      if (!ticket || !["Password Reset", "Admin Access"].includes(ticket.category)) {
+  alert("Approval not supported for this ticket type.");
+  return;
+}
+
 
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
         approvedBy: accounts[0]?.name || accounts[0]?.username,
@@ -563,7 +571,10 @@ function TicketDetails() {
       </div>
 
       {/* ALL MODALS BELOW ARE UNCHANGED */}
-      {showApprovalModal && isCategoryHead && ticket.category === "Password Reset" && (
+      {showApprovalModal &&
+  isCategoryHead &&
+  ["Password Reset", "Admin Access"].includes(ticket.category) && (
+
         <div className="overlay">
           <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
