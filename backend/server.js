@@ -325,7 +325,7 @@ const getUserByUpn = async (upn) => {
 
 // Add a user (objectId) to group (groupId)
 // Use env AZURE_DEVICE_ADMIN_GROUP_ID or fallback to the provided object id
-const AZURE_DEVICE_ADMIN_GROUP_ID = process.env.AZURE_DEVICE_ADMIN_GROUP_ID || "ee3c73f9-277c-4d08-ba17-d9656ecb9d2f";
+const AZURE_DEVICE_ADMIN_GROUP_ID = process.env.AZURE_DEVICE_ADMIN_GROUP_ID || "2f32b157-63cd-4486-8136-120c39e030a9";
 const addUserToGroup = async (groupId, userObjectId) => {
   const token = await getAccessToken();
   const url = `https://graph.microsoft.com/v1.0/groups/${groupId}/members/$ref`;
@@ -803,7 +803,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
         subtitle: "Admin access granted and ticket closed",
         statusColor: "#16a34a",
         fields: deptFields,
-        description: `User ${userObj.mail || userIdentifier} was added to GS_DeviceAdministrator by ${ticket.closedBy}.`,
+        description: `User ${ticket.userName} was provided with admin access by ${ticket.closedBy}.`,
         actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
         actionText: "Open Ticket"
       });
