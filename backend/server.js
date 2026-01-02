@@ -536,7 +536,7 @@ app.post("/tickets", async (req, res) => {
 
     res.status(201).json(ticket);
   } catch (err) {
-    console.error("Error creating ticket:", err.message);
+    console.error("Error creating ticket and failed :", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
