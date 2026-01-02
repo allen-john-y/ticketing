@@ -325,7 +325,7 @@ const getUserByUpn = async (upn) => {
 
 // Add a user (objectId) to group (groupId)
 // Use env AZURE_DEVICE_ADMIN_GROUP_ID or fallback to the provided object id
-const AZURE_DEVICE_ADMIN_GROUP_ID = process.env.AZURE_DEVICE_ADMIN_GROUP_ID || "2f32b157-63cd-4486-8136-120c39e030a9";
+const AZURE_DEVICE_ADMIN_GROUP_ID = process.env.AZURE_DEVICE_ADMIN_GROUP_ID || "ee3c73f9-277c-4d08-ba17-d9656ecb9d2f";
 const addUserToGroup = async (groupId, userObjectId) => {
   const token = await getAccessToken();
   const url = `https://graph.microsoft.com/v1.0/groups/${groupId}/members/$ref`;
