@@ -14,6 +14,8 @@ const deptEmails = {
   "Employee Onboarding": "allenj@sandeza-inc.com",
 };
 
+const approvalCategories = ["Password Reset", "Admin Access"];
+
 function TicketDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
