@@ -406,14 +406,9 @@ app.get("/tickets/:id", async (req, res) => {
 
     // derive heads for the ticket category
     let heads = [];
-    if (ticket.category === "Password Reset") {
-  heads = [passwordResetPrimary, passwordResetSecondary].filter(Boolean);
-}
-
-if (ticket.category === "Admin Access") {
-  heads = [adminAccessPrimary, passwordResetSecondary].filter(Boolean);
-}
- else if (deptEmails[ticket.category]) {
+    if (ticket.category === "Password Reset" || ticket.category === "Admin Access") {
+      heads = [passwordResetPrimary, passwordResetSecondary].filter(Boolean);
+    } else if (deptEmails[ticket.category]) {
       const entry = deptEmails[ticket.category];
       heads = Array.isArray(entry) ? entry : [entry];
     }
