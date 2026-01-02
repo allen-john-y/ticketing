@@ -1,3 +1,5 @@
+// TicketDetails.js (FULL UPDATED – Password Reset + Admin Access approvals)
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -39,7 +41,7 @@ function TicketDetails() {
 
   const backendBase = "https://ticketing-hn59.onrender.com";
 
-  // NEW: Category head / approval states
+  // Category head / approval states
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [isCategoryHead, setIsCategoryHead] = useState(false);
   const [approveLoading, setApproveLoading] = useState(false);
@@ -76,49 +78,41 @@ function TicketDetails() {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
 
-        // CATEGORY HEAD CHECK - robust: support string or array and multiple MSAL email fields
+        // CATEGORY HEAD CHECK
         if (accounts[0] && res.data) {
-          // Extract logged user email from common MSAL fields
           const acct = accounts[0] || {};
           const possibleEmails = [
             acct.username,
             acct.upn,
             acct.preferred_username,
-            acct.email,
-            acct.name,
-            acct.homeAccountId
+            acct.email
           ].filter(Boolean);
 
-          // Normalize logged email (take the first reasonable-looking email)
           const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
             .toLowerCase()
             .trim();
 
-          // Get head entry from mapping and normalize into an array
           const headEntry = deptEmails[res.data.category];
           const headList = Array.isArray(headEntry) ? headEntry : (headEntry ? [headEntry] : []);
-          const normalizedHeadList = headList.map(h => (h || '').toLowerCase().trim()).filter(Boolean);
-
-          // Debugging helpful info (remove in production if you want)
-          console.debug('Logged email:', loggedEmail, 'Category heads:', normalizedHeadList, 'Ticket status:', res.data.status);
+          const normalizedHeadList = headList
+            .map(h => (h || '').toLowerCase().trim())
+            .filter(Boolean);
 
           if (loggedEmail && normalizedHeadList.includes(loggedEmail)) {
             setIsCategoryHead(true);
 
             const status = (res.data.status || '').toString();
             if (
-  approvalCategories.includes(res.data.category) &&
-  (status === "Waiting for approval" || status === "Open")
-) {
-  setShowApprovalModal(true);
-}
-
+              approvalCategories.includes(res.data.category) &&
+              (status === "Waiting for approval" || status === "Open")
+            ) {
+              setShowApprovalModal(true);
+            }
           } else {
             setIsCategoryHead(false);
             setShowApprovalModal(false);
           }
         }
-
       } catch (err) {
         console.error('Error fetching ticket:', err);
       }
@@ -140,11 +134,11 @@ function TicketDetails() {
 
   // Derived: show inline "Waiting for Approval" banner
   const needsApprovalBanner =
-  isCategoryHead &&
-  ticket &&
-  (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
-  !showApprovalModal &&
-  ["Password Reset", "Admin Access"].includes(ticket.category);
+    isCategoryHead &&
+    ticket &&
+    (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
+    !showApprovalModal &&
+    approvalCategories.includes(ticket.category);
 
   const copyToClipboard = (text) => {
     try {
@@ -158,11 +152,10 @@ function TicketDetails() {
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
-      if (!ticket || !["Password Reset", "Admin Access"].includes(ticket.category)) {
-  alert("Approval not supported for this ticket type.");
-  return;
-}
-
+      if (!ticket || !approvalCategories.includes(ticket.category)) {
+        alert("Approval not supported for this ticket type.");
+        return;
+      }
 
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
         approvedBy: accounts[0]?.name || accounts[0]?.username,
@@ -171,10 +164,12 @@ function TicketDetails() {
 
       setShowApprovalModal(false);
 
+      // Password Reset: backend returns newPassword
       if (res.data?.newPassword) {
         setReturnedPassword(res.data.newPassword);
         setShowPasswordPopup(true);
       } else {
+        // Admin Access: no password, just go back
         setTimeout(() => {
           navigate("/", { state: { refresh: true } });
         }, 200);
@@ -266,7 +261,6 @@ function TicketDetails() {
     setConfirmreopenModal(true);
   };
 
-  // call correct backend endpoint (/revive) and send expected field names (revivedBy, reviveReason)
   const confirmreopenTicket = async () => {
     setLoading(true);
     try {
@@ -509,7 +503,7 @@ function TicketDetails() {
         </div>
       </div>
 
-      {/* FULL HISTORY TIMELINE - UPDATED TO SHOW "ON BEHALF OF" */}
+      {/* FULL HISTORY TIMELINE */}
       <div style={{ maxWidth: '720px', margin: '3rem auto', padding: '0 1rem' }}>
         <h2 style={{ fontSize: '1.9rem', color: '#1e293b', marginBottom: '2.5rem', textAlign: 'center', fontWeight: 700 }}>
           Ticket History
@@ -572,11 +566,10 @@ function TicketDetails() {
         </div>
       </div>
 
-      {/* ALL MODALS BELOW ARE UNCHANGED */}
+      {/* APPROVAL MODAL – Password Reset + Admin Access */}
       {showApprovalModal &&
-  isCategoryHead &&
-  ["Password Reset", "Admin Access"].includes(ticket.category) && (
-
+        isCategoryHead &&
+        approvalCategories.includes(ticket.category) && (
         <div className="overlay">
           <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
@@ -647,6 +640,7 @@ function TicketDetails() {
         </div>
       )}
 
+      {/* PASSWORD POPUP FOR PASSWORD RESET */}
       {showPasswordPopup && (
         <div className="overlay">
           <div className="modal-box" style={{ maxWidth: 560 }}>
@@ -674,6 +668,7 @@ function TicketDetails() {
         </div>
       )}
 
+      {/* CLOSE REASON MODAL */}
       {showReasonInput && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -702,6 +697,7 @@ function TicketDetails() {
         </div>
       )}
 
+      {/* CLOSE CONFIRM MODAL */}
       {confirmModal && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -717,6 +713,7 @@ function TicketDetails() {
         </div>
       )}
 
+      {/* REOPEN REASON MODAL */}
       {showreopenReasonInput && (
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -745,16 +742,17 @@ function TicketDetails() {
         </div>
       )}
 
+      {/* REOPEN CONFIRM MODAL */}
       {confirmreopenModal && (
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px', color: '#16a34a', fontSize: '1.6rem', fontWeight: 700 }}>reopen This Ticket?</h3>
             <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-              <button onClick={confirmreopenTicket} disabled={loading} style={{ padding: '16px 36px', background: '#16a34a', color: 'white', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+              <button onClick={confirmreopenTicket} disabled={loading} style={{ padding: '16px 36px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
                 {loading ? 'Reviving...' : 'Yes, reopen It'}
               </button>
-              <button onClick={cancelreopen} style={{ padding: '16px 36px', background: '#64748b', color: 'white', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button onClick={cancelreopen} style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
             </div>
           </div>
         </div>
