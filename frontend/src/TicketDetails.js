@@ -617,6 +617,7 @@ function TicketDetails() {
               onChange={(e) => setAdminNote(e.target.value)}
               rows={4}
               style={{ width: "100%", marginBottom: 10 }}
+              required={true}
             />
 
             <div style={{ display: "flex", gap: 12, marginTop: 10, justifyContent: "center" }}>

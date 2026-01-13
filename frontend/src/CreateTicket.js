@@ -148,7 +148,7 @@ function CreateTicket() {
 
     // If user is device admin, block creation of Admin Access tickets
     if (formData.category === 'Admin Access' && isDeviceAdmin) {
-      setModal({ open: true, title: 'Cannot Create Request', message: 'You already have admin access to the device (GS_DeviceAdministrator). Creating an Admin Access ticket is not allowed.', type: 'error' });
+      setModal({ open: true, title: 'Cannot Create Request', message: 'You already have admin access to the device. Creating an Admin Access ticket is not allowed.', type: 'error' });
       setLoading(false);
       return;
     }
