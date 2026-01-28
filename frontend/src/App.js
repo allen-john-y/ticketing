@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
-import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
@@ -28,9 +28,9 @@ function Header({ logout }) {
   const [profileError, setProfileError] = useState(null);
   const [profilePhoto, setProfilePhoto] = useState(null);
 
-  // ADMIN CHECK
+  // New: admin + settings state
   const [isAdmin, setIsAdmin] = useState(false);
-  const navigate = useNavigate();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -74,37 +74,92 @@ function Header({ logout }) {
     fetchPhotoSilently();
   }, [accounts, instance]);
 
-  // ADMIN CHECK – find if user is in Helpdesk_Admins
+  // New: check if account is member of Helpdesk_Admin
   useEffect(() => {
-    const fetchAdminFlag = async () => {
-      if (!accounts || !accounts[0]) return;
+    let cancelled = false;
+
+    const checkAdminMembership = async () => {
+      if (!accounts || !accounts[0]) {
+        setIsAdmin(false);
+        return;
+      }
+
       try {
+        // Acquire token for group membership read
         const tokenResponse = await instance.acquireTokenSilent({
-          scopes: ['User.Read', 'GroupMember.Read.All'],
+          scopes: ['GroupMember.Read.All'],
           account: accounts[0],
         });
 
-        const res = await fetch('https://graph.microsoft.com/v1.0/me/memberOf', {
-          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
-        });
+        const token = tokenResponse.accessToken;
 
-        if (!res.ok) {
-          console.error('Admin check failed:', res.status);
-          setIsAdmin(false);
+        // 1) find the Helpdesk_Admin group id
+        const groupRes = await fetch(
+          "https://graph.microsoft.com/v1.0/groups?$filter=displayName eq 'Helpdesk_Admin'&$select=id,displayName",
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!groupRes.ok) {
+          // can't read groups - fallback to false (or handle as needed)
+          console.warn('Could not query groups:', groupRes.status);
+          if (!cancelled) setIsAdmin(false);
           return;
         }
 
-        const data = await res.json();
-        const groupNames = (data.value || []).map(g => g.displayName);
-        const isHelpdeskAdmin = groupNames.includes('Helpdesk_Admins'); // use exact group display name
-        setIsAdmin(isHelpdeskAdmin);
+        const groupJson = await groupRes.json();
+        const group = Array.isArray(groupJson.value) && groupJson.value[0];
+        if (!group || !group.id) {
+          if (!cancelled) setIsAdmin(false);
+          return;
+        }
+
+        const groupId = group.id;
+
+        // 2) use checkMemberGroups to verify membership
+        const checkRes = await fetch('https://graph.microsoft.com/v1.0/me/checkMemberGroups', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupIds: [groupId] }),
+        });
+
+        if (checkRes.ok) {
+          const checkJson = await checkRes.json();
+          const isMember = Array.isArray(checkJson.value) && checkJson.value.includes(groupId);
+          if (!cancelled) setIsAdmin(!!isMember);
+          return;
+        }
+
+        // Fallback: get /me/memberOf and check for the displayName or id match
+        const memberOfRes = await fetch('https://graph.microsoft.com/v1.0/me/memberOf?$select=id,displayName', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (memberOfRes.ok) {
+          const moJson = await memberOfRes.json();
+          const found = Array.isArray(moJson.value) && moJson.value.some(g =>
+            (g.displayName && g.displayName === 'Helpdesk_Admin') || (g.id && g.id === groupId)
+          );
+          if (!cancelled) setIsAdmin(!!found);
+        } else {
+          if (!cancelled) setIsAdmin(false);
+        }
       } catch (err) {
-        console.error('Admin check error:', err);
-        setIsAdmin(false);
+        // If interaction required, redirect to acquire consent/interactive token for this scope
+        if (err instanceof InteractionRequiredAuthError) {
+          instance.acquireTokenRedirect({
+            scopes: ['GroupMember.Read.All'],
+            account: accounts[0],
+          });
+        } else {
+          console.error('Error checking admin membership', err);
+          if (!cancelled) setIsAdmin(false);
+        }
       }
     };
 
-    fetchAdminFlag();
+    checkAdminMembership();
+
+    return () => { cancelled = true; };
   }, [accounts, instance]);
 
   const fetchFullProfile = async () => {
@@ -234,12 +289,12 @@ function Header({ logout }) {
         {/* ⭐⭐⭐ CENTER TITLE (ADDED) ⭐⭐⭐ */}
         <div
           style={{
-            position: 'absolute',
+            position: 'absolute',        // stays centered always
             left: '50%',
             transform: 'translateX(-50%)',
             textAlign: 'center',
             pointerEvents: 'none',
-            animation: 'floatGlow 3s ease-in-out infinite',
+            animation: 'floatGlow 3s ease-in-out infinite',   // floating animation
           }}
         >
           <div
@@ -269,24 +324,96 @@ function Header({ logout }) {
 
         {/* RIGHT PROFILE BLOCK */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* ADMIN GEAR – only if in Helpdesk_Admins */}
-          {isAdmin && (
-            <button
-              onClick={() => navigate('/dashboard')}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 6,
-                marginRight: 4,
-              }}
-              title="Admin settings"
-            >
-              <span role="img" aria-label="settings" style={{ fontSize: 20 }}>⚙️</span>
-            </button>
-          )}
-
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* New: settings gear shown only for admins */}
+            {isAdmin && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setSettingsOpen(s => !s)}
+                  aria-label="Settings"
+                  title="Settings"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    border: '1px solid rgba(15,23,42,0.06)',
+                    background: settingsOpen ? '#eef2ff' : 'linear-gradient(180deg,#ffffff,#fbfdff)',
+                    cursor: 'pointer',
+                    boxShadow: '0 6px 18px rgba(2,6,23,0.04)',
+                    color: '#374151',
+                  }}
+                >
+                  {/* simple gear svg */}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 2.3 16.88l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82L4.21 3.1A2 2 0 1 1 7 1.27l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V1a2 2 0 1 1 4 0v.09c0 .59.39 1.12 1 1.51h.91a1.65 1.65 0 0 0 1.82-.33l.06-.06A2 2 0 1 1 21.69 7.12l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.59 0 1.12.39 1.51 1H23a2 2 0 1 1 0 4h-.09c-.39.61-.92 1-1.51 1z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+
+                {settingsOpen && (
+                  <div
+                    role="menu"
+                    aria-label="Admin settings"
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      marginTop: 8,
+                      background: 'white',
+                      border: '1px solid rgba(15,23,42,0.06)',
+                      borderRadius: 8,
+                      boxShadow: '0 12px 40px rgba(2,6,23,0.12)',
+                      padding: 10,
+                      width: 220,
+                      zIndex: 60,
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, marginBottom: 8 }}>Admin Settings</div>
+                    <button
+                      onClick={() => {
+                        // TODO: wire up actual admin page or actions
+                        // For now, just close and log
+                        setSettingsOpen(false);
+                        console.log('Open admin settings (implement navigation)');
+                      }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '8px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#0f172a',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Manage Helpdesk
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSettingsOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '8px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#6b7280',
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div ref={profileRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setProfileOpen(prev => !prev)}
@@ -475,8 +602,130 @@ function Header({ logout }) {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* modal body unchanged */}
-            {/* ... keep your existing modal JSX here ... */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '12px',
+              }}
+            >
+              <h3 style={{ margin: 0 }}>Full Profile</h3>
+              <button
+                onClick={closeFullProfile}
+                aria-label="Close profile"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '1.1rem',
+                  cursor: 'pointer',
+                }}
+              >
+                ✖
+              </button>
+            </div>
+
+            {/* Photo */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 12,
+                  background: '#eef2ff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 800,
+                  color: '#3730a3',
+                  overflow: 'hidden',
+                }}
+              >
+                {profilePhoto ? (
+                  <img
+                    src={profilePhoto}
+                    alt="profile"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                ) : (
+                  <span style={{ fontSize: 20 }}>{initials}</span>
+                )}
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                  {accounts?.[0]?.name || ''}
+                </div>
+                <div style={{ color: '#6b7280', fontSize: 13 }}>
+                  {accounts?.[0]?.username || ''}
+                </div>
+              </div>
+            </div>
+
+            {loadingProfile && <p>Loading profile…</p>}
+
+            {profileError && (
+              <div style={{ color: 'crimson', marginBottom: '8px' }}>
+                <p style={{ margin: 0 }}>Error loading profile:</p>
+                <small>{profileError}</small>
+              </div>
+            )}
+
+            {profileData && (
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Email</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.email || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Department</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.department || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Job Title</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.jobTitle || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Employee ID</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.employeeId || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Mobile</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.mobilePhone || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Street Address</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.streetAddress || '—'}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>State</div>
+                    <div style={{ fontWeight: 600 }}>{profileData.state || '—'}</div>
+                  </div>
+                  <div style={{ width: '120px' }}>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Pincode</div>
+                    <div style={{ fontWeight: 600 }}>{profileData.postalCode || '—'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!loadingProfile && !profileData && !profileError && (
+              <div style={{ textAlign: 'center' }}>
+                <small>No profile data available.</small>
+              </div>
+            )}
           </div>
         </>
       )}
