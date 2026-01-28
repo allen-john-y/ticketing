@@ -20,23 +20,23 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' }));
 
 // Allow frontend to load images from /uploads
-app.use("/uploads", (req, res, next) => {
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  next();
-});
-
-// Normal Helmet (secure)
-app.use(helmet());
+const UPLOAD_DIR = path.join(__dirname, "uploads");
 
 // Ensure uploads directory exists
-const UPLOAD_DIR = path.join(__dirname, "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// Serve uploaded files
+// Serve uploaded files statically with proper headers
+app.use("/uploads", (req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.removeHeader("Content-Security-Policy");
+  next();
+});
+
 app.use("/uploads", express.static(UPLOAD_DIR));
+
 
 
 // ---------------------- CORS ------------------------------
