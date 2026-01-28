@@ -236,14 +236,6 @@ function Header({ logout }) {
 
       // If none found or not an email, fallback to searching by startswith on mail/userPrincipalName/displayName
       if (results.length === 0) {
-        // Use OData startswith for partial searches (encode the query)
-        // const filterParts = [
-        //   `startswith(tolower(mail),'${encodeURIComponent(q.toLowerCase())}')`,
-        //   `startswith(tolower(userPrincipalName),'${encodeURIComponent(q.toLowerCase())}')`,
-        //   `startswith(tolower(displayName),'${encodeURIComponent(q.toLowerCase())}')`,
-        // ];
-        //const filter = filterParts.join(' or ');
-        // Graph may not like encodeURIComponent in the filter terms for single quotes; build carefully
         const safeQ = q.replace(/'/g, "''"); // escape single quotes by doubling
         const realFilter = `startswith(tolower(mail),'${safeQ.toLowerCase()}') or startswith(tolower(userPrincipalName),'${safeQ.toLowerCase()}') or startswith(tolower(displayName),'${safeQ.toLowerCase()}')`;
 
@@ -253,8 +245,6 @@ function Header({ logout }) {
         if (r.ok) {
           const j = await r.json();
           if (Array.isArray(j.value)) results = j.value;
-        } else {
-          // As a last resort, try /users?$search (requires indexing and query param) - omitted for simplicity
         }
       }
 
@@ -306,13 +296,9 @@ function Header({ logout }) {
         setAddMessage(`${selectedSearchUser.displayName} has been added to Helpdesk_Admin`);
         // notify backend to send emails to actor and target
         notifyServerAboutAdd(selectedSearchUser).catch(e => console.error('notify failed', e));
-        // optimistic: set current user as admin updated if they got added
-        // keep modal open so admin can see message; clear selection
+        // clear selection so admin can add another if needed
         setSelectedSearchUser(null);
         setSearchResults([]);
-        // Optionally refresh membership checks in app
-        // re-check membership for current user
-        // (if the actor added themselves, the isAdmin state might already be true)
       } else {
         const text = await res.text();
         setAddError(`Add failed: ${res.status} ${text}`);
@@ -326,7 +312,7 @@ function Header({ logout }) {
   };
 
   // Sends a notification request to your server (server.js) to dispatch emails.
-  // server endpoints to implement later by you:
+  // server endpoints to implement:
   // POST /api/notify-admin-added  payload: { actor: {id,name,mail}, target: {id,name,mail} }
   // POST /api/notify-admin-removed payload: { actor: {...}, target: {...} }
   const notifyServerAboutAdd = async (targetUser) => {
@@ -349,7 +335,6 @@ function Header({ logout }) {
         }),
       });
     } catch (err) {
-      // don't block UI if notify fails; just log
       console.error('notify server error', err);
     }
   };
@@ -418,7 +403,7 @@ function Header({ logout }) {
       if (res.ok || res.status === 204) {
         setRemoveMessage(`${selectedMember.displayName} has been removed from Helpdesk_Admin`);
         notifyServerAboutRemove(selectedMember).catch(e => console.error('notify failed', e));
-        // refresh members list
+        // refresh members list locally
         setGroupMembers(prev => prev.filter(m => m.id !== selectedMember.id));
         setSelectedMember(null);
       } else {
@@ -616,59 +601,16 @@ function Header({ logout }) {
           </div>
         </div>
 
-        {/* RIGHT PROFILE + ADMIN BUTTONS */}
+        {/* RIGHT PROFILE + GEAR (only) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Add / Remove buttons (only visible to admins) */}
-            {isAdmin && (
-              <>
-                <button
-                  onClick={openAddModal}
-                  title="Add user to Helpdesk_Admin"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(15,23,42,0.06)',
-                    background: 'linear-gradient(180deg,#ffffff,#f1f5f9)',
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                  }}
-                >
-                  <img src={gearIcon} alt="" style={{ width: 16, height: 16, opacity: 0.9 }} />
-                  Add user
-                </button>
-
-                <button
-                  onClick={openRemoveModal}
-                  title="Remove user from Helpdesk_Admin"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(15,23,42,0.06)',
-                    background: 'linear-gradient(180deg,#ffffff,#fff1f2)',
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                  }}
-                >
-                  <img src={gearIcon} alt="" style={{ width: 16, height: 16, opacity: 0.9, transform: 'rotate(20deg)' }} />
-                  Remove user
-                </button>
-              </>
-            )}
-
-            {/* settings gear (small) */}
+            {/* Only gear icon for admins - menu inside has Add/Remove */}
             {isAdmin && (
               <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setSettingsOpen(s => !s)}
-                  aria-label="Settings"
-                  title="Admin quick"
+                  aria-label="Admin settings"
+                  title="Admin settings"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -712,10 +654,10 @@ function Header({ logout }) {
                         textAlign: 'left',
                         background: 'transparent',
                         border: 'none',
-                        padding: '8px',
+                        padding: '10px 8px',
                         borderRadius: 6,
                         cursor: 'pointer',
-                        color: '#0f172a',
+                        color: '#0b79bf', // business blue
                         fontWeight: 700,
                       }}
                     >
@@ -729,10 +671,10 @@ function Header({ logout }) {
                         textAlign: 'left',
                         background: 'transparent',
                         border: 'none',
-                        padding: '8px',
+                        padding: '10px 8px',
                         borderRadius: 6,
                         cursor: 'pointer',
-                        color: '#0f172a',
+                        color: '#ef4444', // business red
                         fontWeight: 700,
                       }}
                     >
@@ -972,7 +914,7 @@ function Header({ logout }) {
                 style={{
                   padding: '10px 16px',
                   borderRadius: 8,
-                  background: '#0369a1',
+                  background: '#0b79bf', // business blue
                   color: 'white',
                   border: 'none',
                   cursor: 'pointer',
@@ -1005,7 +947,7 @@ function Header({ logout }) {
                     <div style={{ fontWeight: 700 }}>{u.displayName}</div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>{u.mail || u.userPrincipalName}</div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>{u.id}</div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>{/* intentionally hidden id area */}</div>
                 </div>
               ))}
             </div>
@@ -1037,7 +979,7 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* REMOVE USER MODAL */}
+      {/* REMOVE USER MODAL (no IDs shown, only name + mail) */}
       {removeModalOpen && (
         <>
           <div
@@ -1085,7 +1027,7 @@ function Header({ logout }) {
                   key={m.id}
                   onClick={() => setSelectedMember(m)}
                   style={{
-                    padding: 10,
+                    padding: 12,
                     borderRadius: 8,
                     marginBottom: 8,
                     background: selectedMember?.id === m.id ? '#fff1f2' : '#fff',
@@ -1100,7 +1042,7 @@ function Header({ logout }) {
                     <div style={{ fontWeight: 700 }}>{m.displayName}</div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>{m.mail || m.userPrincipalName}</div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>{m.id}</div>
+                  {/* ID intentionally not shown */}
                 </div>
               ))}
             </div>
@@ -1118,7 +1060,7 @@ function Header({ logout }) {
                 style={{
                   padding: '10px 14px',
                   borderRadius: 8,
-                  background: removeLoading ? '#f7a6a6' : '#ef4444',
+                  background: removeLoading ? '#f7a6a6' : '#ef4444', // business red
                   color: 'white',
                   border: 'none',
                   cursor: removeLoading ? 'default' : 'pointer',
