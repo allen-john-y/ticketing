@@ -237,11 +237,11 @@ function Header({ logout }) {
       // If none found or not an email, fallback to searching by startswith on mail/userPrincipalName/displayName
       if (results.length === 0) {
         // Use OData startswith for partial searches (encode the query)
-        const filterParts = [
-          `startswith(tolower(mail),'${encodeURIComponent(q.toLowerCase())}')`,
-          `startswith(tolower(userPrincipalName),'${encodeURIComponent(q.toLowerCase())}')`,
-          `startswith(tolower(displayName),'${encodeURIComponent(q.toLowerCase())}')`,
-        ];
+        // const filterParts = [
+        //   `startswith(tolower(mail),'${encodeURIComponent(q.toLowerCase())}')`,
+        //   `startswith(tolower(userPrincipalName),'${encodeURIComponent(q.toLowerCase())}')`,
+        //   `startswith(tolower(displayName),'${encodeURIComponent(q.toLowerCase())}')`,
+        // ];
         //const filter = filterParts.join(' or ');
         // Graph may not like encodeURIComponent in the filter terms for single quotes; build carefully
         const safeQ = q.replace(/'/g, "''"); // escape single quotes by doubling
