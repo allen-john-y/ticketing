@@ -1,4 +1,4 @@
-// TicketDetails.js (UPDATED – + Operational & Finance subQuery + attachment)
+// TicketDetails.js (UPDATED – Operational & Finance subQuery + attachment in details and history)
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -10,7 +10,6 @@ const deptEmails = {
   "Password Reset": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
   "Admin Access": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
   "Operational & Finance": "vigneshm@sandeza-inc.com"
-  // You can later add "Operational & Finance": "..." here if it has heads
 };
 
 const approvalCategories = ["Password Reset", "Admin Access"];
@@ -309,7 +308,7 @@ function TicketDetails() {
         ...(ticket.reopenedAt ? [{ action: "reopend", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reopenReason }] : [])
       ];
 
-  // Helpers for attachment display
+  // Helpers for attachment display (main ticket)
   const hasAttachment = ticket.attachment && (ticket.attachment.fileName || ticket.attachment.fileUrl);
   const attachmentLabel = ticket.attachment?.fileName || 'Attachment';
   const attachmentTypeLabel = ticket.attachment?.fileType || '';
@@ -335,6 +334,36 @@ function TicketDetails() {
         {attachmentTypeLabel && (
           <span style={{ marginLeft: 8, fontSize: 12, color: '#6b7280' }}>
             ({attachmentTypeLabel})
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  // Helper for attachment in each history event
+  const renderHistoryAttachment = (event) => {
+    if (!event.attachment || (!event.attachment.fileName && !event.attachment.fileUrl)) return null;
+    const label = event.attachment.fileName || 'Attachment';
+    const typeLabel = event.attachment.fileType || '';
+    const url = event.attachment.fileUrl;
+    return (
+      <div style={{ marginTop: 8, fontSize: 13 }}>
+        <strong>Attachment:</strong>{' '}
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
+          >
+            {label}
+          </a>
+        ) : (
+          <span style={{ fontWeight: 600 }}>{label}</span>
+        )}
+        {typeLabel && (
+          <span style={{ marginLeft: 6, fontSize: 12, color: '#6b7280' }}>
+            ({typeLabel})
           </span>
         )}
       </div>
@@ -447,7 +476,7 @@ function TicketDetails() {
                 </div>
               </div>
 
-              {/* NEW: Operational & Finance sub info under title */}
+              {/* Operational & Finance sub info under title */}
               {ticket.category === 'Operational & Finance' && ticket.subQuery && (
                 <div style={{ marginTop: 8, fontSize: 13, color: '#4b5563' }}>
                   <strong>Sub Category:</strong> {ticket.subQuery}
@@ -459,7 +488,7 @@ function TicketDetails() {
                 </div>
               )}
 
-              {/* NEW: Attachment small hint */}
+              {/* Attachment small hint */}
               {hasAttachment && (
                 <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
                   {renderAttachment()}
@@ -573,6 +602,8 @@ function TicketDetails() {
             const createdByDifferentPerson = isCreatedEvent && event.by !== ticket.userName;
             const showOnBehalf = isCreatedEvent && (ticket.onBehalf || createdByDifferentPerson);
 
+            const isOpsFin = ticket.category === 'Operational & Finance';
+
             return (
               <div
                 key={index}
@@ -608,11 +639,31 @@ function TicketDetails() {
                   )}
                 </small>
 
+                {/* Sub query info snapshot in history (if backend stored it per event) */}
+                {isOpsFin && (event.subQuery || event.otherSubQueryText) && (
+                  <div style={{ marginTop: 6, fontSize: 13, color: '#4b5563' }}>
+                    {event.subQuery && (
+                      <div>
+                        <strong>Sub Category:</strong> {event.subQuery}
+                      </div>
+                    )}
+                    {event.subQuery === 'Other' && event.otherSubQueryText && (
+                      <div style={{ marginTop: 2 }}>
+                        <strong>Details:</strong> {event.otherSubQueryText}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Reason */}
                 {event.reason && (
                   <div style={{ marginTop: 12, padding: 12, background: '#e2e8f0', borderRadius: 8 }}>
                     <strong>Reason:</strong> {event.reason}
                   </div>
                 )}
+
+                {/* Attachment snapshot in history */}
+                {renderHistoryAttachment(event)}
               </div>
             );
           })}
@@ -655,7 +706,7 @@ function TicketDetails() {
               {ticket.deliveryEmail && <p style={{ margin: '6px 0' }}><strong>Delivery Email:</strong> {ticket.deliveryEmail}</p>}
               <p style={{ margin: '6px 0' }}><strong>Created On:</strong> {formatDate(ticket.createdAt)}</p>
 
-              {/* NEW: subQuery summary inside approval modal */}
+              {/* subQuery summary inside approval modal */}
               {ticket.category === 'Operational & Finance' && ticket.subQuery && (
                 <>
                   <p style={{ margin: '6px 0' }}><strong>Sub Category:</strong> {ticket.subQuery}</p>
@@ -665,7 +716,7 @@ function TicketDetails() {
                 </>
               )}
 
-              {/* NEW: attachment summary inside approval modal */}
+              {/* attachment summary inside approval modal */}
               {hasAttachment && (
                 <div style={{ marginTop: 8 }}>
                   {renderAttachment()}

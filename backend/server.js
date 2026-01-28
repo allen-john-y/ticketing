@@ -59,8 +59,7 @@ const connectDB = async () => {
   }
 };
 connectDB();
-
-// ---------------------- Schema ----------------------------
+//--------------------ticket-Schema----------------------------
 const ticketSchema = new mongoose.Schema(
   {
     ticketNumber: { type: Number, unique: true },
@@ -78,22 +77,23 @@ const ticketSchema = new mongoose.Schema(
     reopenedBy: String,
     reopenedAt: Date,
 
-    // new fields to support on behalf flow
+    // on behalf flow
     onBehalf: { type: String },          // 'Self' or 'Other'
     onBehalfEmail: { type: String },     // when onBehalf = 'Other'
     deliveryEmail: { type: String },
 
-    // NEW: ops/finance sub query (for Operational & Finance category)
-    subQuery: { type: String },          // e.g. 'Salary','Reimbursement','Invoice issue','Tax / GST','Other'
+    // Operational & Finance sub query
+    subQuery: { type: String },          // 'Salary','Reimbursement','Invoice issue','Tax / GST','Other'
     otherSubQueryText: { type: String }, // free text when subQuery = 'Other'
 
-    // NEW: attachment metadata (single file)
+    // attachment metadata (single file) on the ticket
     attachment: {
-      fileName: String,
-      fileType: String,   // mime type like 'application/pdf', 'image/png'
-      fileUrl: String,    // where frontend can load it from (S3/Cloudinary/etc.)
+      fileName: { type: String },
+      fileType: { type: String },
+      fileUrl: { type: String } // optional: where you later upload the file
     },
 
+    // history with optional attachment snapshot
     history: [
       {
         action: {
@@ -103,6 +103,11 @@ const ticketSchema = new mongoose.Schema(
         by: String,
         at: { type: Date, default: Date.now },
         reason: String,
+        attachment: {
+          fileName: { type: String },
+          fileType: { type: String },
+          fileUrl: { type: String }
+        }
       },
     ],
   },
@@ -110,6 +115,7 @@ const ticketSchema = new mongoose.Schema(
 );
 
 const Ticket = mongoose.model('Ticket', ticketSchema);
+
 
 // ---------------------- Counter ---------------------------
 let ticketCounter = 0;
