@@ -19,17 +19,17 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' }));
 
-// Allow images + PDF to be embedded cross-origin
 app.use("/uploads", (req, res, next) => {
-  res.setHeader("Content-Security-Policy", "frame-ancestors *");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Content-Security-Policy", "frame-ancestors *");
   next();
 });
 
-// Disable Helmet CSP so it won't override
 app.use(helmet({
-  contentSecurityPolicy: false
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: false,
+  frameguard: false
 }));
 
 const UPLOAD_DIR = path.join(__dirname, "uploads");
@@ -37,7 +37,6 @@ if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// Serve uploaded files
 app.use("/uploads", express.static(UPLOAD_DIR));
 
 
