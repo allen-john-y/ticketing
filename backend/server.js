@@ -17,24 +17,29 @@ require("dotenv").config();
 // ---------------------- App Setup ------------------------
 const app = express();
 app.set("trust proxy", 1);
-app.use(express.json({ limit: '25mb' })); // increase JSON body limit if attachments metadata is large
-app.use(helmet());
+app.use(express.json({ limit: '25mb' }));
+
+// Allow images + PDF to be embedded cross-origin
+app.use("/uploads", (req, res, next) => {
+  res.setHeader("Content-Security-Policy", "frame-ancestors *");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  next();
+});
+
+// Disable Helmet CSP so it won't override
+app.use(helmet({
+  contentSecurityPolicy: false
+}));
 
 const UPLOAD_DIR = path.join(__dirname, "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// Ensure uploads directory exists
-// Serve uploaded files statically with proper headers
-app.use("/uploads", (req, res, next) => {
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.removeHeader("Content-Security-Policy");
-  next();
-});
-
+// Serve uploaded files
 app.use("/uploads", express.static(UPLOAD_DIR));
+
 
 // ---------------------- CORS ------------------------------
 const allowedOrigins = [
