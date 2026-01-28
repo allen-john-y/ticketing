@@ -1,4 +1,4 @@
-// TicketDetails.js (FULL UPDATED – Password Reset + Admin Access approvals)
+// TicketDetails.js (UPDATED – + Operational & Finance subQuery + attachment)
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -6,14 +6,11 @@ import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 
 // CATEGORY HEAD EMAIL MAP (mirrors backend deptEmails)
-// Note: values can be a string or an array of strings.
 const deptEmails = {
   "Password Reset": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
   "Admin Access": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
-  "Payroll Issue": "kishorekumars@sandeza-inc.com",
-  "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
-  "Leave Request": "allenj@sandeza-inc.com",
-  "Employee Onboarding": "allenj@sandeza-inc.com",
+  "Operational & Finance": "vigneshm@sandeza-inc.com"
+  // You can later add "Operational & Finance": "..." here if it has heads
 };
 
 const approvalCategories = ["Password Reset", "Admin Access"];
@@ -118,7 +115,7 @@ function TicketDetails() {
       }
     };
     fetchTicket();
-  }, [id, accounts, instance]);
+  }, [id, accounts, instance, backendBase]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
@@ -174,7 +171,6 @@ function TicketDetails() {
           navigate("/", { state: { refresh: true } });
         }, 200);
       }
-
     } catch (err) {
       console.error("Approve error:", err);
       alert("Approval failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
@@ -200,7 +196,6 @@ function TicketDetails() {
       setTimeout(() => {
         navigate("/", { state: { refresh: true } });
       }, 200);
-
     } catch (err) {
       console.error("Reject error:", err);
       alert("Rejection failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
@@ -235,7 +230,6 @@ function TicketDetails() {
       setTimeout(() => {
         navigate('/', { state: { refresh: true } });
       }, 200);
-
     } catch (err) {
       setCloseError("Failed to close ticket. Please try again.");
       console.error("Close error:", err);
@@ -277,7 +271,6 @@ function TicketDetails() {
       setTimeout(() => {
         navigate('/', { state: { refresh: true } });
       }, 200);
-
     } catch (err) {
       setreopenError("Failed to reopen ticket. Please try again.");
       console.error("reopen error:", err);
@@ -316,8 +309,37 @@ function TicketDetails() {
         ...(ticket.reopenedAt ? [{ action: "reopend", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reopenReason }] : [])
       ];
 
- // const loggedEmail = (accounts[0]?.username || accounts[0]?.upn || '').toLowerCase().trim();
- // const isCreator = ticket.userEmail && (loggedEmail === ticket.userEmail.toLowerCase().trim());
+  // Helpers for attachment display
+  const hasAttachment = ticket.attachment && (ticket.attachment.fileName || ticket.attachment.fileUrl);
+  const attachmentLabel = ticket.attachment?.fileName || 'Attachment';
+  const attachmentTypeLabel = ticket.attachment?.fileType || '';
+
+  const renderAttachment = () => {
+    if (!hasAttachment) return null;
+    const url = ticket.attachment.fileUrl;
+    return (
+      <div style={{ marginTop: 10 }}>
+        <strong>Attachment:</strong>{' '}
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
+          >
+            {attachmentLabel}
+          </a>
+        ) : (
+          <span style={{ fontWeight: 600 }}>{attachmentLabel}</span>
+        )}
+        {attachmentTypeLabel && (
+          <span style={{ marginLeft: 8, fontSize: 12, color: '#6b7280' }}>
+            ({attachmentTypeLabel})
+          </span>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -332,11 +354,16 @@ function TicketDetails() {
 
       {/* BACK BUTTON */}
       <div style={{ padding: "1rem", maxWidth: 720, margin: "0 auto" }}>
-        <button onClick={() => navigate('/')} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
-          borderRadius: 12, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer',
-          fontWeight: 600, boxShadow: '0 2px 10px rgba(0,0,0,0.06)', fontSize: '15px'
-        }}>Back to Tickets</button>
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
+            borderRadius: 12, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer',
+            fontWeight: 600, boxShadow: '0 2px 10px rgba(0,0,0,0.06)', fontSize: '15px'
+          }}
+        >
+          Back to Tickets
+        </button>
       </div>
 
       {/* MAIN CARD */}
@@ -353,7 +380,6 @@ function TicketDetails() {
         gap: 18,
         position: 'relative'
       }}>
-
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1 }}>
             <div style={{
@@ -420,6 +446,25 @@ function TicketDetails() {
                   </span>
                 </div>
               </div>
+
+              {/* NEW: Operational & Finance sub info under title */}
+              {ticket.category === 'Operational & Finance' && ticket.subQuery && (
+                <div style={{ marginTop: 8, fontSize: 13, color: '#4b5563' }}>
+                  <strong>Sub Category:</strong> {ticket.subQuery}
+                  {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
+                    <div style={{ marginTop: 4 }}>
+                      <strong>Details:</strong> {ticket.otherSubQueryText}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* NEW: Attachment small hint */}
+              {hasAttachment && (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
+                  {renderAttachment()}
+                </div>
+              )}
             </div>
           </div>
 
@@ -427,24 +472,36 @@ function TicketDetails() {
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: '#64748b', fontSize: 13 }}>Created by</div>
               <div style={{ fontWeight: 800, color: '#0f172a' }}>{ticket.userName}</div>
-              <a href={`mailto:${ticket.userEmail}`} style={{ color: '#2563eb', fontSize: 13, textDecoration: 'none' }}>{ticket.userEmail}</a>
+              <a href={`mailto:${ticket.userEmail}`} style={{ color: '#2563eb', fontSize: 13, textDecoration: 'none' }}>
+                {ticket.userEmail}
+              </a>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 8 }}>
               {authority === 'admin' && ticket.status !== 'Closed' && (
-                <button onClick={() => setShowReasonInput(true)} style={{
-                  width: '100%', background: '#dc2626', color: 'white', padding: '12px 14px',
-                  border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
-                  boxShadow: '0 8px 24px rgba(220,38,38,0.18)'
-                }}>Close Ticket</button>
+                <button
+                  onClick={() => setShowReasonInput(true)}
+                  style={{
+                    width: '100%', background: '#dc2626', color: 'white', padding: '12px 14px',
+                    border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
+                    boxShadow: '0 8px 24px rgba(220,38,38,0.18)'
+                  }}
+                >
+                  Close Ticket
+                </button>
               )}
 
               {ticket.status === 'Closed' && (
-                <button onClick={() => setShowreopenReasonInput(true)} style={{
-                  width: '100%', background: '#16a34a', color: 'white', padding: '12px 14px',
-                  border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
-                  boxShadow: '0 8px 24px rgba(16,185,129,0.12)'
-                }}>reopen Ticket</button>
+                <button
+                  onClick={() => setShowreopenReasonInput(true)}
+                  style={{
+                    width: '100%', background: '#16a34a', color: 'white', padding: '12px 14px',
+                    border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
+                    boxShadow: '0 8px 24px rgba(16,185,129,0.12)'
+                  }}
+                >
+                  reopen Ticket
+                </button>
               )}
             </div>
           </div>
@@ -486,7 +543,7 @@ function TicketDetails() {
           </div>
         )}
 
-        {/* Description block */}
+        {/* Description + attachment (detailed) */}
         <div style={{
           marginTop: 4,
           background: '#f8fafc',
@@ -500,6 +557,8 @@ function TicketDetails() {
         }}>
           <strong style={{ display: 'block', marginBottom: 8, fontSize: 15 }}>Description</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
+          {/* Attachment detailed view */}
+          {renderAttachment()}
         </div>
       </div>
 
@@ -596,6 +655,23 @@ function TicketDetails() {
               {ticket.deliveryEmail && <p style={{ margin: '6px 0' }}><strong>Delivery Email:</strong> {ticket.deliveryEmail}</p>}
               <p style={{ margin: '6px 0' }}><strong>Created On:</strong> {formatDate(ticket.createdAt)}</p>
 
+              {/* NEW: subQuery summary inside approval modal */}
+              {ticket.category === 'Operational & Finance' && ticket.subQuery && (
+                <>
+                  <p style={{ margin: '6px 0' }}><strong>Sub Category:</strong> {ticket.subQuery}</p>
+                  {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
+                    <p style={{ margin: '6px 0' }}><strong>Sub Details:</strong> {ticket.otherSubQueryText}</p>
+                  )}
+                </>
+              )}
+
+              {/* NEW: attachment summary inside approval modal */}
+              {hasAttachment && (
+                <div style={{ marginTop: 8 }}>
+                  {renderAttachment()}
+                </div>
+              )}
+
               <div style={{ marginTop: 12 }}>
                 <strong>Description:</strong>
                 <div style={{
@@ -621,19 +697,33 @@ function TicketDetails() {
             />
 
             <div style={{ display: "flex", gap: 12, marginTop: 10, justifyContent: "center" }}>
-              <button onClick={handleApprove} disabled={approveLoading} style={{
-                padding: "12px 22px", background: "#16a34a", color: "white", borderRadius: 12, fontWeight: 700, cursor: "pointer", minWidth: 120
-              }}>
+              <button
+                onClick={handleApprove}
+                disabled={approveLoading}
+                style={{
+                  padding: "12px 22px", background: "#16a34a", color: "white",
+                  borderRadius: 12, fontWeight: 700, cursor: "pointer", minWidth: 120
+                }}
+              >
                 {approveLoading ? "Approving..." : "Approve"}
               </button>
-              <button onClick={handleReject} disabled={rejectLoading} style={{
-                padding: "12px 22px", background: "#dc2626", color: "white", borderRadius: 12, fontWeight: 700, cursor: "pointer", minWidth: 120
-              }}>
+              <button
+                onClick={handleReject}
+                disabled={rejectLoading}
+                style={{
+                  padding: "12px 22px", background: "#dc2626", color: "white",
+                  borderRadius: 12, fontWeight: 700, cursor: "pointer", minWidth: 120
+                }}
+              >
                 {rejectLoading ? "Rejecting..." : "Reject"}
               </button>
-              <button onClick={() => { setShowApprovalModal(false); setAdminNote(''); }} style={{
-                padding: "12px 22px", background: "#64748b", color: "white", borderRadius: 12, fontWeight: 700, cursor: "pointer"
-              }}>
+              <button
+                onClick={() => { setShowApprovalModal(false); setAdminNote(''); }}
+                style={{
+                  padding: "12px 22px", background: "#64748b", color: "white",
+                  borderRadius: 12, fontWeight: 700, cursor: "pointer"
+                }}
+              >
                 Dismiss
               </button>
             </div>
@@ -658,10 +748,16 @@ function TicketDetails() {
               {returnedPassword}
             </div>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 18 }}>
-              <button onClick={() => copyToClipboard(returnedPassword)} style={{ padding: "10px 18px", background: "#2563eb", color: 'white', borderRadius: 10 }}>
+              <button
+                onClick={() => copyToClipboard(returnedPassword)}
+                style={{ padding: "10px 18px", background: "#2563eb", color: 'white', borderRadius: 10 }}
+              >
                 Copy
               </button>
-              <button onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }} style={{ padding: "10px 18px", background: "#10b981", color: 'white', borderRadius: 10 }}>
+              <button
+                onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }}
+                style={{ padding: "10px 18px", background: "#10b981", color: 'white', borderRadius: 10 }}
+              >
                 Done
               </button>
             </div>
@@ -687,10 +783,16 @@ function TicketDetails() {
             />
             {closeError && <div className="error-text">{closeError}</div>}
             <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
-              <button onClick={handleSubmitReason} style={{ padding: '14px 28px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+              <button
+                onClick={handleSubmitReason}
+                style={{ padding: '14px 28px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
+              >
                 Continue to Close
               </button>
-              <button onClick={cancelClose} style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>
+              <button
+                onClick={cancelClose}
+                style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
+              >
                 Cancel
               </button>
             </div>
@@ -705,10 +807,19 @@ function TicketDetails() {
             <h3 style={{ margin: '0 0 20px', color: '#dc2626', fontSize: '1.6rem', fontWeight: 700 }}>Permanently Close Ticket?</h3>
             <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>Are you sure?</p>
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-              <button onClick={confirmCloseTicket} disabled={loading} style={{ padding: '16px 36px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+              <button
+                onClick={confirmCloseTicket}
+                disabled={loading}
+                style={{ padding: '16px 36px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
+              >
                 {loading ? 'Closing...' : 'Yes, Close It'}
               </button>
-              <button onClick={cancelClose} style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button
+                onClick={cancelClose}
+                style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -732,10 +843,16 @@ function TicketDetails() {
             />
             {reopenError && <div className="error-text">{reopenError}</div>}
             <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
-              <button onClick={handleSubmitreopenReason} style={{ padding: '14px 28px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+              <button
+                onClick={handleSubmitreopenReason}
+                style={{ padding: '14px 28px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
+              >
                 Continue to reopen
               </button>
-              <button onClick={cancelreopen} style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>
+              <button
+                onClick={cancelreopen}
+                style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
+              >
                 Cancel
               </button>
             </div>
@@ -750,10 +867,19 @@ function TicketDetails() {
             <h3 style={{ margin: '0 0 20px', color: '#16a34a', fontSize: '1.6rem', fontWeight: 700 }}>reopen This Ticket?</h3>
             <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-              <button onClick={confirmreopenTicket} disabled={loading} style={{ padding: '16px 36px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
+              <button
+                onClick={confirmreopenTicket}
+                disabled={loading}
+                style={{ padding: '16px 36px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
+              >
                 {loading ? 'Reviving...' : 'Yes, reopen It'}
               </button>
-              <button onClick={cancelreopen} style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button
+                onClick={cancelreopen}
+                style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

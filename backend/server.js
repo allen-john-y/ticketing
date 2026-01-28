@@ -133,10 +133,7 @@ const adminAccessPrimary = process.env.ADMIN_ACCESS_PRIMARY || passwordResetPrim
 const deptEmails = {
   "Password Reset": passwordResetPrimary,
   "Admin Access": adminAccessPrimary,
-  "Payroll Issue": "kishorekumars@sandeza-inc.com",
-  "Expense Reimbursement": "kishorekumars@sandeza-inc.com",
-  "Leave Request": "allenj@sandeza-inc.com",
-  "Employee Onboarding": "allenj@sandeza-inc.com",
+  "Operational & Finance": "vigneshm@sandeza-inc.com"
 };
 
 // ---------------------- Azure Graph Token ----------------------

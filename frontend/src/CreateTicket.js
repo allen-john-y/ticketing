@@ -631,13 +631,14 @@ function CreateTicket() {
                 <option value="Reimbursement">Reimbursement</option>
                 <option value="Invoice issue">Invoice issue</option>
                 <option value="Tax / GST">Tax / GST</option>
+                <option value="Payroll Issue">Payroll Issue</option>
                 <option value="Other">Other</option>
               </select>
 
               {formData.subQuery === 'Other' && (
                 <div style={{ marginTop: 8 }}>
                   <textarea
-                    rows="3"
+                    rows="1"
                     placeholder="Please describe the issue"
                     value={formData.otherSubQueryText}
                     onChange={(e) =>
