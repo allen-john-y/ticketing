@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -38,13 +38,14 @@ function CreateTicket() {
     onBehalfEmail: '',       // for Other: company email to verify
     alternativeEmail: '',    // delivery email (for Self or Other)
 
-    // NEW: sub query and other text for Operational & Finance
+    // sub query and other text for Operational & Finance
     subQuery: '',            // e.g. Salary, Reimbursement, Invoice issue...
     otherSubQueryText: '',   // free text when subQuery === 'Other'
 
-    // NEW: attachment metadata (we only keep the file object in UI)
+    // attachment metadata (we only keep the file object in UI)
     attachmentFile: null,
   });
+
   const [loading, setLoading] = useState(false);
   const [newPassword] = useState("");
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
@@ -54,15 +55,17 @@ function CreateTicket() {
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
 
-  // --- States for verification of "Other" on-behalf email
-  // verifyStatus: 'idle' | 'verifying' | 'verified' | 'notfound' | 'error'
+  // verification of "Other" on-behalf email
   const [verifyStatus, setVerifyStatus] = useState('idle');
   const [verifiedName, setVerifiedName] = useState('');
   const [verifyError, setVerifyError] = useState('');
 
-  // NEW: device admin group check
+  // device admin group check
   const [isDeviceAdmin, setIsDeviceAdmin] = useState(false);
   const [groupsLoading, setGroupsLoading] = useState(false);
+
+  // ref for file input to allow clearing
+  const fileInputRef = useRef(null); // [web:34][web:40]
 
   useEffect(() => {
     let mounted = true;
@@ -87,7 +90,7 @@ function CreateTicket() {
     return () => { mounted = false; };
   }, [instance, accounts]);
 
-  // NEW: fetch groups and detect GS_DeviceAdministrator membership
+  // fetch groups and detect GS_DeviceAdministrator membership
   useEffect(() => {
     if (!accounts || !accounts[0]) return;
     const fetchGroups = async () => {
@@ -112,7 +115,7 @@ function CreateTicket() {
     fetchGroups();
   }, [instance, accounts]);
 
-  // Call backend to verify an "onBehalfEmail" exists in Azure AD
+  // verify "Other" on-behalf email
   const handleVerifyOther = async () => {
     const email = (formData.onBehalfEmail || '').trim();
     setVerifyError('');
@@ -165,7 +168,7 @@ function CreateTicket() {
       return;
     }
 
-    // NEW: validation for Operational & Finance subQuery
+    // validation for Operational & Finance subQuery
     if (formData.category === 'Operational & Finance') {
       if (!formData.subQuery) {
         setModal({
@@ -282,7 +285,6 @@ function CreateTicket() {
         attachmentMeta = {
           fileName: formData.attachmentFile.name,
           fileType: formData.attachmentFile.type || 'application/octet-stream',
-          // fileUrl can be set by backend if you later add upload flow
         };
       }
 
@@ -365,6 +367,14 @@ function CreateTicket() {
   // Determine whether to disable the create button:
   const disableCreateBecauseDeviceAdmin =
     formData.category === 'Admin Access' && isDeviceAdmin;
+
+  // Clear attachment handler
+  const handleClearAttachment = () => {
+    setFormData(prev => ({ ...prev, attachmentFile: null }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''; // reset file input UI [web:34][web:40]
+    }
+  };
 
   return (
     <div style={styles.pageWrap}>
@@ -637,14 +647,15 @@ function CreateTicket() {
 
               {formData.subQuery === 'Other' && (
                 <div style={{ marginTop: 8 }}>
-                  <textarea
-                    rows="1"
+                  {/* Single-line text input instead of textarea */}
+                  <input
+                    type="text"
                     placeholder="Please describe the issue"
                     value={formData.otherSubQueryText}
                     onChange={(e) =>
                       setFormData({ ...formData, otherSubQueryText: e.target.value })
                     }
-                    style={styles.textarea}
+                    style={styles.input}
                     required
                   />
                 </div>
@@ -653,6 +664,7 @@ function CreateTicket() {
               <div style={{ marginTop: 12 }}>
                 <label style={styles.label}>Attachment (optional)</label>
                 <input
+                  ref={fileInputRef}
                   type="file"
                   onChange={(e) => {
                     const file = e.target.files?.[0] || null;
@@ -660,6 +672,39 @@ function CreateTicket() {
                   }}
                   style={{ fontSize: 13 }}
                 />
+
+                {/* Show selected file with remove (X) */}
+                {formData.attachmentFile && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 10px',
+                      borderRadius: 999,
+                      background: '#e5f0ff',
+                      fontSize: 13
+                    }}
+                  >
+                    <span>[Uploaded File] {formData.attachmentFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={handleClearAttachment}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                        color: '#dc2626'
+                      }}
+                      title="Remove attachment"
+                    >
+                      ✖
+                    </button>
+                  </div>
+                )}
+
                 <div
                   style={{
                     fontSize: 12,
