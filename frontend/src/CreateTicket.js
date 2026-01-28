@@ -41,10 +41,23 @@ function CreateTicket() {
     // sub query and other text for Operational & Finance
     subQuery: '',            // e.g. Salary, Reimbursement, Invoice issue...
     otherSubQueryText: '',   // free text when subQuery === 'Other'
-
-    // attachment metadata (we only keep the file object in UI)
-    attachmentFile: null,
   });
+
+  // New attachments state (enhanced)
+  const [attachments, setAttachments] = useState([]);
+  // attachments: [{ file: File, preview: string|null, uploading: bool, progress: number, uploaded: bool, error: string|null, serverResponse: object|null }]
+
+  const MAX_FILES = 5;
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
+  const ALLOWED_TYPES = [
+    'image/png', 'image/jpeg', 'image/jpg', 'image/gif',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+    'application/msword', // doc
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+    'text/plain',
+    'application/zip'
+  ];
 
   const [loading, setLoading] = useState(false);
   const [newPassword] = useState("");
@@ -65,7 +78,7 @@ function CreateTicket() {
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   // ref for file input to allow clearing
-  const fileInputRef = useRef(null); // [web:34][web:40]
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -279,13 +292,83 @@ function CreateTicket() {
       const returnPasswordToRequester =
         formData.category === 'Password Reset' && formData.onBehalf === 'Self';
 
-      // Build attachment metadata if present
-      let attachmentMeta;
-      if (formData.attachmentFile) {
-        attachmentMeta = {
-          fileName: formData.attachmentFile.name,
-          fileType: formData.attachmentFile.type || 'application/octet-stream',
-        };
+      // Upload attachments (if any) before creating ticket
+      let attachmentsMeta = [];
+      if (attachments && attachments.length > 0) {
+        // Only upload files that are not uploaded yet
+        for (let i = 0; i < attachments.length; i++) {
+          const att = attachments[i];
+          if (att.uploaded) {
+            if (att.serverResponse) attachmentsMeta.push(att.serverResponse);
+            continue;
+          }
+
+          // mark uploading
+          setAttachments(prev => {
+            const copy = [...prev];
+            copy[i] = { ...copy[i], uploading: true, progress: 0, error: null };
+            return copy;
+          });
+
+          try {
+            const form = new FormData();
+            form.append('file', att.file);
+            // Add any metadata fields if required by backend:
+            // form.append('purpose', 'ticket_attachment');
+
+            const uploadResp = await axios.post(`${backendBase}/upload`, form, {
+              headers: {
+                Authorization: `Bearer ${token.accessToken}`,
+                'Content-Type': 'multipart/form-data'
+              },
+              onUploadProgress: (progressEvent) => {
+                const p = progressEvent.total ? Math.round((progressEvent.loaded * 100) / progressEvent.total) : 0;
+                setAttachments(prev => {
+                  const copy = [...prev];
+                  copy[i] = { ...copy[i], progress: p };
+                  return copy;
+                });
+              }
+            });
+
+            // Expect backend to return something like { id, url, fileName, fileType }
+            const serverData = uploadResp?.data || null;
+
+            setAttachments(prev => {
+              const copy = [...prev];
+              copy[i] = { ...copy[i], uploading: false, uploaded: true, serverResponse: serverData, progress: 100 };
+              return copy;
+            });
+
+            if (serverData) {
+              attachmentsMeta.push({
+                fileName: serverData.fileName || att.file.name,
+                fileType: serverData.fileType || att.file.type,
+                url: serverData.url || serverData.location || serverData.path || null,
+                id: serverData.id || serverData.fileId || null
+              });
+            } else {
+              // fallback to local metadata if server didn't return
+              attachmentsMeta.push({
+                fileName: att.file.name,
+                fileType: att.file.type,
+                url: null,
+                id: null
+              });
+            }
+          } catch (err) {
+            console.error('Upload error for file', att.file.name, err);
+            setAttachments(prev => {
+              const copy = [...prev];
+              copy[i] = { ...copy[i], uploading: false, uploaded: false, error: err?.response?.data?.message || err.message || 'Upload failed' };
+              return copy;
+            });
+            // Option: fail the entire submit if an attachment failed upload
+            setModal({ open: true, title: 'Upload Failed', message: `Failed to upload ${att.file.name}: ${err?.response?.data?.message || err.message || 'Upload failed'}`, type: 'error' });
+            setLoading(false);
+            return;
+          }
+        } // end for
       }
 
       const ticketData = {
@@ -313,8 +396,8 @@ function CreateTicket() {
             }
           : {}),
 
-        // Attachment metadata
-        ...(attachmentMeta ? { attachment: attachmentMeta } : {}),
+        // Attachments metadata (array) if any
+        ...(attachmentsMeta && attachmentsMeta.length ? { attachments: attachmentsMeta } : {}),
       };
 
       const response = await axios.post(`${backendBase}/tickets`, ticketData, {
@@ -368,13 +451,128 @@ function CreateTicket() {
   const disableCreateBecauseDeviceAdmin =
     formData.category === 'Admin Access' && isDeviceAdmin;
 
-  // Clear attachment handler
-  const handleClearAttachment = () => {
-    setFormData(prev => ({ ...prev, attachmentFile: null }));
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''; // reset file input UI [web:34][web:40]
+  // Attachment helpers
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const fileTypeLabel = (type, name) => {
+    if (!type) {
+      if (name) {
+        const ext = name.split('.').pop()?.toLowerCase();
+        return ext || '';
+      }
+      return '';
+    }
+    return type.split('/').pop();
+  };
+
+  const isImageType = (t) => t && t.startsWith('image/');
+
+  // Handle selected files (from input or drop)
+  const handleFilesSelected = (fileList) => {
+    const incoming = Array.from(fileList || []);
+    if (!incoming.length) return;
+
+    const currentCount = attachments.length;
+    if (currentCount + incoming.length > MAX_FILES) {
+      setModal({
+        open: true,
+        title: 'Too many files',
+        message: `You can attach up to ${MAX_FILES} files.`,
+        type: 'error'
+      });
+      return;
+    }
+
+    const validated = [];
+    for (const file of incoming) {
+      if (file.size > MAX_FILE_SIZE) {
+        setModal({
+          open: true,
+          title: 'File too large',
+          message: `${file.name} is larger than ${formatBytes(MAX_FILE_SIZE)}.`,
+          type: 'error'
+        });
+        continue;
+      }
+      if (!ALLOWED_TYPES.includes(file.type) && !file.name.match(/\.(docx|doc|xlsx|xls|pdf|txt|zip)$/i)) {
+        setModal({
+          open: true,
+          title: 'Unsupported file type',
+          message: `${file.name} is not a supported file type.`,
+          type: 'error'
+        });
+        continue;
+      }
+      const preview = isImageType(file.type) ? URL.createObjectURL(file) : null;
+      validated.push({
+        file,
+        preview,
+        uploading: false,
+        progress: 0,
+        uploaded: false,
+        error: null,
+        serverResponse: null
+      });
+    }
+
+    if (validated.length) {
+      setAttachments(prev => [...prev, ...validated]);
+      // Clear native file input so same file can be selected again if needed
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  // Remove a single attachment
+  const handleRemoveAttachment = (index) => {
+    setAttachments(prev => {
+      const copy = [...prev];
+      const removed = copy.splice(index, 1)[0];
+      if (removed && removed.preview) {
+        try { URL.revokeObjectURL(removed.preview); } catch (e) {}
+      }
+      return copy;
+    });
+    // Clear file input ref if no attachments remain
+    if (fileInputRef.current && attachments.length <= 1) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Clear all attachments
+  const handleClearAllAttachments = () => {
+    attachments.forEach(a => { if (a.preview) try { URL.revokeObjectURL(a.preview); } catch (e) {} });
+    setAttachments([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Drag and drop handlers
+  const [isDragging, setIsDragging] = useState(false);
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const dtFiles = e.dataTransfer?.files;
+    handleFilesSelected(dtFiles);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    // cleanup previews on unmount
+    return () => {
+      attachments.forEach(a => { if (a.preview) try { URL.revokeObjectURL(a.preview); } catch (e) {} });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div style={styles.pageWrap}>
@@ -620,7 +818,7 @@ function CreateTicket() {
             </>
           )}
 
-          {/* Operational & Finance - sub category + attachment */}
+          {/* Operational & Finance - sub category + enhanced attachment */}
           {formData.category === 'Operational & Finance' && (
             <div style={{ marginBottom: 12 }}>
               <label style={styles.label}>Sub Category *</label>
@@ -663,45 +861,140 @@ function CreateTicket() {
 
               <div style={{ marginTop: 12 }}>
                 <label style={styles.label}>Attachment (optional)</label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setFormData({ ...formData, attachmentFile: file });
-                  }}
-                  style={{ fontSize: 13 }}
-                />
 
-                {/* Show selected file with remove (X) */}
-                {formData.attachmentFile && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '6px 10px',
-                      borderRadius: 999,
-                      background: '#e5f0ff',
-                      fontSize: 13
-                    }}
-                  >
-                    <span>[Uploaded File] {formData.attachmentFile.name}</span>
+                {/* Drag & Drop Zone */}
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={() => setIsDragging(false)}
+                  style={{
+                    border: isDragging ? '2px dashed #2563eb' : '1px dashed #e6e9ee',
+                    borderRadius: 8,
+                    padding: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    background: isDragging ? '#eff6ff' : '#fff',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: '#1f2937' }}>
+                      Drag & drop files here or click to browse
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+                      Supported: images, PDF, Word, Excel, txt, zip. Max {formatBytes(MAX_FILE_SIZE)} each. Up to {MAX_FILES} files.
+                    </div>
+                  </div>
+
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      onChange={(e) => handleFilesSelected(e.target.files)}
+                      style={{ display: 'none' }}
+                    />
                     <button
                       type="button"
-                      onClick={handleClearAttachment}
+                      onClick={() => fileInputRef.current && fileInputRef.current.click()}
                       style={{
+                        padding: '8px 12px',
+                        background: '#2563eb',
+                        color: 'white',
                         border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        color: '#dc2626'
+                        borderRadius: 8,
+                        cursor: 'pointer'
                       }}
-                      title="Remove attachment"
                     >
-                      ✖
+                      Browse
                     </button>
+                  </div>
+                </div>
+
+                {/* Selected attachments list */}
+                {attachments.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {attachments.map((att, idx) => (
+                        <div
+                          key={`${att.file.name}-${idx}`}
+                          style={{
+                            width: 180,
+                            border: '1px solid #e6e9ee',
+                            borderRadius: 8,
+                            padding: 8,
+                            background: '#ffffff',
+                            display: 'flex',
+                            gap: 8,
+                            alignItems: 'center',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <div style={{ width: 44, height: 44, flex: '0 0 44px' }}>
+                            {att.preview ? (
+                              <img
+                                src={att.preview}
+                                alt={att.file.name}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }}
+                              />
+                            ) : (
+                              <div style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', borderRadius: 6, fontSize: 12 }}>
+                                {fileTypeLabel(att.file.type, att.file.name)}
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {att.file.name}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#6b7280' }}>{formatBytes(att.file.size)}</div>
+
+                            {/* upload progress or error */}
+                            {att.uploading && (
+                              <div style={{ marginTop: 6 }}>
+                                <div style={{ height: 8, background: '#f3f4f6', borderRadius: 6 }}>
+                                  <div style={{ width: `${att.progress}%`, height: '100%', background: '#2563eb', borderRadius: 6 }} />
+                                </div>
+                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{att.progress}%</div>
+                              </div>
+                            )}
+                            {att.error && (
+                              <div style={{ marginTop: 6, color: '#dc2626', fontSize: 12 }}>{att.error}</div>
+                            )}
+                            {att.uploaded && (
+                              <div style={{ marginTop: 6, color: '#16a34a', fontSize: 12 }}>Uploaded</div>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAttachment(idx)}
+                              title="Remove"
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer',
+                                color: '#ef4444',
+                                fontSize: 16,
+                                padding: 4
+                              }}
+                            >
+                              ✖
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                      <button type="button" onClick={handleClearAllAttachments} style={{ ...styles.ghostButton }}>Clear all</button>
+                    </div>
                   </div>
                 )}
 
@@ -709,11 +1002,10 @@ function CreateTicket() {
                   style={{
                     fontSize: 12,
                     color: '#6b7280',
-                    marginTop: 4
+                    marginTop: 8
                   }}
                 >
-                  You can attach a supporting document (invoice, payslip, etc.). Currently only file
-                  metadata is stored; uploads can be wired later.
+                  Attach supporting documents like invoice, payslip, etc. Files will be uploaded when you submit the ticket.
                 </div>
               </div>
             </div>
