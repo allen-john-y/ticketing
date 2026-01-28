@@ -316,7 +316,7 @@ function TicketDetails() {
         ...(ticket.reopenedAt ? [{ action: "reopend", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reopenReason }] : [])
       ];
 
-  const loggedEmail = (accounts[0]?.username || accounts[0]?.upn || '').toLowerCase().trim();
+ // const loggedEmail = (accounts[0]?.username || accounts[0]?.upn || '').toLowerCase().trim();
  // const isCreator = ticket.userEmail && (loggedEmail === ticket.userEmail.toLowerCase().trim());
 
   return (
