@@ -1,4 +1,4 @@
-// TicketDetails.js (UPDATED – Operational & Finance subQuery + attachment in details and history)
+// TicketDetails.js (UPDATED – attachment modal viewer for ticket and history items)
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -46,6 +46,11 @@ function TicketDetails() {
   const [returnedPassword, setReturnedPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
+  // Attachment modal state
+  const [attachmentModalOpen, setAttachmentModalOpen] = useState(false);
+  const [activeAttachment, setActiveAttachment] = useState(null); // { fileName, fileType, fileUrl, id }
+  const [attachmentList, setAttachmentList] = useState([]); // for multi attachments view when ticket.attachments exists
+
   // fetch authority (admin group)
   useEffect(() => {
     const fetchAuthority = async () => {
@@ -73,6 +78,28 @@ function TicketDetails() {
       try {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
+
+        // prepare attachments list if present
+        const list = [];
+        if (res.data.attachments && Array.isArray(res.data.attachments) && res.data.attachments.length) {
+          res.data.attachments.forEach(a => {
+            list.push({
+              fileName: a.fileName || a.file_name || '',
+              fileType: a.fileType || a.file_type || '',
+              fileUrl: a.fileUrl || a.url || a.path || null,
+              id: a.id || a.fileId || null
+            });
+          });
+        } else if (res.data.attachment && (res.data.attachment.fileName || res.data.attachment.fileUrl)) {
+          // fallback to legacy single attachment
+          list.push({
+            fileName: res.data.attachment.fileName || '',
+            fileType: res.data.attachment.fileType || '',
+            fileUrl: res.data.attachment.fileUrl || null,
+            id: null
+          });
+        }
+        setAttachmentList(list);
 
         // CATEGORY HEAD CHECK
         if (accounts[0] && res.data) {
@@ -309,35 +336,32 @@ function TicketDetails() {
       ];
 
   // Helpers for attachment display (main ticket)
-  const hasAttachment = ticket.attachment && (ticket.attachment.fileName || ticket.attachment.fileUrl);
-  const attachmentLabel = ticket.attachment?.fileName || 'Attachment';
-  const attachmentTypeLabel = ticket.attachment?.fileType || '';
+  const hasAttachment = (attachmentList && attachmentList.length > 0);
+  const firstAttachment = hasAttachment ? attachmentList[0] : null;
 
-  const renderAttachment = () => {
-    if (!hasAttachment) return null;
-    const url = ticket.attachment.fileUrl;
-    return (
-      <div style={{ marginTop: 10 }}>
-        <strong>Attachment:</strong>{' '}
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
-          >
-            {attachmentLabel}
-          </a>
-        ) : (
-          <span style={{ fontWeight: 600 }}>{attachmentLabel}</span>
-        )}
-        {attachmentTypeLabel && (
-          <span style={{ marginLeft: 8, fontSize: 12, color: '#6b7280' }}>
-            ({attachmentTypeLabel})
-          </span>
-        )}
-      </div>
-    );
+  const isImageType = (type) => type && type.startsWith && type.startsWith('image/');
+  const isPdfType = (type, url) => {
+    if (type && type === 'application/pdf') return true;
+    if (url && url.toLowerCase().endsWith('.pdf')) return true;
+    return false;
+  };
+
+  const openAttachmentViewer = (attachment) => {
+    if (!attachment) return;
+    // for non-viewable types, open in new tab
+    const viewableImage = isImageType(attachment.fileType);
+    const viewablePdf = isPdfType(attachment.fileType, attachment.fileUrl);
+    if (!viewableImage && !viewablePdf) {
+      // open in new tab
+      if (attachment.fileUrl) {
+        window.open(attachment.fileUrl, '_blank', 'noopener');
+      } else {
+        alert('No URL available to open this attachment.');
+      }
+      return;
+    }
+    setActiveAttachment(attachment);
+    setAttachmentModalOpen(true);
   };
 
   // Helper for attachment in each history event
@@ -346,21 +370,16 @@ function TicketDetails() {
     const label = event.attachment.fileName || 'Attachment';
     const typeLabel = event.attachment.fileType || '';
     const url = event.attachment.fileUrl;
+    const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
     return (
       <div style={{ marginTop: 8, fontSize: 13 }}>
         <strong>Attachment:</strong>{' '}
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
-          >
-            {label}
-          </a>
-        ) : (
-          <span style={{ fontWeight: 600 }}>{label}</span>
-        )}
+        <button
+          onClick={() => openAttachmentViewer(att)}
+          style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}
+        >
+          View attachment
+        </button>
         {typeLabel && (
           <span style={{ marginLeft: 6, fontSize: 12, color: '#6b7280' }}>
             ({typeLabel})
@@ -370,15 +389,71 @@ function TicketDetails() {
     );
   };
 
+  // Render attachment summary in ticket details & approval modal
+  const renderAttachmentSummary = () => {
+    if (!hasAttachment) return null;
+
+    if (attachmentList.length === 1) {
+      const a = attachmentList[0];
+      return (
+        <div style={{ marginTop: 10 }}>
+          <strong>Attachment:</strong>{' '}
+          <button
+            onClick={() => openAttachmentViewer(a)}
+            style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
+          >
+            View attachment
+          </button>
+          <span style={{ marginLeft: 10, fontSize: 13, color: '#374151', fontWeight: 700 }}>{a.fileName}</span>
+        </div>
+      );
+    }
+
+    // multiple attachments
+    return (
+      <div style={{ marginTop: 10 }}>
+        <strong>Attachments:</strong>{' '}
+        <button
+          onClick={() => {
+            // open modal and show the first attachment by default
+            if (attachmentList.length) {
+              setAttachmentList(attachmentList); // ensure state has list
+              setActiveAttachment(attachmentList[0]);
+              setAttachmentModalOpen(true);
+            }
+          }}
+          style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
+        >
+          Attachments uploaded ({attachmentList.length})
+        </button>
+      </div>
+    );
+  };
+
   return (
     <>
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes zoomIn { from { transform: scale(0.8); } to { transform: scale(1); } }
-        .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.3s; }
-        .modal-box { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 760px; text-align: center; box-shadow: 0 15px 50px rgba(0,0,0,0.25); animation: zoomIn 0.3s; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.18s; }
+        .modal-box { background: white; padding: 30px; border-radius: 12px; width: 92%; max-width: 980px; text-align: center; box-shadow: 0 15px 50px rgba(0,0,0,0.25); animation: zoomIn 0.18s; position: relative; }
         .reason-input { width: 80%; padding: 12px; margin: 12px 0; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; }
         .error-text { color: #dc2626; font-size: 14px; margin-top: 8px; font-weight: 500; }
+
+        /* Attachment viewer styles */
+        .att-viewer { display:flex; flex-direction:column; gap:12px; align-items:stretch; }
+        .att-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+        .att-title { font-weight:800; font-size:16px; color:#0f172a; }
+        .att-close { background:transparent; border:none; font-size:20px; cursor:pointer; color:#475569; }
+        .att-content { width:100%; min-height: 240px; max-height: 80vh; display:flex; justify-content:center; align-items:center; overflow:auto; background:#f8fafc; border-radius:10px; padding:12px; }
+        .att-img { max-width:100%; max-height:78vh; object-fit:contain; border-radius:8px; box-shadow:0 6px 18px rgba(2,6,23,0.08); }
+        .att-iframe { width:100%; height:78vh; border: none; border-radius:8px; }
+        .att-list { display:flex; gap:8px; overflow:auto; padding-top:8px; }
+        .att-thumb { padding:6px; background:#fff; border-radius:8px; border:1px solid #e6e9ee; cursor:pointer; min-width:120px; display:flex; gap:8px; align-items:center; }
+        .att-thumb img { width:56px; height:56px; object-fit:cover; border-radius:6px; }
+        .att-thumb .meta { display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
+        .att-thumb .meta .name { font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .att-thumb .meta .type { font-size:12px; color:#6b7280; }
       `}</style>
 
       {/* BACK BUTTON */}
@@ -491,7 +566,7 @@ function TicketDetails() {
               {/* Attachment small hint */}
               {hasAttachment && (
                 <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
-                  {renderAttachment()}
+                  {renderAttachmentSummary()}
                 </div>
               )}
             </div>
@@ -587,7 +662,7 @@ function TicketDetails() {
           <strong style={{ display: 'block', marginBottom: 8, fontSize: 15 }}>Description</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
           {/* Attachment detailed view */}
-          {renderAttachment()}
+          {renderAttachmentSummary()}
         </div>
       </div>
 
@@ -719,7 +794,7 @@ function TicketDetails() {
               {/* attachment summary inside approval modal */}
               {hasAttachment && (
                 <div style={{ marginTop: 8 }}>
-                  {renderAttachment()}
+                  {renderAttachmentSummary()}
                 </div>
               )}
 
@@ -931,6 +1006,67 @@ function TicketDetails() {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Attachment Viewer Modal */}
+      {attachmentModalOpen && activeAttachment && (
+        <div className="overlay" onClick={() => setAttachmentModalOpen(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
+            <div className="att-viewer">
+              <div className="att-toolbar">
+                <div className="att-title">{activeAttachment.fileName || 'Attachment'}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {/* If there are multiple attachments show count */}
+                  {attachmentList && attachmentList.length > 1 && (
+                    <div style={{ fontSize: 13, color: '#6b7280', marginRight: 8 }}>
+                      {attachmentList.length} attachments
+                    </div>
+                  )}
+                  <button className="att-close" onClick={() => setAttachmentModalOpen(false)} aria-label="Close attachment viewer">✖</button>
+                </div>
+              </div>
+
+              <div className="att-content">
+                {isImageType(activeAttachment.fileType) ? (
+                  <img src={activeAttachment.fileUrl} alt={activeAttachment.fileName} className="att-img" />
+                ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
+                  <iframe src={activeAttachment.fileUrl} title={activeAttachment.fileName || 'PDF'} className="att-iframe" />
+                ) : (
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ marginBottom: 12 }}>This file type cannot be previewed inline. It will open in a new tab.</p>
+                    <a href={activeAttachment.fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '8px 14px', background: '#2563eb', color: '#fff', borderRadius: 8, textDecoration: 'none', fontWeight: 700 }}>
+                      Open attachment
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* If multiple attachments exist, show thumbnails / list below */}
+              {attachmentList && attachmentList.length > 1 && (
+                <div className="att-list" style={{ marginTop: 8 }}>
+                  {attachmentList.map((a, idx) => {
+                    const previewIsImage = isImageType(a.fileType);
+                    return (
+                      <div key={`${a.fileName}-${idx}`} className="att-thumb" onClick={() => setActiveAttachment(a)} title={a.fileName}>
+                        {previewIsImage ? (
+                          <img src={a.fileUrl} alt={a.fileName} />
+                        ) : (
+                          <div style={{ width:56, height:56, display:'flex', alignItems:'center', justifyContent:'center', background:'#f3f4f6', borderRadius:6, fontSize:12, padding:6 }}>
+                            {a.fileName?.split('.').pop()?.toUpperCase() || 'FILE'}
+                          </div>
+                        )}
+                        <div className="meta">
+                          <div className="name">{a.fileName}</div>
+                          <div className="type">{a.fileType || (a.fileUrl ? a.fileUrl.split('.').pop() : '')}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

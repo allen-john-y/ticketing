@@ -8,13 +8,26 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const fetch = require("node-fetch");
 const https = require("https");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
 require("dotenv").config();
 
 // ---------------------- App Setup ------------------------
 const app = express();
 app.set("trust proxy", 1);
-app.use(express.json());
+app.use(express.json({ limit: '25mb' })); // increase JSON body limit if attachments metadata is large
 app.use(helmet());
+
+// Ensure uploads directory exists
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+// Serve uploaded files statically
+app.use("/uploads", express.static(UPLOAD_DIR));
 
 // ---------------------- CORS ------------------------------
 const allowedOrigins = [
@@ -59,6 +72,7 @@ const connectDB = async () => {
   }
 };
 connectDB();
+
 //--------------------ticket-Schema----------------------------
 const ticketSchema = new mongoose.Schema(
   {
@@ -86,12 +100,22 @@ const ticketSchema = new mongoose.Schema(
     subQuery: { type: String },          // 'Salary','Reimbursement','Invoice issue','Tax / GST','Other'
     otherSubQueryText: { type: String }, // free text when subQuery = 'Other'
 
-    // attachment metadata (single file) on the ticket
+    // For backward compatibility: single attachment metadata (legacy)
     attachment: {
       fileName: { type: String },
       fileType: { type: String },
       fileUrl: { type: String } // optional: where you later upload the file
     },
+
+    // New: attachments array to support multiple files
+    attachments: [
+      {
+        fileName: { type: String },
+        fileType: { type: String },
+        fileUrl: { type: String },
+        id: { type: String } // server-side id or filename
+      }
+    ],
 
     // history with optional attachment snapshot
     history: [
@@ -115,7 +139,6 @@ const ticketSchema = new mongoose.Schema(
 );
 
 const Ticket = mongoose.model('Ticket', ticketSchema);
-
 
 // ---------------------- Counter ---------------------------
 let ticketCounter = 0;
@@ -364,6 +387,51 @@ const addUserToGroup = async (groupId, userObjectId) => {
   return true;
 };
 
+// ---------------------- UPLOAD (NEW) ----------------------
+// Multer setup
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, UPLOAD_DIR);
+  },
+  filename: function (req, file, cb) {
+    // unique filename: timestamp-random-ext
+    const rnd = crypto.randomBytes(6).toString('hex');
+    const ext = path.extname(file.originalname) || '';
+    const name = `${Date.now()}-${rnd}${ext}`;
+    cb(null, name);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB limit
+});
+
+// POST /upload
+// Accepts single file field named 'file' and returns metadata: { id, fileName, fileType, url }
+app.post('/upload', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const saved = req.file;
+    // Build public URL based on request
+    const protocol = req.protocol;
+    const host = req.get('host'); // includes port if any
+    const fileUrl = `${protocol}://${host}/uploads/${encodeURIComponent(saved.filename)}`;
+
+    return res.json({
+      id: saved.filename,
+      fileName: saved.originalname,
+      fileType: saved.mimetype,
+      url: fileUrl,
+      size: saved.size
+    });
+  } catch (err) {
+    console.error('Upload error:', err);
+    return res.status(500).json({ message: 'Upload failed', error: err.message });
+  }
+});
+
 // ---------------------- Routes ----------------------------
 
 // Health Check
@@ -584,6 +652,8 @@ app.post("/tickets", async (req, res) => {
       onBehalf,
       onBehalfEmail,
       deliveryEmail,
+      // new: attachments array from client (optional)
+      attachments
     } = req.body;
     if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
@@ -612,7 +682,8 @@ app.post("/tickets", async (req, res) => {
     const initialStatus = approvalRequiredCategories.includes(category) ? "Waiting for approval" : "Open";
 
     ticketCounter++;
-    const ticket = await Ticket.create({
+
+    const ticketPayload = {
       ticketNumber: ticketCounter,
       userId,
       userName,
@@ -632,7 +703,29 @@ app.post("/tickets", async (req, res) => {
           reason: null,
         },
       ],
-    });
+    };
+
+    // If client provided attachments array, attach it to ticket
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      // Normalize each item to expected fields
+      ticketPayload.attachments = attachments.map((a) => ({
+        fileName: a.fileName || a.file_name || a.name || '',
+        fileType: a.fileType || a.file_type || a.type || '',
+        fileUrl: a.url || a.fileUrl || a.path || null,
+        id: a.id || a.fileId || null
+      }));
+      // For backward compatibility - set single attachment to first item if present
+      if (!ticketPayload.attachment && ticketPayload.attachments.length > 0) {
+        const first = ticketPayload.attachments[0];
+        ticketPayload.attachment = {
+          fileName: first.fileName,
+          fileType: first.fileType,
+          fileUrl: first.fileUrl
+        };
+      }
+    }
+
+    const ticket = await Ticket.create(ticketPayload);
 
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;

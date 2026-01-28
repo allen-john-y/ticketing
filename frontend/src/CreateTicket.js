@@ -292,14 +292,30 @@ function CreateTicket() {
       const returnPasswordToRequester =
         formData.category === 'Password Reset' && formData.onBehalf === 'Self';
 
+      // Helper to normalize server response or fallback to local file meta
+      const normalizeServerResp = (serverData, file) => {
+        const sd = serverData || {};
+        const fileUrl = sd.fileUrl || sd.url || sd.path || sd.location || null;
+        return {
+          fileName: sd.fileName || sd.file_name || file?.name || '',
+          fileType: sd.fileType || sd.file_type || file?.type || '',
+          fileUrl,
+          id: sd.id || sd.fileId || sd.filename || null,
+          size: sd.size || (file ? file.size : null)
+        };
+      };
+
       // Upload attachments (if any) before creating ticket
       let attachmentsMeta = [];
       if (attachments && attachments.length > 0) {
         // Only upload files that are not uploaded yet
         for (let i = 0; i < attachments.length; i++) {
           const att = attachments[i];
+
+          // If already uploaded and serverResponse exists, normalize & use it
           if (att.uploaded) {
-            if (att.serverResponse) attachmentsMeta.push(att.serverResponse);
+            const normalized = normalizeServerResp(att.serverResponse, att.file);
+            attachmentsMeta.push(normalized);
             continue;
           }
 
@@ -313,8 +329,6 @@ function CreateTicket() {
           try {
             const form = new FormData();
             form.append('file', att.file);
-            // Add any metadata fields if required by backend:
-            // form.append('purpose', 'ticket_attachment');
 
             const uploadResp = await axios.post(`${backendBase}/upload`, form, {
               headers: {
@@ -331,31 +345,17 @@ function CreateTicket() {
               }
             });
 
-            // Expect backend to return something like { id, url, fileName, fileType }
-            const serverData = uploadResp?.data || null;
+            const serverDataRaw = uploadResp?.data || null;
+            const serverData = normalizeServerResp(serverDataRaw, att.file);
 
+            // store normalized response back into attachment state
             setAttachments(prev => {
               const copy = [...prev];
               copy[i] = { ...copy[i], uploading: false, uploaded: true, serverResponse: serverData, progress: 100 };
               return copy;
             });
 
-            if (serverData) {
-              attachmentsMeta.push({
-                fileName: serverData.fileName || att.file.name,
-                fileType: serverData.fileType || att.file.type,
-                url: serverData.url || serverData.location || serverData.path || null,
-                id: serverData.id || serverData.fileId || null
-              });
-            } else {
-              // fallback to local metadata if server didn't return
-              attachmentsMeta.push({
-                fileName: att.file.name,
-                fileType: att.file.type,
-                url: null,
-                id: null
-              });
-            }
+            attachmentsMeta.push(serverData);
           } catch (err) {
             console.error('Upload error for file', att.file.name, err);
             setAttachments(prev => {
@@ -363,7 +363,6 @@ function CreateTicket() {
               copy[i] = { ...copy[i], uploading: false, uploaded: false, error: err?.response?.data?.message || err.message || 'Upload failed' };
               return copy;
             });
-            // Option: fail the entire submit if an attachment failed upload
             setModal({ open: true, title: 'Upload Failed', message: `Failed to upload ${att.file.name}: ${err?.response?.data?.message || err.message || 'Upload failed'}`, type: 'error' });
             setLoading(false);
             return;
@@ -396,7 +395,7 @@ function CreateTicket() {
             }
           : {}),
 
-        // Attachments metadata (array) if any
+        // Attachments metadata (array) if any - normalized shape with fileUrl
         ...(attachmentsMeta && attachmentsMeta.length ? { attachments: attachmentsMeta } : {}),
       };
 
@@ -450,6 +449,14 @@ function CreateTicket() {
   // Determine whether to disable the create button:
   const disableCreateBecauseDeviceAdmin =
     formData.category === 'Admin Access' && isDeviceAdmin;
+
+  // Clear attachment handler
+  const handleClearAttachment = () => {
+    setAttachments(prev => ({ ...prev, attachmentFile: null }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''; // reset file input UI [web:34][web:40]
+    }
+  };
 
   // Attachment helpers
   const formatBytes = (bytes) => {
