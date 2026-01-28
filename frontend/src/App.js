@@ -102,6 +102,7 @@ function Header({ logout }) {
   // check whether current user belongs to Helpdesk_Admin
   useEffect(() => {
     let cancelled = false;
+    const backendBase = 'https://ticketing-hn59.onrender.com';
 
     const checkMembership = async () => {
       if (!accounts || !accounts[0]) {
@@ -322,7 +323,7 @@ function Header({ logout }) {
         name: accounts?.[0]?.name || accounts?.[0]?.username || '',
         mail: accounts?.[0]?.username || accounts?.[0]?.username || '',
       };
-      await fetch('/api/notify-admin-added', {
+      await fetch(`${backendBase}/api/notify-admin-added`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -425,7 +426,7 @@ function Header({ logout }) {
         name: accounts?.[0]?.name || accounts?.[0]?.username || '',
         mail: accounts?.[0]?.username || accounts?.[0]?.username || '',
       };
-      await fetch('/api/notify-admin-removed', {
+      await fetch(`${backendBase}/api/notify-admin-removed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
