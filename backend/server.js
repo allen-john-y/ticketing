@@ -386,6 +386,137 @@ app.post("/verify-user", async (req, res) => {
   }
 });
 
+// ---------------------- ADMIN NOTIFICATION ROUTES ----------------------
+// These endpoints are added to support frontend notifications when an admin
+// adds or removes a user from the Helpdesk_Admin group. They do not alter
+// any existing functionality and only send emails using the existing
+// sendEmail/buildHtmlEmail helpers.
+
+// payload: { actor: { id, name, mail }, target: { id, name, mail } }
+app.post("/api/notify-admin-added", async (req, res) => {
+  try {
+    const { actor, target } = req.body || {};
+    if (!actor || !target) return res.status(400).json({ message: "actor and target are required" });
+    const actorName = actor.name || actor.mail || "Unknown";
+    const actorMail = actor.mail || null;
+    const targetName = target.name || target.mail || "Unknown";
+    const targetMail = target.mail || null;
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+    // Email to actor (the admin who performed the add)
+    const actorTitle = `Admin Added — ${targetName} added to Helpdesk_Admin`;
+    const actorFields = [
+      { label: "Action", value: "Add Admin" },
+      { label: "Performed By", value: actorName },
+      { label: "Added User", value: `${targetName} (${targetMail || '—'})` },
+      { label: "When (IST)", value: nowIST },
+    ];
+    const actorHtml = buildHtmlEmail({
+      title: actorTitle,
+      subtitle: "Adding new admin completed successfully",
+      statusColor: "#16a34a",
+      fields: actorFields,
+      description: `You have successfully added ${targetName} as a Helpdesk Admin.`,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+      actionText: "Open Helpdesk"
+    });
+
+    // Email to target (the newly added admin)
+    const targetTitle = `You were added as Helpdesk Admin`;
+    const targetFields = [
+      { label: "Added By", value: actorName },
+      { label: "When (IST)", value: nowIST },
+      { label: "Group", value: "Helpdesk_Admin" },
+    ];
+    const targetHtml = buildHtmlEmail({
+      title: targetTitle,
+      subtitle: `You have been granted admin rights in Helpdesk`,
+      statusColor: "#0ea5e9",
+      fields: targetFields,
+      description: `You are added as new admin in Helpdesk portal by ${actorName}. If this was unexpected, please contact your IT department.`,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+      actionText: "Open Helpdesk"
+    });
+
+    // send emails (fire sequentially - if one fails, report)
+    const actorSend = actorMail ? await sendEmail(actorMail, actorTitle, actorHtml, itHead) : false;
+    const targetSend = targetMail ? await sendEmail(targetMail, targetTitle, targetHtml, itHead) : false;
+
+    return res.json({
+      message: "Notification attempted",
+      actorNotified: !!actorSend,
+      targetNotified: !!targetSend,
+    });
+  } catch (err) {
+    console.error("notify-admin-added error:", err);
+    return res.status(500).json({ message: "Failed to send admin-added notifications", error: err.message });
+  }
+});
+
+// payload: { actor: { id, name, mail }, target: { id, name, mail } }
+app.post("/api/notify-admin-removed", async (req, res) => {
+  try {
+    const { actor, target } = req.body || {};
+    if (!actor || !target) return res.status(400).json({ message: "actor and target are required" });
+    const actorName = actor.name || actor.mail || "Unknown";
+    const actorMail = actor.mail || null;
+    const targetName = target.name || target.mail || "Unknown";
+    const targetMail = target.mail || null;
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+    // Email to actor (the admin who performed the removal)
+    const actorTitle = `Admin Removed — ${targetName} removed from Helpdesk_Admin`;
+    const actorFields = [
+      { label: "Action", value: "Remove Admin" },
+      { label: "Performed By", value: actorName },
+      { label: "Removed User", value: `${targetName} (${targetMail || '—'})` },
+      { label: "When (IST)", value: nowIST },
+    ];
+    const actorHtml = buildHtmlEmail({
+      title: actorTitle,
+      subtitle: "Admin removal completed successfully",
+      statusColor: "#16a34a",
+      fields: actorFields,
+      description: `You have successfully removed ${targetName} from Helpdesk Admins.`,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+      actionText: "Open Helpdesk"
+    });
+
+    // Email to target (the user removed)
+    const targetTitle = `You were removed from Helpdesk Admins`;
+    const targetFields = [
+      { label: "Removed By", value: actorName },
+      { label: "When (IST)", value: nowIST },
+      { label: "Group", value: "Helpdesk_Admin" },
+    ];
+    const targetHtml = buildHtmlEmail({
+      title: targetTitle,
+      subtitle: `Your admin rights were revoked`,
+      statusColor: "#dc2626",
+      fields: targetFields,
+      description: `You are removed from admin in Helpdesk portal by ${actorName}. If this was unexpected, please contact your IT department.`,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+      actionText: "Open Helpdesk"
+    });
+
+    const actorSend = actorMail ? await sendEmail(actorMail, actorTitle, actorHtml, itHead) : false;
+    const targetSend = targetMail ? await sendEmail(targetMail, targetTitle, targetHtml, itHead) : false;
+
+    return res.json({
+      message: "Notification attempted",
+      actorNotified: !!actorSend,
+      targetNotified: !!targetSend,
+    });
+  } catch (err) {
+    console.error("notify-admin-removed error:", err);
+    return res.status(500).json({ message: "Failed to send admin-removed notifications", error: err.message });
+  }
+});
+
 // ---------------------- PART 2 ----------------------
 // Get Tickets
 app.get("/tickets", async (req, res) => {
