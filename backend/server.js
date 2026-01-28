@@ -21,12 +21,14 @@ app.use(express.json({ limit: '25mb' })); // increase JSON body limit if attachm
 app.use(helmet());
 
 // Ensure uploads directory exists
-const UPLOAD_DIR = path.join(__dirname, "uploads");
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+// Serve uploaded files statically with proper headers
+app.use("/uploads", (req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.removeHeader("Content-Security-Policy");
+  next();
+});
 
-// Serve uploaded files statically
 app.use("/uploads", express.static(UPLOAD_DIR));
 
 // ---------------------- CORS ------------------------------
