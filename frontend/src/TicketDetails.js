@@ -317,7 +317,7 @@ function TicketDetails() {
       ];
 
   const loggedEmail = (accounts[0]?.username || accounts[0]?.upn || '').toLowerCase().trim();
-  const isCreator = ticket.userEmail && (loggedEmail === ticket.userEmail.toLowerCase().trim());
+ // const isCreator = ticket.userEmail && (loggedEmail === ticket.userEmail.toLowerCase().trim());
 
   return (
     <>
