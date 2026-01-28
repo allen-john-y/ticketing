@@ -8,6 +8,7 @@ import CreateTicket from './CreateTicket';
 import TicketDetails from './TicketDetails';
 import Dashboard from './Dashboard';
 import logo from './sandeza.jpg';
+import gearIcon from './GearIcon.jpg';
 
 const pca = new PublicClientApplication({
   auth: {
@@ -347,10 +348,11 @@ function Header({ logout }) {
                   }}
                 >
                   {/* simple gear svg */}
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 2.3 16.88l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82L4.21 3.1A2 2 0 1 1 7 1.27l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V1a2 2 0 1 1 4 0v.09c0 .59.39 1.12 1 1.51h.91a1.65 1.65 0 0 0 1.82-.33l.06-.06A2 2 0 1 1 21.69 7.12l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.59 0 1.12.39 1.51 1H23a2 2 0 1 1 0 4h-.09c-.39.61-.92 1-1.51 1z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                  <img src={gearIcon}
+                  alt="Settings"
+                  style={{ width: 18, height: 18, objectFit: 'contain' }}
+                  />
+
                 </button>
 
                 {settingsOpen && (
