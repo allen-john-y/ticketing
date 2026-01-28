@@ -33,6 +33,15 @@ function Header({ logout }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Group id cache (Helpdesk_Admin)
+  const [groupId, setGroupId] = useState(null);
+
+  // Admin action UI state
+  const [adminUserInput, setAdminUserInput] = useState(''); // expects userPrincipalName / email
+  const [adminActionLoading, setAdminActionLoading] = useState(false);
+  const [adminActionMessage, setAdminActionMessage] = useState(null);
+  const [adminActionError, setAdminActionError] = useState(null);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
@@ -114,18 +123,19 @@ function Header({ logout }) {
           return;
         }
 
-        const groupId = group.id;
+        const foundGroupId = group.id;
+        if (!cancelled) setGroupId(foundGroupId);
 
         // 2) use checkMemberGroups to verify membership
         const checkRes = await fetch('https://graph.microsoft.com/v1.0/me/checkMemberGroups', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groupIds: [groupId] }),
+          body: JSON.stringify({ groupIds: [foundGroupId] }),
         });
 
         if (checkRes.ok) {
           const checkJson = await checkRes.json();
-          const isMember = Array.isArray(checkJson.value) && checkJson.value.includes(groupId);
+          const isMember = Array.isArray(checkJson.value) && checkJson.value.includes(foundGroupId);
           if (!cancelled) setIsAdmin(!!isMember);
           return;
         }
@@ -138,7 +148,7 @@ function Header({ logout }) {
         if (memberOfRes.ok) {
           const moJson = await memberOfRes.json();
           const found = Array.isArray(moJson.value) && moJson.value.some(g =>
-            (g.displayName && g.displayName === 'Helpdesk_Admin') || (g.id && g.id === groupId)
+            (g.displayName && g.displayName === 'Helpdesk_Admin') || (g.id && g.id === foundGroupId)
           );
           if (!cancelled) setIsAdmin(!!found);
         } else {
@@ -162,6 +172,167 @@ function Header({ logout }) {
 
     return () => { cancelled = true; };
   }, [accounts, instance]);
+
+  // helper: ensure we have groupId and an interactive token if needed
+  const ensureGroupIdAndToken = async () => {
+    if (!accounts || !accounts[0]) throw new Error('No signed-in account');
+    // Acquire token for Group.ReadWrite.All and User.Read.All (required to add/remove users)
+    try {
+      const tokenResponse = await instance.acquireTokenSilent({
+        scopes: ['Group.ReadWrite.All', 'User.Read.All'],
+        account: accounts[0],
+      });
+      const token = tokenResponse.accessToken;
+
+      // If groupId already present, return it
+      if (groupId) return { token, groupId };
+
+      // fetch group id
+      const groupRes = await fetch(
+        "https://graph.microsoft.com/v1.0/groups?$filter=displayName eq 'Helpdesk_Admin'&$select=id,displayName",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!groupRes.ok) throw new Error(`Failed to locate Helpdesk_Admin group (${groupRes.status})`);
+
+      const groupJson = await groupRes.json();
+      const group = Array.isArray(groupJson.value) && groupJson.value[0];
+      if (!group || !group.id) throw new Error('Helpdesk_Admin group not found');
+
+      setGroupId(group.id);
+      return { token, groupId: group.id };
+    } catch (err) {
+      if (err instanceof InteractionRequiredAuthError) {
+        // interactive redirect to request elevated scopes
+        instance.acquireTokenRedirect({
+          scopes: ['Group.ReadWrite.All', 'User.Read.All'],
+          account: accounts[0],
+        });
+        throw new Error('Redirecting for consent');
+      }
+      throw err;
+    }
+  };
+
+  // admin action: add user to Helpdesk_Admin by userPrincipalName
+  const addUserToGroup = async () => {
+    setAdminActionMessage(null);
+    setAdminActionError(null);
+
+    const upn = (adminUserInput || '').trim();
+    if (!upn) {
+      setAdminActionError('Enter user email / UPN');
+      return;
+    }
+
+    setAdminActionLoading(true);
+    try {
+      const { token, groupId: gid } = await ensureGroupIdAndToken();
+
+      // Resolve user object id by UPN
+      // GET /users/{userPrincipalName}
+      const userRes = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!userRes.ok) {
+        // try filter search as fallback
+        if (userRes.status === 404) {
+          setAdminActionError(`User not found: ${upn}`);
+          setAdminActionLoading(false);
+          return;
+        }
+        throw new Error(`Failed to lookup user (${userRes.status})`);
+      }
+
+      const userJson = await userRes.json();
+      const userId = userJson.id;
+      if (!userId) throw new Error('User id not available');
+
+      // POST /groups/{group-id}/members/$ref
+      const addRes = await fetch(`https://graph.microsoft.com/v1.0/groups/${gid}/members/$ref`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userId}` }),
+      });
+
+      if (addRes.ok || addRes.status === 204) {
+        setAdminActionMessage(`Added ${upn} to Helpdesk_Admin`);
+        setAdminUserInput('');
+      } else {
+        // Graph may return 400 if already member, or other statuses
+        const text = await addRes.text();
+        setAdminActionError(`Failed to add user: ${addRes.status} ${text}`);
+      }
+    } catch (err) {
+      if (err.message && err.message.includes('Redirecting for consent')) {
+        setAdminActionError('User consent required — redirecting to sign-in.');
+      } else {
+        console.error(err);
+        setAdminActionError(err.message || 'Unknown error');
+      }
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
+
+  // admin action: remove user from Helpdesk_Admin by userPrincipalName
+  const removeUserFromGroup = async () => {
+    setAdminActionMessage(null);
+    setAdminActionError(null);
+
+    const upn = (adminUserInput || '').trim();
+    if (!upn) {
+      setAdminActionError('Enter user email / UPN');
+      return;
+    }
+
+    setAdminActionLoading(true);
+    try {
+      const { token, groupId: gid } = await ensureGroupIdAndToken();
+
+      // Resolve user object id by UPN
+      const userRes = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!userRes.ok) {
+        if (userRes.status === 404) {
+          setAdminActionError(`User not found: ${upn}`);
+          setAdminActionLoading(false);
+          return;
+        }
+        throw new Error(`Failed to lookup user (${userRes.status})`);
+      }
+
+      const userJson = await userRes.json();
+      const userId = userJson.id;
+      if (!userId) throw new Error('User id not available');
+
+      // DELETE /groups/{group-id}/members/{id}/$ref
+      const delRes = await fetch(`https://graph.microsoft.com/v1.0/groups/${gid}/members/${userId}/$ref`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (delRes.ok || delRes.status === 204) {
+        setAdminActionMessage(`Removed ${upn} from Helpdesk_Admin`);
+        setAdminUserInput('');
+      } else {
+        const text = await delRes.text();
+        setAdminActionError(`Failed to remove user: ${delRes.status} ${text}`);
+      }
+    } catch (err) {
+      if (err.message && err.message.includes('Redirecting for consent')) {
+        setAdminActionError('User consent required — redirecting to sign-in.');
+      } else {
+        console.error(err);
+        setAdminActionError(err.message || 'Unknown error');
+      }
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
 
   const fetchFullProfile = async () => {
     if (!accounts || !accounts[0]) return;
@@ -290,12 +461,12 @@ function Header({ logout }) {
         {/* ⭐⭐⭐ CENTER TITLE (ADDED) ⭐⭐⭐ */}
         <div
           style={{
-            position: 'absolute',        // stays centered always
+            position: 'absolute',
             left: '50%',
             transform: 'translateX(-50%)',
             textAlign: 'center',
             pointerEvents: 'none',
-            animation: 'floatGlow 3s ease-in-out infinite',   // floating animation
+            animation: 'floatGlow 3s ease-in-out infinite',
           }}
         >
           <div
@@ -347,12 +518,10 @@ function Header({ logout }) {
                     color: '#374151',
                   }}
                 >
-                  {/* simple gear svg */}
                   <img src={gearIcon}
-                  alt="Settings"
-                  style={{ width: 18, height: 18, objectFit: 'contain' }}
+                    alt="Settings"
+                    style={{ width: 18, height: 18, objectFit: 'contain' }}
                   />
-
                 </button>
 
                 {settingsOpen && (
@@ -367,50 +536,104 @@ function Header({ logout }) {
                       border: '1px solid rgba(15,23,42,0.06)',
                       borderRadius: 8,
                       boxShadow: '0 12px 40px rgba(2,6,23,0.12)',
-                      padding: 10,
-                      width: 220,
+                      padding: 12,
+                      width: 320,
                       zIndex: 60,
                     }}
                   >
-                    <div style={{ fontWeight: 800, marginBottom: 8 }}>Admin Settings</div>
-                    <button
-                      onClick={() => {
-                        // TODO: wire up actual admin page or actions
-                        // For now, just close and log
-                        setSettingsOpen(false);
-                        console.log('Open admin settings (implement navigation)');
-                      }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '8px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        color: '#0f172a',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Manage Helpdesk
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSettingsOpen(false);
-                      }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '8px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        color: '#6b7280',
-                      }}
-                    >
-                      Close
-                    </button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontWeight: 800 }}>Admin Settings</div>
+                      <div style={{ fontSize: 12, color: '#6b7280' }}>Helpdesk_Admin</div>
+                    </div>
+
+                    {/* Add / Remove user form */}
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <label style={{ fontSize: 12, color: '#6b7280' }}>User email / UPN</label>
+                      <input
+                        value={adminUserInput}
+                        onChange={(e) => setAdminUserInput(e.target.value)}
+                        placeholder="user@example.com"
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: 8,
+                          border: '1px solid rgba(15,23,42,0.08)',
+                          outline: 'none',
+                          fontSize: 14,
+                          width: '100%',
+                        }}
+                      />
+
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={addUserToGroup}
+                          disabled={adminActionLoading}
+                          style={{
+                            flex: 1,
+                            background: '#0369a1',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 10px',
+                            borderRadius: 8,
+                            cursor: adminActionLoading ? 'default' : 'pointer',
+                            fontWeight: 700,
+                          }}
+                          title="Add user to Helpdesk_Admin"
+                        >
+                          {adminActionLoading ? 'Working…' : 'Add user'}
+                        </button>
+
+                        <button
+                          onClick={removeUserFromGroup}
+                          disabled={adminActionLoading}
+                          style={{
+                            flex: 1,
+                            background: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 10px',
+                            borderRadius: 8,
+                            cursor: adminActionLoading ? 'default' : 'pointer',
+                            fontWeight: 700,
+                          }}
+                          title="Remove user from Helpdesk_Admin"
+                        >
+                          {adminActionLoading ? 'Working…' : 'Remove user'}
+                        </button>
+                      </div>
+
+                      {adminActionMessage && (
+                        <div style={{ padding: 8, background: '#ecfdf5', color: '#065f46', borderRadius: 8, fontSize: 13 }}>
+                          {adminActionMessage}
+                        </div>
+                      )}
+
+                      {adminActionError && (
+                        <div style={{ padding: 8, background: '#fff1f2', color: '#9f1239', borderRadius: 8, fontSize: 13 }}>
+                          {adminActionError}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                        <button
+                          onClick={() => {
+                            setSettingsOpen(false);
+                            setAdminActionMessage(null);
+                            setAdminActionError(null);
+                            setAdminUserInput('');
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#6b7280',
+                            cursor: 'pointer',
+                            padding: '6px 8px',
+                            borderRadius: 6,
+                          }}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
