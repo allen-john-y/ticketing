@@ -1022,7 +1022,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       ];
       const userHtml = buildHtmlEmail({
         title: userTitle,
-        subtitle: "Admin access granted — you have been added to GS_DeviceAdministrator",
+        subtitle: "Admin access granted —  Please restart your system after 2 hours",
         statusColor: "#16a34a",
         fields: userFields,
         description: `Your account (${userObj.mail || userIdentifier}) has been added to the device administrator group. Please sign out and sign in again for group changes to take effect.`,

@@ -337,7 +337,7 @@ function TicketDetails() {
 
   // Helpers for attachment display (main ticket)
   const hasAttachment = (attachmentList && attachmentList.length > 0);
-  const firstAttachment = hasAttachment ? attachmentList[0] : null;
+  //const firstAttachment = hasAttachment ? attachmentList[0] : null;
 
   const isImageType = (type) => type && type.startsWith && type.startsWith('image/');
   const isPdfType = (type, url) => {

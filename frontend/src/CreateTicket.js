@@ -450,13 +450,7 @@ function CreateTicket() {
   const disableCreateBecauseDeviceAdmin =
     formData.category === 'Admin Access' && isDeviceAdmin;
 
-  // Clear attachment handler
-  const handleClearAttachment = () => {
-    setAttachments(prev => ({ ...prev, attachmentFile: null }));
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''; // reset file input UI [web:34][web:40]
-    }
-  };
+  
 
   // Attachment helpers
   const formatBytes = (bytes) => {
