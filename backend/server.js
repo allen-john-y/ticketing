@@ -78,14 +78,28 @@ const ticketSchema = new mongoose.Schema(
     reopenedBy: String,
     reopenedAt: Date,
 
-    // new fields to support "on behalf" flow
-    onBehalf: { type: String }, // 'Self' or 'Other'
-    onBehalfEmail: { type: String }, // when onBehalf === 'Other'
+    // new fields to support on behalf flow
+    onBehalf: { type: String },          // 'Self' or 'Other'
+    onBehalfEmail: { type: String },     // when onBehalf = 'Other'
     deliveryEmail: { type: String },
+
+    // NEW: ops/finance sub query (for Operational & Finance category)
+    subQuery: { type: String },          // e.g. 'Salary','Reimbursement','Invoice issue','Tax / GST','Other'
+    otherSubQueryText: { type: String }, // free text when subQuery = 'Other'
+
+    // NEW: attachment metadata (single file)
+    attachment: {
+      fileName: String,
+      fileType: String,   // mime type like 'application/pdf', 'image/png'
+      fileUrl: String,    // where frontend can load it from (S3/Cloudinary/etc.)
+    },
 
     history: [
       {
-        action: { type: String, enum: ["created", "closed", "revived", "approved", "rejected"] },
+        action: {
+          type: String,
+          enum: ['created', 'closed', 'revived', 'approved', 'rejected'],
+        },
         by: String,
         at: { type: Date, default: Date.now },
         reason: String,
@@ -94,7 +108,8 @@ const ticketSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-const Ticket = mongoose.model("Ticket", ticketSchema);
+
+const Ticket = mongoose.model('Ticket', ticketSchema);
 
 // ---------------------- Counter ---------------------------
 let ticketCounter = 0;

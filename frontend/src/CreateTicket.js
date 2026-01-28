@@ -36,7 +36,14 @@ function CreateTicket() {
     priority: 'Medium',
     onBehalf: 'Self',        // Self or Other
     onBehalfEmail: '',       // for Other: company email to verify
-    alternativeEmail: ''     // delivery email (for Self or Other)
+    alternativeEmail: '',    // delivery email (for Self or Other)
+
+    // NEW: sub query and other text for Operational & Finance
+    subQuery: '',            // e.g. Salary, Reimbursement, Invoice issue...
+    otherSubQueryText: '',   // free text when subQuery === 'Other'
+
+    // NEW: attachment metadata (we only keep the file object in UI)
+    attachmentFile: null,
   });
   const [loading, setLoading] = useState(false);
   const [newPassword] = useState("");
@@ -148,27 +155,71 @@ function CreateTicket() {
 
     // If user is device admin, block creation of Admin Access tickets
     if (formData.category === 'Admin Access' && isDeviceAdmin) {
-      setModal({ open: true, title: 'Cannot Create Request', message: 'You already have admin access to the device. Creating an Admin Access ticket is not allowed.', type: 'error' });
+      setModal({
+        open: true,
+        title: 'Cannot Create Request',
+        message: 'You already have admin access to the device. Creating an Admin Access ticket is not allowed.',
+        type: 'error'
+      });
       setLoading(false);
       return;
     }
 
-    // Validation
+    // NEW: validation for Operational & Finance subQuery
+    if (formData.category === 'Operational & Finance') {
+      if (!formData.subQuery) {
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please select a sub category under Operational & Finance.',
+          type: 'error'
+        });
+        setLoading(false);
+        return;
+      }
+      if (formData.subQuery === 'Other' && !formData.otherSubQueryText.trim()) {
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please describe the issue for Other sub category.',
+          type: 'error'
+        });
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Validation for Password Reset
     if (formData.category === 'Password Reset' && formData.onBehalf === 'Other') {
       if (!formData.onBehalfEmail.trim()) {
-        setModal({ open: true, title: 'Validation', message: 'Please enter the company email of the person you are requesting the reset for.', type: 'error' });
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please enter the company email of the person you are requesting the reset for.',
+          type: 'error'
+        });
         setLoading(false);
         return;
       }
       if (verifyStatus !== 'verified') {
-        setModal({ open: true, title: 'Validation', message: 'Please verify the target user\'s email using the Verify button before submitting.', type: 'error' });
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please verify the target user\'s email using the Verify button before submitting.',
+          type: 'error'
+        });
         setLoading(false);
         return;
       }
       const del = (formData.alternativeEmail || '').trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!del || !emailRegex.test(del)) {
-        setModal({ open: true, title: 'Validation', message: 'Please provide a valid alternative email address to receive the reset password for the target user.', type: 'error' });
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please provide a valid alternative email address to receive the reset password for the target user.',
+          type: 'error'
+        });
         setLoading(false);
         return;
       }
@@ -178,12 +229,22 @@ function CreateTicket() {
       const alt = (formData.alternativeEmail || '').trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!alt) {
-        setModal({ open: true, title: 'Validation', message: 'Please provide an alternative email address to receive the reset password.', type: 'error' });
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please provide an alternative email address to receive the reset password.',
+          type: 'error'
+        });
         setLoading(false);
         return;
       }
       if (!emailRegex.test(alt)) {
-        setModal({ open: true, title: 'Validation', message: 'Please enter a valid alternative email address.', type: 'error' });
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please enter a valid alternative email address.',
+          type: 'error'
+        });
         setLoading(false);
         return;
       }
@@ -199,9 +260,10 @@ function CreateTicket() {
           headers: { Authorization: `Bearer ${token.accessToken}` }
         });
         latestName = userRes.data.displayName || latestName || 'User';
-        latestEmail = (userRes.data.mail && userRes.data.mail.trim()) ||
-                      (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
-                      latestEmail || '';
+        latestEmail =
+          (userRes.data.mail && userRes.data.mail.trim()) ||
+          (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) ||
+          latestEmail || '';
       } catch (err) {
         // ignore
       }
@@ -211,7 +273,18 @@ function CreateTicket() {
         ? (formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail)
         : undefined;
 
-      const returnPasswordToRequester = formData.category === 'Password Reset' && formData.onBehalf === 'Self';
+      const returnPasswordToRequester =
+        formData.category === 'Password Reset' && formData.onBehalf === 'Self';
+
+      // Build attachment metadata if present
+      let attachmentMeta;
+      if (formData.attachmentFile) {
+        attachmentMeta = {
+          fileName: formData.attachmentFile.name,
+          fileType: formData.attachmentFile.type || 'application/octet-stream',
+          // fileUrl can be set by backend if you later add upload flow
+        };
+      }
 
       const ticketData = {
         category: formData.category,
@@ -223,15 +296,34 @@ function CreateTicket() {
         status: 'Waiting for approval',
         ...(onBehalf ? { onBehalf } : {}),
         ...(onBehalfEmail ? { onBehalfEmail } : {}),
-        ...(formData.alternativeEmail && formData.alternativeEmail.trim() ? { deliveryEmail: formData.alternativeEmail.trim() } : {}),
-        ...(returnPasswordToRequester ? { returnPasswordToRequester: true } : {})
+        ...(formData.alternativeEmail && formData.alternativeEmail.trim()
+          ? { deliveryEmail: formData.alternativeEmail.trim() }
+          : {}),
+        ...(returnPasswordToRequester ? { returnPasswordToRequester: true } : {}),
+
+        // SubQuery for Operational & Finance
+        ...(formData.category === 'Operational & Finance' && formData.subQuery
+          ? {
+              subQuery: formData.subQuery,
+              ...(formData.subQuery === 'Other' && formData.otherSubQueryText.trim()
+                ? { otherSubQueryText: formData.otherSubQueryText.trim() }
+                : {}),
+            }
+          : {}),
+
+        // Attachment metadata
+        ...(attachmentMeta ? { attachment: attachmentMeta } : {}),
       };
 
       const response = await axios.post(`${backendBase}/tickets`, ticketData, {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
-      const id = response?.data?._id || response?.data?.id || response?.data?.ticketId || null;
+      const id =
+        response?.data?._id ||
+        response?.data?.id ||
+        response?.data?.ticketId ||
+        null;
       if (id) setCreatedTicketId(id);
 
       setModal({
@@ -263,10 +355,16 @@ function CreateTicket() {
     else navigate('/', { state: { refresh: true } });
   };
 
-  const initials = (displayName || displayEmail || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+  const initials = (displayName || displayEmail || 'U')
+    .split(' ')
+    .map(s => s[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   // Determine whether to disable the create button:
-  const disableCreateBecauseDeviceAdmin = formData.category === 'Admin Access' && isDeviceAdmin;
+  const disableCreateBecauseDeviceAdmin =
+    formData.category === 'Admin Access' && isDeviceAdmin;
 
   return (
     <div style={styles.pageWrap}>
@@ -274,7 +372,9 @@ function CreateTicket() {
         <div style={styles.headerRow}>
           <div style={styles.avatar}>{initials}</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#1f2937' }}>{displayName || displayEmail || 'Unknown User'}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1f2937' }}>
+              {displayName || displayEmail || 'Unknown User'}
+            </div>
             <div style={{ fontSize: 13, color: '#6b7280' }}>{displayEmail || '—'}</div>
           </div>
           <div style={{ marginLeft: 12, textAlign: 'right' }}>
@@ -285,7 +385,6 @@ function CreateTicket() {
 
         <h1 style={{ textAlign: 'center', margin: '18px 0 8px' }}>Create New Ticket</h1>
         <form onSubmit={handleSubmit}>
-
           <div style={styles.gridRow}>
             <div style={styles.field}>
               <label style={styles.label}>Category *</label>
@@ -293,13 +392,16 @@ function CreateTicket() {
                 value={formData.category}
                 onChange={(e) => {
                   const val = e.target.value;
-                  setFormData({
-                    ...formData,
+                  setFormData(prev => ({
+                    ...prev,
                     category: val,
-                    onBehalf: val === 'Password Reset' ? 'Self' : formData.onBehalf,
-                    onBehalfEmail: val === 'Password Reset' ? formData.onBehalfEmail : '',
-                    alternativeEmail: val === 'Password Reset' ? formData.alternativeEmail : ''
-                  });
+                    onBehalf: val === 'Password Reset' ? 'Self' : prev.onBehalf,
+                    onBehalfEmail: val === 'Password Reset' ? prev.onBehalfEmail : '',
+                    alternativeEmail: val === 'Password Reset' ? prev.alternativeEmail : '',
+                    ...(val !== 'Operational & Finance'
+                      ? { subQuery: '', otherSubQueryText: '' }
+                      : {})
+                  }));
                   // reset verification when switching category
                   setVerifyStatus('idle');
                   setVerifiedName('');
@@ -311,6 +413,7 @@ function CreateTicket() {
                 <option value="">Select Category</option>
                 <option value="Password Reset">🔑 Password Reset</option>
                 <option value="Admin Access">🛠️ Admin Access</option>
+                <option value="Operational & Finance">💼 Operational & Finance</option>
               </select>
             </div>
 
@@ -338,12 +441,17 @@ function CreateTicket() {
                   value={formData.onBehalf}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setFormData({ ...formData, onBehalf: val });
+                    setFormData(prev => ({
+                      ...prev,
+                      onBehalf: val,
+                      ...(val === 'Self'
+                        ? { onBehalfEmail: '' }
+                        : {})
+                    }));
                     // reset verification when user toggles between Self/Other
                     setVerifyStatus('idle');
                     setVerifiedName('');
                     setVerifyError('');
-                    setFormData(prev => ({ ...prev, onBehalfEmail: '' }));
                   }}
                   style={{ ...styles.select, flex: '0 0 220px' }}
                 >
@@ -359,14 +467,24 @@ function CreateTicket() {
                         type="text"
                         placeholder="Enter company email of target user"
                         value={formData.onBehalfEmail}
-                        onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, onBehalfEmail: e.target.value })
+                        }
                         style={{ ...styles.input, flex: 1 }}
                         required
                       />
                       <button
                         type="button"
                         onClick={handleVerifyOther}
-                        style={{ padding: '10px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#2563eb', color: 'white', fontWeight: 700 }}
+                        style={{
+                          padding: '10px 14px',
+                          borderRadius: 8,
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: '#2563eb',
+                          color: 'white',
+                          fontWeight: 700
+                        }}
                         disabled={verifyStatus === 'verifying'}
                       >
                         {verifyStatus === 'verifying' ? 'Verifying...' : 'Verify'}
@@ -375,11 +493,31 @@ function CreateTicket() {
 
                     {/* Verification feedback */}
                     <div style={{ marginTop: 8, fontSize: 13 }}>
-                      {verifyStatus === 'idle' && <span style={{ color: '#6b7280' }}>Click Verify to confirm the user exists in Azure AD.</span>}
-                      {verifyStatus === 'verifying' && <span style={{ color: '#0ea5e9' }}>Verifying presence in Azure AD...</span>}
-                      {verifyStatus === 'verified' && <span style={{ color: '#16a34a' }}>✅ User verified: <strong>{verifiedName}</strong></span>}
-                      {verifyStatus === 'notfound' && <span style={{ color: '#dc2626' }}>❌ User not found in Azure AD. Check the email.</span>}
-                      {verifyStatus === 'error' && <span style={{ color: '#dc2626' }}>❌ Verification error: {verifyError}</span>}
+                      {verifyStatus === 'idle' && (
+                        <span style={{ color: '#6b7280' }}>
+                          Click Verify to confirm the user exists in Azure AD.
+                        </span>
+                      )}
+                      {verifyStatus === 'verifying' && (
+                        <span style={{ color: '#0ea5e9' }}>
+                          Verifying presence in Azure AD...
+                        </span>
+                      )}
+                      {verifyStatus === 'verified' && (
+                        <span style={{ color: '#16a34a' }}>
+                          ✅ User verified: <strong>{verifiedName}</strong>
+                        </span>
+                      )}
+                      {verifyStatus === 'notfound' && (
+                        <span style={{ color: '#dc2626' }}>
+                          ❌ User not found in Azure AD. Check the email.
+                        </span>
+                      )}
+                      {verifyStatus === 'error' && (
+                        <span style={{ color: '#dc2626' }}>
+                          ❌ Verification error: {verifyError}
+                        </span>
+                      )}
                     </div>
 
                     {/* If verified -> ask for delivery email (alternative) */}
@@ -389,12 +527,21 @@ function CreateTicket() {
                           type="email"
                           placeholder="Alternative email to receive reset (required)"
                           value={formData.alternativeEmail}
-                          onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({ ...formData, alternativeEmail: e.target.value })
+                          }
                           style={{ ...styles.input }}
                           required
                         />
-                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
-                          The reset password will be sent to both the requester's primary email (if applicable) and this alternative email.
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: '#6b7280',
+                            marginTop: 6
+                          }}
+                        >
+                          The reset password will be sent to both the requester's primary email
+                          (if applicable) and this alternative email.
                         </div>
                       </div>
                     )}
@@ -407,7 +554,9 @@ function CreateTicket() {
                     type="email"
                     placeholder="Alternative email (required) to receive reset"
                     value={formData.alternativeEmail}
-                    onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, alternativeEmail: e.target.value })
+                    }
                     style={{ ...styles.input, flex: 1 }}
                     required
                   />
@@ -415,7 +564,8 @@ function CreateTicket() {
               </div>
 
               <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
-                Choose who the password reset is for. If "Other", provide their company email and click Verify.
+                Choose who the password reset is for. If "Other", provide their company email and
+                click Verify.
               </div>
             </div>
           )}
@@ -426,17 +576,101 @@ function CreateTicket() {
               {groupsLoading ? (
                 <div style={{ marginTop: 12, color: '#6b7280' }}>Checking access...</div>
               ) : isDeviceAdmin ? (
-                <div style={{ marginTop: 12, padding: 12, background: '#fffbeb', borderRadius: 8, border: '1px solid #fef3c7', color: '#92400e' }}>
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: 12,
+                    background: '#fffbeb',
+                    borderRadius: 8,
+                    border: '1px solid #fef3c7',
+                    color: '#92400e'
+                  }}
+                >
                   <strong>You already have device admin access.</strong>
-                  <div style={{ marginTop: 6 }}>Your account already have admin access, so creating an Admin Access ticket is disabled.</div>
+                  <div style={{ marginTop: 6 }}>
+                    Your account already have admin access, so creating an Admin Access ticket is
+                    disabled.
+                  </div>
                 </div>
               ) : (
-                <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e6f0ff', color: '#064e3b' }}>
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: 12,
+                    background: '#f8fafc',
+                    borderRadius: 8,
+                    border: '1px solid #e6f0ff',
+                    color: '#064e3b'
+                  }}
+                >
                   <strong>Need Admin Access?</strong>
-                  <div style={{ marginTop: 6 }}>create an Admin Access ticket</div>
+                  <div style={{ marginTop: 6 }}>Create an Admin Access ticket</div>
                 </div>
               )}
             </>
+          )}
+
+          {/* Operational & Finance - sub category + attachment */}
+          {formData.category === 'Operational & Finance' && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={styles.label}>Sub Category *</label>
+              <select
+                value={formData.subQuery}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    subQuery: e.target.value,
+                    otherSubQueryText: ''
+                  })
+                }
+                style={styles.select}
+                required
+              >
+                <option value="">Select sub category</option>
+                <option value="Salary">Salary</option>
+                <option value="Reimbursement">Reimbursement</option>
+                <option value="Invoice issue">Invoice issue</option>
+                <option value="Tax / GST">Tax / GST</option>
+                <option value="Other">Other</option>
+              </select>
+
+              {formData.subQuery === 'Other' && (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    rows="3"
+                    placeholder="Please describe the issue"
+                    value={formData.otherSubQueryText}
+                    onChange={(e) =>
+                      setFormData({ ...formData, otherSubQueryText: e.target.value })
+                    }
+                    style={styles.textarea}
+                    required
+                  />
+                </div>
+              )}
+
+              <div style={{ marginTop: 12 }}>
+                <label style={styles.label}>Attachment (optional)</label>
+                <input
+                  type="file"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setFormData({ ...formData, attachmentFile: file });
+                  }}
+                  style={{ fontSize: 13 }}
+                />
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: '#6b7280',
+                    marginTop: 4
+                  }}
+                >
+                  You can attach a supporting document (invoice, payslip, etc.). Currently only file
+                  metadata is stored; uploads can be wired later.
+                </div>
+              </div>
+            </div>
           )}
 
           <div style={styles.field}>
@@ -456,7 +690,11 @@ function CreateTicket() {
               type="submit"
               style={{ ...styles.primaryButton, flex: 1 }}
               disabled={loading || disableCreateBecauseDeviceAdmin}
-              title={disableCreateBecauseDeviceAdmin ? 'You already have device admin access — cannot create Admin Access ticket' : undefined}
+              title={
+                disableCreateBecauseDeviceAdmin
+                  ? 'You already have device admin access — cannot create Admin Access ticket'
+                  : undefined
+              }
             >
               {loading ? 'Creating...' : 'Create Ticket'}
             </button>
@@ -514,7 +752,10 @@ function CreateTicket() {
       )}
 
       {showPasswordPopup && (
-        <PasswordPopup password={newPassword} onClose={() => setShowPasswordPopup(false)} />
+        <PasswordPopup
+          password={newPassword}
+          onClose={() => setShowPasswordPopup(false)}
+        />
       )}
     </div>
   );
@@ -523,24 +764,154 @@ function CreateTicket() {
 /* --- styles --- (same as before) */
 const styles = {
   pageWrap: { padding: '2rem', maxWidth: 820, margin: '0 auto', boxSizing: 'border-box' },
-  card: { background: 'white', padding: '1.25rem 1.5rem', borderRadius: 12, boxShadow: '0 6px 30px rgba(2,6,23,0.08)', boxSizing: 'border-box', overflow: 'hidden' },
+  card: {
+    background: 'white',
+    padding: '1.25rem 1.5rem',
+    borderRadius: 12,
+    boxShadow: '0 6px 30px rgba(2,6,23,0.08)',
+    boxSizing: 'border-box',
+    overflow: 'hidden'
+  },
   headerRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 },
-  avatar: { width: 56, height: 56, borderRadius: 10, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#4338ca', fontSize: 18 },
-  gridRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start', marginBottom: 12 },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    background: '#eef2ff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 700,
+    color: '#4338ca',
+    fontSize: 18
+  },
+  gridRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 12,
+    alignItems: 'start',
+    marginBottom: 12
+  },
   field: { marginBottom: 12 },
-  label: { display: 'block', marginBottom: 6, fontSize: 13, color: '#374151', fontWeight: 600 },
-  input: { width: '100%', padding: '10px 12px', border: '1px solid #e6e9ee', borderRadius: 8, background: '#fafafa', boxSizing: 'border-box' },
-  select: { width: '100%', padding: '10px 12px', border: '1px solid #e6e9ee', borderRadius: 8, background: 'white', boxSizing: 'border-box' },
-  textarea: { width: '100%', minHeight: 140, maxHeight: 300, padding: '12px', border: '1px solid #e6e9ee', borderRadius: 8, background: 'white', resize: 'vertical', overflow: 'auto', boxSizing: 'border-box' },
-  primaryButton: { background: '#2563eb', color: 'white', padding: '12px 18px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 },
-  ghostButton: { background: '#f3f4f6', color: '#374151', padding: '12px 18px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 },
-  modalOverlay: { position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10000 },
-  modalBox: { background: "white", padding: "28px", borderRadius: "10px", width: "380px", textAlign: "center", boxShadow: "0 6px 24px rgba(2,6,23,0.12)" },
-  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
-  passwordBox: { background: 'white', padding: '2rem', borderRadius: '10px', textAlign: 'center', width: '400px', boxShadow: '0 8px 30px rgba(2,6,23,0.12)', position: 'relative' },
-  passwordText: { fontFamily: 'monospace', fontSize: '1.1rem', background: '#f1f1f1', padding: '10px', borderRadius: '6px' },
-  copyButton: { marginTop: '1rem', background: '#3498db', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer' },
-  modalCloseButton: { position: 'absolute', top: '10px', right: '10px', background: 'transparent', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }
+  label: {
+    display: 'block',
+    marginBottom: 6,
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: 600
+  },
+  input: {
+    width: '100%',
+    padding: '10px 12px',
+    border: '1px solid #e6e9ee',
+    borderRadius: 8,
+    background: '#fafafa',
+    boxSizing: 'border-box'
+  },
+  select: {
+    width: '100%',
+    padding: '10px 12px',
+    border: '1px solid #e6e9ee',
+    borderRadius: 8,
+    background: 'white',
+    boxSizing: 'border-box'
+  },
+  textarea: {
+    width: '100%',
+    minHeight: 140,
+    maxHeight: 300,
+    padding: '12px',
+    border: '1px solid #e6e9ee',
+    borderRadius: 8,
+    background: 'white',
+    resize: 'vertical',
+    overflow: 'auto',
+    boxSizing: 'border-box'
+  },
+  primaryButton: {
+    background: '#2563eb',
+    color: 'white',
+    padding: '12px 18px',
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontWeight: 700
+  },
+  ghostButton: {
+    background: '#f3f4f6',
+    color: '#374151',
+    padding: '12px 18px',
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontWeight: 600
+  },
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100vw",
+    height: "100vh",
+    background: "rgba(0,0,0,0.5)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10000
+  },
+  modalBox: {
+    background: "white",
+    padding: "28px",
+    borderRadius: "10px",
+    width: "380px",
+    textAlign: "center",
+    boxShadow: "0 6px 24px rgba(2,6,23,0.12)"
+  },
+  overlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999
+  },
+  passwordBox: {
+    background: 'white',
+    padding: '2rem',
+    borderRadius: '10px',
+    textAlign: 'center',
+    width: '400px',
+    boxShadow: '0 8px 30px rgba(2,6,23,0.12)',
+    position: 'relative'
+  },
+  passwordText: {
+    fontFamily: 'monospace',
+    fontSize: '1.1rem',
+    background: '#f1f1f1',
+    padding: '10px',
+    borderRadius: '6px'
+  },
+  copyButton: {
+    marginTop: '1rem',
+    background: '#3498db',
+    color: 'white',
+    padding: '8px 16px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer'
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    background: 'transparent',
+    border: 'none',
+    fontSize: '1.2rem',
+    cursor: 'pointer'
+  }
 };
 
 export default CreateTicket;
