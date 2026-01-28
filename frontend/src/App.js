@@ -242,7 +242,7 @@ function Header({ logout }) {
           `startswith(tolower(userPrincipalName),'${encodeURIComponent(q.toLowerCase())}')`,
           `startswith(tolower(displayName),'${encodeURIComponent(q.toLowerCase())}')`,
         ];
-        const filter = filterParts.join(' or ');
+        //const filter = filterParts.join(' or ');
         // Graph may not like encodeURIComponent in the filter terms for single quotes; build carefully
         const safeQ = q.replace(/'/g, "''"); // escape single quotes by doubling
         const realFilter = `startswith(tolower(mail),'${safeQ.toLowerCase()}') or startswith(tolower(userPrincipalName),'${safeQ.toLowerCase()}') or startswith(tolower(displayName),'${safeQ.toLowerCase()}')`;
