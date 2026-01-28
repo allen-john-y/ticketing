@@ -10,6 +10,8 @@ import Dashboard from './Dashboard';
 import logo from './sandeza.jpg';
 import gearIcon from './GearIcon.jpg';
 
+const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
+
 const pca = new PublicClientApplication({
   auth: {
     clientId: '6541d73a-dbbd-4f74-9465-38a0eb03ec6b',
@@ -29,18 +31,28 @@ function Header({ logout }) {
   const [profileError, setProfileError] = useState(null);
   const [profilePhoto, setProfilePhoto] = useState(null);
 
-  // New: admin + settings state
+  // admin states
   const [isAdmin, setIsAdmin] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Group id cache (Helpdesk_Admin)
-  const [groupId, setGroupId] = useState(null);
+  // Add user modal
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedSearchUser, setSelectedSearchUser] = useState(null);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addMessage, setAddMessage] = useState(null);
+  const [addError, setAddError] = useState(null);
 
-  // Admin action UI state
-  const [adminUserInput, setAdminUserInput] = useState(''); // expects userPrincipalName / email
-  const [adminActionLoading, setAdminActionLoading] = useState(false);
-  const [adminActionMessage, setAdminActionMessage] = useState(null);
-  const [adminActionError, setAdminActionError] = useState(null);
+  // Remove user modal
+  const [removeModalOpen, setRemoveModalOpen] = useState(false);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [removeLoading, setRemoveLoading] = useState(false);
+  const [removeMessage, setRemoveMessage] = useState(null);
+  const [removeError, setRemoveError] = useState(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -52,17 +64,18 @@ function Header({ logout }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // fetch small profile photo silently
   useEffect(() => {
     const fetchPhotoSilently = async () => {
       if (!accounts || !accounts[0]) return;
       try {
         const tokenResponse = await instance.acquireTokenSilent({
           scopes: ['User.Read'],
-          account: accounts[0]
+          account: accounts[0],
         });
 
         const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
-          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
+          headers: { Authorization: `Bearer ${tokenResponse.accessToken}` },
         });
 
         if (!photoRes.ok) return;
@@ -78,133 +91,85 @@ function Header({ logout }) {
         const b64 = btoa(binary);
         const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
         setProfilePhoto(`data:${contentType};base64,${b64}`);
-      } catch (err) {}
+      } catch (err) {
+        // silent fail
+      }
     };
 
     fetchPhotoSilently();
   }, [accounts, instance]);
 
-  // New: check if account is member of Helpdesk_Admin
+  // check whether current user belongs to Helpdesk_Admin
   useEffect(() => {
     let cancelled = false;
 
-    const checkAdminMembership = async () => {
+    const checkMembership = async () => {
       if (!accounts || !accounts[0]) {
         setIsAdmin(false);
         return;
       }
-
       try {
-        // Acquire token for group membership read
         const tokenResponse = await instance.acquireTokenSilent({
           scopes: ['GroupMember.Read.All'],
           account: accounts[0],
         });
-
         const token = tokenResponse.accessToken;
 
-        // 1) find the Helpdesk_Admin group id
-        const groupRes = await fetch(
-          "https://graph.microsoft.com/v1.0/groups?$filter=displayName eq 'Helpdesk_Admin'&$select=id,displayName",
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (!groupRes.ok) {
-          // can't read groups - fallback to false (or handle as needed)
-          console.warn('Could not query groups:', groupRes.status);
-          if (!cancelled) setIsAdmin(false);
-          return;
-        }
-
-        const groupJson = await groupRes.json();
-        const group = Array.isArray(groupJson.value) && groupJson.value[0];
-        if (!group || !group.id) {
-          if (!cancelled) setIsAdmin(false);
-          return;
-        }
-
-        const foundGroupId = group.id;
-        if (!cancelled) setGroupId(foundGroupId);
-
-        // 2) use checkMemberGroups to verify membership
-        const checkRes = await fetch('https://graph.microsoft.com/v1.0/me/checkMemberGroups', {
+        // Use checkMemberGroups to test membership
+        const res = await fetch('https://graph.microsoft.com/v1.0/me/checkMemberGroups', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groupIds: [foundGroupId] }),
+          body: JSON.stringify({ groupIds: [HELP_DESK_GROUP_ID] }),
         });
 
-        if (checkRes.ok) {
-          const checkJson = await checkRes.json();
-          const isMember = Array.isArray(checkJson.value) && checkJson.value.includes(foundGroupId);
-          if (!cancelled) setIsAdmin(!!isMember);
+        if (res.ok) {
+          const json = await res.json();
+          const member = Array.isArray(json.value) && json.value.includes(HELP_DESK_GROUP_ID);
+          if (!cancelled) setIsAdmin(!!member);
           return;
         }
 
-        // Fallback: get /me/memberOf and check for the displayName or id match
-        const memberOfRes = await fetch('https://graph.microsoft.com/v1.0/me/memberOf?$select=id,displayName', {
+        // fallback: /me/memberOf
+        const fallback = await fetch('https://graph.microsoft.com/v1.0/me/memberOf?$select=id,displayName', {
           headers: { Authorization: `Bearer ${token}` },
         });
-
-        if (memberOfRes.ok) {
-          const moJson = await memberOfRes.json();
-          const found = Array.isArray(moJson.value) && moJson.value.some(g =>
-            (g.displayName && g.displayName === 'Helpdesk_Admin') || (g.id && g.id === foundGroupId)
-          );
+        if (fallback.ok) {
+          const j = await fallback.json();
+          const found = Array.isArray(j.value) && j.value.some(g => g.id === HELP_DESK_GROUP_ID);
           if (!cancelled) setIsAdmin(!!found);
         } else {
           if (!cancelled) setIsAdmin(false);
         }
       } catch (err) {
-        // If interaction required, redirect to acquire consent/interactive token for this scope
         if (err instanceof InteractionRequiredAuthError) {
           instance.acquireTokenRedirect({
             scopes: ['GroupMember.Read.All'],
             account: accounts[0],
           });
         } else {
-          console.error('Error checking admin membership', err);
+          console.error('membership check failed', err);
           if (!cancelled) setIsAdmin(false);
         }
       }
     };
 
-    checkAdminMembership();
-
+    checkMembership();
     return () => { cancelled = true; };
   }, [accounts, instance]);
 
-  // helper: ensure we have groupId and an interactive token if needed
-  const ensureGroupIdAndToken = async () => {
+  // Helper: acquire token with required scopes for admin actions (interactive redirect if required)
+  const acquireTokenForAdmin = async () => {
     if (!accounts || !accounts[0]) throw new Error('No signed-in account');
-    // Acquire token for Group.ReadWrite.All and User.Read.All (required to add/remove users)
     try {
-      const tokenResponse = await instance.acquireTokenSilent({
+      const resp = await instance.acquireTokenSilent({
         scopes: ['Group.ReadWrite.All', 'User.Read.All'],
         account: accounts[0],
       });
-      const token = tokenResponse.accessToken;
-
-      // If groupId already present, return it
-      if (groupId) return { token, groupId };
-
-      // fetch group id
-      const groupRes = await fetch(
-        "https://graph.microsoft.com/v1.0/groups?$filter=displayName eq 'Helpdesk_Admin'&$select=id,displayName",
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!groupRes.ok) throw new Error(`Failed to locate Helpdesk_Admin group (${groupRes.status})`);
-
-      const groupJson = await groupRes.json();
-      const group = Array.isArray(groupJson.value) && groupJson.value[0];
-      if (!group || !group.id) throw new Error('Helpdesk_Admin group not found');
-
-      setGroupId(group.id);
-      return { token, groupId: group.id };
+      return resp.accessToken;
     } catch (err) {
       if (err instanceof InteractionRequiredAuthError) {
-        // interactive redirect to request elevated scopes
-        instance.acquireTokenRedirect({
+        // request interactive consent for elevated scopes
+        await instance.acquireTokenRedirect({
           scopes: ['Group.ReadWrite.All', 'User.Read.All'],
           account: accounts[0],
         });
@@ -214,123 +179,281 @@ function Header({ logout }) {
     }
   };
 
-  // admin action: add user to Helpdesk_Admin by userPrincipalName
-  const addUserToGroup = async () => {
-    setAdminActionMessage(null);
-    setAdminActionError(null);
+  // --- ADD USER FLOW ---
 
-    const upn = (adminUserInput || '').trim();
-    if (!upn) {
-      setAdminActionError('Enter user email / UPN');
-      return;
-    }
+  const openAddModal = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedSearchUser(null);
+    setAddMessage(null);
+    setAddError(null);
+    setAddModalOpen(true);
+  };
 
-    setAdminActionLoading(true);
+  const closeAddModal = () => {
+    setAddModalOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedSearchUser(null);
+    setAddMessage(null);
+    setAddError(null);
+    setAddLoading(false);
+    setSearchLoading(false);
+  };
+
+  const performSearch = async () => {
+    setSearchResults([]);
+    setSearchLoading(true);
+    setAddError(null);
     try {
-      const { token, groupId: gid } = await ensureGroupIdAndToken();
+      const token = await acquireTokenForAdmin();
 
-      // Resolve user object id by UPN
-      // GET /users/{userPrincipalName}
-      const userRes = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const q = (searchQuery || '').trim();
+      if (!q) {
+        setAddError('Enter email, UPN or name to search');
+        setSearchLoading(false);
+        return;
+      }
 
-      if (!userRes.ok) {
-        // try filter search as fallback
-        if (userRes.status === 404) {
-          setAdminActionError(`User not found: ${upn}`);
-          setAdminActionLoading(false);
-          return;
+      // Try exact user by UPN or ID first
+      const tryExact = async (identifier) => {
+        const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(identifier)}?$select=id,displayName,mail,userPrincipalName`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const j = await r.json();
+          return [j];
         }
-        throw new Error(`Failed to lookup user (${userRes.status})`);
+        return [];
+      };
+
+      let results = [];
+
+      // If query contains '@', try exact lookup first
+      if (q.includes('@')) {
+        results = await tryExact(q);
       }
 
-      const userJson = await userRes.json();
-      const userId = userJson.id;
-      if (!userId) throw new Error('User id not available');
+      // If none found or not an email, fallback to searching by startswith on mail/userPrincipalName/displayName
+      if (results.length === 0) {
+        // Use OData startswith for partial searches (encode the query)
+        const filterParts = [
+          `startswith(tolower(mail),'${encodeURIComponent(q.toLowerCase())}')`,
+          `startswith(tolower(userPrincipalName),'${encodeURIComponent(q.toLowerCase())}')`,
+          `startswith(tolower(displayName),'${encodeURIComponent(q.toLowerCase())}')`,
+        ];
+        const filter = filterParts.join(' or ');
+        // Graph may not like encodeURIComponent in the filter terms for single quotes; build carefully
+        const safeQ = q.replace(/'/g, "''"); // escape single quotes by doubling
+        const realFilter = `startswith(tolower(mail),'${safeQ.toLowerCase()}') or startswith(tolower(userPrincipalName),'${safeQ.toLowerCase()}') or startswith(tolower(displayName),'${safeQ.toLowerCase()}')`;
 
-      // POST /groups/{group-id}/members/$ref
-      const addRes = await fetch(`https://graph.microsoft.com/v1.0/groups/${gid}/members/$ref`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userId}` }),
-      });
-
-      if (addRes.ok || addRes.status === 204) {
-        setAdminActionMessage(`Added ${upn} to Helpdesk_Admin`);
-        setAdminUserInput('');
-      } else {
-        // Graph may return 400 if already member, or other statuses
-        const text = await addRes.text();
-        setAdminActionError(`Failed to add user: ${addRes.status} ${text}`);
+        const r = await fetch(`https://graph.microsoft.com/v1.0/users?$filter=${encodeURIComponent(realFilter)}&$select=id,displayName,mail,userPrincipalName&$top=10`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const j = await r.json();
+          if (Array.isArray(j.value)) results = j.value;
+        } else {
+          // As a last resort, try /users?$search (requires indexing and query param) - omitted for simplicity
+        }
       }
+
+      // normalize results to include id, displayName, mail, userPrincipalName
+      const normalized = (results || []).map(u => ({
+        id: u.id,
+        displayName: u.displayName || u.userPrincipalName || u.mail || '(no name)',
+        mail: u.mail || '',
+        userPrincipalName: u.userPrincipalName || '',
+      }));
+
+      setSearchResults(normalized);
+      if (normalized.length === 0) setAddError('No users found for that query.');
     } catch (err) {
       if (err.message && err.message.includes('Redirecting for consent')) {
-        setAdminActionError('User consent required — redirecting to sign-in.');
+        setAddError('Consent required. Redirecting to sign-in.');
       } else {
-        console.error(err);
-        setAdminActionError(err.message || 'Unknown error');
+        console.error('search failed', err);
+        setAddError(err.message || 'Search failed.');
       }
     } finally {
-      setAdminActionLoading(false);
+      setSearchLoading(false);
     }
   };
 
-  // admin action: remove user from Helpdesk_Admin by userPrincipalName
-  const removeUserFromGroup = async () => {
-    setAdminActionMessage(null);
-    setAdminActionError(null);
-
-    const upn = (adminUserInput || '').trim();
-    if (!upn) {
-      setAdminActionError('Enter user email / UPN');
+  const confirmAddUser = async () => {
+    if (!selectedSearchUser) {
+      setAddError('Select a user to add.');
       return;
     }
-
-    setAdminActionLoading(true);
+    setAddLoading(true);
+    setAddMessage(null);
+    setAddError(null);
     try {
-      const { token, groupId: gid } = await ensureGroupIdAndToken();
+      const token = await acquireTokenForAdmin();
 
-      // Resolve user object id by UPN
-      const userRes = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      // POST /groups/{id}/members/$ref
+      const body = {
+        "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${selectedSearchUser.id}`,
+      };
+
+      const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${HELP_DESK_GROUP_ID}/members/$ref`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
 
-      if (!userRes.ok) {
-        if (userRes.status === 404) {
-          setAdminActionError(`User not found: ${upn}`);
-          setAdminActionLoading(false);
-          return;
-        }
-        throw new Error(`Failed to lookup user (${userRes.status})`);
+      if (res.ok || res.status === 204) {
+        setAddMessage(`${selectedSearchUser.displayName} has been added to Helpdesk_Admin`);
+        // notify backend to send emails to actor and target
+        notifyServerAboutAdd(selectedSearchUser).catch(e => console.error('notify failed', e));
+        // optimistic: set current user as admin updated if they got added
+        // keep modal open so admin can see message; clear selection
+        setSelectedSearchUser(null);
+        setSearchResults([]);
+        // Optionally refresh membership checks in app
+        // re-check membership for current user
+        // (if the actor added themselves, the isAdmin state might already be true)
+      } else {
+        const text = await res.text();
+        setAddError(`Add failed: ${res.status} ${text}`);
       }
+    } catch (err) {
+      console.error('add user failed', err);
+      setAddError(err.message || 'Add failed');
+    } finally {
+      setAddLoading(false);
+    }
+  };
 
-      const userJson = await userRes.json();
-      const userId = userJson.id;
-      if (!userId) throw new Error('User id not available');
+  // Sends a notification request to your server (server.js) to dispatch emails.
+  // server endpoints to implement later by you:
+  // POST /api/notify-admin-added  payload: { actor: {id,name,mail}, target: {id,name,mail} }
+  // POST /api/notify-admin-removed payload: { actor: {...}, target: {...} }
+  const notifyServerAboutAdd = async (targetUser) => {
+    try {
+      const actor = {
+        id: accounts?.[0]?.homeAccountId || '',
+        name: accounts?.[0]?.name || accounts?.[0]?.username || '',
+        mail: accounts?.[0]?.username || accounts?.[0]?.username || '',
+      };
+      await fetch('/api/notify-admin-added', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor,
+          target: {
+            id: targetUser.id,
+            name: targetUser.displayName,
+            mail: targetUser.mail || targetUser.userPrincipalName,
+          },
+        }),
+      });
+    } catch (err) {
+      // don't block UI if notify fails; just log
+      console.error('notify server error', err);
+    }
+  };
 
-      // DELETE /groups/{group-id}/members/{id}/$ref
-      const delRes = await fetch(`https://graph.microsoft.com/v1.0/groups/${gid}/members/${userId}/$ref`, {
+  // --- REMOVE USER FLOW ---
+
+  const openRemoveModal = async () => {
+    setRemoveModalOpen(true);
+    setMembersLoading(true);
+    setGroupMembers([]);
+    setSelectedMember(null);
+    setRemoveMessage(null);
+    setRemoveError(null);
+
+    try {
+      const token = await acquireTokenForAdmin();
+      // list members
+      const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${HELP_DESK_GROUP_ID}/members?$select=id,displayName,mail,userPrincipalName&$top=200`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch members: ${res.status}`);
+      }
+      const j = await res.json();
+      const members = (Array.isArray(j.value) ? j.value : []).map(m => ({
+        id: m.id,
+        displayName: m.displayName || m.userPrincipalName || m.mail || '(no name)',
+        mail: m.mail || '',
+        userPrincipalName: m.userPrincipalName || '',
+      }));
+      setGroupMembers(members);
+    } catch (err) {
+      console.error('fetch members failed', err);
+      setRemoveError(err.message || 'Failed to load members');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const closeRemoveModal = () => {
+    setRemoveModalOpen(false);
+    setGroupMembers([]);
+    setSelectedMember(null);
+    setRemoveMessage(null);
+    setRemoveError(null);
+    setMembersLoading(false);
+    setRemoveLoading(false);
+  };
+
+  const confirmRemoveUser = async () => {
+    if (!selectedMember) {
+      setRemoveError('Select a user to remove.');
+      return;
+    }
+    setRemoveLoading(true);
+    setRemoveMessage(null);
+    setRemoveError(null);
+    try {
+      const token = await acquireTokenForAdmin();
+
+      const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${HELP_DESK_GROUP_ID}/members/${selectedMember.id}/$ref`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (delRes.ok || delRes.status === 204) {
-        setAdminActionMessage(`Removed ${upn} from Helpdesk_Admin`);
-        setAdminUserInput('');
+      if (res.ok || res.status === 204) {
+        setRemoveMessage(`${selectedMember.displayName} has been removed from Helpdesk_Admin`);
+        notifyServerAboutRemove(selectedMember).catch(e => console.error('notify failed', e));
+        // refresh members list
+        setGroupMembers(prev => prev.filter(m => m.id !== selectedMember.id));
+        setSelectedMember(null);
       } else {
-        const text = await delRes.text();
-        setAdminActionError(`Failed to remove user: ${delRes.status} ${text}`);
+        const text = await res.text();
+        setRemoveError(`Remove failed: ${res.status} ${text}`);
       }
     } catch (err) {
-      if (err.message && err.message.includes('Redirecting for consent')) {
-        setAdminActionError('User consent required — redirecting to sign-in.');
-      } else {
-        console.error(err);
-        setAdminActionError(err.message || 'Unknown error');
-      }
+      console.error('remove failed', err);
+      setRemoveError(err.message || 'Remove failed');
     } finally {
-      setAdminActionLoading(false);
+      setRemoveLoading(false);
+    }
+  };
+
+  const notifyServerAboutRemove = async (targetUser) => {
+    try {
+      const actor = {
+        id: accounts?.[0]?.homeAccountId || '',
+        name: accounts?.[0]?.name || accounts?.[0]?.username || '',
+        mail: accounts?.[0]?.username || accounts?.[0]?.username || '',
+      };
+      await fetch('/api/notify-admin-removed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor,
+          target: {
+            id: targetUser.id,
+            name: targetUser.displayName,
+            mail: targetUser.mail || targetUser.userPrincipalName,
+          },
+        }),
+      });
+    } catch (err) {
+      console.error('notify server error', err);
     }
   };
 
@@ -369,7 +492,7 @@ function Header({ logout }) {
 
       try {
         const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (photoRes.ok) {
           const arrayBuffer = await photoRes.arrayBuffer();
@@ -458,7 +581,7 @@ function Header({ logout }) {
           </div>
         </div>
 
-        {/* ⭐⭐⭐ CENTER TITLE (ADDED) ⭐⭐⭐ */}
+        {/* CENTER TITLE */}
         <div
           style={{
             position: 'absolute',
@@ -492,18 +615,60 @@ function Header({ logout }) {
             Empowering Support • Every Step
           </div>
         </div>
-        {/* ⭐⭐⭐ END CENTER TITLE ⭐⭐⭐ */}
 
-        {/* RIGHT PROFILE BLOCK */}
+        {/* RIGHT PROFILE + ADMIN BUTTONS */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* New: settings gear shown only for admins */}
+            {/* Add / Remove buttons (only visible to admins) */}
+            {isAdmin && (
+              <>
+                <button
+                  onClick={openAddModal}
+                  title="Add user to Helpdesk_Admin"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(15,23,42,0.06)',
+                    background: 'linear-gradient(180deg,#ffffff,#f1f5f9)',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                  }}
+                >
+                  <img src={gearIcon} alt="" style={{ width: 16, height: 16, opacity: 0.9 }} />
+                  Add user
+                </button>
+
+                <button
+                  onClick={openRemoveModal}
+                  title="Remove user from Helpdesk_Admin"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(15,23,42,0.06)',
+                    background: 'linear-gradient(180deg,#ffffff,#fff1f2)',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                  }}
+                >
+                  <img src={gearIcon} alt="" style={{ width: 16, height: 16, opacity: 0.9, transform: 'rotate(20deg)' }} />
+                  Remove user
+                </button>
+              </>
+            )}
+
+            {/* settings gear (small) */}
             {isAdmin && (
               <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setSettingsOpen(s => !s)}
                   aria-label="Settings"
-                  title="Settings"
+                  title="Admin quick"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -518,10 +683,7 @@ function Header({ logout }) {
                     color: '#374151',
                   }}
                 >
-                  <img src={gearIcon}
-                    alt="Settings"
-                    style={{ width: 18, height: 18, objectFit: 'contain' }}
-                  />
+                  <img src={gearIcon} alt="Settings" style={{ width: 18, height: 18, objectFit: 'contain' }} />
                 </button>
 
                 {settingsOpen && (
@@ -536,109 +698,61 @@ function Header({ logout }) {
                       border: '1px solid rgba(15,23,42,0.06)',
                       borderRadius: 8,
                       boxShadow: '0 12px 40px rgba(2,6,23,0.12)',
-                      padding: 12,
-                      width: 320,
+                      padding: 10,
+                      width: 220,
                       zIndex: 60,
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <div style={{ fontWeight: 800 }}>Admin Settings</div>
-                      <div style={{ fontSize: 12, color: '#6b7280' }}>Helpdesk_Admin</div>
-                    </div>
+                    <div style={{ fontWeight: 800, marginBottom: 8 }}>Admin Settings</div>
 
-                    {/* Add / Remove user form */}
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      <label style={{ fontSize: 12, color: '#6b7280' }}>User email / UPN</label>
-                      <input
-                        value={adminUserInput}
-                        onChange={(e) => setAdminUserInput(e.target.value)}
-                        placeholder="user@example.com"
-                        style={{
-                          padding: '8px 10px',
-                          borderRadius: 8,
-                          border: '1px solid rgba(15,23,42,0.08)',
-                          outline: 'none',
-                          fontSize: 14,
-                          width: '100%',
-                        }}
-                      />
+                    <button
+                      onClick={() => { openAddModal(); setSettingsOpen(false); }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '8px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#0f172a',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Add user
+                    </button>
 
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          onClick={addUserToGroup}
-                          disabled={adminActionLoading}
-                          style={{
-                            flex: 1,
-                            background: '#0369a1',
-                            color: 'white',
-                            border: 'none',
-                            padding: '8px 10px',
-                            borderRadius: 8,
-                            cursor: adminActionLoading ? 'default' : 'pointer',
-                            fontWeight: 700,
-                          }}
-                          title="Add user to Helpdesk_Admin"
-                        >
-                          {adminActionLoading ? 'Working…' : 'Add user'}
-                        </button>
+                    <button
+                      onClick={() => { openRemoveModal(); setSettingsOpen(false); }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '8px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#0f172a',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Remove user
+                    </button>
 
-                        <button
-                          onClick={removeUserFromGroup}
-                          disabled={adminActionLoading}
-                          style={{
-                            flex: 1,
-                            background: '#ef4444',
-                            color: 'white',
-                            border: 'none',
-                            padding: '8px 10px',
-                            borderRadius: 8,
-                            cursor: adminActionLoading ? 'default' : 'pointer',
-                            fontWeight: 700,
-                          }}
-                          title="Remove user from Helpdesk_Admin"
-                        >
-                          {adminActionLoading ? 'Working…' : 'Remove user'}
-                        </button>
-                      </div>
-
-                      {adminActionMessage && (
-                        <div style={{ padding: 8, background: '#ecfdf5', color: '#065f46', borderRadius: 8, fontSize: 13 }}>
-                          {adminActionMessage}
-                        </div>
-                      )}
-
-                      {adminActionError && (
-                        <div style={{ padding: 8, background: '#fff1f2', color: '#9f1239', borderRadius: 8, fontSize: 13 }}>
-                          {adminActionError}
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-                        <button
-                          onClick={() => {
-                            setSettingsOpen(false);
-                            setAdminActionMessage(null);
-                            setAdminActionError(null);
-                            setAdminUserInput('');
-                          }}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#6b7280',
-                            cursor: 'pointer',
-                            padding: '6px 8px',
-                            borderRadius: 6,
-                          }}
-                        >
-                          Close
-                        </button>
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                      <button
+                        onClick={() => setSettingsOpen(false)}
+                        style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}
+                      >
+                        Close
+                      </button>
                     </div>
                   </div>
                 )}
               </div>
             )}
 
+            {/* PROFILE BUTTON */}
             <div ref={profileRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setProfileOpen(prev => !prev)}
@@ -798,7 +912,227 @@ function Header({ logout }) {
         </div>
       </header>
 
-      {/* FULL PROFILE MODAL – unchanged */}
+      {/* ADD USER MODAL */}
+      {addModalOpen && (
+        <>
+          <div
+            onClick={closeAddModal}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              zIndex: 90,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'white',
+              borderRadius: '10px',
+              padding: '18px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              width: '560px',
+              zIndex: 100,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>Add user to Helpdesk_Admin</h3>
+              <button onClick={closeAddModal} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                ✖
+              </button>
+            </div>
+
+            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
+              Search users by email / UPN / name and select a person to grant admin rights.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by email, UPN or name"
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(15,23,42,0.08)',
+                  outline: 'none',
+                  flex: 1,
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') performSearch(); }}
+              />
+              <button
+                onClick={performSearch}
+                disabled={searchLoading}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 8,
+                  background: '#0369a1',
+                  color: 'white',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                {searchLoading ? 'Searching…' : 'Search'}
+              </button>
+            </div>
+
+            <div style={{ maxHeight: 240, overflow: 'auto', marginBottom: 8 }}>
+              {searchResults.length === 0 && !searchLoading && <div style={{ color: '#6b7280' }}>No results</div>}
+              {searchResults.map(u => (
+                <div
+                  key={u.id}
+                  onClick={() => setSelectedSearchUser(u)}
+                  style={{
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    background: selectedSearchUser?.id === u.id ? '#eef2ff' : '#fff',
+                    border: '1px solid rgba(15,23,42,0.04)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{u.displayName}</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>{u.mail || u.userPrincipalName}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>{u.id}</div>
+                </div>
+              ))}
+            </div>
+
+            {addMessage && <div style={{ padding: 10, background: '#ecfdf5', color: '#065f46', borderRadius: 8 }}>{addMessage}</div>}
+            {addError && <div style={{ padding: 10, background: '#fff1f2', color: '#9f1239', borderRadius: 8 }}>{addError}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+              <button onClick={closeAddModal} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button
+                onClick={confirmAddUser}
+                disabled={addLoading || !selectedSearchUser}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: addLoading ? '#9ec7df' : '#0b79bf',
+                  color: 'white',
+                  border: 'none',
+                  cursor: addLoading ? 'default' : 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                {addLoading ? 'Adding…' : 'Add as admin'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* REMOVE USER MODAL */}
+      {removeModalOpen && (
+        <>
+          <div
+            onClick={closeRemoveModal}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              zIndex: 90,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'white',
+              borderRadius: '10px',
+              padding: '18px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              width: '560px',
+              zIndex: 100,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>Remove user from Helpdesk_Admin</h3>
+              <button onClick={closeRemoveModal} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                ✖
+              </button>
+            </div>
+
+            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
+              Select an existing Helpdesk_Admin member to remove their admin rights.
+            </div>
+
+            <div style={{ maxHeight: 300, overflow: 'auto', marginBottom: 8 }}>
+              {membersLoading && <div style={{ color: '#6b7280' }}>Loading members…</div>}
+              {!membersLoading && groupMembers.length === 0 && <div style={{ color: '#6b7280' }}>No members found.</div>}
+              {groupMembers.map(m => (
+                <div
+                  key={m.id}
+                  onClick={() => setSelectedMember(m)}
+                  style={{
+                    padding: 10,
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    background: selectedMember?.id === m.id ? '#fff1f2' : '#fff',
+                    border: '1px solid rgba(15,23,42,0.04)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{m.displayName}</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>{m.mail || m.userPrincipalName}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>{m.id}</div>
+                </div>
+              ))}
+            </div>
+
+            {removeMessage && <div style={{ padding: 10, background: '#ecfdf5', color: '#065f46', borderRadius: 8 }}>{removeMessage}</div>}
+            {removeError && <div style={{ padding: 10, background: '#fff1f2', color: '#9f1239', borderRadius: 8 }}>{removeError}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+              <button onClick={closeRemoveModal} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button
+                onClick={confirmRemoveUser}
+                disabled={removeLoading || !selectedMember}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: removeLoading ? '#f7a6a6' : '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  cursor: removeLoading ? 'default' : 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                {removeLoading ? 'Removing…' : 'Remove admin'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* FULL PROFILE MODAL */}
       {fullProfileOpen && (
         <>
           <div
@@ -969,7 +1303,7 @@ function AppContent() {
     try {
       await instance.loginRedirect({
         scopes: ['User.Read', 'User.ReadBasic.All', 'GroupMember.Read.All'],
-        prompt: 'select_account'
+        prompt: 'select_account',
       });
     } catch (err) {
       console.error('Login failed:', err);
