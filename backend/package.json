@@ -16,6 +16,7 @@
     "jsonwebtoken": "^9.0.0",
     "jwks-rsa": "^3.0.0",
     "mongoose": "^7.0.0",
+    "multer": "^2.0.2",
     "node-fetch": "^2.7.0"
   }
 }
