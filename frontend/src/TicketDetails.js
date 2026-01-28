@@ -1031,18 +1031,54 @@ function TicketDetails() {
 
               <div className="att-content">
                 {isImageType(activeAttachment.fileType) ? (
-                  <img src={activeAttachment.fileUrl} alt={activeAttachment.fileName} className="att-img" />
+                  <img
+                    src={activeAttachment.fileUrl}
+                    alt={activeAttachment.fileName}
+                    className="att-img"
+                  />
                 ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
-                  <iframe src={activeAttachment.fileUrl} title={activeAttachment.fileName || 'PDF'} className="att-iframe" />
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ marginBottom: 12 }}>PDF preview is opened in a new tab.</p>
+                    <a
+                      href={activeAttachment.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-block',
+                        padding: '10px 18px',
+                        background: '#2563eb',
+                        color: '#fff',
+                        borderRadius: 10,
+                        textDecoration: 'none',
+                        fontWeight: 700
+                      }}
+                    >
+                      Open PDF
+                    </a>
+                  </div>
                 ) : (
                   <div style={{ textAlign: 'center' }}>
-                    <p style={{ marginBottom: 12 }}>This file type cannot be previewed inline. It will open in a new tab.</p>
-                    <a href={activeAttachment.fileUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '8px 14px', background: '#2563eb', color: '#fff', borderRadius: 8, textDecoration: 'none', fontWeight: 700 }}>
+                    <p style={{ marginBottom: 12 }}>This file type cannot be previewed inline.</p>
+                    <a
+                      href={activeAttachment.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-block',
+                        padding: '8px 14px',
+                        background: '#2563eb',
+                        color: '#fff',
+                        borderRadius: 8,
+                        textDecoration: 'none',
+                        fontWeight: 700
+                      }}
+                    >
                       Open attachment
                     </a>
                   </div>
                 )}
               </div>
+
 
               {/* If multiple attachments exist, show thumbnails / list below */}
               {attachmentList && attachmentList.length > 1 && (

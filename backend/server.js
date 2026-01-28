@@ -12,51 +12,32 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
-const AWS = require("aws-sdk");  // NEW: For S3
-const multerS3 = require("multer-s3");  // NEW: S3 storage
 require("dotenv").config();
-
-// ---------------------- AWS S3 Config (NEW) ----------------------
-AWS.config.update({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION
-});
-const s3 = new AWS.S3();
-
-// Multer S3 storage (NEW)
-const upload = multer({
-  storage: multerS3({
-    s3: s3,
-    bucket: process.env.S3_BUCKET,
-    metadata: (req, file, cb) => cb(null, { fieldName: file.fieldname }),
-    key: (req, file, cb) => {
-      const uniqueName = Date.now().toString() + '-' + crypto.randomBytes(8).toString('hex') + path.extname(file.originalname);
-      cb(null, uniqueName);
-    }
-  }),
-  limits: { fileSize: 25 * 1024 * 1024 },  // 25MB
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images and PDFs allowed'));
-    }
-  }
-});
 
 // ---------------------- App Setup ------------------------
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' }));
 
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginResourcePolicy: false,
-  frameguard: false
-}));
+// Allow frontend to load images from /uploads
+app.use("/uploads", (req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  next();
+});
 
-// REMOVED: Duplicate /uploads middleware and local static serving
+// Normal Helmet (secure)
+app.use(helmet());
+
+// Ensure uploads directory exists
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+// Serve uploaded files
+app.use("/uploads", express.static(UPLOAD_DIR));
+
 
 // ---------------------- CORS ------------------------------
 const allowedOrigins = [
@@ -86,19 +67,6 @@ const limiter = rateLimit({
   max: 100,
 });
 app.use("/tickets", limiter);
-
-// NEW: Upload endpoint - use this in your ticket routes
-app.post('/upload', (req, res) => {
-  upload.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    res.json({ 
-      url: req.file.location,  // Public S3 URL for UI
-      key: req.file.key 
-    });
-  });
-});
-
 
 // ---------------------- MongoDB ---------------------------
 const connectDB = async () => {
