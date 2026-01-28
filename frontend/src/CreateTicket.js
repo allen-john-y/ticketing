@@ -39,7 +39,7 @@ function CreateTicket() {
     alternativeEmail: ''     // delivery email (for Self or Other)
   });
   const [loading, setLoading] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
+  const [newPassword] = useState("");
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
   const [createdTicketId, setCreatedTicketId] = useState(null);
