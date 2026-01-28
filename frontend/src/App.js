@@ -102,7 +102,7 @@ function Header({ logout }) {
   // check whether current user belongs to Helpdesk_Admin
   useEffect(() => {
     let cancelled = false;
-    const backendBase = 'https://ticketing-hn59.onrender.com';
+    //const backendBase = 'https://ticketing-hn59.onrender.com';
 
     const checkMembership = async () => {
       if (!accounts || !accounts[0]) {
@@ -317,6 +317,8 @@ function Header({ logout }) {
   // POST /api/notify-admin-added  payload: { actor: {id,name,mail}, target: {id,name,mail} }
   // POST /api/notify-admin-removed payload: { actor: {...}, target: {...} }
   const notifyServerAboutAdd = async (targetUser) => {
+
+    const backendBase = 'https://ticketing-hn59.onrender.com';
     try {
       const actor = {
         id: accounts?.[0]?.homeAccountId || '',
@@ -420,6 +422,7 @@ function Header({ logout }) {
   };
 
   const notifyServerAboutRemove = async (targetUser) => {
+    const backendBase = 'https://ticketing-hn59.onrender.com';
     try {
       const actor = {
         id: accounts?.[0]?.homeAccountId || '',
