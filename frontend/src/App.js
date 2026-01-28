@@ -891,14 +891,14 @@ function Header({ logout }) {
             </div>
 
             <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
-              Search users by email / UPN / name and select a person to grant admin rights.
+              Search users by email.
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by email, UPN or name"
+                placeholder="Search by email"
                 style={{
                   padding: '10px 12px',
                   borderRadius: 8,
@@ -1009,14 +1009,14 @@ function Header({ logout }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>Remove user from Helpdesk_Admin</h3>
+              <h3 style={{ margin: 0 }}>Remove user from Admin rights</h3>
               <button onClick={closeRemoveModal} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
                 ✖
               </button>
             </div>
 
             <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
-              Select an existing Helpdesk_Admin member to remove their admin rights.
+              Select an existing member to remove their admin rights.
             </div>
 
             <div style={{ maxHeight: 300, overflow: 'auto', marginBottom: 8 }}>
