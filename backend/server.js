@@ -20,6 +20,11 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' })); // increase JSON body limit if attachments metadata is large
 app.use(helmet());
 
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
 // Ensure uploads directory exists
 // Serve uploaded files statically with proper headers
 app.use("/uploads", (req, res, next) => {
