@@ -374,12 +374,7 @@ function TicketDetails() {
     return (
       <div style={{ marginTop: 8, fontSize: 13 }}>
         <strong>Attachment:</strong>{' '}
-        <button
-          onClick={() => openAttachmentViewer(att)}
-          style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}
-        >
-          View attachment
-        </button>
+        
         {typeLabel && (
           <span style={{ marginLeft: 6, fontSize: 12, color: '#6b7280' }}>
             ({typeLabel})
