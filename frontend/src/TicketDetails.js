@@ -395,45 +395,46 @@ function TicketDetails() {
     setConfirmModal(true);
   };
 
-  const confirmCloseTicket = async () => {
-    setLoading(true);
-    try {
-      //let attachmentsMeta = [];
-      if (closeFiles && closeFiles.length > 0) {
-        // upload to /upload (Option 1)
-        attachmentList = await uploadFiles(closeFiles);
-      }
-
-     
-
-     // const res = await axios.put(`${backendBase}/tickets/${id}/close`, payload);
-
-      // update local ticket if necessary (refresh or optimistic)
-      setConfirmModal(false);
-      setShowReasonInput(false);
-      setCloseReason('');
-      setCloseError('');
-      setCloseFiles([]);
-
-      // refresh view by navigating back or fetching again
-      setTimeout(() => {
-        navigate('/', { state: { refresh: true } });
-      }, 200);
-    } catch (err) {
-      setCloseError("Failed to close ticket. Please try again.");
-      console.error("Close error:", err);
-    } finally {
-      setLoading(false);
+ const confirmCloseTicket = async () => {
+  setLoading(true);
+  try {
+    // 1) Upload files (if any) to /upload and collect metadata
+    let attachmentsMeta = [];
+    if (closeFiles && closeFiles.length > 0) {
+      attachmentsMeta = await uploadFiles(closeFiles); // throws if upload fails
     }
-  };
 
-  const cancelClose = () => {
-    setShowReasonInput(false);
+    // 2) Build payload and call the close endpoint
+    const payload = {
+      closedBy: accounts[0]?.name || accounts[0]?.username || "IT Head",
+      closeReason: closeReason.trim(),
+      attachments: attachmentsMeta // may be [] if no files
+    };
+
+    const res = await axios.put(`${backendBase}/tickets/${id}/close`, payload);
+
+    // 3) Success: clear modal state and refresh/navigate
     setConfirmModal(false);
+    setShowReasonInput(false);
     setCloseReason('');
     setCloseError('');
     setCloseFiles([]);
-  };
+
+    // Optionally update local state from response:
+    // if (res.data && res.data.ticket) setTicket(res.data.ticket);
+
+    setTimeout(() => {
+      navigate('/', { state: { refresh: true } });
+    }, 200);
+  } catch (err) {
+    console.error("Close error:", err);
+    // If uploadFiles failed it will be caught here as well
+    setCloseError("Failed to close ticket. Please try again.");
+    alert("Close failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ---- Reopen ticket flow (Option 1)
   const handleSubmitreopenReason = () => {
@@ -447,37 +448,40 @@ function TicketDetails() {
   };
 
   const confirmreopenTicket = async () => {
-    setLoading(true);
-    try {
-      let attachmentsMeta = [];
-      if (reopenFiles && reopenFiles.length > 0) {
-        attachmentsMeta = await uploadFiles(reopenFiles);
-      }
-
-      const payload = {
-        revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
-        reviveReason: reopenReason.trim(),
-        attachments: attachmentsMeta
-      };
-
-      await axios.put(`${backendBase}/tickets/${id}/revive`, payload);
-
-      setConfirmreopenModal(false);
-      setShowreopenReasonInput(false);
-      setreopenReason('');
-      setreopenError('');
-      setReopenFiles([]);
-
-      setTimeout(() => {
-        navigate('/', { state: { refresh: true } });
-      }, 200);
-    } catch (err) {
-      setreopenError("Failed to reopen ticket. Please try again.");
-      console.error("reopen error:", err);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    let attachmentsMeta = [];
+    if (reopenFiles && reopenFiles.length > 0) {
+      attachmentsMeta = await uploadFiles(reopenFiles);
     }
-  };
+
+    const payload = {
+      revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
+      reviveReason: reopenReason.trim(),
+      attachments: attachmentsMeta
+    };
+
+    const res = await axios.put(`${backendBase}/tickets/${id}/revive`, payload);
+
+    setConfirmreopenModal(false);
+    setShowreopenReasonInput(false);
+    setreopenReason('');
+    setreopenError('');
+    setReopenFiles([]);
+
+    // if (res.data && res.data.ticket) setTicket(res.data.ticket);
+
+    setTimeout(() => {
+      navigate('/', { state: { refresh: true } });
+    }, 200);
+  } catch (err) {
+    console.error("reopen error:", err);
+    setreopenError("Failed to reopen ticket. Please try again.");
+    alert("Reopen failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+  } finally {
+    setLoading(false);
+  }
+};
 
   const cancelreopen = () => {
     setShowreopenReasonInput(false);
