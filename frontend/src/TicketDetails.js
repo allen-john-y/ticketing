@@ -1,20 +1,8 @@
-/* TicketDetails.js
-   Full updated component:
-   - Single "View attachment" button (no filename) inside Description
-   - No duplicate top attachment hint
-   - Attachment viewer: image preview + "Download image" (uses Download.png)
-   - Multi-attachment: "Attachments uploaded (N)" button + "Download all" (zips via jszip)
-   - History: per-event attachments shown (View + Download all for that event)
-   - Close / Reopen modals: optional file inputs; client uploads files to POST /upload first, then calls PUT /tickets/:id/close or /tickets/:id/revive with attachments metadata (Option 1)
-   - Approve / Reject handlers included to fix build eslint errors
-   - Requires: Download.png in same folder; jszip installed for zip creation (npm install jszip)
-*/
-
+/* TicketDetails.js — updated: add image download button in attachment viewer */
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
-import DownloadIcon from './Download.png'; // put Download.png next to this file
 
 // CATEGORY HEAD EMAIL MAP (mirrors backend deptEmails)
 const deptEmails = {
@@ -33,17 +21,15 @@ function TicketDetails() {
   const [authority, setAuthority] = useState('basic');
   const [loading, setLoading] = useState(false);
 
-  // Close states + optional files
+  // Close states
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [closeReason, setCloseReason] = useState('');
   const [closeError, setCloseError] = useState('');
-  const [closeFiles, setCloseFiles] = useState([]); // optional files when closing
 
-  // reopen states + optional files
+  // reopen states
   const [showreopenReasonInput, setShowreopenReasonInput] = useState(false);
   const [reopenReason, setreopenReason] = useState('');
   const [reopenError, setreopenError] = useState('');
-  const [reopenFiles, setReopenFiles] = useState([]); // optional files when reopening
 
   const [confirmModal, setConfirmModal] = useState(false);
   const [confirmreopenModal, setConfirmreopenModal] = useState(false);
@@ -59,10 +45,10 @@ function TicketDetails() {
   const [returnedPassword, setReturnedPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
-  // Attachment modal state (viewer)
+  // Attachment modal state
   const [attachmentModalOpen, setAttachmentModalOpen] = useState(false);
-  const [activeAttachment, setActiveAttachment] = useState(null); // currently previewed file
-  const [attachmentList, setAttachmentList] = useState([]); // attachments currently in the viewer (can be per-event or ticket-level)
+  const [activeAttachment, setActiveAttachment] = useState(null); // { fileName, fileType, fileUrl, id }
+  const [attachmentList, setAttachmentList] = useState([]); // for multi attachments view when ticket.attachments exists
 
   // fetch authority (admin group)
   useEffect(() => {
@@ -86,67 +72,36 @@ function TicketDetails() {
     fetchAuthority();
   }, [accounts, instance]);
 
-  // Fetch ticket and normalize attachments and per-event attachments
   useEffect(() => {
     const fetchTicket = async () => {
       try {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
-        const data = res.data || {};
+        setTicket(res.data);
 
-        // normalize ticket-level attachments into an array
-        const ticketAttachments = [];
-        if (data.attachments && Array.isArray(data.attachments) && data.attachments.length) {
-          data.attachments.forEach(a => {
-            ticketAttachments.push({
+        // prepare attachments list if present
+        const list = [];
+        if (res.data.attachments && Array.isArray(res.data.attachments) && res.data.attachments.length) {
+          res.data.attachments.forEach(a => {
+            list.push({
               fileName: a.fileName || a.file_name || '',
               fileType: a.fileType || a.file_type || '',
               fileUrl: a.fileUrl || a.url || a.path || null,
               id: a.id || a.fileId || null
             });
           });
-        } else if (data.attachment && (data.attachment.fileName || data.attachment.fileUrl)) {
-          ticketAttachments.push({
-            fileName: data.attachment.fileName || '',
-            fileType: data.attachment.fileType || '',
-            fileUrl: data.attachment.fileUrl || null,
+        } else if (res.data.attachment && (res.data.attachment.fileName || res.data.attachment.fileUrl)) {
+          // fallback to legacy single attachment
+          list.push({
+            fileName: res.data.attachment.fileName || '',
+            fileType: res.data.attachment.fileType || '',
+            fileUrl: res.data.attachment.fileUrl || null,
             id: null
           });
         }
-
-        // normalize history events: ensure event.attachments is array (may come as event.attachment or event.attachments)
-        const hist = Array.isArray(data.history) ? data.history.map(ev => {
-          const normalized = { ...ev };
-          const evList = [];
-
-          if (Array.isArray(ev.attachments) && ev.attachments.length) {
-            ev.attachments.forEach(a => {
-              evList.push({
-                fileName: a.fileName || a.file_name || '',
-                fileType: a.fileType || a.file_type || '',
-                fileUrl: a.fileUrl || a.url || a.path || null,
-                id: a.id || a.fileId || null
-              });
-            });
-          } else if (ev.attachment && (ev.attachment.fileName || ev.attachment.fileUrl)) {
-            evList.push({
-              fileName: ev.attachment.fileName || '',
-              fileType: ev.attachment.fileType || '',
-              fileUrl: ev.attachment.fileUrl || null,
-              id: null
-            });
-          }
-          normalized.attachments = evList;
-          return normalized;
-        }) : [];
-
-        const ticketWithNorm = { ...data, attachments: ticketAttachments, history: hist };
-
-        setTicket(ticketWithNorm);
-        // default attachmentList (ticket-level) used elsewhere
-        setAttachmentList(ticketAttachments);
+        setAttachmentList(list);
 
         // CATEGORY HEAD CHECK
-        if (accounts[0] && ticketWithNorm) {
+        if (accounts[0] && res.data) {
           const acct = accounts[0] || {};
           const possibleEmails = [
             acct.username,
@@ -159,7 +114,7 @@ function TicketDetails() {
             .toLowerCase()
             .trim();
 
-          const headEntry = deptEmails[ticketWithNorm.category];
+          const headEntry = deptEmails[res.data.category];
           const headList = Array.isArray(headEntry) ? headEntry : (headEntry ? [headEntry] : []);
           const normalizedHeadList = headList
             .map(h => (h || '').toLowerCase().trim())
@@ -168,9 +123,9 @@ function TicketDetails() {
           if (loggedEmail && normalizedHeadList.includes(loggedEmail)) {
             setIsCategoryHead(true);
 
-            const status = (ticketWithNorm.status || '').toString();
+            const status = (res.data.status || '').toString();
             if (
-              approvalCategories.includes(ticketWithNorm.category) &&
+              approvalCategories.includes(res.data.category) &&
               (status === "Waiting for approval" || status === "Open")
             ) {
               setShowApprovalModal(true);
@@ -187,7 +142,6 @@ function TicketDetails() {
     fetchTicket();
   }, [id, accounts, instance, backendBase]);
 
-  // utils
   const formatDate = (dateString) => {
     if (!dateString) return "—";
     return new Date(dateString).toLocaleDateString('en-IN', {
@@ -200,6 +154,14 @@ function TicketDetails() {
     });
   };
 
+  // Derived: show inline "Waiting for Approval" banner
+  const needsApprovalBanner =
+    isCategoryHead &&
+    ticket &&
+    (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
+    !showApprovalModal &&
+    approvalCategories.includes(ticket.category);
+
   const copyToClipboard = (text) => {
     try {
       navigator.clipboard.writeText(text);
@@ -209,14 +171,6 @@ function TicketDetails() {
     }
   };
 
-  const isImageType = (type) => type && type.startsWith && type.startsWith('image/');
-  const isPdfType = (type, url) => {
-    if (type && type === 'application/pdf') return true;
-    if (url && url.toLowerCase().endsWith('.pdf')) return true;
-    return false;
-  };
-
-  // ---- Approval handlers (fixes build eslint no-undef) ----
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
@@ -232,17 +186,19 @@ function TicketDetails() {
 
       setShowApprovalModal(false);
 
+      // Password Reset: backend returns newPassword
       if (res.data?.newPassword) {
         setReturnedPassword(res.data.newPassword);
         setShowPasswordPopup(true);
       } else {
+        // Admin Access: no password, just go back
         setTimeout(() => {
           navigate("/", { state: { refresh: true } });
         }, 200);
       }
     } catch (err) {
       console.error("Approve error:", err);
-      alert("Approval failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+      alert("Approval failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
     } finally {
       setApproveLoading(false);
       setAdminNote('');
@@ -252,7 +208,7 @@ function TicketDetails() {
   const handleReject = async () => {
     setRejectLoading(true);
     try {
-      if (!ticket) throw new Error("Ticket missing");
+      if (!ticket) throw new Error('Ticket missing');
 
       await axios.post(`${backendBase}/tickets/${id}/reject`, {
         rejectedBy: accounts[0]?.name || accounts[0]?.username,
@@ -267,124 +223,12 @@ function TicketDetails() {
       }, 200);
     } catch (err) {
       console.error("Reject error:", err);
-      alert("Rejection failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+      alert("Rejection failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
     } finally {
       setRejectLoading(false);
     }
   };
 
-  // uploadFiles helper: POST each file to /upload and return metadata array
-  const uploadFiles = async (files) => {
-    if (!files || files.length === 0) return [];
-    const uploads = Array.from(files).map(async (file) => {
-      const form = new FormData();
-      form.append('file', file, file.name);
-      const res = await axios.post(`${backendBase}/upload`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      // normalize response
-      return {
-        id: res.data.id,
-        fileName: res.data.fileName,
-        fileType: res.data.fileType,
-        fileUrl: res.data.url || res.data.fileUrl
-      };
-    });
-    return Promise.all(uploads);
-  };
-
-  // download a single attachment (fetch blob and trigger)
-  const downloadAttachment = async (attachment) => {
-    if (!attachment || !attachment.fileUrl) return;
-    try {
-      const resp = await fetch(attachment.fileUrl, { mode: 'cors' });
-      if (!resp.ok) throw new Error('Network response not ok');
-      const blob = await resp.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      const filename = attachment.fileName || (attachment.fileUrl.split('/').pop().split('?')[0]) || 'download';
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.warn('Download fallback, opening in new tab', err);
-      window.open(attachment.fileUrl, '_blank', 'noopener');
-    }
-  };
-
-  // Download-all helper: zip provided list (or the current viewer list if not provided)
-  const downloadAllAttachments = async (list) => {
-    const toZip = Array.isArray(list) && list.length ? list : (attachmentList || []);
-    if (!toZip.length) return;
-    try {
-      const JSZipModule = await import('jszip'); // requires jszip package: npm install jszip
-      const JSZip = JSZipModule.default || JSZipModule;
-      const zip = new JSZip();
-
-      const fetches = toZip.map(async (a) => {
-        if (!a.fileUrl) return;
-        try {
-          const res = await fetch(a.fileUrl, { mode: 'cors' });
-          if (!res.ok) throw new Error(`Failed: ${res.status}`);
-          const blob = await res.blob();
-          const filename = a.fileName || (a.fileUrl.split('/').pop().split('?')[0]) || 'file';
-          zip.file(filename, blob);
-        } catch (e) {
-          console.warn('Failed to fetch attachment for zip:', a.fileUrl, e);
-        }
-      });
-
-      await Promise.all(fetches);
-
-      const content = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(content);
-      const a = document.createElement('a');
-      a.href = url;
-      const zipName = `attachments-${ticket?.ticketNumber || id}.zip`;
-      a.download = zipName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download all failed (zip):', err);
-      alert('Failed to create ZIP. Ensure jszip is installed and attachments allow cross-origin fetch.');
-    }
-  };
-
-  // open viewer for a list: set attachmentList and activeAttachment
-  const openViewerForList = (list) => {
-    if (!list || list.length === 0) return;
-    setAttachmentList(list);
-    setActiveAttachment(list[0]);
-    setAttachmentModalOpen(true);
-  };
-
-  // open single attachment (previous behavior: if not viewable, open in new tab)
-  const openAttachmentViewer = (attachment) => {
-    if (!attachment) return;
-    const viewableImage = isImageType(attachment.fileType);
-    const viewablePdf = isPdfType(attachment.fileType, attachment.fileUrl);
-    if (!viewableImage && !viewablePdf) {
-      if (attachment.fileUrl) {
-        window.open(attachment.fileUrl, '_blank', 'noopener');
-      } else {
-        alert('No URL available to open this attachment.');
-      }
-      return;
-    }
-    setActiveAttachment(attachment);
-    setAttachmentModalOpen(true);
-    // ensure current viewer list includes at least that attachment
-    if (!attachmentList || !attachmentList.find(a => a.fileUrl === attachment.fileUrl)) {
-      setAttachmentList([attachment]);
-    }
-  };
-
-  // ---- Close ticket flow (Option 1): upload files to /upload first, then PUT /tickets/:id/close with attachments metadata ----
   const handleSubmitReason = () => {
     if (!closeReason.trim()) {
       setCloseError("Please provide a reason for closing this ticket.");
@@ -395,48 +239,37 @@ function TicketDetails() {
     setConfirmModal(true);
   };
 
- const confirmCloseTicket = async () => {
-  setLoading(true);
-  try {
-    // 1) Upload files (if any) to /upload and collect metadata
-    let attachmentsMeta = [];
-    if (closeFiles && closeFiles.length > 0) {
-      attachmentsMeta = await uploadFiles(closeFiles); // throws if upload fails
+  const confirmCloseTicket = async () => {
+    setLoading(true);
+    try {
+      await axios.put(`${backendBase}/tickets/${id}/close`, {
+        closeReason: closeReason.trim(),
+        closedBy: accounts[0]?.name || accounts[0]?.username
+      });
+
+      setConfirmModal(false);
+      setShowReasonInput(false);
+      setCloseReason('');
+      setCloseError('');
+
+      setTimeout(() => {
+        navigate('/', { state: { refresh: true } });
+      }, 200);
+    } catch (err) {
+      setCloseError("Failed to close ticket. Please try again.");
+      console.error("Close error:", err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // 2) Build payload and call the close endpoint
-    const payload = {
-      closedBy: accounts[0]?.name || accounts[0]?.username || "IT Head",
-      closeReason: closeReason.trim(),
-      attachments: attachmentsMeta // may be [] if no files
-    };
-
-    const res = await axios.put(`${backendBase}/tickets/${id}/close`, payload);
-
-    // 3) Success: clear modal state and refresh/navigate
-    setConfirmModal(false);
+  const cancelClose = () => {
     setShowReasonInput(false);
+    setConfirmModal(false);
     setCloseReason('');
     setCloseError('');
-    setCloseFiles([]);
+  };
 
-    // Optionally update local state from response:
-    // if (res.data && res.data.ticket) setTicket(res.data.ticket);
-
-    setTimeout(() => {
-      navigate('/', { state: { refresh: true } });
-    }, 200);
-  } catch (err) {
-    console.error("Close error:", err);
-    // If uploadFiles failed it will be caught here as well
-    setCloseError("Failed to close ticket. Please try again.");
-    alert("Close failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // ---- Reopen ticket flow (Option 1)
   const handleSubmitreopenReason = () => {
     if (!reopenReason.trim()) {
       setreopenError("Please provide a reason for reviving this ticket.");
@@ -448,74 +281,34 @@ function TicketDetails() {
   };
 
   const confirmreopenTicket = async () => {
-  setLoading(true);
-  try {
-    let attachmentsMeta = [];
-    if (reopenFiles && reopenFiles.length > 0) {
-      attachmentsMeta = await uploadFiles(reopenFiles);
+    setLoading(true);
+    try {
+      await axios.put(`${backendBase}/tickets/${id}/revive`, {
+        revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
+        reviveReason: reopenReason.trim()
+      });
+
+      setConfirmreopenModal(false);
+      setShowreopenReasonInput(false);
+      setreopenReason('');
+      setreopenError('');
+
+      setTimeout(() => {
+        navigate('/', { state: { refresh: true } });
+      }, 200);
+    } catch (err) {
+      setreopenError("Failed to reopen ticket. Please try again.");
+      console.error("reopen error:", err);
+    } finally {
+      setLoading(false);
     }
-
-    const payload = {
-      revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
-      reviveReason: reopenReason.trim(),
-      attachments: attachmentsMeta
-    };
-
-    const res = await axios.put(`${backendBase}/tickets/${id}/revive`, payload);
-
-    setConfirmreopenModal(false);
-    setShowreopenReasonInput(false);
-    setreopenReason('');
-    setreopenError('');
-    setReopenFiles([]);
-
-    // if (res.data && res.data.ticket) setTicket(res.data.ticket);
-
-    setTimeout(() => {
-      navigate('/', { state: { refresh: true } });
-    }, 200);
-  } catch (err) {
-    console.error("reopen error:", err);
-    setreopenError("Failed to reopen ticket. Please try again.");
-    alert("Reopen failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const cancelreopen = () => {
     setShowreopenReasonInput(false);
     setConfirmreopenModal(false);
     setreopenReason('');
     setreopenError('');
-    setReopenFiles([]);
-  };
-
-  // ---- Render helpers for history attachments (per-event) ----
-  const renderHistoryAttachment = (event) => {
-    const list = Array.isArray(event.attachments) ? event.attachments : [];
-    if (!list.length) return null;
-
-    return (
-      <div style={{ marginTop: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <strong style={{ minWidth: 80 }}>Attachments:</strong>
-        <button
-          onClick={() => openViewerForList(list)}
-          style={{ background: '#2563eb', color: 'white', border: 'none', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}
-        >
-          View
-        </button>
-
-        <button
-          onClick={() => downloadAllAttachments(list)}
-          title="Download all attachments for this event"
-          style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
-        >
-          <img src={DownloadIcon} alt="Download all" style={{ width: 16, height: 16 }} />
-          <span style={{ fontWeight: 700, color: '#0f172a' }}>Download all</span>
-        </button>
-      </div>
-    );
   };
 
   if (!ticket) return <p style={{ textAlign: 'center', padding: '2rem' }}>Loading ticket...</p>;
@@ -533,59 +326,126 @@ function TicketDetails() {
       "#0369a1"
   };
 
-  // Derived: show inline "Waiting for Approval" banner
-  const needsApprovalBanner =
-    isCategoryHead &&
-    ticket &&
-    (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
-    !showApprovalModal &&
-    approvalCategories.includes(ticket.category);
+  const historyEvents = ticket.history && ticket.history.length > 0
+    ? ticket.history
+    : [
+        { action: "created", by: ticket.userName, at: ticket.createdAt, reason: null },
+        ...(ticket.closedAt ? [{ action: "closed", by: ticket.closedBy || "Unknown", at: ticket.closedAt, reason: ticket.closeReason }] : []),
+        ...(ticket.reopenedAt ? [{ action: "reopend", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reopenReason }] : [])
+      ];
 
-  // helper used in ticket-level render area (keeps the button + download single/all)
+  // Helpers for attachment display (main ticket)
+  const hasAttachment = (attachmentList && attachmentList.length > 0);
+
+  const isImageType = (type) => type && type.startsWith && type.startsWith('image/');
+  const isPdfType = (type, url) => {
+    if (type && type === 'application/pdf') return true;
+    if (url && url.toLowerCase().endsWith('.pdf')) return true;
+    return false;
+  };
+
+  const openAttachmentViewer = (attachment) => {
+    if (!attachment) return;
+    // for non-viewable types, open in new tab
+    const viewableImage = isImageType(attachment.fileType);
+    const viewablePdf = isPdfType(attachment.fileType, attachment.fileUrl);
+    if (!viewableImage && !viewablePdf) {
+      // open in new tab
+      if (attachment.fileUrl) {
+        window.open(attachment.fileUrl, '_blank', 'noopener');
+      } else {
+        alert('No URL available to open this attachment.');
+      }
+      return;
+    }
+    setActiveAttachment(attachment);
+    setAttachmentModalOpen(true);
+  };
+
+  // download helper: fetch blob and force download (better cross-origin reliability)
+  const downloadAttachment = async (attachment) => {
+    if (!attachment || !attachment.fileUrl) return;
+    try {
+      const resp = await fetch(attachment.fileUrl, { mode: 'cors' });
+      if (!resp.ok) throw new Error('Network response not ok');
+      const blob = await resp.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      const filename = attachment.fileName || (attachment.fileUrl.split('/').pop().split('?')[0]) || 'download';
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      // fallback: open in new tab
+      console.warn('Download fallback, opening in new tab', err);
+      window.open(attachment.fileUrl, '_blank', 'noopener');
+    }
+  };
+
+  // Helper for attachment in each history event
+  const renderHistoryAttachment = (event) => {
+    if (!event.attachment || (!event.attachment.fileName && !event.attachment.fileUrl)) return null;
+    const label = event.attachment.fileName || 'Attachment';
+    const typeLabel = event.attachment.fileType || '';
+    const url = event.attachment.fileUrl;
+    const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
+    return (
+      <div style={{ marginTop: 8, fontSize: 13 }}>
+        <strong>Attachment:</strong>{' '}
+        <button
+          onClick={() => openAttachmentViewer(att)}
+          style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}
+        >
+          View attachment
+        </button>
+        {typeLabel && (
+          <span style={{ marginLeft: 6, fontSize: 12, color: '#6b7280' }}>
+            ({typeLabel})
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  // Render attachment summary in ticket details & approval modal
   const renderAttachmentSummary = () => {
-    const list = ticket.attachments || [];
-    if (!list || list.length === 0) return null;
+    if (!hasAttachment) return null;
 
-    if (list.length === 1) {
-      const a = list[0];
+    if (attachmentList.length === 1) {
+      const a = attachmentList[0];
       return (
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <strong style={{ minWidth: 90 }}>Attachment:</strong>
+        <div style={{ marginTop: 10 }}>
+          <strong>Attachment:</strong>{' '}
           <button
             onClick={() => openAttachmentViewer(a)}
-            style={{ background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
+            style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
           >
             View attachment
           </button>
-
-          <button
-            onClick={() => downloadAttachment(a)}
-            title="Download"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
-          >
-            <img src={DownloadIcon} alt="Download" style={{ width: 18, height: 18 }} />
-          </button>
+          {/* Filename intentionally hidden per earlier request */}
         </div>
       );
     }
 
+    // multiple attachments
     return (
-      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <strong style={{ minWidth: 90 }}>Attachments:</strong>
+      <div style={{ marginTop: 10 }}>
+        <strong>Attachments:</strong>{' '}
         <button
-          onClick={() => openViewerForList(list)}
-          style={{ background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
+          onClick={() => {
+            // open modal and show the first attachment by default
+            if (attachmentList.length) {
+              setAttachmentList(attachmentList); // ensure state has list
+              setActiveAttachment(attachmentList[0]);
+              setAttachmentModalOpen(true);
+            }
+          }}
+          style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
         >
-          Attachments uploaded ({list.length})
-        </button>
-
-        <button
-          onClick={() => downloadAllAttachments(list)}
-          title="Download all attachments (zip)"
-          style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
-        >
-          <img src={DownloadIcon} alt="Download all" style={{ width: 18, height: 18 }} />
-          <span style={{ fontWeight: 700, color: '#0f172a' }}>Download all</span>
+          Attachments uploaded ({attachmentList.length})
         </button>
       </div>
     );
@@ -617,8 +477,8 @@ function TicketDetails() {
         .att-thumb .meta .type { font-size:12px; color:#6b7280; }
 
         .att-actions { display:flex; gap:8px; margin-top:12px; }
-        .att-btn { padding:10px 16px; background:#2563eb; color:#fff; border-radius:8px; text-decoration:none; font-weight:700; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
-        .att-btn img { width:18px; height:18px; }
+        .att-btn { padding:10px 16px; background:#2563eb; color:#fff; border-radius:8px; text-decoration:none; font-weight:700; border:none; cursor:pointer; }
+        .att-btn.secondary { background:#10b981; }
       `}</style>
 
       {/* BACK BUTTON */}
@@ -728,6 +588,7 @@ function TicketDetails() {
                 </div>
               )}
 
+              {/* NOTE: Removed duplicate small hint attachment shown above the Description box */}
             </div>
           </div>
 
@@ -820,7 +681,7 @@ function TicketDetails() {
         }}>
           <strong style={{ display: 'block', marginBottom: 8, fontSize: 15 }}>Description</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
-          {/* Ticket-level attachments (kept here) */}
+          {/* Attachment detailed view - kept here (only this button will be visible) */}
           {renderAttachmentSummary()}
         </div>
       </div>
@@ -831,11 +692,7 @@ function TicketDetails() {
           Ticket History
         </h2>
         <div>
-          { (ticket.history && ticket.history.length ? ticket.history : [
-            { action: "created", by: ticket.userName, at: ticket.createdAt, reason: null, attachments: [] },
-            ...(ticket.closedAt ? [{ action: "closed", by: ticket.closedBy || "Unknown", at: ticket.closedAt, reason: ticket.closeReason, attachments: [] }] : []),
-            ...(ticket.reopenedAt ? [{ action: "reopend", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reopenReason, attachments: [] }] : [])
-          ]).map((event, index) => {
+          {historyEvents.map((event, index) => {
             const isCreatedEvent = event.action === 'created';
             const createdByDifferentPerson = isCreatedEvent && event.by !== ticket.userName;
             const showOnBehalf = isCreatedEvent && (ticket.onBehalf || createdByDifferentPerson);
@@ -900,7 +757,7 @@ function TicketDetails() {
                   </div>
                 )}
 
-                {/* Attachment snapshot in history (per-event) */}
+                {/* Attachment snapshot in history */}
                 {renderHistoryAttachment(event)}
               </div>
             );
@@ -914,7 +771,7 @@ function TicketDetails() {
         </div>
       </div>
 
-      {/* APPROVAL MODAL */}
+      {/* APPROVAL MODAL – Password Reset + Admin Access */}
       {showApprovalModal &&
         isCategoryHead &&
         approvalCategories.includes(ticket.category) && (
@@ -944,8 +801,18 @@ function TicketDetails() {
               {ticket.deliveryEmail && <p style={{ margin: '6px 0' }}><strong>Delivery Email:</strong> {ticket.deliveryEmail}</p>}
               <p style={{ margin: '6px 0' }}><strong>Created On:</strong> {formatDate(ticket.createdAt)}</p>
 
+              {/* subQuery summary inside approval modal */}
+              {ticket.category === 'Operational & Finance' && ticket.subQuery && (
+                <>
+                  <p style={{ margin: '6px 0' }}><strong>Sub Category:</strong> {ticket.subQuery}</p>
+                  {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
+                    <p style={{ margin: '6px 0' }}><strong>Sub Details:</strong> {ticket.otherSubQueryText}</p>
+                  )}
+                </>
+              )}
+
               {/* attachment summary inside approval modal */}
-              {ticket.attachments && ticket.attachments.length > 0 && (
+              {hasAttachment && (
                 <div style={{ marginTop: 8 }}>
                   {renderAttachmentSummary()}
                 </div>
@@ -1051,31 +918,26 @@ function TicketDetails() {
             <h3 style={{ margin: '0 0 20px', color: '#1e293b', fontSize: '1.5rem', fontWeight: 700 }}>
               Close Ticket #{ticket.ticketNumber}
             </h3>
-            <p style={{ color: '#475569', marginBottom: 20 }}>Please provide a reason for closing this ticket. (Attachments optional)</p>
+            <p style={{ color: '#475569', marginBottom: 20 }}>Please provide a reason for closing this ticket.</p>
             <textarea
               className="reason-input"
-              rows="4"
+              rows="6"
               placeholder="Explain why this ticket is being closed..."
               value={closeReason}
               onChange={(e) => setCloseReason(e.target.value)}
+              autoFocus
             />
-            <div style={{ marginTop: 8 }}>
-              <input type="file" multiple onChange={(e) => setCloseFiles(Array.from(e.target.files || []))} />
-              {closeFiles && closeFiles.length > 0 && (
-                <div style={{ marginTop: 8, fontSize: 13 }}>{closeFiles.length} file(s) selected</div>
-              )}
-            </div>
             {closeError && <div className="error-text">{closeError}</div>}
-            <div style={{ marginTop: 16, display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
               <button
                 onClick={handleSubmitReason}
-                style={{ padding: '12px 22px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
+                style={{ padding: '14px 28px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
               >
                 Continue to Close
               </button>
               <button
                 onClick={cancelClose}
-                style={{ padding: '12px 22px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
+                style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
               >
                 Cancel
               </button>
@@ -1114,33 +976,28 @@ function TicketDetails() {
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px', color: '#1e293b', fontSize: '1.5rem', fontWeight: 700 }}>
-              Reopen Ticket #{ticket.ticketNumber}
+              reopen Ticket #{ticket.ticketNumber}
             </h3>
-            <p style={{ color: '#475569', marginBottom: 20 }}>Please explain why this ticket needs to be reopened. (Attachments optional)</p>
+            <p style={{ color: '#475569', marginBottom: 20 }}>Please explain why this ticket needs to be reopened.</p>
             <textarea
               className="reason-input"
-              rows="4"
-              placeholder="Why is this ticket being reopened?"
+              rows="6"
+              placeholder="Why is this ticket being reopend?"
               value={reopenReason}
               onChange={(e) => setreopenReason(e.target.value)}
+              autoFocus
             />
-            <div style={{ marginTop: 8 }}>
-              <input type="file" multiple onChange={(e) => setReopenFiles(Array.from(e.target.files || []))} />
-              {reopenFiles && reopenFiles.length > 0 && (
-                <div style={{ marginTop: 8, fontSize: 13 }}>{reopenFiles.length} file(s) selected</div>
-              )}
-            </div>
             {reopenError && <div className="error-text">{reopenError}</div>}
-            <div style={{ marginTop: 16, display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
               <button
                 onClick={handleSubmitreopenReason}
-                style={{ padding: '12px 22px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
+                style={{ padding: '14px 28px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
               >
-                Continue to Reopen
+                Continue to reopen
               </button>
               <button
                 onClick={cancelreopen}
-                style={{ padding: '12px 22px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
+                style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
               >
                 Cancel
               </button>
@@ -1153,7 +1010,7 @@ function TicketDetails() {
       {confirmreopenModal && (
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#16a34a', fontSize: '1.6rem', fontWeight: 700 }}>Reopen This Ticket?</h3>
+            <h3 style={{ margin: '0 0 20px', color: '#16a34a', fontSize: '1.6rem', fontWeight: 700 }}>reopen This Ticket?</h3>
             <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
               <button
@@ -1182,6 +1039,7 @@ function TicketDetails() {
               <div className="att-toolbar">
                 <div className="att-title">{activeAttachment.fileName || 'Attachment'}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {/* If there are multiple attachments show count */}
                   {attachmentList && attachmentList.length > 1 && (
                     <div style={{ fontSize: 13, color: '#6b7280', marginRight: 8 }}>
                       {attachmentList.length} attachments
@@ -1200,15 +1058,24 @@ function TicketDetails() {
                       className="att-img"
                     />
                     <div className="att-actions">
-                      {/* Download button for images (only control) */}
+                      {/* Download button for images */}
                       <button
                         className="att-btn"
                         onClick={() => downloadAttachment(activeAttachment)}
-                        title="Download image"
                       >
-                        <img src={DownloadIcon} alt="Download" />
                         Download image
                       </button>
+
+                      {/* Also allow opening in new tab if user prefers */}
+                      <a
+                        href={activeAttachment.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="att-btn secondary"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        Open in new tab
+                      </a>
                     </div>
                   </>
                 ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
@@ -1254,7 +1121,8 @@ function TicketDetails() {
                 )}
               </div>
 
-              {/* thumbnails for multi attachments */}
+
+              {/* If multiple attachments exist, show thumbnails / list below */}
               {attachmentList && attachmentList.length > 1 && (
                 <div className="att-list" style={{ marginTop: 8 }}>
                   {attachmentList.map((a, idx) => {
