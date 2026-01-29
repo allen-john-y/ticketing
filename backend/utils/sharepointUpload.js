@@ -16,8 +16,8 @@ async function getAccessToken() {
 }
 
 async function getSiteId(token) {
-  const siteHost = process.env.SHAREPOINT_SITE;
-  const siteName = process.env.SHAREPOINT_SITE_NAME;
+  const siteHost = process.env.SHAREPOINT_SITE;       // e.g. sandezasystems.sharepoint.com
+  const siteName = process.env.SHAREPOINT_SITE_NAME; // e.g. Ticketing
 
   const res = await axios.get(
     `https://graph.microsoft.com/v1.0/sites/${siteHost}:/sites/${siteName}`,
@@ -28,33 +28,30 @@ async function getSiteId(token) {
 }
 
 async function uploadToSharePoint(file) {
-  const token = await getAccessToken();
-  const siteId = await getSiteId(token);
+  try {
+    const token = await getAccessToken();
+    const siteId = await getSiteId(token);
 
-  const client = Client.init({
-    authProvider: (done) => done(null, token),
-  });
-
-  const fileName = `${Date.now()}-${file.originalname}`;
-  const folder = process.env.SHAREPOINT_FOLDER;
-
-  const uploadPath = `/sites/${siteId}/drive/root:/${folder}/${fileName}:/content`;
-  const result = await client.api(uploadPath).put(file.buffer);
-
-  // 🔥 Create permanent download link (no expiry, no token issue)
-  const linkResponse = await client
-    .api(`/sites/${siteId}/drive/items/${result.id}/createLink`)
-    .post({
-      type: "download",
-      scope: "organization"
+    const client = Client.init({
+      authProvider: (done) => done(null, token),
     });
 
-  return {
-    id: result.id,
-    fileName: file.originalname,
-    fileType: file.mimetype,
-    fileUrl: linkResponse.link.webUrl
-  };
+    const fileName = `${Date.now()}-${file.originalname}`;
+    const folder = process.env.SHAREPOINT_FOLDER; // must exist
+
+    const uploadPath = `/sites/${siteId}/drive/root:/${folder}/${fileName}:/content`;
+
+    const result = await client.api(uploadPath).put(file.buffer);
+
+    return {
+      id: result.id,
+      fileName: file.originalname,
+      fileType: file.mimetype
+    };
+  } catch (err) {
+    console.error("SharePoint upload error:", err);
+    throw err;
+  }
 }
 
 module.exports = { uploadToSharePoint };
