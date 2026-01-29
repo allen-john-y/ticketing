@@ -106,7 +106,8 @@ const ticketSchema = new mongoose.Schema(
         fileName: { type: String },
         fileType: { type: String },
         fileUrl: { type: String },
-        id: { type: String } // server-side id or filename
+        id: { type: String }, // driveItem id
+        driveId: { type: String } // parentReference.driveId (drive id)
       }
     ],
 
@@ -389,8 +390,8 @@ const upload = multer({
 
 
 // POST /upload
-// Accepts single file field named 'file' and returns metadata: { id, fileName, fileType, url }
-const { uploadToSharePoint } = require("./utils/sharepointUpload");
+// Accepts single file field named 'file' and returns metadata: { id, driveId, fileName, fileType, url }
+const { uploadToSharePoint } = require("./utils/sharePointUpload");
 
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
@@ -402,6 +403,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
     return res.json({
       id: result.id,
+      driveId: result.driveId || null,
       fileName: result.fileName,
       fileType: result.fileType,
       url: result.fileUrl
@@ -692,7 +694,8 @@ app.post("/tickets", async (req, res) => {
         fileName: a.fileName || a.file_name || a.name || '',
         fileType: a.fileType || a.file_type || a.type || '',
         fileUrl: a.url || a.fileUrl || a.path || null,
-        id: a.id || a.fileId || null
+        id: a.id || a.fileId || null,
+        driveId: a.driveId || null
       }));
       // For backward compatibility - set single attachment to first item if present
       if (!ticketPayload.attachment && ticketPayload.attachments.length > 0) {
@@ -1387,70 +1390,104 @@ app.put("/tickets/:id/revive", async (req, res) => {
   }
 });
 
-// ---------------------- DOWNLOAD ATTACHMENT (PROXY) ----------------------
-// Helper to resolve site id (for site drive files)
-const getSiteId = async (token) => {
-  const siteHost = process.env.SHAREPOINT_SITE;       // e.g. sandezasystems.sharepoint.com
-  const siteName = process.env.SHAREPOINT_SITE_NAME; // e.g. Ticketing
-  if (!siteHost || !siteName) {
-    throw new Error('Missing SHAREPOINT_SITE or SHAREPOINT_SITE_NAME env vars');
+// ---------------------- DOWNLOAD ATTACHMENT (ROBUST PROXY + ZIP) ----------------------
+
+// Helper: attempt multiple Graph endpoints to fetch item content stream
+async function fetchItemStream(token, itemId, driveId) {
+  const attempts = [];
+
+  // If driveId known, try drives/{driveId}/items/{itemId}/content first
+  if (driveId) {
+    attempts.push({
+      label: `drives/${driveId}/items/${itemId}`,
+      url: `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/content`
+    });
   }
 
-  const res = await axios.get(
-    `https://graph.microsoft.com/v1.0/sites/${siteHost}:/sites/${siteName}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  // Try site drive if configured
+  if (process.env.SHAREPOINT_SITE && process.env.SHAREPOINT_SITE_NAME) {
+    try {
+      const siteHost = process.env.SHAREPOINT_SITE;
+      const siteName = process.env.SHAREPOINT_SITE_NAME;
+      const siteRes = await axios.get(
+        `https://graph.microsoft.com/v1.0/sites/${siteHost}:/sites/${siteName}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const siteId = siteRes.data.id;
+      attempts.push({
+        label: `sites/${siteId}/drive/items/${itemId}`,
+        url: `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${itemId}/content`
+      });
+    } catch (e) {
+      console.warn('Could not resolve site id (skip site-drive attempt):', e.message || e);
+    }
+  }
 
-  return res.data.id;
-};
+  // Generic drive attempt
+  attempts.push({
+    label: `drive/items/${itemId}`,
+    url: `https://graph.microsoft.com/v1.0/drive/items/${itemId}/content`
+  });
 
-// Stream a single attachment by driveItem id (site drive)
+  // Try each until one succeeds
+  for (const att of attempts) {
+    try {
+      const resp = await axios.get(att.url, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'stream',
+        validateStatus: status => status >= 200 && status < 400
+      });
+      return {
+        stream: resp.data,
+        contentType: resp.headers['content-type'],
+        contentDisposition: resp.headers['content-disposition'],
+        used: att.label
+      };
+    } catch (err) {
+      const errMsg = err?.response?.data ? JSON.stringify(err.response.data) : err.message || err;
+      console.warn(`Attempt failed for ${att.label}:`, errMsg);
+      // continue to next attempt
+    }
+  }
+
+  throw new Error('All attempts to fetch item failed');
+}
+
+// Single file proxy: /attachments/:fileId?driveId=<optional>
 app.get("/attachments/:fileId", async (req, res) => {
   try {
-    const token = await getAccessToken(); // existing function
     const fileId = req.params.fileId;
+    const driveId = req.query.driveId || null;
     if (!fileId) return res.status(400).send('Missing file id');
 
-    // Resolve site drive id (we assume uploaded files are in site drive via your upload helper)
-    const siteId = await getSiteId(token);
+    const token = await getAccessToken();
+    const fetched = await fetchItemStream(token, fileId, driveId);
 
-    // Fetch metadata to determine name and MIME
-    const metaUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${fileId}`;
-    const metaResp = await axios.get(metaUrl, { headers: { Authorization: `Bearer ${token}` } });
-    const meta = metaResp.data || {};
-    const filename = meta.name || `file-${fileId}`;
-    const mime = (meta.file && meta.file.mimeType) || meta.file?.mimeType || 'application/octet-stream';
+    if (fetched.contentType) res.setHeader('Content-Type', fetched.contentType);
 
-    // Stream content
-    const contentUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${fileId}/content`;
-    const streamResp = await axios.get(contentUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-      responseType: 'stream'
-    });
-
-    // Set headers
-    res.setHeader('Content-Type', mime);
-    if (String(mime).startsWith('image/')) {
-      // inline for images
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
-    } else if (mime === 'application/pdf') {
-      // force download for PDFs as requested
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    if (fetched.contentDisposition) {
+      res.setHeader('Content-Disposition', fetched.contentDisposition);
     } else {
-      // default: attachment
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      const ct = (fetched.contentType || '').toLowerCase();
+      if (ct.startsWith('image/')) {
+        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileId)}"`);
+      } else if (ct === 'application/pdf') {
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileId)}"`);
+      } else {
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileId)}"`);
+      }
     }
 
-    // pipe Graph stream to response
-    streamResp.data.pipe(res);
+    // pipe stream to client
+    fetched.stream.pipe(res);
   } catch (err) {
-    console.error("Attachment proxy error:", err?.response?.data || err?.message || err);
-    if (!res.headersSent) res.status(500).send("Download failed");
+    console.error('Attachment proxy error:', err?.response?.data || err?.message || err);
+    if (!res.headersSent) res.status(500).send('Download failed');
   }
 });
 
 // Download multiple attachments as a ZIP
-// Expects query param: ids=id1,id2,id3
+// GET /attachments/zip?ids=id1,id2&driveIds=did1,did2 (driveIds optional, comma-aligned with ids)
 app.get("/attachments/zip", async (req, res) => {
   try {
     const idsQuery = req.query.ids;
@@ -1458,8 +1495,10 @@ app.get("/attachments/zip", async (req, res) => {
     const ids = idsQuery.split(',').map(s => s.trim()).filter(Boolean);
     if (ids.length === 0) return res.status(400).send('No ids provided');
 
+    const driveIdsParam = req.query.driveIds || '';
+    const driveIds = driveIdsParam.split(',').map(s => s.trim());
+
     const token = await getAccessToken();
-    const siteId = await getSiteId(token);
 
     const zipName = `attachments-${Date.now()}.zip`;
     res.setHeader('Content-Type', 'application/zip');
@@ -1472,20 +1511,19 @@ app.get("/attachments/zip", async (req, res) => {
     });
     archive.pipe(res);
 
-    // Append each file (stream) to the archive
-    for (const id of ids) {
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const driveId = (driveIds[i] && driveIds[i] !== '') ? driveIds[i] : null;
       try {
-        const metaUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${id}`;
-        const metaResp = await axios.get(metaUrl, { headers: { Authorization: `Bearer ${token}` } });
-        const filename = metaResp.data?.name || `file-${id}`;
+        const fetched = await fetchItemStream(token, id, driveId);
 
-        const contentUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${id}/content`;
-        const streamResp = await axios.get(contentUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-          responseType: 'stream'
-        });
+        let filename = `file-${id}`;
+        if (fetched.contentDisposition) {
+          const m = /filename\*?=(?:UTF-8'')?["']?([^;"']+)/i.exec(fetched.contentDisposition);
+          if (m && m[1]) filename = decodeURIComponent(m[1]);
+        }
 
-        archive.append(streamResp.data, { name: filename });
+        archive.append(fetched.stream, { name: filename });
       } catch (innerErr) {
         console.warn('Skipping file in ZIP (failed to fetch):', id, innerErr?.message || innerErr);
         // continue with remaining files
@@ -1503,6 +1541,6 @@ app.get("/attachments/zip", async (req, res) => {
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`Server running on port ${PORT} (Full History Enabled)`)
+  console.log(`Server running on port ${PORT} (Attachments proxy enabled)`)
 );
-// ---------------------- END PART 4 ----------------------
+// ---------------------- END ----------------------

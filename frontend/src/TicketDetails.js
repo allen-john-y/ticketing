@@ -1,4 +1,4 @@
-// TicketDetails.js — updated: use backend proxy URLs for attachments, PDF download, image inline, server ZIP for download-all
+// TicketDetails.js — updated: use backend proxy URLs for attachments, include driveIds in ZIP download
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -49,7 +49,7 @@ function TicketDetails() {
 
   // Attachment modal state
   const [attachmentModalOpen, setAttachmentModalOpen] = useState(false);
-  const [activeAttachment, setActiveAttachment] = useState(null); // { fileName, fileType, fileUrl, id }
+  const [activeAttachment, setActiveAttachment] = useState(null); // { fileName, fileType, fileUrl, id, driveId }
   const [attachmentList, setAttachmentList] = useState([]); // for multi attachments view when ticket.attachments exists
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
 
@@ -102,7 +102,7 @@ function TicketDetails() {
   return () => {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   };
-}, [activeAttachment]);  // ✅ correct dependency
+}, [activeAttachment]);
 
 
   useEffect(() => {
@@ -115,26 +115,30 @@ function TicketDetails() {
         const list = [];
         if (res.data.attachments && Array.isArray(res.data.attachments) && res.data.attachments.length) {
           res.data.attachments.forEach(a => {
-            // prefer drive item id (id/fileId/driveItemId) and use backend proxy URL when available
-            const driveId = a.id || a.fileId || a.driveItemId || null;
-            const proxyUrl = driveId ? `${backendBase}/attachments/${driveId}` : (a.fileUrl || a.url || a.path || null);
+            // prefer drive item id and driveId if present; use backend proxy url when id present
+            const driveId = a.driveId || a.parentReference?.driveId || null;
+            const driveItemId = a.id || a.fileId || null;
+            const proxyUrl = driveItemId ? `${backendBase}/attachments/${driveItemId}${driveId ? `?driveId=${encodeURIComponent(driveId)}` : ''}` : (a.fileUrl || a.url || a.path || null);
             list.push({
               fileName: a.fileName || a.file_name || a.originalname || '',
               fileType: a.fileType || a.file_type || a.mimetype || '',
               fileUrl: proxyUrl,
-              id: driveId || (a.id || a.fileId || null)
+              id: driveItemId,
+              driveId: driveId || null
             });
           });
         } else if (res.data.attachment && (res.data.attachment.fileName || res.data.attachment.fileUrl)) {
           // fallback to legacy single attachment
           const a = res.data.attachment;
-          const driveId = a.id || a.fileId || null;
-          const proxyUrl = driveId ? `${backendBase}/attachments/${driveId}` : (a.fileUrl || null);
+          const driveId = a.driveId || a.parentReference?.driveId || null;
+          const driveItemId = a.id || a.fileId || null;
+          const proxyUrl = driveItemId ? `${backendBase}/attachments/${driveItemId}${driveId ? `?driveId=${encodeURIComponent(driveId)}` : ''}` : (a.fileUrl || null);
           list.push({
             fileName: a.fileName || '',
             fileType: a.fileType || '',
             fileUrl: proxyUrl,
-            id: driveId || null
+            id: driveItemId || null,
+            driveId: driveId || null
           });
         }
         setAttachmentList(list);
@@ -393,7 +397,7 @@ function TicketDetails() {
     const viewablePdf = isPdfType(attachment.fileType, fileUrl);
 
     if (viewablePdf) {
-      // For PDFs, download directly (user requested PDF -> direct download)
+      // For PDFs, download directly (server sets attachment)
       downloadAttachment(attachment);
       return;
     }
@@ -437,7 +441,7 @@ function TicketDetails() {
     }
   };
 
-  // download-all helper: use backend zip endpoint
+  // download-all helper: use backend zip endpoint and include driveIds aligned with ids
   const downloadAllAttachments = async () => {
     if (!attachmentList || attachmentList.length === 0) return;
     // require that attachments have ids (drive item ids)
@@ -446,7 +450,9 @@ function TicketDetails() {
       alert('No downloadable attachments available.');
       return;
     }
-    const url = `${backendBase}/attachments/zip?ids=${encodeURIComponent(ids.join(','))}`;
+    // collect aligned driveIds (use empty string when missing to preserve positions)
+    const driveIds = attachmentList.map(a => a.driveId || '');
+    const url = `${backendBase}/attachments/zip?ids=${encodeURIComponent(ids.join(','))}&driveIds=${encodeURIComponent(driveIds.join(','))}`;
     const a = document.createElement('a');
     a.href = url;
     a.download = `attachments-${ticket.ticketNumber || id}.zip`;
