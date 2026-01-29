@@ -1427,7 +1427,7 @@ app.put("/tickets/:id/revive", async (req, res) => {
     const deptCcList = [];
     if (ticket.category === "Password Reset" || ticket.category === "Admin Access") deptCcList.push(passwordResetSecondary);
     if (itHead) deptCcList.push(itHead);
-    await sendEmail(dept, `[REVIVED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptCcList.length ? deptCcList : itHead);
+    await sendEmail(dept, `[REOPENED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, emailHtml, deptCcList.length ? deptCcList : itHead);
 
     console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
 

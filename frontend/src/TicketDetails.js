@@ -410,7 +410,7 @@ function TicketDetails() {
         attachments: attachmentsMeta
       };
 
-      const res = await axios.put(`${backendBase}/tickets/${id}/close`, payload);
+     // const res = await axios.put(`${backendBase}/tickets/${id}/close`, payload);
 
       // update local ticket if necessary (refresh or optimistic)
       setConfirmModal(false);
