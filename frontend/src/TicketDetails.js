@@ -1,4 +1,4 @@
-// TicketDetails.js — updated: use Download.png icon, remove "open in new tab", add "Download image" and "Download all (zip)" for multi attachments
+// TicketDetails.js — updated: use backend proxy URLs for attachments, PDF download, image inline, server ZIP for download-all
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -85,7 +85,9 @@ function TicketDetails() {
     }
 
     try {
-      const res = await fetch(activeAttachment.fileUrl, { credentials: 'include' });
+      // Fetch via backend proxy (no credentials), create object URL for inline preview
+      const res = await fetch(activeAttachment.fileUrl);
+      if (!res.ok) throw new Error('Failed to load image preview');
       const blob = await res.blob();
       objectUrl = URL.createObjectURL(blob);
       setImagePreviewUrl(objectUrl);
@@ -113,20 +115,26 @@ function TicketDetails() {
         const list = [];
         if (res.data.attachments && Array.isArray(res.data.attachments) && res.data.attachments.length) {
           res.data.attachments.forEach(a => {
+            // prefer drive item id (id/fileId/driveItemId) and use backend proxy URL when available
+            const driveId = a.id || a.fileId || a.driveItemId || null;
+            const proxyUrl = driveId ? `${backendBase}/attachments/${driveId}` : (a.fileUrl || a.url || a.path || null);
             list.push({
-              fileName: a.fileName || a.file_name || '',
-              fileType: a.fileType || a.file_type || '',
-              fileUrl: a.fileUrl || a.url || a.path || null,
-              id: a.id || a.fileId || null
+              fileName: a.fileName || a.file_name || a.originalname || '',
+              fileType: a.fileType || a.file_type || a.mimetype || '',
+              fileUrl: proxyUrl,
+              id: driveId || (a.id || a.fileId || null)
             });
           });
         } else if (res.data.attachment && (res.data.attachment.fileName || res.data.attachment.fileUrl)) {
           // fallback to legacy single attachment
+          const a = res.data.attachment;
+          const driveId = a.id || a.fileId || null;
+          const proxyUrl = driveId ? `${backendBase}/attachments/${driveId}` : (a.fileUrl || null);
           list.push({
-            fileName: res.data.attachment.fileName || '',
-            fileType: res.data.attachment.fileType || '',
-            fileUrl: res.data.attachment.fileUrl || null,
-            id: null
+            fileName: a.fileName || '',
+            fileType: a.fileType || '',
+            fileUrl: proxyUrl,
+            id: driveId || null
           });
         }
         setAttachmentList(list);
@@ -376,36 +384,41 @@ function TicketDetails() {
   };
 
   const openAttachmentViewer = (attachment) => {
-  if (!attachment) return;
+    if (!attachment) return;
 
-  const backendBase = "https://ticketing-hn59.onrender.com";
-  // Always use backend proxy URL instead of SharePoint URL
-  const fileUrl = `${backendBase}/attachments/${attachment.id}`;
+    // If file has id, backend proxy URL should already be set in attachment.fileUrl
+    const fileUrl = attachment.fileUrl;
 
-  const viewableImage = isImageType(attachment.fileType);
-  const viewablePdf = isPdfType(attachment.fileType, fileUrl);
+    const viewableImage = isImageType(attachment.fileType);
+    const viewablePdf = isPdfType(attachment.fileType, fileUrl);
 
-  if (!viewableImage && !viewablePdf) {
-    // For non-previewable files, directly download/open
-    window.open(fileUrl, '_blank', 'noopener');
-    return;
-  }
+    if (viewablePdf) {
+      // For PDFs, download directly (user requested PDF -> direct download)
+      downloadAttachment(attachment);
+      return;
+    }
 
-  // For previewable files (image / pdf), open modal with backend URL
-  setActiveAttachment({
-    ...attachment,
-    fileUrl: fileUrl
-  });
+    if (!viewableImage) {
+      // For non-previewable files, open in new tab (server will trigger download)
+      window.open(fileUrl, '_blank', 'noopener');
+      return;
+    }
 
-  setAttachmentModalOpen(true);
-};
+    // For images: open modal with backend URL
+    setActiveAttachment({
+      ...attachment,
+      fileUrl
+    });
+
+    setAttachmentModalOpen(true);
+  };
 
 
   // download helper: fetch blob and force download (better cross-origin reliability)
   const downloadAttachment = async (attachment) => {
     if (!attachment || !attachment.fileUrl) return;
     try {
-      const resp = await fetch(attachment.fileUrl, { mode: 'cors' });
+      const resp = await fetch(attachment.fileUrl);
       if (!resp.ok) throw new Error('Network response not ok');
       const blob = await resp.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -424,45 +437,22 @@ function TicketDetails() {
     }
   };
 
-  // download-all helper: zip all attachments client-side and download as single zip
+  // download-all helper: use backend zip endpoint
   const downloadAllAttachments = async () => {
     if (!attachmentList || attachmentList.length === 0) return;
-    try {
-      const JSZipModule = await import('jszip'); // requires jszip package: npm install jszip
-      const JSZip = JSZipModule.default || JSZipModule;
-      const zip = new JSZip();
-
-      // fetch each file as blob and add to zip
-      const fetches = attachmentList.map(async (a) => {
-        if (!a.fileUrl) return;
-        try {
-          const res = await fetch(a.fileUrl, { mode: 'cors' });
-          if (!res.ok) throw new Error(`Failed: ${res.status}`);
-          const blob = await res.blob();
-          const filename = a.fileName || (a.fileUrl.split('/').pop().split('?')[0]) || 'file';
-          zip.file(filename, blob);
-        } catch (e) {
-          console.warn('Failed to fetch attachment for zip:', a.fileUrl, e);
-        }
-      });
-
-      await Promise.all(fetches);
-
-      const content = await zip.generateAsync({ type: 'blob' });
-
-      const url = URL.createObjectURL(content);
-      const a = document.createElement('a');
-      a.href = url;
-      const zipName = `attachments-${ticket.ticketNumber || id}.zip`;
-      a.download = zipName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download all failed (zip):', err);
-      alert('Failed to create ZIP. Ensure jszip is installed and attachments allow cross-origin fetch.');
+    // require that attachments have ids (drive item ids)
+    const ids = attachmentList.map(a => a.id).filter(Boolean);
+    if (ids.length === 0) {
+      alert('No downloadable attachments available.');
+      return;
     }
+    const url = `${backendBase}/attachments/zip?ids=${encodeURIComponent(ids.join(','))}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `attachments-${ticket.ticketNumber || id}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   // Helper for attachment in each history event
@@ -476,10 +466,17 @@ function TicketDetails() {
       <div style={{ marginTop: 8, fontSize: 13 }}>
         <strong>Attachment:</strong>{' '}
         <button
-          onClick={() => openAttachmentViewer(att)}
+          onClick={() => {
+            // For history attachments, if PDF then download, else open viewer
+            if (isPdfType(typeLabel, url)) {
+              downloadAttachment(att);
+            } else {
+              openAttachmentViewer(att);
+            }
+          }}
           style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}
         >
-          View attachment
+          {isPdfType(typeLabel, url) ? 'Download PDF' : 'View attachment'}
         </button>
         {typeLabel && (
           <span style={{ marginLeft: 6, fontSize: 12, color: '#6b7280' }}>
@@ -496,24 +493,34 @@ function TicketDetails() {
 
     if (attachmentList.length === 1) {
       const a = attachmentList[0];
+      const isPdf = isPdfType(a.fileType, a.fileUrl);
       return (
         <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <strong style={{ minWidth: 90 }}>Attachment:</strong>
+          <strong style={{ minWidth: 90 }}>{isPdf ? 'PDF:' : 'Attachment:'}</strong>
+
           <button
-            onClick={() => openAttachmentViewer(a)}
+            onClick={() => {
+              if (isPdf) {
+                downloadAttachment(a);
+              } else {
+                openAttachmentViewer(a);
+              }
+            }}
             style={{ marginLeft: 0, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
           >
-            View attachment
+            {isPdf ? 'Download PDF' : 'View attachment'}
           </button>
 
           {/* Download icon (single file) to the right */}
-          <button
-            onClick={() => downloadAttachment(a)}
-            title="Download"
-            style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
-          >
-            <img src={DownloadIcon} alt="Download" style={{ width: 18, height: 18 }} />
-          </button>
+          {!isPdf && (
+            <button
+              onClick={() => downloadAttachment(a)}
+              title="Download"
+              style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
+            >
+              <img src={DownloadIcon} alt="Download" style={{ width: 18, height: 18 }} />
+            </button>
+          )}
         </div>
       );
     }
@@ -1164,23 +1171,14 @@ function TicketDetails() {
                   </>
                 ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
                   <div style={{ textAlign: 'center' }}>
-                    <p style={{ marginBottom: 12 }}>PDF preview is opened in a new tab.</p>
-                    <a
-                      href={activeAttachment.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'inline-block',
-                        padding: '10px 18px',
-                        background: '#2563eb',
-                        color: '#fff',
-                        borderRadius: 10,
-                        textDecoration: 'none',
-                        fontWeight: 700
-                      }}
+                    <p style={{ marginBottom: 12 }}>PDF will be downloaded when you click the button.</p>
+                    <button
+                      className="att-btn"
+                      onClick={() => downloadAttachment(activeAttachment)}
                     >
-                      Open PDF
-                    </a>
+                      <img src={DownloadIcon} alt="Download" />
+                      Download PDF
+                    </button>
                   </div>
                 ) : (
                   <div style={{ textAlign: 'center' }}>

@@ -12,6 +12,8 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const axios = require("axios");         // ADDED
+const archiver = require("archiver");   // ADDED
 require("dotenv").config();
 
 // ---------------------- App Setup ------------------------
@@ -1386,31 +1388,115 @@ app.put("/tickets/:id/revive", async (req, res) => {
 });
 
 // ---------------------- DOWNLOAD ATTACHMENT (PROXY) ----------------------
+// Helper to resolve site id (for site drive files)
+const getSiteId = async (token) => {
+  const siteHost = process.env.SHAREPOINT_SITE;       // e.g. sandezasystems.sharepoint.com
+  const siteName = process.env.SHAREPOINT_SITE_NAME; // e.g. Ticketing
+  if (!siteHost || !siteName) {
+    throw new Error('Missing SHAREPOINT_SITE or SHAREPOINT_SITE_NAME env vars');
+  }
+
+  const res = await axios.get(
+    `https://graph.microsoft.com/v1.0/sites/${siteHost}:/sites/${siteName}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  return res.data.id;
+};
+
+// Stream a single attachment by driveItem id (site drive)
 app.get("/attachments/:fileId", async (req, res) => {
   try {
-    const token = await getAccessToken(); // already exists in your file
+    const token = await getAccessToken(); // existing function
     const fileId = req.params.fileId;
+    if (!fileId) return res.status(400).send('Missing file id');
 
-    const graphRes = await fetch(
-      `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    // Resolve site drive id (we assume uploaded files are in site drive via your upload helper)
+    const siteId = await getSiteId(token);
 
-    if (!graphRes.ok) {
-      const text = await graphRes.text();
-      console.error("Graph download failed:", text);
-      return res.status(500).send("Failed to download file");
+    // Fetch metadata to determine name and MIME
+    const metaUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${fileId}`;
+    const metaResp = await axios.get(metaUrl, { headers: { Authorization: `Bearer ${token}` } });
+    const meta = metaResp.data || {};
+    const filename = meta.name || `file-${fileId}`;
+    const mime = (meta.file && meta.file.mimeType) || meta.file?.mimeType || 'application/octet-stream';
+
+    // Stream content
+    const contentUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${fileId}/content`;
+    const streamResp = await axios.get(contentUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+      responseType: 'stream'
+    });
+
+    // Set headers
+    res.setHeader('Content-Type', mime);
+    if (String(mime).startsWith('image/')) {
+      // inline for images
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+    } else if (mime === 'application/pdf') {
+      // force download for PDFs as requested
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    } else {
+      // default: attachment
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
     }
 
-    res.setHeader("Content-Disposition", "attachment");
-    graphRes.body.pipe(res);
+    // pipe Graph stream to response
+    streamResp.data.pipe(res);
   } catch (err) {
-    console.error("Attachment proxy error:", err);
-    res.status(500).send("Download failed");
+    console.error("Attachment proxy error:", err?.response?.data || err?.message || err);
+    if (!res.headersSent) res.status(500).send("Download failed");
+  }
+});
+
+// Download multiple attachments as a ZIP
+// Expects query param: ids=id1,id2,id3
+app.get("/attachments/zip", async (req, res) => {
+  try {
+    const idsQuery = req.query.ids;
+    if (!idsQuery) return res.status(400).send('Missing ids');
+    const ids = idsQuery.split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) return res.status(400).send('No ids provided');
+
+    const token = await getAccessToken();
+    const siteId = await getSiteId(token);
+
+    const zipName = `attachments-${Date.now()}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', err => {
+      console.error('Archiver error:', err);
+      if (!res.headersSent) res.status(500).end();
+    });
+    archive.pipe(res);
+
+    // Append each file (stream) to the archive
+    for (const id of ids) {
+      try {
+        const metaUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${id}`;
+        const metaResp = await axios.get(metaUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const filename = metaResp.data?.name || `file-${id}`;
+
+        const contentUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${id}/content`;
+        const streamResp = await axios.get(contentUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'stream'
+        });
+
+        archive.append(streamResp.data, { name: filename });
+      } catch (innerErr) {
+        console.warn('Skipping file in ZIP (failed to fetch):', id, innerErr?.message || innerErr);
+        // continue with remaining files
+      }
+    }
+
+    await archive.finalize();
+    // response will end once archive stream finishes
+  } catch (err) {
+    console.error('Zip creation error:', err?.message || err);
+    if (!res.headersSent) res.status(500).send('Failed to create ZIP');
   }
 });
 
