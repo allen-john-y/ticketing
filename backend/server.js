@@ -1432,7 +1432,7 @@ app.put("/tickets/:id/revive", async (req, res) => {
     console.log(`Ticket #${ticket.ticketNumber} revived by ${ticket.reopenedBy}`);
 
     res.json({
-      message: "Ticket revived successfully",
+      message: "Ticket Reopned successfully",
       ticket: {
         _id: ticket._id,
         status: "Open",
