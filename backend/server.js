@@ -19,25 +19,6 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' }));
 
-// Allow frontend to load images from /uploads
-const UPLOAD_DIR = path.join(__dirname, "uploads");
-
-// Ensure uploads directory exists
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
-// Serve uploaded files statically with proper headers
-app.use("/uploads", (req, res, next) => {
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.removeHeader("Content-Security-Policy");
-  next();
-});
-
-app.use("/uploads", express.static(UPLOAD_DIR));
-
-
 
 // ---------------------- CORS ------------------------------
 const allowedOrigins = [
@@ -399,45 +380,32 @@ const addUserToGroup = async (groupId, userObjectId) => {
 
 // ---------------------- UPLOAD (NEW) ----------------------
 // Multer setup
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, UPLOAD_DIR);
-  },
-  filename: function (req, file, cb) {
-    // unique filename: timestamp-random-ext
-    const rnd = crypto.randomBytes(6).toString('hex');
-    const ext = path.extname(file.originalname) || '';
-    const name = `${Date.now()}-${rnd}${ext}`;
-    cb(null, name);
-  }
-});
 const upload = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB limit
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
 });
+
 
 // POST /upload
 // Accepts single file field named 'file' and returns metadata: { id, fileName, fileType, url }
-app.post('/upload', upload.single('file'), (req, res) => {
+const { uploadToSharePoint } = require("./utils/sharepointUpload");
+
+app.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
-    const saved = req.file;
-    // Build public URL based on request
-    const protocol = req.protocol;
-    const host = req.get('host'); // includes port if any
-    const fileUrl = `${protocol}://${host}/uploads/${encodeURIComponent(saved.filename)}`;
+
+    const result = await uploadToSharePoint(req.file);
 
     return res.json({
-      id: saved.filename,
-      fileName: saved.originalname,
-      fileType: saved.mimetype,
-      url: fileUrl,
-      size: saved.size
+      id: result.id,
+      fileName: result.fileName,
+      fileType: result.fileType,
+      url: result.fileUrl
     });
   } catch (err) {
-    console.error('Upload error:', err);
+    console.error('SharePoint upload error:', err);
     return res.status(500).json({ message: 'Upload failed', error: err.message });
   }
 });
