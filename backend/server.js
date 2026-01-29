@@ -1208,9 +1208,10 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
 // ---------------------- PART 4 ----------------------
 // Close Ticket
+// Replace existing PUT /tickets/:id/close handler with this updated version
 app.put("/tickets/:id/close", async (req, res) => {
   try {
-    const { closedBy, closeReason } = req.body;
+    const { closedBy, closeReason, attachments } = req.body;
 
     if (!closeReason || closeReason.trim() === "") {
       return res.status(400).json({ message: "Close reason is required" });
@@ -1225,13 +1226,44 @@ app.put("/tickets/:id/close", async (req, res) => {
 
     const now = new Date();
 
+    // push history entry for closed (we'll attach snapshot below if attachments provided)
     ticket.history.push({
       action: "closed",
       by: closedBy?.trim() || "IT Head",
       at: now,
       reason: closeReason.trim(),
+      // attachment: will be set below if attachments provided
     });
 
+    // If client passed attachments metadata (from /upload), normalize and add them to ticket.attachments
+    if (attachments && Array.isArray(attachments) && attachments.length) {
+      const incoming = attachments.map((a) => ({
+        fileName: a.fileName || a.name || '',
+        fileType: a.fileType || a.type || '',
+        fileUrl: a.url || a.fileUrl || a.path || null,
+        id: a.id || a.fileId || null,
+      }));
+
+      // Append to existing attachments array
+      ticket.attachments = (ticket.attachments || []).concat(incoming);
+
+      // Add snapshot of first attachment into the history entry we just pushed
+      const lastHistoryIndex = ticket.history.length - 1;
+      if (lastHistoryIndex >= 0) {
+        ticket.history[lastHistoryIndex].attachment = incoming[0] || null;
+      }
+
+      // For backward compatibility, if legacy single attachment field is empty, set it to first file
+      if ((!ticket.attachment || !ticket.attachment.fileUrl) && incoming[0]) {
+        ticket.attachment = {
+          fileName: incoming[0].fileName,
+          fileType: incoming[0].fileType,
+          fileUrl: incoming[0].fileUrl,
+        };
+      }
+    }
+
+    // Update ticket status fields
     ticket.status = "Closed";
     ticket.closedBy = closedBy?.trim() || "IT Head";
     ticket.closeReason = closeReason.trim();
@@ -1239,6 +1271,7 @@ app.put("/tickets/:id/close", async (req, res) => {
 
     await ticket.save();
 
+    // ... rest of your existing notification/email logic unchanged ...
     const nowIST = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
       year: "numeric",
@@ -1288,6 +1321,7 @@ app.put("/tickets/:id/close", async (req, res) => {
         closeReason: ticket.closeReason,
         closedAt: ticket.closedAt,
         history: ticket.history,
+        attachments: ticket.attachments
       },
     });
   } catch (err) {
@@ -1297,9 +1331,10 @@ app.put("/tickets/:id/close", async (req, res) => {
 });
 
 // Revive Ticket
+// Replace existing PUT /tickets/:id/revive handler with this updated version
 app.put("/tickets/:id/revive", async (req, res) => {
   try {
-    const { revivedBy, reviveReason } = req.body;
+    const { revivedBy, reviveReason, attachments } = req.body;
 
     if (!reviveReason || reviveReason.trim() === "") {
       return res.status(400).json({ message: "Revive reason is required" });
@@ -1316,13 +1351,41 @@ app.put("/tickets/:id/revive", async (req, res) => {
 
     const now = new Date();
 
+    // push revived history entry (attachment snapshot may be set below)
     ticket.history.push({
       action: "revived",
       by: revivedBy?.trim() || "Unknown User",
       at: now,
       reason: reviveReason.trim(),
+      // attachment: will be set below if attachments provided
     });
 
+    // If client passed attachments metadata, normalize and append to ticket.attachments
+    if (attachments && Array.isArray(attachments) && attachments.length) {
+      const incoming = attachments.map((a) => ({
+        fileName: a.fileName || a.name || '',
+        fileType: a.fileType || a.type || '',
+        fileUrl: a.url || a.fileUrl || a.path || null,
+        id: a.id || a.fileId || null,
+      }));
+
+      ticket.attachments = (ticket.attachments || []).concat(incoming);
+
+      const lastHistoryIndex = ticket.history.length - 1;
+      if (lastHistoryIndex >= 0) {
+        ticket.history[lastHistoryIndex].attachment = incoming[0] || null;
+      }
+
+      if ((!ticket.attachment || !ticket.attachment.fileUrl) && incoming[0]) {
+        ticket.attachment = {
+          fileName: incoming[0].fileName,
+          fileType: incoming[0].fileType,
+          fileUrl: incoming[0].fileUrl,
+        };
+      }
+    }
+
+    // Update ticket state
     ticket.status = "Open";
     ticket.reopenedBy = revivedBy?.trim() || "Unknown User";
     ticket.reopenedAt = now;
@@ -1377,11 +1440,12 @@ app.put("/tickets/:id/revive", async (req, res) => {
         reviveReason: ticket.reviveReason,
         reopenedAt: ticket.reopenedAt,
         history: ticket.history,
+        attachments: ticket.attachments
       },
     });
   } catch (err) {
     console.error("Revive ticket error:", err.message);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 
