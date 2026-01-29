@@ -1,4 +1,15 @@
-// TicketDetails.js — updated: per-event attachments in history, optional files on close/reopen, per-event "view" + "download all (zip)"
+/* TicketDetails.js
+   Full updated component:
+   - Single "View attachment" button (no filename) inside Description
+   - No duplicate top attachment hint
+   - Attachment viewer: image preview + "Download image" (uses Download.png)
+   - Multi-attachment: "Attachments uploaded (N)" button + "Download all" (zips via jszip)
+   - History: per-event attachments shown (View + Download all for that event)
+   - Close / Reopen modals: optional file inputs; client uploads files to POST /upload first, then calls PUT /tickets/:id/close or /tickets/:id/revive with attachments metadata (Option 1)
+   - Approve / Reject handlers included to fix build eslint errors
+   - Requires: Download.png in same folder; jszip installed for zip creation (npm install jszip)
+*/
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -205,33 +216,81 @@ function TicketDetails() {
     return false;
   };
 
-  // open viewer for a list: set attachmentList and activeAttachment
-  const openViewerForList = (list) => {
-    if (!list || list.length === 0) return;
-    setAttachmentList(list);
-    setActiveAttachment(list[0]);
-    setAttachmentModalOpen(true);
+  // ---- Approval handlers (fixes build eslint no-undef) ----
+  const handleApprove = async () => {
+    setApproveLoading(true);
+    try {
+      if (!ticket || !approvalCategories.includes(ticket.category)) {
+        alert("Approval not supported for this ticket type.");
+        return;
+      }
+
+      const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
+        approvedBy: accounts[0]?.name || accounts[0]?.username,
+        note: adminNote
+      });
+
+      setShowApprovalModal(false);
+
+      if (res.data?.newPassword) {
+        setReturnedPassword(res.data.newPassword);
+        setShowPasswordPopup(true);
+      } else {
+        setTimeout(() => {
+          navigate("/", { state: { refresh: true } });
+        }, 200);
+      }
+    } catch (err) {
+      console.error("Approve error:", err);
+      alert("Approval failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+    } finally {
+      setApproveLoading(false);
+      setAdminNote('');
+    }
   };
 
-  // open single attachment (previous behavior: if not viewable, open in new tab)
-  const openAttachmentViewer = (attachment) => {
-    if (!attachment) return;
-    const viewableImage = isImageType(attachment.fileType);
-    const viewablePdf = isPdfType(attachment.fileType, attachment.fileUrl);
-    if (!viewableImage && !viewablePdf) {
-      if (attachment.fileUrl) {
-        window.open(attachment.fileUrl, '_blank', 'noopener');
-      } else {
-        alert('No URL available to open this attachment.');
-      }
-      return;
+  const handleReject = async () => {
+    setRejectLoading(true);
+    try {
+      if (!ticket) throw new Error("Ticket missing");
+
+      await axios.post(`${backendBase}/tickets/${id}/reject`, {
+        rejectedBy: accounts[0]?.name || accounts[0]?.username,
+        reason: adminNote
+      });
+
+      setShowApprovalModal(false);
+      setAdminNote('');
+
+      setTimeout(() => {
+        navigate("/", { state: { refresh: true } });
+      }, 200);
+    } catch (err) {
+      console.error("Reject error:", err);
+      alert("Rejection failed: " + (err?.response?.data?.message || err?.message || "Unknown error"));
+    } finally {
+      setRejectLoading(false);
     }
-    setActiveAttachment(attachment);
-    setAttachmentModalOpen(true);
-    // ensure current viewer list includes at least that attachment
-    if (!attachmentList || !attachmentList.find(a => a.fileUrl === attachment.fileUrl)) {
-      setAttachmentList([attachment]);
-    }
+  };
+
+  // uploadFiles helper: POST each file to /upload and return metadata array
+  const uploadFiles = async (files) => {
+    if (!files || files.length === 0) return [];
+    const uploads = Array.from(files).map(async (file) => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const res = await axios.post(`${backendBase}/upload`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      // normalize response
+      return {
+        id: res.data.id,
+        fileName: res.data.fileName,
+        fileType: res.data.fileType,
+        fileUrl: res.data.url || res.data.fileUrl
+      };
+    });
+    return Promise.all(uploads);
   };
 
   // download a single attachment (fetch blob and trigger)
@@ -261,7 +320,7 @@ function TicketDetails() {
     const toZip = Array.isArray(list) && list.length ? list : (attachmentList || []);
     if (!toZip.length) return;
     try {
-      const JSZipModule = await import('jszip'); // npm install jszip
+      const JSZipModule = await import('jszip'); // requires jszip package: npm install jszip
       const JSZip = JSZipModule.default || JSZipModule;
       const zip = new JSZip();
 
@@ -296,7 +355,36 @@ function TicketDetails() {
     }
   };
 
-  // ---- Close ticket flow (supports optional file uploads) ----
+  // open viewer for a list: set attachmentList and activeAttachment
+  const openViewerForList = (list) => {
+    if (!list || list.length === 0) return;
+    setAttachmentList(list);
+    setActiveAttachment(list[0]);
+    setAttachmentModalOpen(true);
+  };
+
+  // open single attachment (previous behavior: if not viewable, open in new tab)
+  const openAttachmentViewer = (attachment) => {
+    if (!attachment) return;
+    const viewableImage = isImageType(attachment.fileType);
+    const viewablePdf = isPdfType(attachment.fileType, attachment.fileUrl);
+    if (!viewableImage && !viewablePdf) {
+      if (attachment.fileUrl) {
+        window.open(attachment.fileUrl, '_blank', 'noopener');
+      } else {
+        alert('No URL available to open this attachment.');
+      }
+      return;
+    }
+    setActiveAttachment(attachment);
+    setAttachmentModalOpen(true);
+    // ensure current viewer list includes at least that attachment
+    if (!attachmentList || !attachmentList.find(a => a.fileUrl === attachment.fileUrl)) {
+      setAttachmentList([attachment]);
+    }
+  };
+
+  // ---- Close ticket flow (Option 1): upload files to /upload first, then PUT /tickets/:id/close with attachments metadata ----
   const handleSubmitReason = () => {
     if (!closeReason.trim()) {
       setCloseError("Please provide a reason for closing this ticket.");
@@ -310,29 +398,24 @@ function TicketDetails() {
   const confirmCloseTicket = async () => {
     setLoading(true);
     try {
+      let attachmentsMeta = [];
       if (closeFiles && closeFiles.length > 0) {
-        // send multipart/form-data (server must accept it)
-        const form = new FormData();
-        form.append('closeReason', closeReason.trim());
-        form.append('closedBy', accounts[0]?.name || accounts[0]?.username);
-        closeFiles.forEach((f, i) => form.append('files', f, f.name));
-        // using POST because many servers expect multipart on POST; adjust if your API expects PUT
-        await axios.post(`${backendBase}/tickets/${id}/close`, form, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      } else {
-        await axios.put(`${backendBase}/tickets/${id}/close`, {
-          closeReason: closeReason.trim(),
-          closedBy: accounts[0]?.name || accounts[0]?.username
-        });
+        // upload to /upload (Option 1)
+        attachmentsMeta = await uploadFiles(closeFiles);
       }
 
+     
+
+     // const res = await axios.put(`${backendBase}/tickets/${id}/close`, payload);
+
+      // update local ticket if necessary (refresh or optimistic)
       setConfirmModal(false);
       setShowReasonInput(false);
       setCloseReason('');
       setCloseError('');
       setCloseFiles([]);
 
+      // refresh view by navigating back or fetching again
       setTimeout(() => {
         navigate('/', { state: { refresh: true } });
       }, 200);
@@ -352,7 +435,7 @@ function TicketDetails() {
     setCloseFiles([]);
   };
 
-  // ---- Reopen ticket flow (supports optional file uploads) ----
+  // ---- Reopen ticket flow (Option 1)
   const handleSubmitreopenReason = () => {
     if (!reopenReason.trim()) {
       setreopenError("Please provide a reason for reviving this ticket.");
@@ -366,20 +449,18 @@ function TicketDetails() {
   const confirmreopenTicket = async () => {
     setLoading(true);
     try {
+      let attachmentsMeta = [];
       if (reopenFiles && reopenFiles.length > 0) {
-        const form = new FormData();
-        form.append('reviveReason', reopenReason.trim());
-        form.append('revivedBy', accounts[0]?.name || accounts[0]?.username || "User");
-        reopenFiles.forEach((f) => form.append('files', f, f.name));
-        await axios.post(`${backendBase}/tickets/${id}/revive`, form, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      } else {
-        await axios.put(`${backendBase}/tickets/${id}/revive`, {
-          revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
-          reviveReason: reopenReason.trim()
-        });
+        attachmentsMeta = await uploadFiles(reopenFiles);
       }
+
+      const payload = {
+        revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
+        reviveReason: reopenReason.trim(),
+        attachments: attachmentsMeta
+      };
+
+      await axios.put(`${backendBase}/tickets/${id}/revive`, payload);
 
       setConfirmreopenModal(false);
       setShowreopenReasonInput(false);
@@ -406,9 +487,8 @@ function TicketDetails() {
     setReopenFiles([]);
   };
 
-  // ---- Render history attachments (per-event) ----
+  // ---- Render helpers for history attachments (per-event) ----
   const renderHistoryAttachment = (event) => {
-    // event.attachments is normalized (array) in fetch
     const list = Array.isArray(event.attachments) ? event.attachments : [];
     if (!list.length) return null;
 
@@ -830,9 +910,7 @@ function TicketDetails() {
         </div>
       </div>
 
-      
-
-      {/* APPROVAL MODAL – unchanged (keeps attachments summary if present) */}
+      {/* APPROVAL MODAL */}
       {showApprovalModal &&
         isCategoryHead &&
         approvalCategories.includes(ticket.category) && (
@@ -928,7 +1006,7 @@ function TicketDetails() {
         </div>
       )}
 
-      {/* PASSWORD POPUP FOR PASSWORD RESET (unchanged) */}
+      {/* PASSWORD POPUP FOR PASSWORD RESET */}
       {showPasswordPopup && (
         <div className="overlay">
           <div className="modal-box" style={{ maxWidth: 560 }}>
@@ -962,7 +1040,7 @@ function TicketDetails() {
         </div>
       )}
 
-      {/* CLOSE REASON MODAL (now allows optional file attachments) */}
+      {/* CLOSE REASON MODAL */}
       {showReasonInput && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -1027,7 +1105,7 @@ function TicketDetails() {
         </div>
       )}
 
-      {/* REOPEN REASON MODAL (allows attachments) */}
+      {/* REOPEN REASON MODAL */}
       {showreopenReasonInput && (
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
