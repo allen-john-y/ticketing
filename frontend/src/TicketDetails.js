@@ -26,8 +26,9 @@ function TicketDetails() {
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [closeReason, setCloseReason] = useState('');
   const [closeError, setCloseError] = useState('');
+  
 
-  // reopen states
+  // reopen useEffect
   const [showreopenReasonInput, setShowreopenReasonInput] = useState(false);
   const [reopenReason, setreopenReason] = useState('');
   const [reopenError, setreopenError] = useState('');
@@ -50,6 +51,7 @@ function TicketDetails() {
   const [attachmentModalOpen, setAttachmentModalOpen] = useState(false);
   const [activeAttachment, setActiveAttachment] = useState(null); // { fileName, fileType, fileUrl, id }
   const [attachmentList, setAttachmentList] = useState([]); // for multi attachments view when ticket.attachments exists
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
 
   // fetch authority (admin group)
   useEffect(() => {
@@ -72,6 +74,34 @@ function TicketDetails() {
     };
     fetchAuthority();
   }, [accounts, instance]);
+
+  useEffect(() => {
+  let objectUrl = null;
+
+  const loadImage = async () => {
+    if (!activeAttachment || !activeAttachment.fileUrl) {
+      setImagePreviewUrl(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(activeAttachment.fileUrl, { credentials: 'include' });
+      const blob = await res.blob();
+      objectUrl = URL.createObjectURL(blob);
+      setImagePreviewUrl(objectUrl);
+    } catch (e) {
+      console.error("Image load failed", e);
+      setImagePreviewUrl(null);
+    }
+  };
+
+  loadImage();
+
+  return () => {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  };
+}, [activeAttachment]);  // ✅ correct dependency
+
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -154,31 +184,6 @@ function TicketDetails() {
       hour12: true
     });
   };
-
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
-
-useEffect(() => {
-  const loadImage = async () => {
-    if (!activeAttachment || !activeAttachment.fileUrl) return;
-
-    try {
-      const res = await fetch(activeAttachment.fileUrl, { credentials: 'include' });
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setImagePreviewUrl(url);
-    } catch (e) {
-      console.error("Image load failed", e);
-      setImagePreviewUrl(null);
-    }
-  };
-
-  loadImage();
-
-  return () => {
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-  };
-}, [activeAttachment]);
-
 
   // Derived: show inline "Waiting for Approval" banner
   const needsApprovalBanner =
@@ -1132,10 +1137,10 @@ useEffect(() => {
                 {isImageType(activeAttachment.fileType) ? (
                   <>
                     <img
-                      src={imagePreviewUrl}
-                      alt={activeAttachment.fileName}
-                      className="att-img"
-                    />
+                    src={imagePreviewUrl}
+                    alt={activeAttachment.fileName}
+                    className="att-img"
+                  />
 
                     <div className="att-actions">
                       {/* Download button for images (only control) */}
