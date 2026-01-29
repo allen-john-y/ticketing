@@ -442,6 +442,7 @@ function TicketDetails() {
   };
 
   // replace existing downloadAllAttachments with this
+// download-all helper: use backend zip endpoint and include driveIds aligned with ids
 const downloadAllAttachments = async () => {
   if (!attachmentList || attachmentList.length === 0) return;
 
@@ -456,11 +457,10 @@ const downloadAllAttachments = async () => {
   const ids = downloadable.map(a => a.id).join(',');
   const driveIds = downloadable.map(a => a.driveId || '').join(',');
 
-  // If some attachments exist but weren't downloadable, warn the user
+  // If some attachments exist but weren't downloadable, inform the user
   if (downloadable.length < attachmentList.length) {
-    if (!confirm(`Only ${downloadable.length} of ${attachmentList.length} attachments can be included in the ZIP. Continue?`)) {
-      return;
-    }
+    alert(`Only ${downloadable.length} of ${attachmentList.length} attachments can be included in the ZIP. The downloadable ones will be downloaded.`);
+    // proceed anyway
   }
 
   // Build URL (include driveIds param only if any driveIds exist)
