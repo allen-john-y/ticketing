@@ -155,6 +155,31 @@ function TicketDetails() {
     });
   };
 
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+
+useEffect(() => {
+  const loadImage = async () => {
+    if (!activeAttachment || !activeAttachment.fileUrl) return;
+
+    try {
+      const res = await fetch(activeAttachment.fileUrl, { credentials: 'include' });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setImagePreviewUrl(url);
+    } catch (e) {
+      console.error("Image load failed", e);
+      setImagePreviewUrl(null);
+    }
+  };
+
+  loadImage();
+
+  return () => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+  };
+}, [activeAttachment]);
+
+
   // Derived: show inline "Waiting for Approval" banner
   const needsApprovalBanner =
     isCategoryHead &&
