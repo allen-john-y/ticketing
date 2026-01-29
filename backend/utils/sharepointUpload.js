@@ -16,8 +16,8 @@ async function getAccessToken() {
 }
 
 async function getSiteId(token) {
-  const siteHost = process.env.SHAREPOINT_SITE;        // sandezasystems.sharepoint.com
-  const siteName = process.env.SHAREPOINT_SITE_NAME;  // Ticketing
+  const siteHost = process.env.SHAREPOINT_SITE;
+  const siteName = process.env.SHAREPOINT_SITE_NAME;
 
   const res = await axios.get(
     `https://graph.microsoft.com/v1.0/sites/${siteHost}:/sites/${siteName}`,
@@ -36,19 +36,25 @@ async function uploadToSharePoint(file) {
   });
 
   const fileName = `${Date.now()}-${file.originalname}`;
-  const folder = process.env.SHAREPOINT_FOLDER; // Ticket-Attachments
+  const folder = process.env.SHAREPOINT_FOLDER;
 
   const uploadPath = `/sites/${siteId}/drive/root:/${folder}/${fileName}:/content`;
-
   const result = await client.api(uploadPath).put(file.buffer);
 
-  return {
-  id: result.id,
-  fileName: file.originalname,
-  fileType: file.mimetype,
-  fileUrl: result['@microsoft.graph.downloadUrl']
-};
+  // 🔥 Create permanent download link (no expiry, no token issue)
+  const linkResponse = await client
+    .api(`/sites/${siteId}/drive/items/${result.id}/createLink`)
+    .post({
+      type: "download",
+      scope: "organization"
+    });
 
+  return {
+    id: result.id,
+    fileName: file.originalname,
+    fileType: file.mimetype,
+    fileUrl: linkResponse.link.webUrl
+  };
 }
 
 module.exports = { uploadToSharePoint };
