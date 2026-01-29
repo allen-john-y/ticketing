@@ -43,11 +43,12 @@ async function uploadToSharePoint(file) {
   const result = await client.api(uploadPath).put(file.buffer);
 
   return {
-    id: result.id,
-    fileName: file.originalname,
-    fileType: file.mimetype,
-    fileUrl: result.webUrl
-  };
+  id: result.id,
+  fileName: file.originalname,
+  fileType: file.mimetype,
+  fileUrl: result['@microsoft.graph.downloadUrl']
+};
+
 }
 
 module.exports = { uploadToSharePoint };
