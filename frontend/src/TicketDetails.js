@@ -1,8 +1,9 @@
-/* TicketDetails.js — updated: add image download button in attachment viewer */
+// TicketDetails.js — updated: use Download.png icon, remove "open in new tab", add "Download image" and "Download all (zip)" for multi attachments
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
+import DownloadIcon from './Download.png'; // make sure Download.png is in the same folder
 
 // CATEGORY HEAD EMAIL MAP (mirrors backend deptEmails)
 const deptEmails = {
@@ -385,6 +386,47 @@ function TicketDetails() {
     }
   };
 
+  // download-all helper: zip all attachments client-side and download as single zip
+  const downloadAllAttachments = async () => {
+    if (!attachmentList || attachmentList.length === 0) return;
+    try {
+      const JSZipModule = await import('jszip'); // requires jszip package: npm install jszip
+      const JSZip = JSZipModule.default || JSZipModule;
+      const zip = new JSZip();
+
+      // fetch each file as blob and add to zip
+      const fetches = attachmentList.map(async (a) => {
+        if (!a.fileUrl) return;
+        try {
+          const res = await fetch(a.fileUrl, { mode: 'cors' });
+          if (!res.ok) throw new Error(`Failed: ${res.status}`);
+          const blob = await res.blob();
+          const filename = a.fileName || (a.fileUrl.split('/').pop().split('?')[0]) || 'file';
+          zip.file(filename, blob);
+        } catch (e) {
+          console.warn('Failed to fetch attachment for zip:', a.fileUrl, e);
+        }
+      });
+
+      await Promise.all(fetches);
+
+      const content = await zip.generateAsync({ type: 'blob' });
+
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      const zipName = `attachments-${ticket.ticketNumber || id}.zip`;
+      a.download = zipName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download all failed (zip):', err);
+      alert('Failed to create ZIP. Ensure jszip is installed and attachments allow cross-origin fetch.');
+    }
+  };
+
   // Helper for attachment in each history event
   const renderHistoryAttachment = (event) => {
     if (!event.attachment || (!event.attachment.fileName && !event.attachment.fileUrl)) return null;
@@ -417,35 +459,51 @@ function TicketDetails() {
     if (attachmentList.length === 1) {
       const a = attachmentList[0];
       return (
-        <div style={{ marginTop: 10 }}>
-          <strong>Attachment:</strong>{' '}
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <strong style={{ minWidth: 90 }}>Attachment:</strong>
           <button
             onClick={() => openAttachmentViewer(a)}
-            style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
+            style={{ marginLeft: 0, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
           >
             View attachment
           </button>
-          {/* Filename intentionally hidden per earlier request */}
+
+          {/* Download icon (single file) to the right */}
+          <button
+            onClick={() => downloadAttachment(a)}
+            title="Download"
+            style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
+          >
+            <img src={DownloadIcon} alt="Download" style={{ width: 18, height: 18 }} />
+          </button>
         </div>
       );
     }
 
-    // multiple attachments
+    // multiple attachments: show view button + download-all (zip) button to right
     return (
-      <div style={{ marginTop: 10 }}>
-        <strong>Attachments:</strong>{' '}
+      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <strong style={{ minWidth: 90 }}>Attachments:</strong>
         <button
           onClick={() => {
-            // open modal and show the first attachment by default
             if (attachmentList.length) {
-              setAttachmentList(attachmentList); // ensure state has list
               setActiveAttachment(attachmentList[0]);
               setAttachmentModalOpen(true);
             }
           }}
-          style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
+          style={{ marginLeft: 0, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
         >
           Attachments uploaded ({attachmentList.length})
+        </button>
+
+        {/* Download-all (zip) button to the right of view */}
+        <button
+          onClick={downloadAllAttachments}
+          title="Download all attachments (zip)"
+          style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
+        >
+          <img src={DownloadIcon} alt="Download all" style={{ width: 18, height: 18 }} />
+          <span style={{ fontWeight: 700, color: '#0f172a' }}>Download all</span>
         </button>
       </div>
     );
@@ -477,8 +535,8 @@ function TicketDetails() {
         .att-thumb .meta .type { font-size:12px; color:#6b7280; }
 
         .att-actions { display:flex; gap:8px; margin-top:12px; }
-        .att-btn { padding:10px 16px; background:#2563eb; color:#fff; border-radius:8px; text-decoration:none; font-weight:700; border:none; cursor:pointer; }
-        .att-btn.secondary { background:#10b981; }
+        .att-btn { padding:10px 16px; background:#2563eb; color:#fff; border-radius:8px; text-decoration:none; font-weight:700; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+        .att-btn img { width:18px; height:18px; }
       `}</style>
 
       {/* BACK BUTTON */}
@@ -911,7 +969,7 @@ function TicketDetails() {
         </div>
       )}
 
-      {/* CLOSE REASON MODAL */}
+      {/* CLOSE / REOPEN modals... (unchanged) */}
       {showReasonInput && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -946,7 +1004,6 @@ function TicketDetails() {
         </div>
       )}
 
-      {/* CLOSE CONFIRM MODAL */}
       {confirmModal && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -971,7 +1028,6 @@ function TicketDetails() {
         </div>
       )}
 
-      {/* REOPEN REASON MODAL */}
       {showreopenReasonInput && (
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -1006,7 +1062,6 @@ function TicketDetails() {
         </div>
       )}
 
-      {/* REOPEN CONFIRM MODAL */}
       {confirmreopenModal && (
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -1039,7 +1094,6 @@ function TicketDetails() {
               <div className="att-toolbar">
                 <div className="att-title">{activeAttachment.fileName || 'Attachment'}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {/* If there are multiple attachments show count */}
                   {attachmentList && attachmentList.length > 1 && (
                     <div style={{ fontSize: 13, color: '#6b7280', marginRight: 8 }}>
                       {attachmentList.length} attachments
@@ -1058,24 +1112,15 @@ function TicketDetails() {
                       className="att-img"
                     />
                     <div className="att-actions">
-                      {/* Download button for images */}
+                      {/* Download button for images (only control) */}
                       <button
                         className="att-btn"
                         onClick={() => downloadAttachment(activeAttachment)}
+                        title="Download image"
                       >
+                        <img src={DownloadIcon} alt="Download" />
                         Download image
                       </button>
-
-                      {/* Also allow opening in new tab if user prefers */}
-                      <a
-                        href={activeAttachment.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="att-btn secondary"
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        Open in new tab
-                      </a>
                     </div>
                   </>
                 ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
@@ -1120,7 +1165,6 @@ function TicketDetails() {
                   </div>
                 )}
               </div>
-
 
               {/* If multiple attachments exist, show thumbnails / list below */}
               {attachmentList && attachmentList.length > 1 && (
