@@ -1107,10 +1107,11 @@ function TicketDetails() {
                 {isImageType(activeAttachment.fileType) ? (
                   <>
                     <img
-                      src={activeAttachment.fileUrl}
+                      src={imagePreviewUrl}
                       alt={activeAttachment.fileName}
                       className="att-img"
                     />
+
                     <div className="att-actions">
                       {/* Download button for images (only control) */}
                       <button
