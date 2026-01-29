@@ -378,6 +378,7 @@ function TicketDetails() {
   const openAttachmentViewer = (attachment) => {
   if (!attachment) return;
 
+  const backendBase = "https://ticketing-hn59.onrender.com";
   // Always use backend proxy URL instead of SharePoint URL
   const fileUrl = `${backendBase}/attachments/${attachment.id}`;
 
