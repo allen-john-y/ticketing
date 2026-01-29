@@ -376,22 +376,29 @@ function TicketDetails() {
   };
 
   const openAttachmentViewer = (attachment) => {
-    if (!attachment) return;
-    // for non-viewable types, open in new tab
-    const viewableImage = isImageType(attachment.fileType);
-    const viewablePdf = isPdfType(attachment.fileType, attachment.fileUrl);
-    if (!viewableImage && !viewablePdf) {
-      // open in new tab
-      if (attachment.fileUrl) {
-        window.open(attachment.fileUrl, '_blank', 'noopener');
-      } else {
-        alert('No URL available to open this attachment.');
-      }
-      return;
-    }
-    setActiveAttachment(attachment);
-    setAttachmentModalOpen(true);
-  };
+  if (!attachment) return;
+
+  // Always use backend proxy URL instead of SharePoint URL
+  const fileUrl = `${backendBase}/attachments/${attachment.id}`;
+
+  const viewableImage = isImageType(attachment.fileType);
+  const viewablePdf = isPdfType(attachment.fileType, fileUrl);
+
+  if (!viewableImage && !viewablePdf) {
+    // For non-previewable files, directly download/open
+    window.open(fileUrl, '_blank', 'noopener');
+    return;
+  }
+
+  // For previewable files (image / pdf), open modal with backend URL
+  setActiveAttachment({
+    ...attachment,
+    fileUrl: fileUrl
+  });
+
+  setAttachmentModalOpen(true);
+};
+
 
   // download helper: fetch blob and force download (better cross-origin reliability)
   const downloadAttachment = async (attachment) => {

@@ -1385,6 +1385,35 @@ app.put("/tickets/:id/revive", async (req, res) => {
   }
 });
 
+// ---------------------- DOWNLOAD ATTACHMENT (PROXY) ----------------------
+app.get("/attachments/:fileId", async (req, res) => {
+  try {
+    const token = await getAccessToken(); // already exists in your file
+    const fileId = req.params.fileId;
+
+    const graphRes = await fetch(
+      `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!graphRes.ok) {
+      const text = await graphRes.text();
+      console.error("Graph download failed:", text);
+      return res.status(500).send("Failed to download file");
+    }
+
+    res.setHeader("Content-Disposition", "attachment");
+    graphRes.body.pipe(res);
+  } catch (err) {
+    console.error("Attachment proxy error:", err);
+    res.status(500).send("Download failed");
+  }
+});
+
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
