@@ -15,17 +15,30 @@ async function getAccessToken() {
   return response.data.access_token;
 }
 
+async function getSiteId(token) {
+  const siteUrl = process.env.SHAREPOINT_SITE; // sandezasystems-my.sharepoint.com
+  const sitePath = "/sites/root";
+
+  const res = await axios.get(
+    `https://graph.microsoft.com/v1.0/sites/${siteUrl}:${sitePath}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  return res.data.id;
+}
+
 async function uploadToSharePoint(file) {
   const token = await getAccessToken();
+  const siteId = await getSiteId(token);
 
   const client = Client.init({
     authProvider: (done) => done(null, token),
   });
 
   const fileName = `${Date.now()}-${file.originalname}`;
-  const folder = process.env.SHAREPOINT_FOLDER;
+  const folder = process.env.SHAREPOINT_FOLDER; // Ticket-Attachments
 
-  const uploadPath = `/me/drive/root:/${folder}/${fileName}:/content`;
+  const uploadPath = `/sites/${siteId}/drive/root:/${folder}/${fileName}:/content`;
 
   const result = await client.api(uploadPath).put(file.buffer);
 
