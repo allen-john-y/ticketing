@@ -367,10 +367,10 @@ function TicketDetails() {
   // Helper for attachment in each history event
   const renderHistoryAttachment = (event) => {
     if (!event.attachment || (!event.attachment.fileName && !event.attachment.fileUrl)) return null;
-    const label = event.attachment.fileName || 'Attachment';
+    //const label = event.attachment.fileName || 'Attachment';
     const typeLabel = event.attachment.fileType || '';
     const url = event.attachment.fileUrl;
-    const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
+   // const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
     return (
       <div style={{ marginTop: 8, fontSize: 13 }}>
         <strong>Attachment:</strong>{' '}
