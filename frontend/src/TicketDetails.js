@@ -441,25 +441,41 @@ function TicketDetails() {
     }
   };
 
-  // download-all helper: use backend zip endpoint and include driveIds aligned with ids
-  const downloadAllAttachments = async () => {
-    if (!attachmentList || attachmentList.length === 0) return;
-    // require that attachments have ids (drive item ids)
-    const ids = attachmentList.map(a => a.id).filter(Boolean);
-    if (ids.length === 0) {
-      alert('No downloadable attachments available.');
+  // replace existing downloadAllAttachments with this
+const downloadAllAttachments = async () => {
+  if (!attachmentList || attachmentList.length === 0) return;
+
+  // Keep only attachments that have a drive item id (server can fetch these)
+  const downloadable = attachmentList.filter(a => a && a.id);
+  if (downloadable.length === 0) {
+    alert('No downloadable attachments available (missing internal ids).');
+    return;
+  }
+
+  // Build aligned ids and driveIds
+  const ids = downloadable.map(a => a.id).join(',');
+  const driveIds = downloadable.map(a => a.driveId || '').join(',');
+
+  // If some attachments exist but weren't downloadable, warn the user
+  if (downloadable.length < attachmentList.length) {
+    if (!confirm(`Only ${downloadable.length} of ${attachmentList.length} attachments can be included in the ZIP. Continue?`)) {
       return;
     }
-    // collect aligned driveIds (use empty string when missing to preserve positions)
-    const driveIds = attachmentList.map(a => a.driveId || '');
-    const url = `${backendBase}/attachments/zip?ids=${encodeURIComponent(ids.join(','))}&driveIds=${encodeURIComponent(driveIds.join(','))}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `attachments-${ticket.ticketNumber || id}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
+  }
+
+  // Build URL (include driveIds param only if any driveIds exist)
+  const encodedIds = encodeURIComponent(ids);
+  const encodedDriveIds = driveIds ? `&driveIds=${encodeURIComponent(driveIds)}` : '';
+  const url = `${backendBase}/attachments/zip?ids=${encodedIds}${encodedDriveIds}`;
+
+  // Trigger download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `attachments-${ticket.ticketNumber || id}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+};
 
   // Helper for attachment in each history event
   const renderHistoryAttachment = (event) => {
