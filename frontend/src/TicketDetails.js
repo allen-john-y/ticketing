@@ -398,10 +398,10 @@ function TicketDetails() {
   const confirmCloseTicket = async () => {
     setLoading(true);
     try {
-      let attachmentsMeta = [];
+      //let attachmentsMeta = [];
       if (closeFiles && closeFiles.length > 0) {
         // upload to /upload (Option 1)
-        attachmentsMeta = await uploadFiles(closeFiles);
+        attachmentList = await uploadFiles(closeFiles);
       }
 
      
