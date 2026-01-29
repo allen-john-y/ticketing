@@ -16,11 +16,11 @@ async function getAccessToken() {
 }
 
 async function getSiteId(token) {
-  const siteUrl = process.env.SHAREPOINT_SITE; // sandezasystems-my.sharepoint.com
-  const sitePath = "/sites/root";
+  const siteHost = process.env.SHAREPOINT_SITE;        // sandezasystems.sharepoint.com
+  const siteName = process.env.SHAREPOINT_SITE_NAME;  // Ticketing
 
   const res = await axios.get(
-    `https://graph.microsoft.com/v1.0/sites/${siteUrl}:${sitePath}`,
+    `https://graph.microsoft.com/v1.0/sites/${siteHost}:/sites/${siteName}`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
 
