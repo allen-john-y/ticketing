@@ -1,5 +1,4 @@
-// TicketDetails.js (UPDATED – attachment modal viewer for ticket and history items)
-
+// TicketDetails.js (UPDATED – remove duplicate attachment hint and hide filename for single attachment)
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -367,14 +366,19 @@ function TicketDetails() {
   // Helper for attachment in each history event
   const renderHistoryAttachment = (event) => {
     if (!event.attachment || (!event.attachment.fileName && !event.attachment.fileUrl)) return null;
-    //const label = event.attachment.fileName || 'Attachment';
+    const label = event.attachment.fileName || 'Attachment';
     const typeLabel = event.attachment.fileType || '';
-   // const url = event.attachment.fileUrl;
-   // const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
+    const url = event.attachment.fileUrl;
+    const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
     return (
       <div style={{ marginTop: 8, fontSize: 13 }}>
         <strong>Attachment:</strong>{' '}
-        
+        <button
+          onClick={() => openAttachmentViewer(att)}
+          style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}
+        >
+          View attachment
+        </button>
         {typeLabel && (
           <span style={{ marginLeft: 6, fontSize: 12, color: '#6b7280' }}>
             ({typeLabel})
@@ -399,7 +403,7 @@ function TicketDetails() {
           >
             View attachment
           </button>
-          <span style={{ marginLeft: 10, fontSize: 13, color: '#374151', fontWeight: 700 }}>{a.fileName}</span>
+          {/* Filename intentionally hidden per request */}
         </div>
       );
     }
@@ -558,12 +562,7 @@ function TicketDetails() {
                 </div>
               )}
 
-              {/* Attachment small hint */}
-              {hasAttachment && (
-                <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
-                  {renderAttachmentSummary()}
-                </div>
-              )}
+              {/* NOTE: Removed duplicate small hint attachment shown above the Description box */}
             </div>
           </div>
 
@@ -656,7 +655,7 @@ function TicketDetails() {
         }}>
           <strong style={{ display: 'block', marginBottom: 8, fontSize: 15 }}>Description</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
-          {/* Attachment detailed view */}
+          {/* Attachment detailed view - kept here (only this button will be visible) */}
           {renderAttachmentSummary()}
         </div>
       </div>
