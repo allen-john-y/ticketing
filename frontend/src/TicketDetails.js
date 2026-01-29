@@ -1,4 +1,4 @@
-// TicketDetails.js (UPDATED – remove duplicate attachment hint and hide filename for single attachment)
+/* TicketDetails.js — updated: add image download button in attachment viewer */
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -336,7 +336,6 @@ function TicketDetails() {
 
   // Helpers for attachment display (main ticket)
   const hasAttachment = (attachmentList && attachmentList.length > 0);
-  //const firstAttachment = hasAttachment ? attachmentList[0] : null;
 
   const isImageType = (type) => type && type.startsWith && type.startsWith('image/');
   const isPdfType = (type, url) => {
@@ -361,6 +360,29 @@ function TicketDetails() {
     }
     setActiveAttachment(attachment);
     setAttachmentModalOpen(true);
+  };
+
+  // download helper: fetch blob and force download (better cross-origin reliability)
+  const downloadAttachment = async (attachment) => {
+    if (!attachment || !attachment.fileUrl) return;
+    try {
+      const resp = await fetch(attachment.fileUrl, { mode: 'cors' });
+      if (!resp.ok) throw new Error('Network response not ok');
+      const blob = await resp.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      const filename = attachment.fileName || (attachment.fileUrl.split('/').pop().split('?')[0]) || 'download';
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      // fallback: open in new tab
+      console.warn('Download fallback, opening in new tab', err);
+      window.open(attachment.fileUrl, '_blank', 'noopener');
+    }
   };
 
   // Helper for attachment in each history event
@@ -403,7 +425,7 @@ function TicketDetails() {
           >
             View attachment
           </button>
-          {/* Filename intentionally hidden per request */}
+          {/* Filename intentionally hidden per earlier request */}
         </div>
       );
     }
@@ -444,7 +466,7 @@ function TicketDetails() {
         .att-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; }
         .att-title { font-weight:800; font-size:16px; color:#0f172a; }
         .att-close { background:transparent; border:none; font-size:20px; cursor:pointer; color:#475569; }
-        .att-content { width:100%; min-height: 240px; max-height: 80vh; display:flex; justify-content:center; align-items:center; overflow:auto; background:#f8fafc; border-radius:10px; padding:12px; }
+        .att-content { width:100%; min-height: 240px; max-height: 80vh; display:flex; justify-content:center; align-items:center; overflow:auto; background:#f8fafc; border-radius:10px; padding:12px; flex-direction:column; }
         .att-img { max-width:100%; max-height:78vh; object-fit:contain; border-radius:8px; box-shadow:0 6px 18px rgba(2,6,23,0.08); }
         .att-iframe { width:100%; height:78vh; border: none; border-radius:8px; }
         .att-list { display:flex; gap:8px; overflow:auto; padding-top:8px; }
@@ -453,6 +475,10 @@ function TicketDetails() {
         .att-thumb .meta { display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
         .att-thumb .meta .name { font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .att-thumb .meta .type { font-size:12px; color:#6b7280; }
+
+        .att-actions { display:flex; gap:8px; margin-top:12px; }
+        .att-btn { padding:10px 16px; background:#2563eb; color:#fff; border-radius:8px; text-decoration:none; font-weight:700; border:none; cursor:pointer; }
+        .att-btn.secondary { background:#10b981; }
       `}</style>
 
       {/* BACK BUTTON */}
@@ -1025,11 +1051,33 @@ function TicketDetails() {
 
               <div className="att-content">
                 {isImageType(activeAttachment.fileType) ? (
-                  <img
-                    src={activeAttachment.fileUrl}
-                    alt={activeAttachment.fileName}
-                    className="att-img"
-                  />
+                  <>
+                    <img
+                      src={activeAttachment.fileUrl}
+                      alt={activeAttachment.fileName}
+                      className="att-img"
+                    />
+                    <div className="att-actions">
+                      {/* Download button for images */}
+                      <button
+                        className="att-btn"
+                        onClick={() => downloadAttachment(activeAttachment)}
+                      >
+                        Download image
+                      </button>
+
+                      {/* Also allow opening in new tab if user prefers */}
+                      <a
+                        href={activeAttachment.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="att-btn secondary"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        Open in new tab
+                      </a>
+                    </div>
+                  </>
                 ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
                   <div style={{ textAlign: 'center' }}>
                     <p style={{ marginBottom: 12 }}>PDF preview is opened in a new tab.</p>
