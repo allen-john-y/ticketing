@@ -42,13 +42,20 @@ async function uploadToSharePoint(file) {
 
   const result = await client.api(uploadPath).put(file.buffer);
 
-  return {
-  id: result.id,
-  fileName: file.originalname,
-  fileType: file.mimetype,
-  fileUrl: result['@microsoft.graph.downloadUrl']
-};
+  // 🔹 Create permanent org-wide link (no expiry)
+  const linkResponse = await client
+    .api(`/sites/${siteId}/drive/items/${result.id}/createLink`)
+    .post({
+      type: "view",
+      scope: "organization"
+    });
 
+  return {
+    id: result.id,
+    fileName: file.originalname,
+    fileType: file.mimetype,
+    fileUrl: linkResponse.link.webUrl   // permanent SharePoint link
+  };
 }
 
 module.exports = { uploadToSharePoint };
