@@ -391,7 +391,7 @@ const upload = multer({
 
 // POST /upload
 // Accepts single file field named 'file' and returns metadata: { id, driveId, fileName, fileType, url }
-const { uploadToSharePoint } = require("./utils/sharePointUpload");
+const { uploadToSharePoint } = require("./utils/sharepointUpload");
 
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {

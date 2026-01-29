@@ -42,7 +42,7 @@ async function getSiteId(token) {
  * - Small files (<=4MB): uses single PUT to /content
  * - Large files: uses an upload session (chunked)
  *
- * Returns: { id, fileName, fileType, fileUrl }
+ * Returns: { id, driveId, fileName, fileType, fileUrl }
  */
 async function uploadToSharePoint(file) {
   try {
@@ -75,6 +75,7 @@ async function uploadToSharePoint(file) {
 
       return {
         id: result.id,
+        driveId: result.parentReference?.driveId || null,
         fileName: originalName,
         fileType: file.mimetype || result.file?.mimeType || "application/octet-stream",
         fileUrl: result.webUrl || result["@microsoft.graph.downloadUrl"] || null
@@ -82,7 +83,6 @@ async function uploadToSharePoint(file) {
     }
 
     // Large file: create upload session and upload in chunks
-    // Create upload session
     const sessionResp = await client
       .api(`/sites/${siteId}/drive/root:/${remotePath}:/createUploadSession`)
       .post({
@@ -96,11 +96,10 @@ async function uploadToSharePoint(file) {
     if (!uploadUrl) throw new Error("Failed to create upload session");
 
     // Upload in chunks
-    const chunkSize = 5 * 1024 * 1024; // 5 MB chunks (must be multiple of 320 KB ideally)
+    const chunkSize = 5 * 1024 * 1024; // 5 MB chunks
     const buffer = file.buffer;
     const bufferLength = buffer.length;
     let offset = 0;
-    let chunkIndex = 0;
 
     while (offset < bufferLength) {
       const chunkEnd = Math.min(offset + chunkSize, bufferLength) - 1;
@@ -111,7 +110,6 @@ async function uploadToSharePoint(file) {
       const contentLength = end - start + 1;
       const contentRange = `bytes ${start}-${end}/${bufferLength}`;
 
-      // PUT chunk to uploadUrl
       const headers = {
         "Content-Length": contentLength,
         "Content-Range": contentRange,
@@ -124,6 +122,7 @@ async function uploadToSharePoint(file) {
         const item = resp.data;
         return {
           id: item.id,
+          driveId: item.parentReference?.driveId || null,
           fileName: originalName,
           fileType: file.mimetype || item.file?.mimeType || "application/octet-stream",
           fileUrl: item.webUrl || item["@microsoft.graph.downloadUrl"] || null
@@ -132,13 +131,13 @@ async function uploadToSharePoint(file) {
 
       // Otherwise continue uploading next chunk
       offset = end + 1;
-      chunkIndex++;
     }
 
-    // If loop finishes without server returning item, attempt to get item by listing path
+    // Fallback: fetch metadata
     const metadata = await client.api(`/sites/${siteId}/drive/root:/${remotePath}`).get();
     return {
       id: metadata.id,
+      driveId: metadata.parentReference?.driveId || null,
       fileName: originalName,
       fileType: file.mimetype || metadata.file?.mimeType || "application/octet-stream",
       fileUrl: metadata.webUrl || metadata["@microsoft.graph.downloadUrl"] || null
