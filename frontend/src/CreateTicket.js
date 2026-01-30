@@ -841,6 +841,10 @@ function CreateTicket() {
                 <option value="Invoice issue">Invoice issue</option>
                 <option value="Tax / GST">Tax / GST</option>
                 <option value="Payroll Issue">Payroll Issue</option>
+                <option value="PO Request">PO Request</option>
+                <option value="PO Change">PO Change</option>
+                <option value="Vendor Onboarding Request">Vendor Onboarding Request</option>
+                <option value="Vendor Offboarding Request">Vendor Offboarding Request</option>
                 <option value="Other">Other</option>
               </select>
 
