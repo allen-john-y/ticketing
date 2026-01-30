@@ -1,3 +1,6 @@
+/* Patched App.js — added Add Field / Remove Field admin flows inside Header.
+   Keep in mind: adjust backend endpoints if your server uses different routes.
+*/
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
@@ -11,6 +14,7 @@ import logo from './sandeza.jpg';
 import gearIcon from './GearIcon.jpg';
 
 const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
+const backendBase = 'https://ticketing-hn59.onrender.com';
 
 const pca = new PublicClientApplication({
   auth: {
@@ -35,13 +39,8 @@ function Header({ logout }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Add user modal
+  // Add user modal (existing)
   const [addModalOpen, setAddModalOpen] = useState(false);
-  // Add category (Add Field) modal
-const [addFieldOpen, setAddFieldOpen] = useState(false);
-//const [newCategoryName, setNewCategoryName] = useState('');
-const [enableSubCategory, setEnableSubCategory] = useState(false);
-const [subCategories, setSubCategories] = useState(['Other']);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -49,18 +48,8 @@ const [subCategories, setSubCategories] = useState(['Other']);
   const [addLoading, setAddLoading] = useState(false);
   const [addMessage, setAddMessage] = useState(null);
   const [addError, setAddError] = useState(null);
-  const [categoryHeadQuery, setCategoryHeadQuery] = useState('');
-const [categoryHeadResults, setCategoryHeadResults] = useState([]);
-const [categoryHeadLoading, setCategoryHeadLoading] = useState(false);
-const [categoryHeads, setCategoryHeads] = useState([]);
 
-const [ccQuery, setCcQuery] = useState('');
-const [ccResults, setCcResults] = useState([]);
-const [ccLoading, setCcLoading] = useState(false);
-const [ccMails, setCcMails] = useState([]);
-
-
-  // Remove user modal
+  // Remove user modal (existing)
   const [removeModalOpen, setRemoveModalOpen] = useState(false);
   const [groupMembers, setGroupMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -68,6 +57,37 @@ const [ccMails, setCcMails] = useState([]);
   const [removeLoading, setRemoveLoading] = useState(false);
   const [removeMessage, setRemoveMessage] = useState(null);
   const [removeError, setRemoveError] = useState(null);
+
+  // --- NEW: Add Field / Remove Field states ---
+  const [addFieldOpen, setAddFieldOpen] = useState(false);
+  const [removeFieldOpen, setRemoveFieldOpen] = useState(false);
+
+  // Category form state for Add Field
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categoryError, setCategoryError] = useState(null);
+  const [categorySuccess, setCategorySuccess] = useState(null);
+
+  const [enableOnBehalf, setEnableOnBehalf] = useState(false);
+  const [onBehalfOptions, setOnBehalfOptions] = useState([{ label: 'Self', key: 'Self' }]); // list of options (strings)
+  const [requireOnBehalf, setRequireOnBehalf] = useState(false);
+
+  const [enableSubCategory, setEnableSubCategory] = useState(false);
+  const [subCategories, setSubCategories] = useState(['Other']); // at least "Other" present
+  const [requireSubCategory, setRequireSubCategory] = useState(false);
+
+  const [enableAttachmentsForCategory, setEnableAttachmentsForCategory] = useState(false);
+  const [requireAttachmentsForCategory, setRequireAttachmentsForCategory] = useState(false);
+
+  const [categoryHeads, setCategoryHeads] = useState([{ email: '', name: '', verifying: false }]);
+  const [ccEmails, setCcEmails] = useState([{ email: '', name: '', verifying: false }]);
+
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [selectedCategoryToRemove, setSelectedCategoryToRemove] = useState(null);
+  const [removeCategoryLoading, setRemoveCategoryLoading] = useState(false);
+  const [removeCategoryError, setRemoveCategoryError] = useState(null);
+  const [removeCategorySuccess, setRemoveCategorySuccess] = useState(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -117,8 +137,6 @@ const [ccMails, setCcMails] = useState([]);
   // check whether current user belongs to Helpdesk_Admin
   useEffect(() => {
     let cancelled = false;
-    //const backendBase = 'https://ticketing-hn59.onrender.com';
-
     const checkMembership = async () => {
       if (!accounts || !accounts[0]) {
         setIsAdmin(false);
@@ -195,8 +213,7 @@ const [ccMails, setCcMails] = useState([]);
     }
   };
 
-  // --- ADD USER FLOW ---
-
+  // ---------------- Existing Add user / Remove user flows unchanged ----------------
   const openAddModal = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -286,120 +303,6 @@ const [ccMails, setCcMails] = useState([]);
     }
   };
 
-  const searchCategoryHeads = async () => {
-  setCategoryHeadResults([]);
-  setCategoryHeadLoading(true);
-
-  try {
-    const token = await acquireTokenForAdmin();
-
-    const q = (categoryHeadQuery || '').trim();
-    if (!q) {
-      setCategoryHeadLoading(false);
-      return;
-    }
-
-    let results = [];
-
-    if (q.includes('@')) {
-      const r = await fetch(
-        `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(q)}?$select=id,displayName,mail,userPrincipalName`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (r.ok) {
-        const j = await r.json();
-        results = [j];
-      }
-    }
-
-    if (results.length === 0) {
-      const safeQ = q.replace(/'/g, "''");
-      const filter = `startswith(tolower(mail),'${safeQ.toLowerCase()}') or startswith(tolower(userPrincipalName),'${safeQ.toLowerCase()}') or startswith(tolower(displayName),'${safeQ.toLowerCase()}')`;
-
-      const r = await fetch(
-        `https://graph.microsoft.com/v1.0/users?$filter=${encodeURIComponent(filter)}&$select=id,displayName,mail,userPrincipalName&$top=10`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (r.ok) {
-        const j = await r.json();
-        results = j.value || [];
-      }
-    }
-
-    const normalized = results.map(u => ({
-      id: u.id,
-      displayName: u.displayName || u.userPrincipalName || u.mail,
-      mail: u.mail || u.userPrincipalName
-    }));
-
-    setCategoryHeadResults(normalized);
-
-  } catch (err) {
-    console.error('category head search failed', err);
-  } finally {
-    setCategoryHeadLoading(false);
-  }
-};
-
-
-const searchCcUsers = async () => {
-  setCcResults([]);
-  setCcLoading(true);
-
-  try {
-    const token = await acquireTokenForAdmin();
-
-    const q = (ccQuery || '').trim();
-    if (!q) {
-      setCcLoading(false);
-      return;
-    }
-
-    let results = [];
-
-    if (q.includes('@')) {
-      const r = await fetch(
-        `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(q)}?$select=id,displayName,mail,userPrincipalName`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (r.ok) {
-        const j = await r.json();
-        results = [j];
-      }
-    }
-
-    if (results.length === 0) {
-      const safeQ = q.replace(/'/g, "''");
-      const filter = `startswith(tolower(mail),'${safeQ.toLowerCase()}') or startswith(tolower(userPrincipalName),'${safeQ.toLowerCase()}') or startswith(tolower(displayName),'${safeQ.toLowerCase()}')`;
-
-      const r = await fetch(
-        `https://graph.microsoft.com/v1.0/users?$filter=${encodeURIComponent(filter)}&$select=id,displayName,mail,userPrincipalName&$top=10`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (r.ok) {
-        const j = await r.json();
-        results = j.value || [];
-      }
-    }
-
-    const normalized = results.map(u => ({
-      id: u.id,
-      displayName: u.displayName || u.userPrincipalName || u.mail,
-      mail: u.mail || u.userPrincipalName
-    }));
-
-    setCcResults(normalized);
-
-  } catch (err) {
-    console.error('cc search failed', err);
-  } finally {
-    setCcLoading(false);
-  }
-};
-
-
   const confirmAddUser = async () => {
     if (!selectedSearchUser) {
       setAddError('Select a user to add.');
@@ -441,13 +344,7 @@ const searchCcUsers = async () => {
     }
   };
 
-  // Sends a notification request to your server (server.js) to dispatch emails.
-  // server endpoints to implement:
-  // POST /api/notify-admin-added  payload: { actor: {id,name,mail}, target: {id,name,mail} }
-  // POST /api/notify-admin-removed payload: { actor: {...}, target: {...} }
   const notifyServerAboutAdd = async (targetUser) => {
-
-    const backendBase = 'https://ticketing-hn59.onrender.com';
     try {
       const actor = {
         id: accounts?.[0]?.homeAccountId || '',
@@ -471,8 +368,7 @@ const searchCcUsers = async () => {
     }
   };
 
-  // --- REMOVE USER FLOW ---
-
+  // --- REMOVE USER FLOW (existing) ---
   const openRemoveModal = async () => {
     setRemoveModalOpen(true);
     setMembersLoading(true);
@@ -551,7 +447,6 @@ const searchCcUsers = async () => {
   };
 
   const notifyServerAboutRemove = async (targetUser) => {
-    const backendBase = 'https://ticketing-hn59.onrender.com';
     try {
       const actor = {
         id: accounts?.[0]?.homeAccountId || '',
@@ -575,6 +470,242 @@ const searchCcUsers = async () => {
     }
   };
 
+  // ---------------- NEW: Category Add / Remove helpers ----------------
+
+  const resetCategoryForm = () => {
+    setCategoryName('');
+    setEnableOnBehalf(false);
+    setOnBehalfOptions([{ label: 'Self', key: 'Self' }]);
+    setRequireOnBehalf(false);
+    setEnableSubCategory(false);
+    setSubCategories(['Other']);
+    setRequireSubCategory(false);
+    setEnableAttachmentsForCategory(false);
+    setRequireAttachmentsForCategory(false);
+    setCategoryHeads([{ email: '', name: '', verifying: false }]);
+    setCcEmails([{ email: '', name: '', verifying: false }]);
+    setCategoryError(null);
+    setCategorySuccess(null);
+  };
+
+  const addOnBehalfOption = () => {
+    setOnBehalfOptions(prev => [...prev, { label: `Option ${prev.length + 1}`, key: `opt${Date.now()}` }]);
+  };
+
+  const removeOnBehalfOption = (idx) => {
+    setOnBehalfOptions(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const addSubCategory = () => {
+    setSubCategories(prev => [...prev, '']);
+  };
+  const updateSubCategory = (idx, value) => {
+    setSubCategories(prev => prev.map((s, i) => (i === idx ? value : s)));
+  };
+  const removeSubCategory = (idx) => {
+    setSubCategories(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const addCategoryHead = () => {
+    setCategoryHeads(prev => [...prev, { email: '', name: '', verifying: false }]);
+  };
+  const updateCategoryHeadEmail = (idx, email) => {
+    setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, email, name: '', verifying: false } : h)));
+  };
+  const verifyCategoryHead = async (idx) => {
+    const head = categoryHeads[idx];
+    if (!head || !head.email) return;
+    setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, verifying: true } : h)));
+    try {
+      // try Graph lookup for user
+      const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
+      const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(head.email)}?$select=displayName,mail,userPrincipalName`, {
+        headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
+      });
+      if (r.ok) {
+        const json = await r.json();
+        const name = json.displayName || json.mail || json.userPrincipalName || head.email;
+        setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, name, verifying: false } : h)));
+        return;
+      }
+
+      // fallback by search
+      const searchR = await fetch(`https://graph.microsoft.com/v1.0/users?$filter=tolower(mail) eq '${head.email.toLowerCase()}' or tolower(userPrincipalName) eq '${head.email.toLowerCase()}'&$select=displayName,mail,userPrincipalName`, {
+        headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
+      });
+      if (searchR.ok) {
+        const j = await searchR.json();
+        const found = Array.isArray(j.value) && j.value[0];
+        if (found) {
+          const name = found.displayName || found.mail || found.userPrincipalName || head.email;
+          setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, name, verifying: false } : h)));
+          return;
+        }
+      }
+
+      // not found
+      setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, name: '', verifying: false } : h)));
+      setCategoryError('One or more Category Head emails could not be resolved in Azure AD.');
+    } catch (err) {
+      console.error('verify head error', err);
+      setCategoryError(err.message || 'Failed to verify head email');
+      setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, verifying: false } : h)));
+    }
+  };
+
+  const addCcEmail = () => {
+    setCcEmails(prev => [...prev, { email: '', name: '', verifying: false }]);
+  };
+  const updateCcEmail = (idx, email) => {
+    setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, email, name: '', verifying: false } : h)));
+  };
+  const verifyCcEmail = async (idx) => {
+    const head = ccEmails[idx];
+    if (!head || !head.email) return;
+    setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, verifying: true } : h)));
+    try {
+      const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
+      const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(head.email)}?$select=displayName,mail,userPrincipalName`, {
+        headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
+      });
+      if (r.ok) {
+        const json = await r.json();
+        const name = json.displayName || json.mail || json.userPrincipalName || head.email;
+        setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, name, verifying: false } : h)));
+        return;
+      }
+      setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, name: '', verifying: false } : h)));
+      setCategoryError('One or more CC emails could not be resolved in Azure AD.');
+    } catch (err) {
+      console.error('verify cc error', err);
+      setCategoryError(err.message || 'Failed to verify cc email');
+      setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, verifying: false } : h)));
+    }
+  };
+
+  const createCategory = async () => {
+    if (!categoryName || !categoryName.trim()) {
+      setCategoryError('Category name is required');
+      return;
+    }
+    setCategoryError(null);
+    setCategoryLoading(true);
+    setCategorySuccess(null);
+
+    try {
+      const token = await acquireTokenForAdmin();
+
+      const payload = {
+        name: categoryName.trim(),
+        features: {
+          onBehalf: enableOnBehalf ? { enabled: true, options: onBehalfOptions.map(o => o.label), required: !!requireOnBehalf } : { enabled: false },
+          subCategories: enableSubCategory ? { enabled: true, list: subCategories.filter(s => s && s.trim()), required: !!requireSubCategory } : { enabled: false },
+          attachments: enableAttachmentsForCategory ? { enabled: true, required: !!requireAttachmentsForCategory } : { enabled: false },
+        },
+        categoryHeads: categoryHeads.filter(h => h.email).map(h => ({ email: h.email.trim(), name: h.name || h.email.trim() })),
+        cc: ccEmails.filter(c => c.email).map(c => ({ email: c.email.trim(), name: c.name || c.email.trim() })),
+        createdBy: {
+          id: accounts?.[0]?.homeAccountId || '',
+          name: accounts?.[0]?.name || accounts?.[0]?.username || '',
+          mail: accounts?.[0]?.username || '',
+        },
+      };
+
+      const res = await fetch(`${backendBase}/api/categories`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `Create failed ${res.status}`);
+      }
+
+      const j = await res.json();
+      setCategorySuccess('Category created successfully');
+      // notify backend to send mail to Helpdesk_Admins (server should handle group list & notifications)
+      try {
+        await fetch(`${backendBase}/api/notify-category-added`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            actor: payload.createdBy,
+            category: payload.name,
+          }),
+        });
+      } catch (notifyErr) {
+        console.error('notify-category-added failed', notifyErr);
+      }
+
+      // reset form & close after small delay
+      setTimeout(() => {
+        resetCategoryForm();
+        setAddFieldOpen(false);
+      }, 900);
+    } catch (err) {
+      console.error('create category failed', err);
+      setCategoryError(err.message || 'Failed to create category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  // Load categories for remove modal
+  const openRemoveFieldModal = async () => {
+    setRemoveFieldOpen(true);
+    setCategoriesLoading(true);
+    setAvailableCategories([]);
+    setSelectedCategoryToRemove(null);
+    setRemoveCategoryError(null);
+    setRemoveCategorySuccess(null);
+
+    try {
+      const token = await acquireTokenForAdmin();
+      const r = await fetch(`${backendBase}/api/categories`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error(`Failed to load categories ${r.status}`);
+      const j = await r.json();
+      setAvailableCategories(Array.isArray(j) ? j : []);
+    } catch (err) {
+      console.error('load categories failed', err);
+      setRemoveCategoryError(err.message || 'Failed to load categories');
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  const confirmRemoveCategory = async () => {
+    if (!selectedCategoryToRemove) {
+      setRemoveCategoryError('Select a category to remove');
+      return;
+    }
+    setRemoveCategoryLoading(true);
+    setRemoveCategoryError(null);
+    try {
+      const token = await acquireTokenForAdmin();
+      const r = await fetch(`${backendBase}/api/categories/${encodeURIComponent(selectedCategoryToRemove.id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t || `Delete failed ${r.status}`);
+      }
+      setRemoveCategorySuccess('Category removed');
+      // locally remove
+      setAvailableCategories(prev => prev.filter(c => c.id !== selectedCategoryToRemove.id));
+      setSelectedCategoryToRemove(null);
+    } catch (err) {
+      console.error('delete category failed', err);
+      setRemoveCategoryError(err.message || 'Failed to delete category');
+    } finally {
+      setRemoveCategoryLoading(false);
+    }
+  };
+
+  // ---------------- Existing profile / full profile functions (unchanged) ----------------
   const fetchFullProfile = async () => {
     if (!accounts || !accounts[0]) return;
     setLoadingProfile(true);
@@ -658,6 +789,7 @@ const searchCcUsers = async () => {
     .join('')
     .toUpperCase();
 
+  // ---------------- JSX ----------------
   return (
     <>
       <header
@@ -774,7 +906,7 @@ const searchCcUsers = async () => {
                       borderRadius: 8,
                       boxShadow: '0 12px 40px rgba(2,6,23,0.12)',
                       padding: 10,
-                      width: 220,
+                      width: 260,
                       zIndex: 60,
                     }}
                   >
@@ -790,7 +922,7 @@ const searchCcUsers = async () => {
                         padding: '10px 8px',
                         borderRadius: 6,
                         cursor: 'pointer',
-                        color: '#0b79bf', // business blue
+                        color: '#0b79bf',
                         fontWeight: 700,
                       }}
                     >
@@ -807,15 +939,16 @@ const searchCcUsers = async () => {
                         padding: '10px 8px',
                         borderRadius: 6,
                         cursor: 'pointer',
-                        color: '#ef4444', // business red
+                        color: '#ef4444',
                         fontWeight: 700,
                       }}
                     >
                       Remove user
                     </button>
 
+                    {/* NEW: Add Field */}
                     <button
-                      onClick={() => { setAddFieldOpen(true); setSettingsOpen(false); }}
+                      onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
                       style={{
                         width: '100%',
                         textAlign: 'left',
@@ -824,13 +957,30 @@ const searchCcUsers = async () => {
                         padding: '10px 8px',
                         borderRadius: 6,
                         cursor: 'pointer',
-                        color: '#16a34a',
-                        fontWeight: 700
+                        color: '#0b79bf',
+                        fontWeight: 700,
                       }}
                     >
                       Add field
                     </button>
 
+                    {/* NEW: Remove Field */}
+                    <button
+                      onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '10px 8px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#ef4444',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Remove field
+                    </button>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
                       <button
@@ -845,7 +995,7 @@ const searchCcUsers = async () => {
               </div>
             )}
 
-            {/* PROFILE BUTTON */}
+            {/* PROFILE BUTTON (unchanged) */}
             <div ref={profileRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setProfileOpen(prev => !prev)}
@@ -1005,7 +1155,7 @@ const searchCcUsers = async () => {
         </div>
       </header>
 
-      {/* ADD USER MODAL */}
+      {/* --- Add User Modal (unchanged) --- */}
       {addModalOpen && (
         <>
           <div
@@ -1065,7 +1215,7 @@ const searchCcUsers = async () => {
                 style={{
                   padding: '10px 16px',
                   borderRadius: 8,
-                  background: '#0b79bf', // business blue
+                  background: '#0b79bf',
                   color: 'white',
                   border: 'none',
                   cursor: 'pointer',
@@ -1130,7 +1280,7 @@ const searchCcUsers = async () => {
         </>
       )}
 
-      {/* REMOVE USER MODAL (no IDs shown, only name + mail) */}
+      {/* --- Remove User Modal (unchanged) --- */}
       {removeModalOpen && (
         <>
           <div
@@ -1211,7 +1361,7 @@ const searchCcUsers = async () => {
                 style={{
                   padding: '10px 14px',
                   borderRadius: 8,
-                  background: removeLoading ? '#f7a6a6' : '#ef4444', // business red
+                  background: removeLoading ? '#f7a6a6' : '#ef4444',
                   color: 'white',
                   border: 'none',
                   cursor: removeLoading ? 'default' : 'pointer',
@@ -1225,475 +1375,295 @@ const searchCcUsers = async () => {
         </>
       )}
 
-      {/* Adding New field Modal */}
-      {/* ADD FIELD MODAL */}
+      {/* --- NEW: Add Field Modal --- */}
       {addFieldOpen && (
-              <>
-                <div
-                  onClick={() => setAddFieldOpen(false)}
-                  style={{
-                    position: 'fixed',
-                    inset: 0,
-                    background: 'rgba(0,0,0,0.4)',
-                    zIndex: 90
-                  }}
-                />
+        <>
+          <div
+            onClick={() => setAddFieldOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              zIndex: 90,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'white',
+              borderRadius: '10px',
+              padding: '18px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              width: '720px',
+              zIndex: 100,
+              maxHeight: '80vh',
+              overflow: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>Add Category / Field</h3>
+              <button onClick={() => setAddFieldOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                ✖
+              </button>
+            </div>
 
-                <div
-                  role="dialog"
-                  aria-modal="true"
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    position: 'fixed',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    background: 'white',
-                    borderRadius: 10,
-                    padding: 18,
-                    width: 640,
-                    maxHeight: '85vh',
-                    overflowY: 'auto',
-                    zIndex: 100,
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.3)'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <h3 style={{ margin: 0 }}>Add Category (Add Field)</h3>
-                    <button
-                      onClick={() => setAddFieldOpen(false)}
-                      style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
-                    >
-                      ✖
-                    </button>
-                  </div>
+            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+              Define a new category and required fields. Users in Category Heads and CCs will be notified for ticket actions.
+            </div>
 
-                  {/* Category name */}
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontWeight: 700 }}>Category name *</label>
-                    <input
-                      type="text"
-                      placeholder="Enter category name"
-                      style={{
-                        width: '100%',
-                        padding: 10,
-                        borderRadius: 8,
-                        border: '1px solid #e5e7eb',
-                        marginTop: 6
-                      }}
-                    />
-                  </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ fontWeight: 700 }}>Category name *</label>
+                <input value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="Enter category name" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #e6e9ee', marginTop: 6 }} />
+              </div>
 
-                  <hr />
-
-                  {/* Set on behalf */}
-                  <div style={{ marginTop: 12 }}>
-                    <label style={{ fontWeight: 700 }}>
-                      <input type="checkbox" style={{ marginRight: 6 }} /> Set on behalf
-                    </label>
-
-                    <div style={{ marginLeft: 18, marginTop: 8 }}>
-                      <label style={{ fontSize: 13 }}>
-                        <input type="checkbox" /> Required
-                      </label>
-
-                      <div style={{ marginTop: 8, fontSize: 14 }}>
-                        Self, Others
-                        <button
-                          type="button"
-                          style={{
-                            marginLeft: 8,
-                            border: 'none',
-                            background: '#e5e7eb',
-                            borderRadius: 4,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <hr />
-
-                  {/* Sub category */}
-                  {/* Sub Category configuration */}
-                  <div style={{ marginTop: 18 }}>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div>
+                <label style={{ fontWeight: 700 }}>Category Heads (they approve & receive emails)</label>
+                <div>
+                  {categoryHeads.map((h, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                       <input
-                        type="checkbox"
-                        checked={enableSubCategory}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setEnableSubCategory(v);
-                          if (v && subCategories.length === 0) {
-                            setSubCategories(['Other']);
-                          }
-                        }}
+                        value={h.email}
+                        onChange={(e) => updateCategoryHeadEmail(idx, e.target.value)}
+                        placeholder="email address"
+                        style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e6e9ee' }}
                       />
-                      <span style={{ fontWeight: 800, color: '#0f172a' }}>
-                        Enable Sub-Category
-                      </span>
-                    </div>
-
-                    {enableSubCategory && (
-                      <div
-                        style={{
-                          marginTop: 12,
-                          border: '1px solid rgba(15,23,42,0.06)',
-                          borderRadius: 10,
-                          padding: 12,
-                          background: '#f8fafc'
-                        }}
-                      >
-
-                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-                          Sub-categories
-                        </div>
-
-                        {subCategories.map((sc, index) => {
-
-                          const isOther = sc === 'Other';
-
-                          return (
-                            <div
-                              key={index}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                marginBottom: 8
-                              }}
-                            >
-                              <input
-                                type="text"
-                                value={sc}
-                                disabled={isOther}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setSubCategories(prev => {
-                                    const copy = [...prev];
-                                    copy[index] = val;
-                                    return copy;
-                                  });
-                                }}
-                                placeholder="Sub category name"
-                                style={{
-                                  flex: 1,
-                                  padding: '8px 10px',
-                                  borderRadius: 8,
-                                  border: '1px solid #e5e7eb',
-                                  background: isOther ? '#f3f4f6' : 'white'
-                                }}
-                              />
-
-                              {!isOther && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSubCategories(prev => {
-                                      const copy = prev.filter((_, i) => i !== index);
-                                      if (!copy.includes('Other')) copy.push('Other');
-                                      return copy;
-                                    });
-                                  }}
-                                  style={{
-                                    border: 'none',
-                                    background: '#fee2e2',
-                                    color: '#b91c1c',
-                                    borderRadius: 6,
-                                    padding: '4px 8px',
-                                    cursor: 'pointer',
-                                    fontWeight: 700
-                                  }}
-                                >
-                                  −
-                                </button>
-                              )}
-
-                              {!isOther && index === subCategories.findIndex(v => v === 'Other') - 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSubCategories(prev => {
-                                      const filtered = prev.filter(v => v !== 'Other');
-                                      return [...filtered, '', 'Other'];
-                                    });
-                                  }}
-                                  style={{
-                                    border: 'none',
-                                    background: '#e0f2fe',
-                                    color: '#0369a1',
-                                    borderRadius: 6,
-                                    padding: '4px 8px',
-                                    cursor: 'pointer',
-                                    fontWeight: 700
-                                  }}
-                                >
-                                  +
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
-                          “Other” is always present and cannot be removed.
-                        </div>
-
-                      </div>
-                    )}
-
-                  </div>
-
-
-                  <hr />
-
-                  {/* Attachments */}
-                  <div style={{ marginTop: 12 }}>
-                    <label style={{ fontWeight: 700 }}>
-                      <input type="checkbox" style={{ marginRight: 6 }} /> Attachments
-                    </label>
-
-                    <div style={{ marginLeft: 18, marginTop: 8 }}>
-                      <label style={{ fontSize: 13 }}>
-                        <input type="checkbox" /> Required
-                      </label>
-                    </div>
-                  </div>
-
-                  <hr />
-
-                  {/* Category Heads */}
-                  <div style={{ marginTop: 18 }}>
-
-                    <div style={{ fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
-                      Category Heads
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        value={categoryHeadQuery}
-                        onChange={(e) => setCategoryHeadQuery(e.target.value)}
-                        placeholder="Search user by name or email"
-                        style={{
-                          flex: 1,
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          border: '1px solid #e5e7eb'
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') searchCategoryHeads(); }}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={searchCategoryHeads}
-                        style={{
-                          padding: '10px 14px',
-                          borderRadius: 8,
-                          background: '#0b79bf',
-                          color: 'white',
-                          border: 'none',
-                          fontWeight: 700,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Search
+                      <button type="button" onClick={() => verifyCategoryHead(idx)} style={{ padding: '8px 10px', borderRadius: 6, background: '#0b79bf', color: 'white', border: 'none' }}>
+                        {h.verifying ? 'Checking…' : 'Lookup'}
                       </button>
+                      {idx === 0 ? (
+                        <button type="button" onClick={addCategoryHead} style={{ padding: '8px 10px', borderRadius: 6, background: '#eef2ff', border: '1px solid #e6e9ee' }}>＋</button>
+                      ) : (
+                        <button type="button" onClick={() => setCategoryHeads(prev => prev.filter((_, i) => i !== idx))} style={{ padding: '8px 10px', borderRadius: 6, background: '#fff1f2', border: '1px solid #e6e9ee' }}>✖</button>
+                      )}
                     </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>Category Heads receive notifications for approvals and actions.</div>
+              </div>
 
-                    {categoryHeadLoading && (
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Searching…</div>
-                    )}
-
-                    {categoryHeadResults.map(u => (
-                      <div
-                        key={u.id}
-                        onClick={() => {
-                          setCategoryHeads(prev => {
-                            if (prev.some(x => x.id === u.id)) return prev;
-                            return [...prev, u];
-                          });
-                        }}
-                        style={{
-                          marginTop: 8,
-                          padding: 10,
-                          borderRadius: 8,
-                          border: '1px solid #e5e7eb',
-                          cursor: 'pointer',
-                          background: '#fff'
-                        }}
-                      >
-                        <div style={{ fontWeight: 700 }}>{u.displayName}</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>{u.mail}</div>
-                      </div>
-                    ))}
-
-                    {categoryHeads.length > 0 && (
-                      <div style={{ marginTop: 10 }}>
-                        {categoryHeads.map(u => (
-                          <div
-                            key={u.id}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '6px 8px',
-                              borderRadius: 6,
-                              background: '#f1f5f9',
-                              marginBottom: 6
-                            }}
-                          >
-                            <span style={{ fontSize: 13 }}>{u.displayName}</span>
-                            <button
-                              type="button"
-                              onClick={() => setCategoryHeads(prev => prev.filter(x => x.id !== u.id))}
-                              style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer' }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                  </div>
-
-
-                  <hr />
-
-                 {/* CC mails */}
-                  <div style={{ marginTop: 18 }}>
-
-                    <div style={{ fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
-                      CC mails
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8 }}>
+              <div>
+                <label style={{ fontWeight: 700 }}>CC emails (optional)</label>
+                <div>
+                  {ccEmails.map((c, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                       <input
-                        value={ccQuery}
-                        onChange={(e) => setCcQuery(e.target.value)}
-                        placeholder="Search user by name or email"
-                        style={{
-                          flex: 1,
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          border: '1px solid #e5e7eb'
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') searchCcUsers(); }}
+                        value={c.email}
+                        onChange={(e) => updateCcEmail(idx, e.target.value)}
+                        placeholder="email address"
+                        style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e6e9ee' }}
                       />
-
-                      <button
-                        type="button"
-                        onClick={searchCcUsers}
-                        style={{
-                          padding: '10px 14px',
-                          borderRadius: 8,
-                          background: '#0b79bf',
-                          color: 'white',
-                          border: 'none',
-                          fontWeight: 700,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Search
+                      <button type="button" onClick={() => verifyCcEmail(idx)} style={{ padding: '8px 10px', borderRadius: 6, background: '#0b79bf', color: 'white', border: 'none' }}>
+                        {c.verifying ? 'Checking…' : 'Lookup'}
                       </button>
+                      {idx === 0 ? (
+                        <button type="button" onClick={addCcEmail} style={{ padding: '8px 10px', borderRadius: 6, background: '#eef2ff', border: '1px solid #e6e9ee' }}>＋</button>
+                      ) : (
+                        <button type="button" onClick={() => setCcEmails(prev => prev.filter((_, i) => i !== idx))} style={{ padding: '8px 10px', borderRadius: 6, background: '#fff1f2', border: '1px solid #e6e9ee' }}>✖</button>
+                      )}
                     </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>People here will receive emails on every action for this category.</div>
+              </div>
 
-                    {ccLoading && (
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Searching…</div>
-                    )}
-
-                    {ccResults.map(u => (
-                      <div
-                        key={u.id}
-                        onClick={() => {
-                          setCcMails(prev => {
-                            if (prev.some(x => x.id === u.id)) return prev;
-                            return [...prev, u];
-                          });
-                        }}
-                        style={{
-                          marginTop: 8,
-                          padding: 10,
-                          borderRadius: 8,
-                          border: '1px solid #e5e7eb',
-                          cursor: 'pointer',
-                          background: '#fff'
-                        }}
-                      >
-                        <div style={{ fontWeight: 700 }}>{u.displayName}</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>{u.mail}</div>
-                      </div>
-                    ))}
-
-                    {ccMails.length > 0 && (
-                      <div style={{ marginTop: 10 }}>
-                        {ccMails.map(u => (
-                          <div
-                            key={u.id}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '6px 8px',
-                              borderRadius: 6,
-                              background: '#f1f5f9',
-                              marginBottom: 6
-                            }}
-                          >
-                            <span style={{ fontSize: 13 }}>{u.displayName}</span>
-                            <button
-                              type="button"
-                              onClick={() => setCcMails(prev => prev.filter(x => x.id !== u.id))}
-                              style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer' }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <label style={{ fontWeight: 700 }}>On Behalf</label>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>Allow selecting Self/Other in ticket form</div>
                   </div>
-
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-                    <button
-                      onClick={() => setAddFieldOpen(false)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: '#6b7280'
-                      }}
-                    >
-                      Cancel
-                    </button>
-
-                    <button
-                      type="button"
-                      style={{
-                        padding: '10px 16px',
-                        borderRadius: 8,
-                        background: '#16a34a',
-                        color: 'white',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontWeight: 700
-                      }}
-                    >
-                      Create category
-                    </button>
+                  <div>
+                    <input type="checkbox" checked={enableOnBehalf} onChange={(e) => setEnableOnBehalf(e.target.checked)} />
                   </div>
                 </div>
-              </>
-            )}
 
+                {enableOnBehalf && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {onBehalfOptions.map((o, idx) => (
+                        <div key={o.key} style={{ padding: 8, borderRadius: 8, background: '#f8fafc', display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <input value={o.label} onChange={(e) => setOnBehalfOptions(prev => prev.map((p, i) => i === idx ? { ...p, label: e.target.value } : p))} style={{ padding: 6, borderRadius: 6, border: '1px solid #e6e9ee' }} />
+                          {idx === 0 ? (
+                            <button type="button" onClick={addOnBehalfOption} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>＋</button>
+                          ) : (
+                            <button type="button" onClick={() => removeOnBehalfOption(idx)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>✖</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
 
-      {/* FULL PROFILE MODAL */}
+                    <div style={{ marginTop: 8 }}>
+                      <label style={{ fontSize: 13 }}><input type="checkbox" checked={requireOnBehalf} onChange={(e) => setRequireOnBehalf(e.target.checked)} /> Required in form</label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <label style={{ fontWeight: 700 }}>Sub-Category</label>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>Add multiple subcategories (users will choose one)</div>
+                  </div>
+                  <div>
+                    <input type="checkbox" checked={enableSubCategory} onChange={(e) => setEnableSubCategory(e.target.checked)} />
+                  </div>
+                </div>
+
+                {enableSubCategory && (
+                  <div style={{ marginTop: 10 }}>
+                    {subCategories.map((s, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <input value={s} onChange={(e) => updateSubCategory(idx, e.target.value)} placeholder="Sub-category label (ex: Salary)" style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e6e9ee' }} />
+                        {idx === subCategories.length - 1 ? (
+                          <button type="button" onClick={addSubCategory} style={{ padding: '8px 10px', borderRadius: 6, background: '#eef2ff', border: '1px solid #e6e9ee' }}>＋</button>
+                        ) : (
+                          <button type="button" onClick={() => removeSubCategory(idx)} style={{ padding: '8px 10px', borderRadius: 6, background: '#fff1f2', border: '1px solid #e6e9ee' }}>✖</button>
+                        )}
+                      </div>
+                    ))}
+
+                    <div style={{ marginTop: 8 }}>
+                      <label><input type="checkbox" checked={requireSubCategory} onChange={(e) => setRequireSubCategory(e.target.checked)} /> Required in form</label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <label style={{ fontWeight: 700 }}>Attachments</label>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>Allow attachments on tickets of this category</div>
+                  </div>
+                  <div>
+                    <input type="checkbox" checked={enableAttachmentsForCategory} onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)} />
+                  </div>
+                </div>
+
+                {enableAttachmentsForCategory && (
+                  <div style={{ marginTop: 8 }}>
+                    <label><input type="checkbox" checked={requireAttachmentsForCategory} onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)} /> Required in form</label>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {categorySuccess && <div style={{ marginTop: 12, padding: 10, background: '#ecfdf5', color: '#065f46', borderRadius: 8 }}>{categorySuccess}</div>}
+            {categoryError && <div style={{ marginTop: 12, padding: 10, background: '#fff1f2', color: '#9f1239', borderRadius: 8 }}>{categoryError}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button onClick={() => { resetCategoryForm(); setAddFieldOpen(false); }} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={createCategory} disabled={categoryLoading || !categoryName.trim()} style={{ padding: '10px 14px', borderRadius: 8, background: categoryLoading ? '#9ec7df' : '#0b79bf', color: 'white', border: 'none', cursor: categoryLoading ? 'default' : 'pointer', fontWeight: 700 }}>
+                {categoryLoading ? 'Creating…' : 'Create Category'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* --- NEW: Remove Field Modal --- */}
+      {removeFieldOpen && (
+        <>
+          <div
+            onClick={() => setRemoveFieldOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              zIndex: 90,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'white',
+              borderRadius: '10px',
+              padding: '18px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              width: '560px',
+              zIndex: 100,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>Remove Category</h3>
+              <button onClick={() => setRemoveFieldOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                ✖
+              </button>
+            </div>
+
+            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
+              Select a category to remove. This operation is destructive and may impact existing tickets — confirm with your team.
+            </div>
+
+            <div style={{ maxHeight: 300, overflow: 'auto', marginBottom: 8 }}>
+              {categoriesLoading && <div style={{ color: '#6b7280' }}>Loading categories…</div>}
+              {!categoriesLoading && availableCategories.length === 0 && <div style={{ color: '#6b7280' }}>No categories found.</div>}
+              {availableCategories.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => setSelectedCategoryToRemove(c)}
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    background: selectedCategoryToRemove?.id === c.id ? '#fff1f2' : '#fff',
+                    border: '1px solid rgba(15,23,42,0.04)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{c.name}</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>{c.description || ''}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {removeCategorySuccess && <div style={{ padding: 10, background: '#ecfdf5', color: '#065f46', borderRadius: 8 }}>{removeCategorySuccess}</div>}
+            {removeCategoryError && <div style={{ padding: 10, background: '#fff1f2', color: '#9f1239', borderRadius: 8 }}>{removeCategoryError}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+              <button onClick={() => setRemoveFieldOpen(false)} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button
+                onClick={confirmRemoveCategory}
+                disabled={removeCategoryLoading || !selectedCategoryToRemove}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: removeCategoryLoading ? '#f7a6a6' : '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  cursor: removeCategoryLoading ? 'default' : 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                {removeCategoryLoading ? 'Removing…' : 'Remove Category'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* FULL PROFILE MODAL (unchanged) */}
       {fullProfileOpen && (
         <>
           <div
@@ -1892,21 +1862,21 @@ function AppContent() {
 
 function App() {
   return (
-    <MsalProvider instance={pca}>
-      <AppContent />
-    </MsalProvider>
+    <>
+      {/* moved animation into component so it is valid JSX */}
+      <style>{`
+        @keyframes floatGlow {
+          0% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
+          50% { transform: translateX(-50%) translateY(-3px); opacity: 1; }
+          100% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
+        }
+      `}</style>
+
+      <MsalProvider instance={pca}>
+        <AppContent />
+      </MsalProvider>
+    </>
   );
 }
 
 export default App;
-
-/* ⭐⭐⭐ GLOBAL ANIMATION (ADDED) ⭐⭐⭐ */
-<style>
-{`
-@keyframes floatGlow {
-  0% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
-  50% { transform: translateX(-50%) translateY(-3px); opacity: 1; }
-  100% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
-}
-`}
-</style>
