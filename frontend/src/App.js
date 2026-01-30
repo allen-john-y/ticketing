@@ -39,7 +39,7 @@ function Header({ logout }) {
   const [addModalOpen, setAddModalOpen] = useState(false);
   // Add category (Add Field) modal
 const [addFieldOpen, setAddFieldOpen] = useState(false);
-const [newCategoryName, setNewCategoryName] = useState('');
+//const [newCategoryName, setNewCategoryName] = useState('');
 const [enableSubCategory, setEnableSubCategory] = useState(false);
 const [subCategories, setSubCategories] = useState(['Other']);
   const [searchQuery, setSearchQuery] = useState('');

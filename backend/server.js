@@ -134,6 +134,51 @@ const ticketSchema = new mongoose.Schema(
 
 const Ticket = mongoose.model('Ticket', ticketSchema);
 
+
+
+// ---------------------- CATEGORY CONFIG ----------------------
+
+const categoryConfigSchema = new mongoose.Schema(
+  {
+    categoryName: { type: String, required: true, unique: true },
+
+    enableOnBehalf: { type: Boolean, default: false },
+
+    enableSubCategory: { type: Boolean, default: false },
+
+    subCategories: [{ type: String }],
+
+    attachmentsEnabled: { type: Boolean, default: false },
+
+    categoryHeads: [
+      {
+        id: String,
+        name: String,
+        mail: String
+      }
+    ],
+
+    ccMails: [
+      {
+        id: String,
+        name: String,
+        mail: String
+      }
+    ],
+
+    createdBy: {
+      id: String,
+      name: String,
+      mail: String
+    }
+
+  },
+  { timestamps: true }
+);
+
+const CategoryConfig = mongoose.model("CategoryConfig", categoryConfigSchema);
+
+
 // ---------------------- Counter ---------------------------
 let ticketCounter = 0;
 const loadCounter = async () => {
@@ -300,8 +345,8 @@ const sendEmail = async (to, subject, bodyHtml, cc) => {
     return false;
   }
 };
-
 // ---------------------- Azure Helpers (Reset + Group) ----------------------
+
 const getAccessToken = async () => {
   const url = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
@@ -318,53 +363,76 @@ const getAccessToken = async () => {
 const resetAzurePassword = async (userIdentifier) => {
   const token = await getAccessToken();
   const newPassword = Math.random().toString(36).slice(-10) + "A1!";
-  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userIdentifier)}`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      passwordProfile: {
-        forceChangePasswordNextSignIn: true,
-        password: newPassword,
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userIdentifier)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    }),
-    agent: new https.Agent({ rejectUnauthorized: false }),
-  });
+      body: JSON.stringify({
+        passwordProfile: {
+          forceChangePasswordNextSignIn: true,
+          password: newPassword,
+        },
+      }),
+      agent: new https.Agent({ rejectUnauthorized: false }),
+    }
+  );
+
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Azure reset failed: ${body}`);
   }
+
   return newPassword;
 };
 
 // Find Azure AD user object id by UPN/email
 const getUserByUpn = async (upn) => {
   const token = await getAccessToken();
-  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id,mail,displayName,userPrincipalName`;
+  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+    upn
+  )}?$select=id,mail,displayName,userPrincipalName`;
+
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     agent: new https.Agent({ rejectUnauthorized: false }),
   });
+
   if (res.status === 404) {
     throw new Error(`User not found: ${upn}`);
   }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Graph lookup failed: ${text}`);
   }
+
   const data = await res.json();
-  return { id: data.id, mail: data.mail || data.userPrincipalName, displayName: data.displayName || null };
+
+  return {
+    id: data.id,
+    mail: data.mail || data.userPrincipalName,
+    displayName: data.displayName || null
+  };
 };
 
 // Add a user (objectId) to group (groupId)
 // Use env AZURE_DEVICE_ADMIN_GROUP_ID or fallback to the provided object id
-const AZURE_DEVICE_ADMIN_GROUP_ID = process.env.AZURE_DEVICE_ADMIN_GROUP_ID || "ee3c73f9-277c-4d08-ba17-d9656ecb9d2f";
+const AZURE_DEVICE_ADMIN_GROUP_ID =
+  process.env.AZURE_DEVICE_ADMIN_GROUP_ID ||
+  "ee3c73f9-277c-4d08-ba17-d9656ecb9d2f";
+
 const addUserToGroup = async (groupId, userObjectId) => {
   const token = await getAccessToken();
   const url = `https://graph.microsoft.com/v1.0/groups/${groupId}/members/$ref`;
-  const body = { "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}` };
+
+  const body = {
+    "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}`
+  };
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -374,11 +442,47 @@ const addUserToGroup = async (groupId, userObjectId) => {
     body: JSON.stringify(body),
     agent: new https.Agent({ rejectUnauthorized: false }),
   });
+
   if (res.status !== 204 && res.status !== 201) {
     const text = await res.text();
     throw new Error(`Add to group failed: ${res.status} ${text}`);
   }
+
   return true;
+};
+
+
+
+// ---------------------- Helpdesk Admins (Azure Group Members) ----------------------
+
+const HELPDESK_ADMIN_GROUP_ID = process.env.HELPDESK_ADMIN_GROUP_ID;
+
+const getHelpdeskAdminsEmails = async () => {
+  if (!HELPDESK_ADMIN_GROUP_ID) return [];
+
+  const token = await getAccessToken();
+
+  const url =
+    `https://graph.microsoft.com/v1.0/groups/${HELPDESK_ADMIN_GROUP_ID}/members` +
+    `?$select=mail,userPrincipalName`;
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    agent: new https.Agent({ rejectUnauthorized: false })
+  });
+
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error("Failed to fetch Helpdesk admins: " + t);
+  }
+
+  const data = await res.json();
+
+  return (data.value || [])
+    .map(u => u.mail || u.userPrincipalName)
+    .filter(Boolean);
 };
 
 // ---------------------- UPLOAD (NEW) ----------------------
@@ -584,6 +688,129 @@ app.post("/api/notify-admin-removed", async (req, res) => {
     return res.status(500).json({ message: "Failed to send admin-removed notifications", error: err.message });
   }
 });
+
+
+// ---------------------- CREATE CATEGORY (ADMIN - ADD FIELD) ----------------------
+
+app.post("/categories", async (req, res) => {
+  try {
+    const {
+      categoryName,
+      enableOnBehalf,
+      enableSubCategory,
+      subCategories,
+      attachmentsEnabled,
+      categoryHeads,
+      ccMails,
+      createdBy
+    } = req.body;
+
+    if (!categoryName || !categoryName.trim()) {
+      return res.status(400).json({ message: "Category name is required" });
+    }
+
+    const normalizedName = categoryName.trim();
+
+    const existing = await CategoryConfig.findOne({
+      categoryName: { $regex: new RegExp("^" + normalizedName + "$", "i") }
+    });
+
+    if (existing) {
+      return res.status(400).json({ message: "Category already exists" });
+    }
+
+    let finalSubCategories = [];
+
+    if (enableSubCategory) {
+      finalSubCategories = Array.isArray(subCategories)
+        ? subCategories
+            .map(s => s && s.trim())
+            .filter(Boolean)
+        : [];
+
+      // ✅ Always keep Other
+      if (!finalSubCategories.some(s => s.toLowerCase() === "other")) {
+        finalSubCategories.push("Other");
+      }
+    }
+
+    const category = await CategoryConfig.create({
+      categoryName: normalizedName,
+      enableOnBehalf: !!enableOnBehalf,
+      enableSubCategory: !!enableSubCategory,
+      subCategories: finalSubCategories,
+      attachmentsEnabled: !!attachmentsEnabled,
+      categoryHeads: Array.isArray(categoryHeads) ? categoryHeads : [],
+      ccMails: Array.isArray(ccMails) ? ccMails : [],
+      createdBy
+    });
+
+    // ---------------- MAIL PART ----------------
+
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata"
+    });
+
+    const headsList = (categoryHeads || []).map(u => u.mail).filter(Boolean);
+    const ccList = (ccMails || []).map(u => u.mail).filter(Boolean);
+
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    const admins = process.env.HELPDESK_ADMINS_EMAILS
+      ? process.env.HELPDESK_ADMINS_EMAILS.split(",").map(e => e.trim())
+      : [];
+
+    const title = `New category created : ${normalizedName}`;
+
+    const html = buildHtmlEmail({
+      title,
+      subtitle: "A new ticket category has been created in Helpdesk",
+      statusColor: "#0ea5e9",
+      fields: [
+        { label: "Category", value: normalizedName },
+        { label: "Created By", value: `${createdBy?.name || "Unknown"} (${createdBy?.mail || "—"})` },
+        { label: "On behalf enabled", value: enableOnBehalf ? "Yes" : "No" },
+        { label: "Sub category enabled", value: enableSubCategory ? "Yes" : "No" },
+        { label: "Attachments enabled", value: attachmentsEnabled ? "Yes" : "No" },
+        { label: "Sub categories", value: finalSubCategories.join(", ") || "—" },
+        { label: "Created At", value: nowIST }
+      ],
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+      actionText: "Open Helpdesk"
+    });
+
+    // 1. notify all helpdesk admins
+    if (admins.length) {
+      await sendEmail(
+        admins,
+        `[HELPDESK] New category created - ${normalizedName}`,
+        html,
+        itHead
+      );
+    }
+
+    // 2. notify category heads + cc
+    const toForHeads = headsList.length ? headsList : admins;
+
+    const ccMerged = [...new Set([...(ccList || []), itHead].filter(Boolean))];
+
+    if (toForHeads.length) {
+      await sendEmail(
+        toForHeads,
+        `[HELPDESK] You are assigned as Category Head - ${normalizedName}`,
+        html,
+        ccMerged
+      );
+    }
+
+    return res.status(201).json(category);
+
+  } catch (err) {
+    console.error("Create category error:", err);
+    return res.status(500).json({ message: "Failed to create category" });
+  }
+});
+
 
 // ---------------------- PART 2 ----------------------
 // Get Tickets
