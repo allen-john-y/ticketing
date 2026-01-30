@@ -1413,7 +1413,7 @@ const searchCcUsers = async () => {
                                 </button>
                               )}
 
-                              {index === subCategories.length - 1 && !isOther && (
+                              {!isOther && index === subCategories.findIndex(v => v === 'Other') - 1 && (
                                 <button
                                   type="button"
                                   onClick={() => {
