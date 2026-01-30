@@ -1457,7 +1457,7 @@ async function fetchItemStream(token, itemId, driveId) {
 // Download multiple attachments as a ZIP
 // GET /attachments/zip?ids=id1,id2&driveIds=did1,did2 (driveIds optional, comma-aligned with ids)
 // npm install archiver p-limit
-const pLimit = require('p-limit');
+const pLimit = require('p-limit').default;
 
 app.get("/attachments/zip", async (req, res) => {
   try {
