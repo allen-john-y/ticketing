@@ -1375,7 +1375,7 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* --- NEW: Add Field Modal --- */}
+     {/* --- ALIGNED: Add Field Modal --- */}
       {addFieldOpen && (
         <>
           <div
@@ -1397,172 +1397,465 @@ function Header({ logout }) {
               transform: 'translate(-50%, -50%)',
               background: 'white',
               borderRadius: '10px',
-              padding: '18px',
+              padding: '24px',
               boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              width: '720px',
+              width: '800px',
+              maxWidth: '90vw',
               zIndex: 100,
-              maxHeight: '80vh',
+              maxHeight: '85vh',
               overflow: 'auto'
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>Add Category / Field</h3>
-              <button onClick={() => setAddFieldOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Add Category / Field</h3>
+              <button 
+                onClick={() => setAddFieldOpen(false)} 
+                style={{ 
+                  background: 'transparent', 
+                  border: 'none', 
+                  cursor: 'pointer',
+                  fontSize: '1.2rem',
+                  color: '#6b7280'
+                }}
+              >
                 ✖
               </button>
             </div>
 
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
               Define a new category and required fields. Users in Category Heads and CCs will be notified for ticket actions.
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ fontWeight: 700 }}>Category name *</label>
-                <input value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="Enter category name" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #e6e9ee', marginTop: 6 }} />
+            {/* Form Fields */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              
+              {/* Category Name - Full Width */}
+              <div style={{ width: '100%' }}>
+                <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
+                  Category Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input 
+                  value={categoryName} 
+                  onChange={(e) => setCategoryName(e.target.value)} 
+                  placeholder="Enter category name (e.g., HR, IT Support, Finance)" 
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 12px', 
+                    borderRadius: 8, 
+                    border: '1px solid #e6e9ee',
+                    fontSize: 14,
+                    boxSizing: 'border-box'
+                  }} 
+                />
               </div>
 
-              <div>
-                <label style={{ fontWeight: 700 }}>Category Heads (they approve & receive emails)</label>
+              {/* Two Column Layout for Category Heads and CC Emails */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                
+                {/* Category Heads */}
                 <div>
-                  {categoryHeads.map((h, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <input
-                        value={h.email}
-                        onChange={(e) => updateCategoryHeadEmail(idx, e.target.value)}
-                        placeholder="email address"
-                        style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e6e9ee' }}
-                      />
-                      <button type="button" onClick={() => verifyCategoryHead(idx)} style={{ padding: '8px 10px', borderRadius: 6, background: '#0b79bf', color: 'white', border: 'none' }}>
-                        {h.verifying ? 'Checking…' : 'Lookup'}
-                      </button>
-                      {idx === 0 ? (
-                        <button type="button" onClick={addCategoryHead} style={{ padding: '8px 10px', borderRadius: 6, background: '#eef2ff', border: '1px solid #e6e9ee' }}>＋</button>
-                      ) : (
-                        <button type="button" onClick={() => setCategoryHeads(prev => prev.filter((_, i) => i !== idx))} style={{ padding: '8px 10px', borderRadius: 6, background: '#fff1f2', border: '1px solid #e6e9ee' }}>✖</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>Category Heads receive notifications for approvals and actions.</div>
-              </div>
-
-              <div>
-                <label style={{ fontWeight: 700 }}>CC emails (optional)</label>
-                <div>
-                  {ccEmails.map((c, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <input
-                        value={c.email}
-                        onChange={(e) => updateCcEmail(idx, e.target.value)}
-                        placeholder="email address"
-                        style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e6e9ee' }}
-                      />
-                      <button type="button" onClick={() => verifyCcEmail(idx)} style={{ padding: '8px 10px', borderRadius: 6, background: '#0b79bf', color: 'white', border: 'none' }}>
-                        {c.verifying ? 'Checking…' : 'Lookup'}
-                      </button>
-                      {idx === 0 ? (
-                        <button type="button" onClick={addCcEmail} style={{ padding: '8px 10px', borderRadius: 6, background: '#eef2ff', border: '1px solid #e6e9ee' }}>＋</button>
-                      ) : (
-                        <button type="button" onClick={() => setCcEmails(prev => prev.filter((_, i) => i !== idx))} style={{ padding: '8px 10px', borderRadius: 6, background: '#fff1f2', border: '1px solid #e6e9ee' }}>✖</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>People here will receive emails on every action for this category.</div>
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <label style={{ fontWeight: 700 }}>On Behalf</label>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>Allow selecting Self/Other in ticket form</div>
+                  <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
+                    Category Heads
+                  </label>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                    They approve tickets & receive email notifications
                   </div>
-                  <div>
-                    <input type="checkbox" checked={enableOnBehalf} onChange={(e) => setEnableOnBehalf(e.target.checked)} />
-                  </div>
-                </div>
-
-                {enableOnBehalf && (
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {onBehalfOptions.map((o, idx) => (
-                        <div key={o.key} style={{ padding: 8, borderRadius: 8, background: '#f8fafc', display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <input value={o.label} onChange={(e) => setOnBehalfOptions(prev => prev.map((p, i) => i === idx ? { ...p, label: e.target.value } : p))} style={{ padding: 6, borderRadius: 6, border: '1px solid #e6e9ee' }} />
-                          {idx === 0 ? (
-                            <button type="button" onClick={addOnBehalfOption} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>＋</button>
-                          ) : (
-                            <button type="button" onClick={() => removeOnBehalfOption(idx)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>✖</button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={{ marginTop: 8 }}>
-                      <label style={{ fontSize: 13 }}><input type="checkbox" checked={requireOnBehalf} onChange={(e) => setRequireOnBehalf(e.target.checked)} /> Required in form</label>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <label style={{ fontWeight: 700 }}>Sub-Category</label>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>Add multiple subcategories (users will choose one)</div>
-                  </div>
-                  <div>
-                    <input type="checkbox" checked={enableSubCategory} onChange={(e) => setEnableSubCategory(e.target.checked)} />
-                  </div>
-                </div>
-
-                {enableSubCategory && (
-                  <div style={{ marginTop: 10 }}>
-                    {subCategories.map((s, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                        <input value={s} onChange={(e) => updateSubCategory(idx, e.target.value)} placeholder="Sub-category label (ex: Salary)" style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #e6e9ee' }} />
-                        {idx === subCategories.length - 1 ? (
-                          <button type="button" onClick={addSubCategory} style={{ padding: '8px 10px', borderRadius: 6, background: '#eef2ff', border: '1px solid #e6e9ee' }}>＋</button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {categoryHeads.map((h, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                        <input
+                          value={h.email}
+                          onChange={(e) => updateCategoryHeadEmail(idx, e.target.value)}
+                          placeholder="email@company.com"
+                          style={{ 
+                            flex: 1, 
+                            padding: '8px 10px', 
+                            borderRadius: 6, 
+                            border: '1px solid #e6e9ee',
+                            fontSize: 13
+                          }}
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => verifyCategoryHead(idx)} 
+                          disabled={h.verifying || !h.email}
+                          style={{ 
+                            padding: '8px 12px', 
+                            borderRadius: 6, 
+                            background: h.verifying ? '#9ec7df' : '#0b79bf', 
+                            color: 'white', 
+                            border: 'none',
+                            cursor: h.verifying || !h.email ? 'default' : 'pointer',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {h.verifying ? 'Checking…' : 'Lookup'}
+                        </button>
+                        {idx === 0 ? (
+                          <button 
+                            type="button" 
+                            onClick={addCategoryHead} 
+                            style={{ 
+                              padding: '8px 12px', 
+                              borderRadius: 6, 
+                              background: '#eef2ff', 
+                              border: '1px solid #c7d2fe',
+                              cursor: 'pointer',
+                              fontSize: 16,
+                              fontWeight: 600
+                            }}
+                          >
+                            ＋
+                          </button>
                         ) : (
-                          <button type="button" onClick={() => removeSubCategory(idx)} style={{ padding: '8px 10px', borderRadius: 6, background: '#fff1f2', border: '1px solid #e6e9ee' }}>✖</button>
+                          <button 
+                            type="button" 
+                            onClick={() => setCategoryHeads(prev => prev.filter((_, i) => i !== idx))} 
+                            style={{ 
+                              padding: '8px 12px', 
+                              borderRadius: 6, 
+                              background: '#fff1f2', 
+                              border: '1px solid #fecaca',
+                              cursor: 'pointer',
+                              fontSize: 14
+                            }}
+                          >
+                            ✖
+                          </button>
                         )}
                       </div>
                     ))}
-
-                    <div style={{ marginTop: 8 }}>
-                      <label><input type="checkbox" checked={requireSubCategory} onChange={(e) => setRequireSubCategory(e.target.checked)} /> Required in form</label>
+                  </div>
+                  {categoryHeads.some(h => h.name) && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#059669' }}>
+                      {categoryHeads.filter(h => h.name).map(h => `✓ ${h.name}`).join(', ')}
                     </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <label style={{ fontWeight: 700 }}>Attachments</label>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>Allow attachments on tickets of this category</div>
-                  </div>
-                  <div>
-                    <input type="checkbox" checked={enableAttachmentsForCategory} onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)} />
-                  </div>
+                  )}
                 </div>
 
-                {enableAttachmentsForCategory && (
-                  <div style={{ marginTop: 8 }}>
-                    <label><input type="checkbox" checked={requireAttachmentsForCategory} onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)} /> Required in form</label>
+                {/* CC Emails */}
+                <div>
+                  <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
+                    CC Emails (Optional)
+                  </label>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                    Receive notifications on every ticket action
                   </div>
-                )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {ccEmails.map((c, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                        <input
+                          value={c.email}
+                          onChange={(e) => updateCcEmail(idx, e.target.value)}
+                          placeholder="email@company.com"
+                          style={{ 
+                            flex: 1, 
+                            padding: '8px 10px', 
+                            borderRadius: 6, 
+                            border: '1px solid #e6e9ee',
+                            fontSize: 13
+                          }}
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => verifyCcEmail(idx)} 
+                          disabled={c.verifying || !c.email}
+                          style={{ 
+                            padding: '8px 12px', 
+                            borderRadius: 6, 
+                            background: c.verifying ? '#9ec7df' : '#0b79bf', 
+                            color: 'white', 
+                            border: 'none',
+                            cursor: c.verifying || !c.email ? 'default' : 'pointer',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {c.verifying ? 'Checking…' : 'Lookup'}
+                        </button>
+                        {idx === 0 ? (
+                          <button 
+                            type="button" 
+                            onClick={addCcEmail} 
+                            style={{ 
+                              padding: '8px 12px', 
+                              borderRadius: 6, 
+                              background: '#eef2ff', 
+                              border: '1px solid #c7d2fe',
+                              cursor: 'pointer',
+                              fontSize: 16,
+                              fontWeight: 600
+                            }}
+                          >
+                            ＋
+                          </button>
+                        ) : (
+                          <button 
+                            type="button" 
+                            onClick={() => setCcEmails(prev => prev.filter((_, i) => i !== idx))} 
+                            style={{ 
+                              padding: '8px 12px', 
+                              borderRadius: 6, 
+                              background: '#fff1f2', 
+                              border: '1px solid #fecaca',
+                              cursor: 'pointer',
+                              fontSize: 14
+                            }}
+                          >
+                            ✖
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {ccEmails.some(c => c.name) && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#059669' }}>
+                      {ccEmails.filter(c => c.name).map(c => `✓ ${c.name}`).join(', ')}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Feature Toggles - Three Columns */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 8 }}>
+                
+                {/* On Behalf Feature */}
+                <div style={{ 
+                  padding: 16, 
+                  border: '1px solid #e6e9ee', 
+                  borderRadius: 8,
+                  background: enableOnBehalf ? '#f0f9ff' : '#fafafa'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontWeight: 700, fontSize: 14 }}>On Behalf</label>
+                    <input 
+                      type="checkbox" 
+                      checked={enableOnBehalf} 
+                      onChange={(e) => setEnableOnBehalf(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                    Allow users to submit tickets for themselves or others
+                  </div>
+
+                  {enableOnBehalf && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Options:</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {onBehalfOptions.map((o, idx) => (
+                          <div key={o.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input 
+                              value={o.label} 
+                              onChange={(e) => setOnBehalfOptions(prev => prev.map((p, i) => i === idx ? { ...p, label: e.target.value } : p))} 
+                              style={{ 
+                                flex: 1,
+                                padding: '6px 8px', 
+                                borderRadius: 4, 
+                                border: '1px solid #e6e9ee',
+                                fontSize: 12
+                              }} 
+                            />
+                            {idx === 0 ? (
+                              <button type="button" onClick={addOnBehalfOption} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>＋</button>
+                            ) : (
+                              <button type="button" onClick={() => removeOnBehalfOption(idx)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}>✖</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ marginTop: 10 }}>
+                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input 
+                            type="checkbox" 
+                            checked={requireOnBehalf} 
+                            onChange={(e) => setRequireOnBehalf(e.target.checked)}
+                            style={{ width: 14, height: 14 }}
+                          /> 
+                          <span>Required field</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sub-Category Feature */}
+                <div style={{ 
+                  padding: 16, 
+                  border: '1px solid #e6e9ee', 
+                  borderRadius: 8,
+                  background: enableSubCategory ? '#f0fdf4' : '#fafafa'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
+                    <input 
+                      type="checkbox" 
+                      checked={enableSubCategory} 
+                      onChange={(e) => setEnableSubCategory(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                    Add multiple subcategories for users to choose from
+                  </div>
+
+                  {enableSubCategory && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Subcategories:</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {subCategories.map((s, idx) => (
+                          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input 
+                              value={s} 
+                              onChange={(e) => updateSubCategory(idx, e.target.value)} 
+                              placeholder="e.g., Salary, Benefits" 
+                              style={{ 
+                                flex: 1,
+                                padding: '6px 8px', 
+                                borderRadius: 4, 
+                                border: '1px solid #e6e9ee',
+                                fontSize: 12
+                              }} 
+                            />
+                            {idx === subCategories.length - 1 ? (
+                              <button type="button" onClick={addSubCategory} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>＋</button>
+                            ) : (
+                              <button type="button" onClick={() => removeSubCategory(idx)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}>✖</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ marginTop: 10 }}>
+                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input 
+                            type="checkbox" 
+                            checked={requireSubCategory} 
+                            onChange={(e) => setRequireSubCategory(e.target.checked)}
+                            style={{ width: 14, height: 14 }}
+                          /> 
+                          <span>Required field</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Attachments Feature */}
+                <div style={{ 
+                  padding: 16, 
+                  border: '1px solid #e6e9ee', 
+                  borderRadius: 8,
+                  background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontWeight: 700, fontSize: 14 }}>Attachments</label>
+                    <input 
+                      type="checkbox" 
+                      checked={enableAttachmentsForCategory} 
+                      onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                    Allow file attachments on tickets in this category
+                  </div>
+
+                  {enableAttachmentsForCategory && (
+                    <div style={{ marginTop: 12 }}>
+                      <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input 
+                          type="checkbox" 
+                          checked={requireAttachmentsForCategory} 
+                          onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)}
+                          style={{ width: 14, height: 14 }}
+                        /> 
+                        <span>Required field</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
 
-            {categorySuccess && <div style={{ marginTop: 12, padding: 10, background: '#ecfdf5', color: '#065f46', borderRadius: 8 }}>{categorySuccess}</div>}
-            {categoryError && <div style={{ marginTop: 12, padding: 10, background: '#fff1f2', color: '#9f1239', borderRadius: 8 }}>{categoryError}</div>}
+            {/* Success/Error Messages */}
+            {categorySuccess && (
+              <div style={{ 
+                marginTop: 16, 
+                padding: '12px 16px', 
+                background: '#ecfdf5', 
+                color: '#065f46', 
+                borderRadius: 8,
+                border: '1px solid #a7f3d0',
+                fontSize: 14,
+                fontWeight: 600
+              }}>
+                ✓ {categorySuccess}
+              </div>
+            )}
+            
+            {categoryError && (
+              <div style={{ 
+                marginTop: 16, 
+                padding: '12px 16px', 
+                background: '#fff1f2', 
+                color: '#9f1239', 
+                borderRadius: 8,
+                border: '1px solid #fecaca',
+                fontSize: 14,
+                fontWeight: 600
+              }}>
+                ✕ {categoryError}
+              </div>
+            )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-              <button onClick={() => { resetCategoryForm(); setAddFieldOpen(false); }} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={createCategory} disabled={categoryLoading || !categoryName.trim()} style={{ padding: '10px 14px', borderRadius: 8, background: categoryLoading ? '#9ec7df' : '#0b79bf', color: 'white', border: 'none', cursor: categoryLoading ? 'default' : 'pointer', fontWeight: 700 }}>
-                {categoryLoading ? 'Creating…' : 'Create Category'}
+            {/* Action Buttons */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'flex-end', 
+              gap: 12, 
+              marginTop: 20,
+              paddingTop: 20,
+              borderTop: '1px solid #e6e9ee'
+            }}>
+              <button 
+                onClick={() => { resetCategoryForm(); setAddFieldOpen(false); }} 
+                style={{ 
+                  background: 'transparent', 
+                  border: '1px solid #e6e9ee', 
+                  color: '#6b7280', 
+                  cursor: 'pointer',
+                  padding: '10px 20px',
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 14
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={createCategory} 
+                disabled={categoryLoading || !categoryName.trim()} 
+                style={{ 
+                  padding: '10px 24px', 
+                  borderRadius: 8, 
+                  background: categoryLoading || !categoryName.trim() ? '#9ec7df' : '#0b79bf', 
+                  color: 'white', 
+                  border: 'none', 
+                  cursor: categoryLoading || !categoryName.trim() ? 'not-allowed' : 'pointer', 
+                  fontWeight: 700,
+                  fontSize: 14
+                }}
+              >
+                {categoryLoading ? 'Creating Category…' : 'Create Category'}
               </button>
             </div>
           </div>
