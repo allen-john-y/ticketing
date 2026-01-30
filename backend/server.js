@@ -1453,38 +1453,6 @@ async function fetchItemStream(token, itemId, driveId) {
   throw new Error('All attempts to fetch item failed');
 }
 
-// Single file proxy: /attachments/:fileId?driveId=<optional>
-app.get("/attachments/:fileId", async (req, res) => {
-  try {
-    const fileId = req.params.fileId;
-    const driveId = req.query.driveId || null;
-    if (!fileId) return res.status(400).send('Missing file id');
-
-    const token = await getAccessToken();
-    const fetched = await fetchItemStream(token, fileId, driveId);
-
-    if (fetched.contentType) res.setHeader('Content-Type', fetched.contentType);
-
-    if (fetched.contentDisposition) {
-      res.setHeader('Content-Disposition', fetched.contentDisposition);
-    } else {
-      const ct = (fetched.contentType || '').toLowerCase();
-      if (ct.startsWith('image/')) {
-        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileId)}"`);
-      } else if (ct === 'application/pdf') {
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileId)}"`);
-      } else {
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileId)}"`);
-      }
-    }
-
-    // pipe stream to client
-    fetched.stream.pipe(res);
-  } catch (err) {
-    console.error('Attachment proxy error:', err?.response?.data || err?.message || err);
-    if (!res.headersSent) res.status(500).send('Download failed');
-  }
-});
 
 // Download multiple attachments as a ZIP
 // GET /attachments/zip?ids=id1,id2&driveIds=did1,did2 (driveIds optional, comma-aligned with ids)
@@ -1584,6 +1552,40 @@ app.get("/attachments/zip", async (req, res) => {
     }
   }
 });
+
+// Single file proxy: /attachments/:fileId?driveId=<optional>
+app.get("/attachments/:fileId", async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    const driveId = req.query.driveId || null;
+    if (!fileId) return res.status(400).send('Missing file id');
+
+    const token = await getAccessToken();
+    const fetched = await fetchItemStream(token, fileId, driveId);
+
+    if (fetched.contentType) res.setHeader('Content-Type', fetched.contentType);
+
+    if (fetched.contentDisposition) {
+      res.setHeader('Content-Disposition', fetched.contentDisposition);
+    } else {
+      const ct = (fetched.contentType || '').toLowerCase();
+      if (ct.startsWith('image/')) {
+        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileId)}"`);
+      } else if (ct === 'application/pdf') {
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileId)}"`);
+      } else {
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileId)}"`);
+      }
+    }
+
+    // pipe stream to client
+    fetched.stream.pipe(res);
+  } catch (err) {
+    console.error('Attachment proxy error:', err?.response?.data || err?.message || err);
+    if (!res.headersSent) res.status(500).send('Download failed');
+  }
+});
+
 
 
 // ---------------------- Start Server ----------------------
