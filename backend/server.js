@@ -1488,12 +1488,16 @@ app.get("/attachments/:fileId", async (req, res) => {
 
 // Download multiple attachments as a ZIP
 // GET /attachments/zip?ids=id1,id2&driveIds=did1,did2 (driveIds optional, comma-aligned with ids)
+// npm install archiver p-limit
+const pLimit = require('p-limit');  // Concurrency limiter
+
 app.get("/attachments/zip", async (req, res) => {
   try {
     const idsQuery = req.query.ids;
     if (!idsQuery) return res.status(400).send('Missing ids');
     const ids = idsQuery.split(',').map(s => s.trim()).filter(Boolean);
     if (ids.length === 0) return res.status(400).send('No ids provided');
+    if (ids.length > 10) return res.status(400).send('Max 10 files');  // NEW: Limit
 
     const driveIdsParam = req.query.driveIds || '';
     const driveIds = driveIdsParam.split(',').map(s => s.trim());
@@ -1504,39 +1508,45 @@ app.get("/attachments/zip", async (req, res) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
 
-    const archive = archiver('zip', { zlib: { level: 6 } });
+    const archive = archiver('zip', { zlib: { level: 1 } });  // Lower compression = faster
     archive.on('error', err => {
       console.error('Archiver error:', err);
       if (!res.headersSent) res.status(500).end();
     });
     archive.pipe(res);
 
-    for (let i = 0; i < ids.length; i++) {
-      const id = ids[i];
-      const driveId = (driveIds[i] && driveIds[i] !== '') ? driveIds[i] : null;
-      try {
-        const fetched = await fetchItemStream(token, id, driveId);
+    // NEW: Limit concurrency to 3 + timeout
+    const limit = pLimit(3);
+    const promises = ids.map((id, i) => 
+      limit(async () => {
+        const driveId = (driveIds[i] && driveIds[i] !== '') ? driveIds[i] : null;
+        try {
+          const fetched = await Promise.race([
+            fetchItemStream(token, id, driveId),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+          ]);
 
-        let filename = `file-${id}`;
-        if (fetched.contentDisposition) {
-          const m = /filename\*?=(?:UTF-8'')?["']?([^;"']+)/i.exec(fetched.contentDisposition);
-          if (m && m[1]) filename = decodeURIComponent(m[1]);
+          let filename = `file-${id}`;
+          if (fetched.contentDisposition) {
+            const m = /filename\*?=(?:UTF-8'')?["']?([^;"']+)/i.exec(fetched.contentDisposition);
+            if (m && m[1]) filename = decodeURIComponent(m[1]);
+          }
+
+          archive.append(fetched.stream, { name: filename });
+        } catch (innerErr) {
+          console.warn('Skipping file in ZIP:', id, innerErr.message);
         }
+      })
+    );
 
-        archive.append(fetched.stream, { name: filename });
-      } catch (innerErr) {
-        console.warn('Skipping file in ZIP (failed to fetch):', id, innerErr?.message || innerErr);
-        // continue with remaining files
-      }
-    }
-
+    await Promise.all(promises);
     await archive.finalize();
-    // response will end once archive stream finishes
   } catch (err) {
-    console.error('Zip creation error:', err?.message || err);
+    console.error('Zip creation error:', err);
     if (!res.headersSent) res.status(500).send('Failed to create ZIP');
   }
 });
+
 
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
