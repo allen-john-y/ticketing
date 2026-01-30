@@ -37,6 +37,8 @@ function Header({ logout }) {
 
   // Add user modal
   const [addModalOpen, setAddModalOpen] = useState(false);
+  // Add category (Add Field) modal
+const [addFieldOpen, setAddFieldOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -685,6 +687,24 @@ function Header({ logout }) {
                       Remove user
                     </button>
 
+                    <button
+                      onClick={() => { setAddFieldOpen(true); setSettingsOpen(false); }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '10px 8px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#16a34a',
+                        fontWeight: 700
+                      }}
+                    >
+                      Add field
+                    </button>
+
+
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
                       <button
                         onClick={() => setSettingsOpen(false)}
@@ -1077,6 +1097,237 @@ function Header({ logout }) {
           </div>
         </>
       )}
+
+      //Adding New filed Modal
+      // ADD FIELD MODAL
+      {addFieldOpen && (
+              <>
+                <div
+                  onClick={() => setAddFieldOpen(false)}
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0.4)',
+                    zIndex: 90
+                  }}
+                />
+
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'fixed',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    background: 'white',
+                    borderRadius: 10,
+                    padding: 18,
+                    width: 640,
+                    maxHeight: '85vh',
+                    overflowY: 'auto',
+                    zIndex: 100,
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <h3 style={{ margin: 0 }}>Add Category (Add Field)</h3>
+                    <button
+                      onClick={() => setAddFieldOpen(false)}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+                    >
+                      ✖
+                    </button>
+                  </div>
+
+                  {/* Category name */}
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontWeight: 700 }}>Category name *</label>
+                    <input
+                      type="text"
+                      placeholder="Enter category name"
+                      style={{
+                        width: '100%',
+                        padding: 10,
+                        borderRadius: 8,
+                        border: '1px solid #e5e7eb',
+                        marginTop: 6
+                      }}
+                    />
+                  </div>
+
+                  <hr />
+
+                  {/* Set on behalf */}
+                  <div style={{ marginTop: 12 }}>
+                    <label style={{ fontWeight: 700 }}>
+                      <input type="checkbox" style={{ marginRight: 6 }} /> Set on behalf
+                    </label>
+
+                    <div style={{ marginLeft: 18, marginTop: 8 }}>
+                      <label style={{ fontSize: 13 }}>
+                        <input type="checkbox" /> Required
+                      </label>
+
+                      <div style={{ marginTop: 8, fontSize: 14 }}>
+                        Self, Others
+                        <button
+                          type="button"
+                          style={{
+                            marginLeft: 8,
+                            border: 'none',
+                            background: '#e5e7eb',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <hr />
+
+                  {/* Sub category */}
+                  <div style={{ marginTop: 12 }}>
+                    <label style={{ fontWeight: 700 }}>
+                      <input type="checkbox" style={{ marginRight: 6 }} /> Sub-Category
+                    </label>
+
+                    <div style={{ marginLeft: 18, marginTop: 8 }}>
+                      <label style={{ fontSize: 13 }}>
+                        <input type="checkbox" /> Required
+                      </label>
+
+                      <div style={{ marginTop: 8 }}>
+                        <input
+                          type="text"
+                          placeholder="Sub category"
+                          style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}
+                        />
+                        <button
+                          type="button"
+                          style={{
+                            marginLeft: 6,
+                            border: 'none',
+                            background: '#e5e7eb',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <div style={{ marginTop: 6, fontSize: 13, color: '#6b7280' }}>
+                        Other (always present)
+                      </div>
+                    </div>
+                  </div>
+
+                  <hr />
+
+                  {/* Attachments */}
+                  <div style={{ marginTop: 12 }}>
+                    <label style={{ fontWeight: 700 }}>
+                      <input type="checkbox" style={{ marginRight: 6 }} /> Attachments
+                    </label>
+
+                    <div style={{ marginLeft: 18, marginTop: 8 }}>
+                      <label style={{ fontSize: 13 }}>
+                        <input type="checkbox" /> Required
+                      </label>
+                    </div>
+                  </div>
+
+                  <hr />
+
+                  {/* Category heads */}
+                  <div style={{ marginTop: 12 }}>
+                    <label style={{ fontWeight: 700 }}>Category Heads</label>
+
+                    <div style={{ marginLeft: 18, marginTop: 8 }}>
+                      <label style={{ fontSize: 13 }}>
+                        <input type="checkbox" /> Required
+                      </label>
+
+                      <input
+                        type="text"
+                        placeholder="Search user email"
+                        style={{
+                          marginTop: 8,
+                          width: '100%',
+                          padding: 8,
+                          borderRadius: 6,
+                          border: '1px solid #e5e7eb'
+                        }}
+                      />
+
+                      <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6 }}>
+                        (Graph search will be wired next)
+                      </div>
+                    </div>
+                  </div>
+
+                  <hr />
+
+                  {/* CC mails */}
+                  <div style={{ marginTop: 12 }}>
+                    <label style={{ fontWeight: 700 }}>CC mails</label>
+
+                    <div style={{ marginLeft: 18, marginTop: 8 }}>
+                      <label style={{ fontSize: 13 }}>
+                        <input type="checkbox" /> Required
+                      </label>
+
+                      <input
+                        type="text"
+                        placeholder="Search user email"
+                        style={{
+                          marginTop: 8,
+                          width: '100%',
+                          padding: 8,
+                          borderRadius: 6,
+                          border: '1px solid #e5e7eb'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+                    <button
+                      onClick={() => setAddFieldOpen(false)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#6b7280'
+                      }}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      style={{
+                        padding: '10px 16px',
+                        borderRadius: 8,
+                        background: '#16a34a',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: 700
+                      }}
+                    >
+                      Create category
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
 
       {/* FULL PROFILE MODAL */}
       {fullProfileOpen && (
