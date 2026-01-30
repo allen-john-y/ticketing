@@ -476,7 +476,7 @@ function Header({ logout }) {
   const resetCategoryForm = () => {
     setCategoryName('');
     setEnableOnBehalf(false);
-    setOnBehalfOptions([{ label: 'Self', key: 'Self' }]);
+    //setOnBehalfOptions([{ label: 'Self', key: 'Self' }]);
     setRequireOnBehalf(false);
     setEnableSubCategory(false);
     setSubCategories([]);
@@ -487,14 +487,6 @@ function Header({ logout }) {
     setCcEmails([{ email: '', name: '', verifying: false }]);
     setCategoryError(null);
     setCategorySuccess(null);
-  };
-
-  const addOnBehalfOption = () => {
-    setOnBehalfOptions(prev => [...prev, { label: `Option ${prev.length + 1}`, key: `opt${Date.now()}` }]);
-  };
-
-  const removeOnBehalfOption = (idx) => {
-    setOnBehalfOptions(prev => prev.filter((_, i) => i !== idx));
   };
 
   const addSubCategory = () => {
