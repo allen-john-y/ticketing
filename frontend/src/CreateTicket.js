@@ -825,15 +825,15 @@ useEffect(() => {
                 ))}
               </select>
 
-              {/* When "Other" is selected, show custom text area */}
+              {/* When "Other" is selected, show single line input */}
               {formData.subCategory === 'Other' && (
                 <div style={{ marginTop: 8 }}>
-                  <textarea
+                  <input
+                    type="text"
                     value={otherSubCategoryText}
                     onChange={(e) => setOtherSubCategoryText(e.target.value)}
                     placeholder="Please describe the issue"
-                    rows={3}
-                    style={styles.textarea}
+                    style={styles.input}
                     required
                   />
                 </div>

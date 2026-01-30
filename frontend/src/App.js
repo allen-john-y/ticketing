@@ -69,11 +69,11 @@ function Header({ logout }) {
   const [categorySuccess, setCategorySuccess] = useState(null);
 
   const [enableOnBehalf, setEnableOnBehalf] = useState(false);
-  const [onBehalfOptions, setOnBehalfOptions] = useState([{ label: 'Self', key: 'Self' }]); // list of options (strings)
+  const FIXED_ONBEHALF_OPTIONS = ['Self', 'Other'];
   const [requireOnBehalf, setRequireOnBehalf] = useState(false);
 
   const [enableSubCategory, setEnableSubCategory] = useState(false);
-  const [subCategories, setSubCategories] = useState(['Other']); // at least "Other" present
+  const [subCategories, setSubCategories] = useState([]);
   const [requireSubCategory, setRequireSubCategory] = useState(false);
 
   const [enableAttachmentsForCategory, setEnableAttachmentsForCategory] = useState(false);
@@ -88,6 +88,7 @@ function Header({ logout }) {
   const [removeCategoryLoading, setRemoveCategoryLoading] = useState(false);
   const [removeCategoryError, setRemoveCategoryError] = useState(null);
   const [removeCategorySuccess, setRemoveCategorySuccess] = useState(null);
+  const FIXED_OTHER = 'Other';
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -478,7 +479,7 @@ function Header({ logout }) {
     setOnBehalfOptions([{ label: 'Self', key: 'Self' }]);
     setRequireOnBehalf(false);
     setEnableSubCategory(false);
-    setSubCategories(['Other']);
+    setSubCategories([]);
     setRequireSubCategory(false);
     setEnableAttachmentsForCategory(false);
     setRequireAttachmentsForCategory(false);
@@ -497,14 +498,21 @@ function Header({ logout }) {
   };
 
   const addSubCategory = () => {
-    setSubCategories(prev => [...prev, '']);
-  };
-  const updateSubCategory = (idx, value) => {
-    setSubCategories(prev => prev.map((s, i) => (i === idx ? value : s)));
-  };
-  const removeSubCategory = (idx) => {
-    setSubCategories(prev => prev.filter((_, i) => i !== idx));
-  };
+  setSubCategories(prev => [...prev, '']);
+};
+
+const updateSubCategory = (idx, value) => {
+  setSubCategories(prev =>
+    prev.map((s, i) => (i === idx ? value : s))
+  );
+};
+
+const removeSubCategory = (idx) => {
+  setSubCategories(prev =>
+    prev.filter((_, i) => i !== idx)
+  );
+};
+
 
   const addCategoryHead = () => {
     setCategoryHeads(prev => [...prev, { email: '', name: '', verifying: false }]);
@@ -598,8 +606,19 @@ function Header({ logout }) {
       const payload = {
         name: categoryName.trim(),
         features: {
-          onBehalf: enableOnBehalf ? { enabled: true, options: onBehalfOptions.map(o => o.label), required: !!requireOnBehalf } : { enabled: false },
-          subCategories: enableSubCategory ? { enabled: true, list: subCategories.filter(s => s && s.trim()), required: !!requireSubCategory } : { enabled: false },
+          onBehalf: enableOnBehalf ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }: { enabled: false },
+          subCategories: enableSubCategory
+  ? {
+      enabled: true,
+      list: [
+        ...subCategories
+          .map(s => s.trim())
+          .filter(s => s && s !== FIXED_OTHER),
+        FIXED_OTHER
+      ],
+      required: !!requireSubCategory
+    }
+  : { enabled: false },
           attachments: enableAttachmentsForCategory ? { enabled: true, required: !!requireAttachmentsForCategory } : { enabled: false },
         },
         categoryHeads: categoryHeads.filter(h => h.email).map(h => ({ email: h.email.trim(), name: h.name || h.email.trim() })),
@@ -1647,43 +1666,31 @@ function Header({ logout }) {
 
                   {enableOnBehalf && (
                     <div style={{ marginTop: 12 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Options:</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {onBehalfOptions.map((o, idx) => (
-                          <div key={o.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <input 
-                              value={o.label} 
-                              onChange={(e) => setOnBehalfOptions(prev => prev.map((p, i) => i === idx ? { ...p, label: e.target.value } : p))} 
-                              style={{ 
-                                flex: 1,
-                                padding: '6px 8px', 
-                                borderRadius: 4, 
-                                border: '1px solid #e6e9ee',
-                                fontSize: 12
-                              }} 
-                            />
-                            {idx === 0 ? (
-                              <button type="button" onClick={addOnBehalfOption} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>＋</button>
-                            ) : (
-                              <button type="button" onClick={() => removeOnBehalfOption(idx)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}>✖</button>
-                            )}
-                          </div>
-                        ))}
+
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                        Fixed options
+                      </div>
+
+                      <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>
+                        • Self<br />
+                        • Other
                       </div>
 
                       <div style={{ marginTop: 10 }}>
                         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <input 
-                            type="checkbox" 
-                            checked={requireOnBehalf} 
+                          <input
+                            type="checkbox"
+                            checked={requireOnBehalf}
                             onChange={(e) => setRequireOnBehalf(e.target.checked)}
                             style={{ width: 14, height: 14 }}
-                          /> 
+                          />
                           <span>Required field</span>
                         </label>
                       </div>
+
                     </div>
                   )}
+
                 </div>
 
                 {/* Sub-Category Feature */}
@@ -1708,44 +1715,76 @@ function Header({ logout }) {
 
                   {enableSubCategory && (
                     <div style={{ marginTop: 12 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Subcategories:</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                        Subcategories:
+                      </div>
+
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {subCategories.map((s, idx) => (
                           <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <input 
-                              value={s} 
-                              onChange={(e) => updateSubCategory(idx, e.target.value)} 
-                              placeholder="e.g., Salary, Benefits" 
-                              style={{ 
+                            <input
+                              value={s}
+                              onChange={(e) => updateSubCategory(idx, e.target.value)}
+                              placeholder="e.g., Salary, Benefits"
+                              style={{
                                 flex: 1,
-                                padding: '6px 8px', 
-                                borderRadius: 4, 
+                                padding: '6px 8px',
+                                borderRadius: 4,
                                 border: '1px solid #e6e9ee',
                                 fontSize: 12
-                              }} 
+                              }}
                             />
+
                             {idx === subCategories.length - 1 ? (
-                              <button type="button" onClick={addSubCategory} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>＋</button>
+                              <button
+                                type="button"
+                                onClick={addSubCategory}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}
+                              >
+                                ＋
+                              </button>
                             ) : (
-                              <button type="button" onClick={() => removeSubCategory(idx)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}>✖</button>
+                              <button
+                                type="button"
+                                onClick={() => removeSubCategory(idx)}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}
+                              >
+                                ✖
+                              </button>
                             )}
                           </div>
                         ))}
+
+                        {/* ✅ Fixed "Other" (always last, not editable) */}
+                        <div
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 4,
+                            border: '1px dashed #cbd5e1',
+                            fontSize: 12,
+                            color: '#475569',
+                            background: '#f8fafc'
+                          }}
+                        >
+                          Other (fixed)
+                        </div>
+
                       </div>
 
                       <div style={{ marginTop: 10 }}>
                         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <input 
-                            type="checkbox" 
-                            checked={requireSubCategory} 
+                          <input
+                            type="checkbox"
+                            checked={requireSubCategory}
                             onChange={(e) => setRequireSubCategory(e.target.checked)}
                             style={{ width: 14, height: 14 }}
-                          /> 
+                          />
                           <span>Required field</span>
                         </label>
                       </div>
                     </div>
                   )}
+
                 </div>
 
                 {/* Attachments Feature */}
