@@ -39,6 +39,9 @@ function Header({ logout }) {
   const [addModalOpen, setAddModalOpen] = useState(false);
   // Add category (Add Field) modal
 const [addFieldOpen, setAddFieldOpen] = useState(false);
+const [newCategoryName, setNewCategoryName] = useState('');
+const [enableSubCategory, setEnableSubCategory] = useState(false);
+const [subCategories, setSubCategories] = useState(['Other']);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -46,6 +49,16 @@ const [addFieldOpen, setAddFieldOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addMessage, setAddMessage] = useState(null);
   const [addError, setAddError] = useState(null);
+  const [categoryHeadQuery, setCategoryHeadQuery] = useState('');
+const [categoryHeadResults, setCategoryHeadResults] = useState([]);
+const [categoryHeadLoading, setCategoryHeadLoading] = useState(false);
+const [categoryHeads, setCategoryHeads] = useState([]);
+
+const [ccQuery, setCcQuery] = useState('');
+const [ccResults, setCcResults] = useState([]);
+const [ccLoading, setCcLoading] = useState(false);
+const [ccMails, setCcMails] = useState([]);
+
 
   // Remove user modal
   const [removeModalOpen, setRemoveModalOpen] = useState(false);
@@ -272,6 +285,120 @@ const [addFieldOpen, setAddFieldOpen] = useState(false);
       setSearchLoading(false);
     }
   };
+
+  const searchCategoryHeads = async () => {
+  setCategoryHeadResults([]);
+  setCategoryHeadLoading(true);
+
+  try {
+    const token = await acquireTokenForAdmin();
+
+    const q = (categoryHeadQuery || '').trim();
+    if (!q) {
+      setCategoryHeadLoading(false);
+      return;
+    }
+
+    let results = [];
+
+    if (q.includes('@')) {
+      const r = await fetch(
+        `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(q)}?$select=id,displayName,mail,userPrincipalName`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (r.ok) {
+        const j = await r.json();
+        results = [j];
+      }
+    }
+
+    if (results.length === 0) {
+      const safeQ = q.replace(/'/g, "''");
+      const filter = `startswith(tolower(mail),'${safeQ.toLowerCase()}') or startswith(tolower(userPrincipalName),'${safeQ.toLowerCase()}') or startswith(tolower(displayName),'${safeQ.toLowerCase()}')`;
+
+      const r = await fetch(
+        `https://graph.microsoft.com/v1.0/users?$filter=${encodeURIComponent(filter)}&$select=id,displayName,mail,userPrincipalName&$top=10`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (r.ok) {
+        const j = await r.json();
+        results = j.value || [];
+      }
+    }
+
+    const normalized = results.map(u => ({
+      id: u.id,
+      displayName: u.displayName || u.userPrincipalName || u.mail,
+      mail: u.mail || u.userPrincipalName
+    }));
+
+    setCategoryHeadResults(normalized);
+
+  } catch (err) {
+    console.error('category head search failed', err);
+  } finally {
+    setCategoryHeadLoading(false);
+  }
+};
+
+
+const searchCcUsers = async () => {
+  setCcResults([]);
+  setCcLoading(true);
+
+  try {
+    const token = await acquireTokenForAdmin();
+
+    const q = (ccQuery || '').trim();
+    if (!q) {
+      setCcLoading(false);
+      return;
+    }
+
+    let results = [];
+
+    if (q.includes('@')) {
+      const r = await fetch(
+        `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(q)}?$select=id,displayName,mail,userPrincipalName`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (r.ok) {
+        const j = await r.json();
+        results = [j];
+      }
+    }
+
+    if (results.length === 0) {
+      const safeQ = q.replace(/'/g, "''");
+      const filter = `startswith(tolower(mail),'${safeQ.toLowerCase()}') or startswith(tolower(userPrincipalName),'${safeQ.toLowerCase()}') or startswith(tolower(displayName),'${safeQ.toLowerCase()}')`;
+
+      const r = await fetch(
+        `https://graph.microsoft.com/v1.0/users?$filter=${encodeURIComponent(filter)}&$select=id,displayName,mail,userPrincipalName&$top=10`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (r.ok) {
+        const j = await r.json();
+        results = j.value || [];
+      }
+    }
+
+    const normalized = results.map(u => ({
+      id: u.id,
+      displayName: u.displayName || u.userPrincipalName || u.mail,
+      mail: u.mail || u.userPrincipalName
+    }));
+
+    setCcResults(normalized);
+
+  } catch (err) {
+    console.error('cc search failed', err);
+  } finally {
+    setCcLoading(false);
+  }
+};
+
 
   const confirmAddUser = async () => {
     if (!selectedSearchUser) {
@@ -1191,41 +1318,136 @@ const [addFieldOpen, setAddFieldOpen] = useState(false);
                   <hr />
 
                   {/* Sub category */}
-                  <div style={{ marginTop: 12 }}>
-                    <label style={{ fontWeight: 700 }}>
-                      <input type="checkbox" style={{ marginRight: 6 }} /> Sub-Category
-                    </label>
+                  {/* Sub Category configuration */}
+                  <div style={{ marginTop: 18 }}>
 
-                    <div style={{ marginLeft: 18, marginTop: 8 }}>
-                      <label style={{ fontSize: 13 }}>
-                        <input type="checkbox" /> Required
-                      </label>
-
-                      <div style={{ marginTop: 8 }}>
-                        <input
-                          type="text"
-                          placeholder="Sub category"
-                          style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }}
-                        />
-                        <button
-                          type="button"
-                          style={{
-                            marginLeft: 6,
-                            border: 'none',
-                            background: '#e5e7eb',
-                            borderRadius: 4,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      <div style={{ marginTop: 6, fontSize: 13, color: '#6b7280' }}>
-                        Other (always present)
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={enableSubCategory}
+                        onChange={(e) => {
+                          const v = e.target.checked;
+                          setEnableSubCategory(v);
+                          if (v && subCategories.length === 0) {
+                            setSubCategories(['Other']);
+                          }
+                        }}
+                      />
+                      <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                        Enable Sub-Category
+                      </span>
                     </div>
+
+                    {enableSubCategory && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          border: '1px solid rgba(15,23,42,0.06)',
+                          borderRadius: 10,
+                          padding: 12,
+                          background: '#f8fafc'
+                        }}
+                      >
+
+                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                          Sub-categories
+                        </div>
+
+                        {subCategories.map((sc, index) => {
+
+                          const isOther = sc === 'Other';
+
+                          return (
+                            <div
+                              key={index}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                marginBottom: 8
+                              }}
+                            >
+                              <input
+                                type="text"
+                                value={sc}
+                                disabled={isOther}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setSubCategories(prev => {
+                                    const copy = [...prev];
+                                    copy[index] = val;
+                                    return copy;
+                                  });
+                                }}
+                                placeholder="Sub category name"
+                                style={{
+                                  flex: 1,
+                                  padding: '8px 10px',
+                                  borderRadius: 8,
+                                  border: '1px solid #e5e7eb',
+                                  background: isOther ? '#f3f4f6' : 'white'
+                                }}
+                              />
+
+                              {!isOther && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSubCategories(prev => {
+                                      const copy = prev.filter((_, i) => i !== index);
+                                      if (!copy.includes('Other')) copy.push('Other');
+                                      return copy;
+                                    });
+                                  }}
+                                  style={{
+                                    border: 'none',
+                                    background: '#fee2e2',
+                                    color: '#b91c1c',
+                                    borderRadius: 6,
+                                    padding: '4px 8px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  −
+                                </button>
+                              )}
+
+                              {index === subCategories.length - 1 && !isOther && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSubCategories(prev => {
+                                      const filtered = prev.filter(v => v !== 'Other');
+                                      return [...filtered, '', 'Other'];
+                                    });
+                                  }}
+                                  style={{
+                                    border: 'none',
+                                    background: '#e0f2fe',
+                                    color: '#0369a1',
+                                    borderRadius: 6,
+                                    padding: '4px 8px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  +
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
+                          “Other” is always present and cannot be removed.
+                        </div>
+
+                      </div>
+                    )}
+
                   </div>
+
 
                   <hr />
 
@@ -1244,57 +1466,199 @@ const [addFieldOpen, setAddFieldOpen] = useState(false);
 
                   <hr />
 
-                  {/* Category heads */}
-                  <div style={{ marginTop: 12 }}>
-                    <label style={{ fontWeight: 700 }}>Category Heads</label>
+                  {/* Category Heads */}
+                  <div style={{ marginTop: 18 }}>
 
-                    <div style={{ marginLeft: 18, marginTop: 8 }}>
-                      <label style={{ fontSize: 13 }}>
-                        <input type="checkbox" /> Required
-                      </label>
+                    <div style={{ fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
+                      Category Heads
+                    </div>
 
+                    <div style={{ display: 'flex', gap: 8 }}>
                       <input
-                        type="text"
-                        placeholder="Search user email"
+                        value={categoryHeadQuery}
+                        onChange={(e) => setCategoryHeadQuery(e.target.value)}
+                        placeholder="Search user by name or email"
                         style={{
-                          marginTop: 8,
-                          width: '100%',
-                          padding: 8,
-                          borderRadius: 6,
+                          flex: 1,
+                          padding: '10px 12px',
+                          borderRadius: 8,
                           border: '1px solid #e5e7eb'
                         }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') searchCategoryHeads(); }}
                       />
 
-                      <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6 }}>
-                        (Graph search will be wired next)
-                      </div>
+                      <button
+                        type="button"
+                        onClick={searchCategoryHeads}
+                        style={{
+                          padding: '10px 14px',
+                          borderRadius: 8,
+                          background: '#0b79bf',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Search
+                      </button>
                     </div>
+
+                    {categoryHeadLoading && (
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Searching…</div>
+                    )}
+
+                    {categoryHeadResults.map(u => (
+                      <div
+                        key={u.id}
+                        onClick={() => {
+                          setCategoryHeads(prev => {
+                            if (prev.some(x => x.id === u.id)) return prev;
+                            return [...prev, u];
+                          });
+                        }}
+                        style={{
+                          marginTop: 8,
+                          padding: 10,
+                          borderRadius: 8,
+                          border: '1px solid #e5e7eb',
+                          cursor: 'pointer',
+                          background: '#fff'
+                        }}
+                      >
+                        <div style={{ fontWeight: 700 }}>{u.displayName}</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>{u.mail}</div>
+                      </div>
+                    ))}
+
+                    {categoryHeads.length > 0 && (
+                      <div style={{ marginTop: 10 }}>
+                        {categoryHeads.map(u => (
+                          <div
+                            key={u.id}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '6px 8px',
+                              borderRadius: 6,
+                              background: '#f1f5f9',
+                              marginBottom: 6
+                            }}
+                          >
+                            <span style={{ fontSize: 13 }}>{u.displayName}</span>
+                            <button
+                              type="button"
+                              onClick={() => setCategoryHeads(prev => prev.filter(x => x.id !== u.id))}
+                              style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer' }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                   </div>
+
 
                   <hr />
 
-                  {/* CC mails */}
-                  <div style={{ marginTop: 12 }}>
-                    <label style={{ fontWeight: 700 }}>CC mails</label>
+                 {/* CC mails */}
+                  <div style={{ marginTop: 18 }}>
 
-                    <div style={{ marginLeft: 18, marginTop: 8 }}>
-                      <label style={{ fontSize: 13 }}>
-                        <input type="checkbox" /> Required
-                      </label>
+                    <div style={{ fontWeight: 800, color: '#0f172a', marginBottom: 6 }}>
+                      CC mails
+                    </div>
 
+                    <div style={{ display: 'flex', gap: 8 }}>
                       <input
-                        type="text"
-                        placeholder="Search user email"
+                        value={ccQuery}
+                        onChange={(e) => setCcQuery(e.target.value)}
+                        placeholder="Search user by name or email"
                         style={{
-                          marginTop: 8,
-                          width: '100%',
-                          padding: 8,
-                          borderRadius: 6,
+                          flex: 1,
+                          padding: '10px 12px',
+                          borderRadius: 8,
                           border: '1px solid #e5e7eb'
                         }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') searchCcUsers(); }}
                       />
+
+                      <button
+                        type="button"
+                        onClick={searchCcUsers}
+                        style={{
+                          padding: '10px 14px',
+                          borderRadius: 8,
+                          background: '#0b79bf',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Search
+                      </button>
                     </div>
+
+                    {ccLoading && (
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Searching…</div>
+                    )}
+
+                    {ccResults.map(u => (
+                      <div
+                        key={u.id}
+                        onClick={() => {
+                          setCcMails(prev => {
+                            if (prev.some(x => x.id === u.id)) return prev;
+                            return [...prev, u];
+                          });
+                        }}
+                        style={{
+                          marginTop: 8,
+                          padding: 10,
+                          borderRadius: 8,
+                          border: '1px solid #e5e7eb',
+                          cursor: 'pointer',
+                          background: '#fff'
+                        }}
+                      >
+                        <div style={{ fontWeight: 700 }}>{u.displayName}</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>{u.mail}</div>
+                      </div>
+                    ))}
+
+                    {ccMails.length > 0 && (
+                      <div style={{ marginTop: 10 }}>
+                        {ccMails.map(u => (
+                          <div
+                            key={u.id}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '6px 8px',
+                              borderRadius: 6,
+                              background: '#f1f5f9',
+                              marginBottom: 6
+                            }}
+                          >
+                            <span style={{ fontSize: 13 }}>{u.displayName}</span>
+                            <button
+                              type="button"
+                              onClick={() => setCcMails(prev => prev.filter(x => x.id !== u.id))}
+                              style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer' }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                   </div>
+
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
                     <button
