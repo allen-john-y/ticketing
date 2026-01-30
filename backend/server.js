@@ -1489,74 +1489,102 @@ app.get("/attachments/:fileId", async (req, res) => {
 // Download multiple attachments as a ZIP
 // GET /attachments/zip?ids=id1,id2&driveIds=did1,did2 (driveIds optional, comma-aligned with ids)
 // npm install archiver p-limit
-const pLimit = require('p-limit');  // npm install p-limit
+const pLimit = require('p-limit');
 
 app.get("/attachments/zip", async (req, res) => {
   try {
     const idsQuery = req.query.ids;
     if (!idsQuery) return res.status(400).send('Missing ids');
+
     const ids = idsQuery.split(',').map(s => s.trim()).filter(Boolean);
     if (ids.length === 0) return res.status(400).send('No ids provided');
-    if (ids.length > 5) return res.status(400).send('Max 5 files');  // Strict limit
+    if (ids.length > 5) return res.status(400).send('Max 5 files');
 
-    const driveIdsParam = req.query.driveIds || '';
-    const driveIds = driveIdsParam.split(',').map(s => s.trim());
+    // ✅ FIX: properly clean driveIds
+    const driveIds = (req.query.driveIds || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
 
     const token = await getAccessToken();
 
     const zipName = `attachments-${Date.now()}.zip`;
+
     res.set({
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="${zipName}"`,
-      'Transfer-Encoding': 'chunked'  // Essential for streaming
+      'Transfer-Encoding': 'chunked'
     });
 
     const archive = archiver('zip', { zlib: { level: 1 } });
-    
-    // Better event handling
-    archive.on('warning', (err) => console.warn('Archive warning:', err));
+
+    archive.on('warning', (err) => {
+      console.warn('Archive warning:', err);
+    });
+
     archive.on('error', (err) => {
       console.error('Archiver fatal error:', err);
-      archive.abort();
-      if (!res.headersSent) res.status(500).send('ZIP creation failed');
+      try { archive.abort(); } catch(e){}
+      if (!res.headersSent) {
+        res.status(500).send('ZIP creation failed');
+      }
     });
-    
-    res.on('close', () => archive.abort());  // Cleanup on client disconnect
-    
+
+    res.on('close', () => {
+      try { archive.abort(); } catch(e){}
+    });
+
     archive.pipe(res);
 
-    // Concurrency limit + timeout
-    const limit = pLimit(2);  // Max 2 parallel
-    const fetchPromises = ids.map((id, i) => 
+    const limit = pLimit(2);
+
+    const fetchPromises = ids.map((id, i) =>
       limit(async () => {
         try {
-          const driveId = driveIds[i] || null;
+          // ✅ FIX: do NOT pass empty / invalid driveId
+          const driveId = driveIds.length > i ? driveIds[i] : null;
+
           const fetched = await Promise.race([
             fetchItemStream(token, id, driveId),
-            new Promise((_, reject) => 
+            new Promise((_, reject) =>
               setTimeout(() => reject(new Error(`Timeout: ${id}`)), 15000)
             )
           ]);
 
-          let filename = decodeURIComponent(id.slice(-10));  // Fallback name
-          const dispMatch = /filename\*?=(?:UTF-8'')?["']?([^;"']+)/i.exec(fetched.contentDisposition || '');
-          if (dispMatch) filename = decodeURIComponent(dispMatch[1]);
+          let filename = id.slice(-10);
+
+          const dispMatch =
+            /filename\*?=(?:UTF-8'')?["']?([^;"']+)/i
+              .exec(fetched.contentDisposition || '');
+
+          if (dispMatch && dispMatch[1]) {
+            try {
+              filename = decodeURIComponent(dispMatch[1]);
+            } catch (e) {
+              filename = dispMatch[1];
+            }
+          }
 
           archive.append(fetched.stream, { name: filename });
+
         } catch (err) {
           console.warn(`Skip ${id}:`, err.message);
-          // Don't crash—continue
+          // continue other files
         }
       })
     );
 
     await Promise.all(fetchPromises);
     await archive.finalize();
+
   } catch (err) {
     console.error('ZIP endpoint error:', err);
-    if (!res.headersSent) res.status(500).send('Download failed');
+    if (!res.headersSent) {
+      res.status(500).send('Download failed');
+    }
   }
 });
+
 
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
