@@ -622,7 +622,7 @@ function Header({ logout }) {
         throw new Error(t || `Create failed ${res.status}`);
       }
 
-      const j = await res.json();
+     // const j = await res.json();
       setCategorySuccess('Category created successfully');
       // notify backend to send mail to Helpdesk_Admins (server should handle group list & notifications)
       try {
