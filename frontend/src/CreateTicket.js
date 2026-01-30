@@ -46,6 +46,8 @@ function CreateTicket() {
   const [categoriesConfig, setCategoriesConfig] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [selectedCategoryConfig, setSelectedCategoryConfig] = useState(null);
+  const [otherSubCategoryText, setOtherSubCategoryText] = useState('');
+
 
   // Attachments state
   const [attachments, setAttachments] = useState([]);
@@ -224,12 +226,31 @@ function CreateTicket() {
     }
 
     // NEW: Validation for dynamic subcategory (if enabled and required)
-    if (selectedCategoryConfig?.features?.subCategories?.enabled) {
-      if (selectedCategoryConfig.features.subCategories.required && !formData.subCategory) {
+if (selectedCategoryConfig?.features?.subCategories?.enabled) {
+
+  if (
+    selectedCategoryConfig.features.subCategories.required &&
+    !formData.subCategory
+  ) {
+    setModal({
+      open: true,
+      title: 'Validation',
+      message: 'Please select a sub-category.',
+      type: 'error'
+    });
+    setLoading(false);
+    return;
+  }
+
+  // ✅ NEW : when "Other" is selected, custom text is mandatory
+      if (
+        formData.subCategory === 'Other' &&
+        !otherSubCategoryText.trim()
+      ) {
         setModal({
           open: true,
           title: 'Validation',
-          message: 'Please select a sub-category.',
+          message: 'Please describe the issue for Other sub-category.',
           type: 'error'
         });
         setLoading(false);
@@ -239,7 +260,10 @@ function CreateTicket() {
 
     // NEW: Validation for dynamic onBehalf (if enabled and required)
     if (selectedCategoryConfig?.features?.onBehalf?.enabled) {
-      if (selectedCategoryConfig.features.onBehalf.required && !formData.onBehalf) {
+      if (
+        selectedCategoryConfig.features.onBehalf.required &&
+        !formData.onBehalf
+      ) {
         setModal({
           open: true,
           title: 'Validation',
@@ -250,6 +274,7 @@ function CreateTicket() {
         return;
       }
     }
+
 
     // NEW: Validation for dynamic attachments (if enabled and required)
     if (selectedCategoryConfig?.features?.attachments?.enabled) {
@@ -766,28 +791,60 @@ useEffect(() => {
             </div>
           )}
 
-          {/* NEW: Dynamic Sub-Category field (if enabled for this category) */}
+          {/* NEW: Dynamic Sub-Category field (with Other support) */}
           {selectedCategoryConfig?.features?.subCategories?.enabled && (
             <div style={{ marginBottom: 12 }}>
               <label style={styles.label}>
-                Sub-Category {selectedCategoryConfig.features.subCategories.required && <span style={{ color: '#ef4444' }}>*</span>}
+                Sub-Category{" "}
+                {selectedCategoryConfig.features.subCategories.required && (
+                  <span style={{ color: '#ef4444' }}>*</span>
+                )}
               </label>
+
               <select
                 value={formData.subCategory}
-                onChange={(e) => setFormData({ ...formData, subCategory: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    subCategory: val
+                  }));
+
+                  // clear text when not Other
+                  if (val !== 'Other') {
+                    setOtherSubCategoryText('');
+                  }
+                }}
                 style={styles.select}
                 required={selectedCategoryConfig.features.subCategories.required}
               >
                 <option value="">Select sub-category</option>
+
                 {selectedCategoryConfig.features.subCategories.list?.map(sub => (
                   <option key={sub} value={sub}>{sub}</option>
                 ))}
               </select>
+
+              {/* When "Other" is selected, show custom text area */}
+              {formData.subCategory === 'Other' && (
+                <div style={{ marginTop: 8 }}>
+                  <textarea
+                    value={otherSubCategoryText}
+                    onChange={(e) => setOtherSubCategoryText(e.target.value)}
+                    placeholder="Please describe the issue"
+                    rows={3}
+                    style={styles.textarea}
+                    required
+                  />
+                </div>
+              )}
             </div>
           )}
 
+
           {/* Password Reset - conditional UI (legacy - keep for backward compatibility) */}
-          {formData.category === 'Password Reset' && (
+          {formData.category === 'Password Reset' && selectedCategoryConfig?.features?.onBehalf?.enabled
+  && formData.onBehalf === 'Other' && (
             <div style={{ marginBottom: 12 }}>
               <label style={styles.label}>On behalf of *</label>
               <div style={{ display: 'flex', gap: 12 }}>
