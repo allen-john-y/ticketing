@@ -1660,7 +1660,7 @@ const removeSubCategory = (idx) => {
                     <div style={{ marginTop: 12 }}>
 
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                        Fixed options
+                        Options
                       </div>
 
                       <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>
@@ -1686,32 +1686,57 @@ const removeSubCategory = (idx) => {
                 </div>
 
                 {/* Sub-Category Feature */}
-                <div style={{ 
-                  padding: 16, 
-                  border: '1px solid #e6e9ee', 
-                  borderRadius: 8,
-                  background: enableSubCategory ? '#f0fdf4' : '#fafafa'
-                }}>
+                <div
+                  style={{
+                    padding: 16,
+                    border: '1px solid #e6e9ee',
+                    borderRadius: 8,
+                    background: enableSubCategory ? '#f0fdf4' : '#fafafa'
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
-                    <input 
-                      type="checkbox" 
-                      checked={enableSubCategory} 
+                    <input
+                      type="checkbox"
+                      checked={enableSubCategory}
                       onChange={(e) => setEnableSubCategory(e.target.checked)}
                       style={{ width: 18, height: 18, cursor: 'pointer' }}
                     />
                   </div>
+
                   <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
                     Add multiple subcategories for users to choose from
                   </div>
 
                   {enableSubCategory && (
                     <div style={{ marginTop: 12 }}>
+
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                         Subcategories:
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+                        {/* When there are no sub-categories yet */}
+                        {subCategories.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={addSubCategory}
+                            style={{
+                              alignSelf: 'flex-start',
+                              background: '#eef2ff',
+                              border: '1px solid #c7d2fe',
+                              borderRadius: 6,
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 600
+                            }}
+                          >
+                            + Add sub-category
+                          </button>
+                        )}
+
                         {subCategories.map((s, idx) => (
                           <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             <input
@@ -1747,7 +1772,7 @@ const removeSubCategory = (idx) => {
                           </div>
                         ))}
 
-                        {/* ✅ Fixed "Other" (always last, not editable) */}
+                        {/* ✅ Fixed "Other" (always last, not editable, case-correct) */}
                         <div
                           style={{
                             padding: '6px 8px',
@@ -1774,10 +1799,12 @@ const removeSubCategory = (idx) => {
                           <span>Required field</span>
                         </label>
                       </div>
+
                     </div>
                   )}
 
                 </div>
+
 
                 {/* Attachments Feature */}
                 <div style={{ 
