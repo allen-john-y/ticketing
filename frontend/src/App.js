@@ -1098,8 +1098,8 @@ const [addFieldOpen, setAddFieldOpen] = useState(false);
         </>
       )}
 
-      //Adding New filed Modal
-      // ADD FIELD MODAL
+      {/* Adding New field Modal */}
+      {/* ADD FIELD MODAL */}
       {addFieldOpen && (
               <>
                 <div
