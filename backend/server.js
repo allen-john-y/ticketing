@@ -1,4 +1,4 @@
-// server.js (FULL UPDATED)
+// server.js (FULL UPDATED WITH DYNAMIC CATEGORIES)
 // ---------------------- PART 1 ----------------------
 // ---------------------- Imports -------------------------
 const express = require("express");
@@ -12,15 +12,14 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
-const axios = require("axios");         // ADDED
-const archiver = require("archiver");   // ADDED
+const axios = require("axios");
+const archiver = require("archiver");
 require("dotenv").config();
 
 // ---------------------- App Setup ------------------------
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' }));
-
 
 // ---------------------- CORS ------------------------------
 const allowedOrigins = [
@@ -85,33 +84,35 @@ const ticketSchema = new mongoose.Schema(
     reopenedAt: Date,
 
     // on behalf flow
-    onBehalf: { type: String },          // 'Self' or 'Other'
-    onBehalfEmail: { type: String },     // when onBehalf = 'Other'
+    onBehalf: { type: String },
+    onBehalfEmail: { type: String },
     deliveryEmail: { type: String },
 
-    // Operational & Finance sub query
-    subQuery: { type: String },          // 'Salary','Reimbursement','Invoice issue','Tax / GST','Other'
-    otherSubQueryText: { type: String }, // free text when subQuery = 'Other'
+    // Dynamic subcategory (from category config)
+    subCategory: { type: String },
 
-    // For backward compatibility: single attachment metadata (legacy)
+    // Legacy Operational & Finance sub query (keep for backward compatibility)
+    subQuery: { type: String },
+    otherSubQueryText: { type: String },
+
+    // Legacy single attachment
     attachment: {
       fileName: { type: String },
       fileType: { type: String },
-      fileUrl: { type: String } // optional: where you later upload the file
+      fileUrl: { type: String }
     },
 
-    // New: attachments array to support multiple files
+    // New: attachments array
     attachments: [
       {
         fileName: { type: String },
         fileType: { type: String },
         fileUrl: { type: String },
-        id: { type: String }, // driveItem id
-        driveId: { type: String } // parentReference.driveId (drive id)
+        id: { type: String },
+        driveId: { type: String }
       }
     ],
 
-    // history with optional attachment snapshot
     history: [
       {
         action: {
@@ -134,35 +135,39 @@ const ticketSchema = new mongoose.Schema(
 
 const Ticket = mongoose.model('Ticket', ticketSchema);
 
-
-
-// ---------------------- CATEGORY CONFIG ----------------------
-
+// ---------------------- CATEGORY CONFIG SCHEMA ----------------------
 const categoryConfigSchema = new mongoose.Schema(
   {
-    categoryName: { type: String, required: true, unique: true },
+    name: { type: String, required: true, unique: true },
 
-    enableOnBehalf: { type: Boolean, default: false },
-
-    enableSubCategory: { type: Boolean, default: false },
-
-    subCategories: [{ type: String }],
-
-    attachmentsEnabled: { type: Boolean, default: false },
+    features: {
+      onBehalf: {
+        enabled: { type: Boolean, default: false },
+        options: [{ type: String }], // e.g., ["Self", "Manager", "HR"]
+        required: { type: Boolean, default: false }
+      },
+      subCategories: {
+        enabled: { type: Boolean, default: false },
+        list: [{ type: String }], // e.g., ["Leave", "Benefits", "Salary", "Other"]
+        required: { type: Boolean, default: false }
+      },
+      attachments: {
+        enabled: { type: Boolean, default: false },
+        required: { type: Boolean, default: false }
+      }
+    },
 
     categoryHeads: [
       {
-        id: String,
-        name: String,
-        mail: String
+        email: { type: String },
+        name: { type: String }
       }
     ],
 
-    ccMails: [
+    cc: [
       {
-        id: String,
-        name: String,
-        mail: String
+        email: { type: String },
+        name: { type: String }
       }
     ],
 
@@ -171,13 +176,11 @@ const categoryConfigSchema = new mongoose.Schema(
       name: String,
       mail: String
     }
-
   },
   { timestamps: true }
 );
 
 const CategoryConfig = mongoose.model("CategoryConfig", categoryConfigSchema);
-
 
 // ---------------------- Counter ---------------------------
 let ticketCounter = 0;
@@ -192,8 +195,7 @@ const loadCounter = async () => {
 };
 loadCounter();
 
-// ---------------------- Department Emails -----------------
-// Primary = Kodhan, Secondary = Allen (applies to Password Reset and Admin Access)
+// ---------------------- Department Emails (Legacy) -----------------
 const passwordResetPrimary = process.env.PASSWORD_RESET_PRIMARY || "kodhan@sandeza-inc.com";
 const passwordResetSecondary = process.env.PASSWORD_RESET_SECONDARY || "allenj@sandeza-inc.com";
 const adminAccessPrimary = process.env.ADMIN_ACCESS_PRIMARY || passwordResetPrimary;
@@ -233,6 +235,7 @@ const getGraphToken = async () => {
 const htmlField = (label, value) => {
   return `<tr><td style="padding:6px 0; font-weight:600; color:#0f172a; width:160px;">${label}</td><td style="padding:6px 0; color:#374151;">${value || '—'}</td></tr>`;
 };
+
 const buildHtmlEmail = ({ title, subtitle, statusColor = '#0369a1', fields = [], description = '', actionLink = '', actionText = '' }) => {
   const fieldsHtml = fields.map(f => htmlField(f.label, f.value)).join("\n");
   const actionButton = actionLink ? `
@@ -345,8 +348,8 @@ const sendEmail = async (to, subject, bodyHtml, cc) => {
     return false;
   }
 };
-// ---------------------- Azure Helpers (Reset + Group) ----------------------
 
+// ---------------------- Azure Helpers (Reset + Group) ----------------------
 const getAccessToken = async () => {
   const url = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
   const params = new URLSearchParams();
@@ -389,12 +392,9 @@ const resetAzurePassword = async (userIdentifier) => {
   return newPassword;
 };
 
-// Find Azure AD user object id by UPN/email
 const getUserByUpn = async (upn) => {
   const token = await getAccessToken();
-  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
-    upn
-  )}?$select=id,mail,displayName,userPrincipalName`;
+  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id,mail,displayName,userPrincipalName`;
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
@@ -419,8 +419,6 @@ const getUserByUpn = async (upn) => {
   };
 };
 
-// Add a user (objectId) to group (groupId)
-// Use env AZURE_DEVICE_ADMIN_GROUP_ID or fallback to the provided object id
 const AZURE_DEVICE_ADMIN_GROUP_ID =
   process.env.AZURE_DEVICE_ADMIN_GROUP_ID ||
   "ee3c73f9-277c-4d08-ba17-d9656ecb9d2f";
@@ -451,50 +449,12 @@ const addUserToGroup = async (groupId, userObjectId) => {
   return true;
 };
 
-
-
-// ---------------------- Helpdesk Admins (Azure Group Members) ----------------------
-
-const HELPDESK_ADMIN_GROUP_ID = process.env.HELPDESK_ADMIN_GROUP_ID;
-
-const getHelpdeskAdminsEmails = async () => {
-  if (!HELPDESK_ADMIN_GROUP_ID) return [];
-
-  const token = await getAccessToken();
-
-  const url =
-    `https://graph.microsoft.com/v1.0/groups/${HELPDESK_ADMIN_GROUP_ID}/members` +
-    `?$select=mail,userPrincipalName`;
-
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
-    agent: new https.Agent({ rejectUnauthorized: false })
-  });
-
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error("Failed to fetch Helpdesk admins: " + t);
-  }
-
-  const data = await res.json();
-
-  return (data.value || [])
-    .map(u => u.mail || u.userPrincipalName)
-    .filter(Boolean);
-};
-
 // ---------------------- UPLOAD (NEW) ----------------------
-// Multer setup
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
-
-// POST /upload
-// Accepts single file field named 'file' and returns metadata: { id, driveId, fileName, fileType, url }
 const { uploadToSharePoint } = require("./utils/sharepointUpload");
 
 app.post('/upload', upload.single('file'), async (req, res) => {
@@ -519,8 +479,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 });
 
 // ---------------------- Routes ----------------------------
-
-// Health Check
 app.get("/", (req, res) => res.send("Sandeza Helpdesk API Running"));
 
 // Verify User endpoint
@@ -559,16 +517,11 @@ app.post("/verify-user", async (req, res) => {
 });
 
 // ---------------------- ADMIN NOTIFICATION ROUTES ----------------------
-// These endpoints are added to support frontend notifications when an admin
-// adds or removes a user from the Helpdesk_Admin group. They do not alter
-// any existing functionality and only send emails using the existing
-// sendEmail/buildHtmlEmail helpers.
-
-// payload: { actor: { id, name, mail }, target: { id, name, mail } }
 app.post("/api/notify-admin-added", async (req, res) => {
   try {
     const { actor, target } = req.body || {};
     if (!actor || !target) return res.status(400).json({ message: "actor and target are required" });
+    
     const actorName = actor.name || actor.mail || "Unknown";
     const actorMail = actor.mail || null;
     const targetName = target.name || target.mail || "Unknown";
@@ -577,7 +530,6 @@ app.post("/api/notify-admin-added", async (req, res) => {
 
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 
-    // Email to actor (the admin who performed the add)
     const actorTitle = `Admin Added — ${targetName} added to Helpdesk_Admin`;
     const actorFields = [
       { label: "Action", value: "Add Admin" },
@@ -595,7 +547,6 @@ app.post("/api/notify-admin-added", async (req, res) => {
       actionText: "Open Helpdesk"
     });
 
-    // Email to target (the newly added admin)
     const targetTitle = `You were added as Helpdesk Admin`;
     const targetFields = [
       { label: "Added By", value: actorName },
@@ -612,7 +563,6 @@ app.post("/api/notify-admin-added", async (req, res) => {
       actionText: "Open Helpdesk"
     });
 
-    // send emails (fire sequentially - if one fails, report)
     const actorSend = actorMail ? await sendEmail(actorMail, actorTitle, actorHtml, itHead) : false;
     const targetSend = targetMail ? await sendEmail(targetMail, targetTitle, targetHtml, itHead) : false;
 
@@ -627,11 +577,11 @@ app.post("/api/notify-admin-added", async (req, res) => {
   }
 });
 
-// payload: { actor: { id, name, mail }, target: { id, name, mail } }
 app.post("/api/notify-admin-removed", async (req, res) => {
   try {
     const { actor, target } = req.body || {};
     if (!actor || !target) return res.status(400).json({ message: "actor and target are required" });
+    
     const actorName = actor.name || actor.mail || "Unknown";
     const actorMail = actor.mail || null;
     const targetName = target.name || target.mail || "Unknown";
@@ -640,7 +590,6 @@ app.post("/api/notify-admin-removed", async (req, res) => {
 
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 
-    // Email to actor (the admin who performed the removal)
     const actorTitle = `Admin Removed — ${targetName} removed from Helpdesk_Admin`;
     const actorFields = [
       { label: "Action", value: "Remove Admin" },
@@ -658,7 +607,6 @@ app.post("/api/notify-admin-removed", async (req, res) => {
       actionText: "Open Helpdesk"
     });
 
-    // Email to target (the user removed)
     const targetTitle = `You were removed from Helpdesk Admins`;
     const targetFields = [
       { label: "Removed By", value: actorName },
@@ -689,130 +637,381 @@ app.post("/api/notify-admin-removed", async (req, res) => {
   }
 });
 
+// ===================== CATEGORY MANAGEMENT API =====================
 
-// ---------------------- CREATE CATEGORY (ADMIN - ADD FIELD) ----------------------
+// GET /api/categories - List all categories
+app.get("/api/categories", async (req, res) => {
+  try {
+    const categories = await CategoryConfig.find().sort({ createdAt: -1 });
+    
+    // Transform to match frontend expectations
+    const transformed = categories.map(cat => ({
+      id: cat._id.toString(),
+      name: cat.name,
+      features: cat.features || {},
+      categoryHeads: cat.categoryHeads || [],
+      cc: cat.cc || [],
+      createdBy: cat.createdBy || {},
+      createdAt: cat.createdAt,
+      updatedAt: cat.updatedAt
+    }));
+    
+    res.json(transformed);
+  } catch (err) {
+    console.error("Get categories error:", err);
+    res.status(500).json({ message: "Failed to fetch categories" });
+  }
+});
 
-app.post("/categories", async (req, res) => {
+// POST /api/categories - Create new category
+app.post("/api/categories", async (req, res) => {
   try {
     const {
-      categoryName,
-      enableOnBehalf,
-      enableSubCategory,
-      subCategories,
-      attachmentsEnabled,
+      name,
+      features,
       categoryHeads,
-      ccMails,
+      cc,
       createdBy
     } = req.body;
 
-    if (!categoryName || !categoryName.trim()) {
+    console.log("📥 [CREATE CATEGORY] Received payload:", JSON.stringify(req.body, null, 2));
+
+    // Validate required fields
+    if (!name || !name.trim()) {
       return res.status(400).json({ message: "Category name is required" });
     }
 
-    const normalizedName = categoryName.trim();
+    const normalizedName = name.trim();
 
+    // Check if category already exists (case-insensitive)
     const existing = await CategoryConfig.findOne({
-      categoryName: { $regex: new RegExp("^" + normalizedName + "$", "i") }
+      name: { $regex: new RegExp("^" + normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$", "i") }
     });
 
     if (existing) {
-      return res.status(400).json({ message: "Category already exists" });
+      return res.status(400).json({ message: "Category with this name already exists" });
     }
 
-    let finalSubCategories = [];
-
-    if (enableSubCategory) {
-      finalSubCategories = Array.isArray(subCategories)
-        ? subCategories
-            .map(s => s && s.trim())
-            .filter(Boolean)
-        : [];
-
-      // ✅ Always keep Other
-      if (!finalSubCategories.some(s => s.toLowerCase() === "other")) {
-        finalSubCategories.push("Other");
+    // Ensure "Other" is always present in subcategories if enabled
+    let finalFeatures = features || {};
+    if (finalFeatures.subCategories?.enabled) {
+      const subList = finalFeatures.subCategories.list || [];
+      if (!subList.some(s => s.toLowerCase() === "other")) {
+        subList.push("Other");
       }
+      finalFeatures.subCategories.list = subList;
     }
 
+    // Create category
     const category = await CategoryConfig.create({
-      categoryName: normalizedName,
-      enableOnBehalf: !!enableOnBehalf,
-      enableSubCategory: !!enableSubCategory,
-      subCategories: finalSubCategories,
-      attachmentsEnabled: !!attachmentsEnabled,
+      name: normalizedName,
+      features: finalFeatures,
       categoryHeads: Array.isArray(categoryHeads) ? categoryHeads : [],
-      ccMails: Array.isArray(ccMails) ? ccMails : [],
-      createdBy
+      cc: Array.isArray(cc) ? cc : [],
+      createdBy: createdBy || {}
     });
 
-    // ---------------- MAIL PART ----------------
+    console.log("✅ [CREATE CATEGORY] Category created:", category._id);
 
-    const nowIST = new Date().toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata"
+    // ============ EMAIL NOTIFICATIONS ============
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    // Get all helpdesk admins
+    const admins = process.env.HELPDESK_ADMINS_EMAILS
+      ? process.env.HELPDESK_ADMINS_EMAILS.split(",").map(e => e.trim())
+      : [];
+
+    // Prepare email fields
+    const emailFields = [
+      { label: "Category Name", value: normalizedName },
+      { label: "Created By", value: `${createdBy?.name || "Unknown"} (${createdBy?.mail || "—"})` },
+      { label: "On Behalf Enabled", value: finalFeatures.onBehalf?.enabled ? "Yes" : "No" },
+      { label: "Sub-Categories Enabled", value: finalFeatures.subCategories?.enabled ? "Yes" : "No" },
+      { label: "Attachments Enabled", value: finalFeatures.attachments?.enabled ? "Yes" : "No" },
+      { label: "Created At (IST)", value: nowIST }
+    ];
+
+    if (finalFeatures.subCategories?.enabled && finalFeatures.subCategories.list?.length) {
+      emailFields.push({
+        label: "Sub-Categories",
+        value: finalFeatures.subCategories.list.join(", ")
+      });
+    }
+
+    if (finalFeatures.onBehalf?.enabled && finalFeatures.onBehalf.options?.length) {
+      emailFields.push({
+        label: "On Behalf Options",
+        value: finalFeatures.onBehalf.options.join(", ")
+      });
+    }
+
+    const title = `New Category Created: ${normalizedName}`;
+    const emailHtml = buildHtmlEmail({
+      title,
+      subtitle: "A new ticket category has been created in the Helpdesk system",
+      statusColor: "#16a34a",
+      fields: emailFields,
+      description: `Category "${normalizedName}" has been successfully created and is now available for ticket creation.`,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+      actionText: "Open Helpdesk"
     });
 
-    const headsList = (categoryHeads || []).map(u => u.mail).filter(Boolean);
-    const ccList = (ccMails || []).map(u => u.mail).filter(Boolean);
+    // 1. Notify all helpdesk admins
+    if (admins.length) {
+      console.log("📧 [CATEGORY] Notifying admins:", admins);
+      await sendEmail(
+        admins,
+        `[HELPDESK] New Category: ${normalizedName}`,
+        emailHtml,
+        itHead
+      );
+    }
 
+    // 2. Notify category heads
+    const headEmails = (categoryHeads || [])
+      .map(h => h.email)
+      .filter(Boolean);
+
+    if (headEmails.length) {
+      const headEmailHtml = buildHtmlEmail({
+        title: `You are assigned as Category Head: ${normalizedName}`,
+        subtitle: "You will receive notifications for tickets in this category",
+        statusColor: "#0ea5e9",
+        fields: emailFields,
+        description: `You have been assigned as a Category Head for "${normalizedName}". You will receive email notifications for ticket approvals and actions.`,
+        actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+        actionText: "Open Helpdesk"
+      });
+
+      const ccEmails = (cc || []).map(c => c.email).filter(Boolean);
+      const ccList = [...new Set([...ccEmails, itHead].filter(Boolean))];
+
+      console.log("📧 [CATEGORY] Notifying category heads:", headEmails);
+      await sendEmail(
+        headEmails,
+        `[HELPDESK] Assigned as Category Head: ${normalizedName}`,
+        headEmailHtml,
+        ccList
+      );
+    }
+
+    // 3. Notify CC recipients
+    const ccEmails = (cc || []).map(c => c.email).filter(Boolean);
+    if (ccEmails.length) {
+      const ccEmailHtml = buildHtmlEmail({
+        title: `New Category Created: ${normalizedName}`,
+        subtitle: "You are CC'd for notifications in this category",
+        statusColor: "#0ea5e9",
+        fields: emailFields,
+        description: `A new category "${normalizedName}" has been created. You are listed as a CC recipient and will receive notifications for ticket actions.`,
+        actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+        actionText: "Open Helpdesk"
+      });
+
+      console.log("📧 [CATEGORY] Notifying CC recipients:", ccEmails);
+      await sendEmail(
+        ccEmails,
+        `[HELPDESK] New Category (CC): ${normalizedName}`,
+        ccEmailHtml,
+        itHead
+      );
+    }
+
+    console.log("✅ [CATEGORY] All notifications sent successfully");
+
+    // Return success response
+    return res.status(201).json({
+      id: category._id.toString(),
+      name: category.name,
+      features: category.features,
+      categoryHeads: category.categoryHeads,
+      cc: category.cc,
+      createdBy: category.createdBy,
+      createdAt: category.createdAt
+    });
+
+  } catch (err) {
+    console.error("❌ [CREATE CATEGORY] Error:", err);
+    return res.status(500).json({ 
+      message: "Failed to create category", 
+      error: err.message 
+    });
+  }
+});
+
+// DELETE /api/categories/:id - Remove category
+app.delete("/api/categories/:id", async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+
+    console.log("🗑️ [DELETE CATEGORY] Attempting to delete:", categoryId);
+
+    // Find the category first
+    const category = await CategoryConfig.findById(categoryId);
+    
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    const categoryName = category.name;
+
+    // Delete the category
+    await CategoryConfig.findByIdAndDelete(categoryId);
+
+    console.log("✅ [DELETE CATEGORY] Category deleted:", categoryName);
+
+    // ============ EMAIL NOTIFICATIONS ============
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const itHead = process.env.IT_HEAD_EMAIL;
+
+    // Get all helpdesk admins
+    const admins = process.env.HELPDESK_ADMINS_EMAILS
+      ? process.env.HELPDESK_ADMINS_EMAILS.split(",").map(e => e.trim())
+      : [];
+
+    const title = `Category Deleted: ${categoryName}`;
+    const emailFields = [
+      { label: "Category Name", value: categoryName },
+      { label: "Deleted At (IST)", value: nowIST },
+      { label: "Action", value: "Category Removed" }
+    ];
+
+    const emailHtml = buildHtmlEmail({
+      title,
+      subtitle: "A category has been removed from the Helpdesk system",
+      statusColor: "#dc2626",
+      fields: emailFields,
+      description: `The category "${categoryName}" has been permanently deleted and is no longer available for ticket creation.`,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
+      actionText: "Open Helpdesk"
+    });
+
+    // Notify all admins
+    if (admins.length) {
+      console.log("📧 [DELETE CATEGORY] Notifying admins:", admins);
+      await sendEmail(
+        admins,
+        `[HELPDESK] Category Deleted: ${categoryName}`,
+        emailHtml,
+        itHead
+      );
+    }
+
+    // Notify category heads and CC
+    const headEmails = (category.categoryHeads || []).map(h => h.email).filter(Boolean);
+    const ccEmails = (category.cc || []).map(c => c.email).filter(Boolean);
+    const allNotifyEmails = [...new Set([...headEmails, ...ccEmails])];
+
+    if (allNotifyEmails.length) {
+      console.log("📧 [DELETE CATEGORY] Notifying heads/CC:", allNotifyEmails);
+      await sendEmail(
+        allNotifyEmails,
+        `[HELPDESK] Category Deleted: ${categoryName}`,
+        emailHtml,
+        itHead
+      );
+    }
+
+    console.log("✅ [DELETE CATEGORY] All notifications sent");
+
+    return res.json({ 
+      message: "Category deleted successfully",
+      categoryName 
+    });
+
+  } catch (err) {
+    console.error("❌ [DELETE CATEGORY] Error:", err);
+    return res.status(500).json({ 
+      message: "Failed to delete category", 
+      error: err.message 
+    });
+  }
+});
+
+// POST /api/notify-category-added - Notify about new category (optional, alternative to inline notifications)
+app.post("/api/notify-category-added", async (req, res) => {
+  try {
+    const { actor, category } = req.body || {};
+    
+    if (!category) {
+      return res.status(400).json({ message: "Category name is required" });
+    }
+
+    const actorName = actor?.name || actor?.mail || "Admin";
+    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;
 
     const admins = process.env.HELPDESK_ADMINS_EMAILS
       ? process.env.HELPDESK_ADMINS_EMAILS.split(",").map(e => e.trim())
       : [];
 
-    const title = `New category created : ${normalizedName}`;
+    const title = `New Category Added: ${category}`;
+    const fields = [
+      { label: "Category", value: category },
+      { label: "Added By", value: actorName },
+      { label: "Added At (IST)", value: nowIST }
+    ];
 
     const html = buildHtmlEmail({
       title,
-      subtitle: "A new ticket category has been created in Helpdesk",
-      statusColor: "#0ea5e9",
-      fields: [
-        { label: "Category", value: normalizedName },
-        { label: "Created By", value: `${createdBy?.name || "Unknown"} (${createdBy?.mail || "—"})` },
-        { label: "On behalf enabled", value: enableOnBehalf ? "Yes" : "No" },
-        { label: "Sub category enabled", value: enableSubCategory ? "Yes" : "No" },
-        { label: "Attachments enabled", value: attachmentsEnabled ? "Yes" : "No" },
-        { label: "Sub categories", value: finalSubCategories.join(", ") || "—" },
-        { label: "Created At", value: nowIST }
-      ],
+      subtitle: "A new category is now available",
+      statusColor: "#16a34a",
+      fields,
+      description: `${actorName} has created a new category "${category}" in the Helpdesk system.`,
       actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
-      actionText: "Open Helpdesk"
+      actionText: "View Categories"
     });
 
-    // 1. notify all helpdesk admins
     if (admins.length) {
       await sendEmail(
         admins,
-        `[HELPDESK] New category created - ${normalizedName}`,
+        `[HELPDESK] New Category: ${category}`,
         html,
         itHead
       );
     }
 
-    // 2. notify category heads + cc
-    const toForHeads = headsList.length ? headsList : admins;
-
-    const ccMerged = [...new Set([...(ccList || []), itHead].filter(Boolean))];
-
-    if (toForHeads.length) {
-      await sendEmail(
-        toForHeads,
-        `[HELPDESK] You are assigned as Category Head - ${normalizedName}`,
-        html,
-        ccMerged
-      );
-    }
-
-    return res.status(201).json(category);
-
+    return res.json({ message: "Category notification sent" });
   } catch (err) {
-    console.error("Create category error:", err);
-    return res.status(500).json({ message: "Failed to create category" });
+    console.error("notify-category-added error:", err);
+    return res.status(500).json({ message: "Failed to send notification" });
   }
 });
 
+// ===================== END CATEGORY MANAGEMENT =====================
 
-// ---------------------- PART 2 ----------------------
+// ---------------------- TICKET ROUTES ----------------------
+
+// Helper: Get category heads for a ticket
+const getCategoryHeads = async (categoryName) => {
+  try {
+    // Try to find in CategoryConfig first
+    const config = await CategoryConfig.findOne({ 
+      name: { $regex: new RegExp("^" + categoryName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$", "i") }
+    });
+
+    if (config && config.categoryHeads && config.categoryHeads.length > 0) {
+      return config.categoryHeads.map(h => h.email).filter(Boolean);
+    }
+
+    // Fallback to legacy mapping
+    if (categoryName === "Password Reset" || categoryName === "Admin Access") {
+      return [passwordResetPrimary, passwordResetSecondary].filter(Boolean);
+    }
+    
+    if (deptEmails[categoryName]) {
+      const entry = deptEmails[categoryName];
+      return Array.isArray(entry) ? entry : [entry];
+    }
+
+    return [];
+  } catch (err) {
+    console.error("Error getting category heads:", err);
+    return [];
+  }
+};
+
 // Get Tickets
 app.get("/tickets", async (req, res) => {
   try {
@@ -824,20 +1023,13 @@ app.get("/tickets", async (req, res) => {
   }
 });
 
-// Get Ticket by ID (adds categoryHeads for frontend convenience)
+// Get Ticket by ID
 app.get("/tickets/:id", async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    // derive heads for the ticket category
-    let heads = [];
-    if (ticket.category === "Password Reset" || ticket.category === "Admin Access") {
-      heads = [passwordResetPrimary, passwordResetSecondary].filter(Boolean);
-    } else if (deptEmails[ticket.category]) {
-      const entry = deptEmails[ticket.category];
-      heads = Array.isArray(entry) ? entry : [entry];
-    }
+    const heads = await getCategoryHeads(ticket.category);
 
     const obj = ticket.toObject();
     obj.categoryHeads = heads.map(h => (h || '').toLowerCase().trim());
@@ -861,13 +1053,44 @@ app.post("/tickets", async (req, res) => {
       onBehalf,
       onBehalfEmail,
       deliveryEmail,
-      // new: attachments array from client (optional)
+      subCategory,
+      subQuery,
+      otherSubQueryText,
       attachments
     } = req.body;
-    if (!deptEmails[category]) return res.status(400).json({ error: "Invalid category" });
 
-    // Defensive validation: Password Reset
-    if (category === "Password Reset" && (onBehalf === "Self" || !onBehalf) ) {
+    console.log("📥 [CREATE TICKET] Category:", category);
+
+    // Check if it's a legacy category or dynamic category
+    const isLegacyCategory = ["Password Reset", "Admin Access", "Operational & Finance"].includes(category);
+    
+    if (!isLegacyCategory) {
+      // Validate against CategoryConfig
+      const config = await CategoryConfig.findOne({ 
+        name: { $regex: new RegExp("^" + category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$", "i") }
+      });
+
+      if (!config) {
+        return res.status(400).json({ error: "Invalid category" });
+      }
+
+      // Validate required fields based on config
+      if (config.features?.subCategories?.enabled && config.features.subCategories.required && !subCategory) {
+        return res.status(400).json({ message: "Sub-category is required for this category" });
+      }
+
+      if (config.features?.attachments?.enabled && config.features.attachments.required && (!attachments || attachments.length === 0)) {
+        return res.status(400).json({ message: "Attachments are required for this category" });
+      }
+    } else {
+      // Legacy validation
+      if (!deptEmails[category]) {
+        return res.status(400).json({ error: "Invalid category" });
+      }
+    }
+
+    // Password Reset validation (legacy)
+    if (category === "Password Reset" && (onBehalf === "Self" || !onBehalf)) {
       if (!deliveryEmail || !deliveryEmail.trim()) {
         return res.status(400).json({ message: "Alternative delivery email is required for self password reset." });
       }
@@ -886,7 +1109,6 @@ app.post("/tickets", async (req, res) => {
       }
     }
 
-    // Admin Access - no strict validation here, frontend enforces device-admin block
     const approvalRequiredCategories = ["Password Reset", "Admin Access"];
     const initialStatus = approvalRequiredCategories.includes(category) ? "Waiting for approval" : "Open";
 
@@ -904,6 +1126,9 @@ app.post("/tickets", async (req, res) => {
       onBehalf: onBehalf || "Self",
       onBehalfEmail: onBehalfEmail || "",
       deliveryEmail: deliveryEmail || "",
+      subCategory: subCategory || "",
+      subQuery: subQuery || "",
+      otherSubQueryText: otherSubQueryText || "",
       history: [
         {
           action: "created",
@@ -914,9 +1139,8 @@ app.post("/tickets", async (req, res) => {
       ],
     };
 
-    // If client provided attachments array, attach it to ticket
+    // Handle attachments
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
-      // Normalize each item to expected fields
       ticketPayload.attachments = attachments.map((a) => ({
         fileName: a.fileName || a.file_name || a.name || '',
         fileType: a.fileType || a.file_type || a.type || '',
@@ -924,7 +1148,7 @@ app.post("/tickets", async (req, res) => {
         id: a.id || a.fileId || null,
         driveId: a.driveId || null
       }));
-      // For backward compatibility - set single attachment to first item if present
+      
       if (!ticketPayload.attachment && ticketPayload.attachments.length > 0) {
         const first = ticketPayload.attachments[0];
         ticketPayload.attachment = {
@@ -937,18 +1161,21 @@ app.post("/tickets", async (req, res) => {
 
     const ticket = await Ticket.create(ticketPayload);
 
+    console.log("✅ [CREATE TICKET] Ticket created:", ticket.ticketNumber);
+
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     const itHead = process.env.IT_HEAD_EMAIL;
 
     // Creator email
     const creatorHtml = buildHtmlEmail({
       title: `Ticket #${ticketCounter} Created`,
-      subtitle: initialStatus === "Waiting for approval" ? "Your ticket is Waiting for approval department approval" : "Your ticket has been created",
+      subtitle: initialStatus === "Waiting for approval" ? "Your ticket is waiting for department approval" : "Your ticket has been created",
       statusColor: "#0ea5e9",
       fields: [
         { label: "Ticket No", value: ticketCounter },
         { label: "Category", value: category },
         { label: "Priority", value: priority },
+        { label: "Status", value: initialStatus },
         { label: "Created At", value: nowIST },
       ],
       description: description,
@@ -964,9 +1191,17 @@ app.post("/tickets", async (req, res) => {
       { label: "Created By", value: `${userName} (${userEmail})` },
       { label: "Category", value: category },
       { label: "Priority", value: priority },
-      { label: "Delivery Email", value: ticket.deliveryEmail || '—' },
       { label: "Status", value: initialStatus }
     ];
+
+    if (subCategory) {
+      deptFields.push({ label: "Sub-Category", value: subCategory });
+    }
+
+    if (deliveryEmail) {
+      deptFields.push({ label: "Delivery Email", value: deliveryEmail });
+    }
+
     const deptHtml = buildHtmlEmail({
       title: `New Ticket #${ticketCounter} — ${category}`,
       subtitle: `Action required: please review the ticket${initialStatus === "Waiting for approval" ? ' (approval required)' : ''}.`,
@@ -977,23 +1212,43 @@ app.post("/tickets", async (req, res) => {
       actionText: initialStatus === "Waiting for approval" ? "Approve / Reject" : "Open Ticket"
     });
 
-    const deptTo = deptEmails[category];
-    const deptCcList = [];
-    if (category === "Password Reset" || category === "Admin Access") {
-      deptCcList.push(passwordResetSecondary);
+    // Get recipients for this category
+    let deptTo = [];
+    let deptCcList = [];
+
+    if (isLegacyCategory) {
+      deptTo = [deptEmails[category]];
+      if (category === "Password Reset" || category === "Admin Access") {
+        deptCcList.push(passwordResetSecondary);
+      }
+    } else {
+      // Get from CategoryConfig
+      const config = await CategoryConfig.findOne({ 
+        name: { $regex: new RegExp("^" + category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$", "i") }
+      });
+
+      if (config) {
+        deptTo = (config.categoryHeads || []).map(h => h.email).filter(Boolean);
+        deptCcList = (config.cc || []).map(c => c.email).filter(Boolean);
+      }
     }
+
     if (itHead) deptCcList.push(itHead);
 
-    await sendEmail(deptTo, `[TICKET #${ticketCounter}] ${category} - Action Required`, deptHtml, deptCcList.length ? deptCcList : itHead);
+    if (deptTo.length > 0) {
+      await sendEmail(deptTo, `[TICKET #${ticketCounter}] ${category} - Action Required`, deptHtml, deptCcList.length ? deptCcList : itHead);
+    }
 
     res.status(201).json(ticket);
   } catch (err) {
-    console.error("Error creating ticket and failed :", err.message);
+    console.error("Error creating ticket:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// ---------------------- PART 3 ----------------------
+// ---------------------- APPROVE / REJECT / CLOSE / REVIVE ----------------------
+// (Keep all existing logic unchanged)
+
 // Approve endpoint
 app.post("/tickets/:id/approve", async (req, res) => {
   try {
@@ -1005,7 +1260,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return res.status(400).json({ message: "Ticket is already closed" });
     }
 
-    // Determine which user identifier to use for operations
     const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
     if (!userIdentifier) {
       return res.status(400).json({ message: "No user identifier available for approval action" });
@@ -1014,9 +1268,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
     const itHead = process.env.IT_HEAD_EMAIL;
     const now = new Date();
 
-    // Branch by category
     if (ticket.category === "Password Reset") {
-      // Password reset flow
       let newPassword;
       try {
         newPassword = await resetAzurePassword(userIdentifier);
@@ -1056,7 +1308,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
         second: "2-digit",
       });
 
-      // Notify requester and delivery
       const userTitle = `Password Reset Approved — Ticket #${ticket.ticketNumber}`;
       const userFields = [
         { label: "Ticket No", value: ticket.ticketNumber },
@@ -1081,7 +1332,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
         await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
       }
 
-      // Dept confirmation + notify other head(s)
       const deptTitle = `Ticket #${ticket.ticketNumber} — Approved and Closed`;
       const deptFields = [
         { label: "Ticket No", value: ticket.ticketNumber },
@@ -1104,7 +1354,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
       if (itHead) deptCcList.push(itHead);
       await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, deptCcList);
 
-      // Notify non-approver heads
       try {
         const approverLower = (approvedBy || "").toLowerCase();
         const approverEmailGuess = approverLower.includes("kodhan") ? passwordResetPrimary
@@ -1166,13 +1415,11 @@ app.post("/tickets/:id/approve", async (req, res) => {
         newPassword,
       });
     } else if (ticket.category === "Admin Access") {
-      // Admin Access approval: add user to group then close ticket
       const groupId = AZURE_DEVICE_ADMIN_GROUP_ID;
       if (!groupId) {
         return res.status(500).json({ message: "Device admin group not configured (AZURE_DEVICE_ADMIN_GROUP_ID missing)" });
       }
 
-      // Resolve user object id
       let userObj;
       try {
         userObj = await getUserByUpn(userIdentifier);
@@ -1181,7 +1428,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
         return res.status(500).json({ message: "Failed to find user in Azure AD", error: err.message });
       }
 
-      // Add to group
       try {
         await addUserToGroup(groupId, userObj.id);
       } catch (err) {
@@ -1189,7 +1435,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
         return res.status(500).json({ message: "Failed to add user to device admin group", error: err.message });
       }
 
-      // Update ticket history and close
       ticket.history.push({
         action: "approved",
         by: approvedBy || "Department Head",
@@ -1221,7 +1466,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
         second: "2-digit",
       });
 
-      // Notify requester
       const userTitle = `Admin Access Approved — Ticket #${ticket.ticketNumber}`;
       const userFields = [
         { label: "Ticket No", value: ticket.ticketNumber },
@@ -1232,7 +1476,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       ];
       const userHtml = buildHtmlEmail({
         title: userTitle,
-        subtitle: "Admin access granted —  Please restart your system after 2 hours",
+        subtitle: "Admin access granted — Please restart your system after 2 hours",
         statusColor: "#16a34a",
         fields: userFields,
         description: `Your account (${userObj.mail || userIdentifier}) has been added to the device administrator group. Please sign out and sign in again for group changes to take effect.`,
@@ -1242,7 +1486,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
 
       await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Admin Access Approved`, userHtml, itHead);
 
-      // Dept confirmation
       const deptTitle = `Ticket #${ticket.ticketNumber} — Admin Access Approved and Closed`;
       const deptFields = [
         { label: "Ticket No", value: ticket.ticketNumber },
@@ -1265,7 +1508,6 @@ app.post("/tickets/:id/approve", async (req, res) => {
       if (itHead) deptCcList.push(itHead);
       await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`, deptHtml, deptCcList);
 
-      // Notify other head(s)
       try {
         const approverLower = (approvedBy || "").toLowerCase();
         const approverEmailGuess = approverLower.includes("kodhan") ? passwordResetPrimary
@@ -1330,7 +1572,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
   }
 });
 
-// Reject endpoint
+// Reject endpoint (keep existing)
 app.post("/tickets/:id/reject", async (req, res) => {
   try {
     const { rejectedBy, reason } = req.body;
@@ -1345,13 +1587,13 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     ticket.history.push({
       action: "rejected",
-      by: rejectedBy ,
+      by: rejectedBy,
       at: now,
       reason: reason || "Rejected by Department Head",
     });
 
     ticket.status = "Closed";
-    ticket.closedBy = rejectedBy ;
+    ticket.closedBy = rejectedBy;
     ticket.closeReason = reason ? `Rejected: ${reason}` : "Reason not specified";
     ticket.closedAt = now;
 
@@ -1376,7 +1618,6 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Notify requester
     const userTitle = `Ticket #${ticket.ticketNumber} — Request Rejected`;
     const userFields = [
       { label: "Ticket No", value: ticket.ticketNumber },
@@ -1396,7 +1637,6 @@ app.post("/tickets/:id/reject", async (req, res) => {
 
     await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Request Rejected`, userHtml, itHead);
 
-    // Dept notification
     const deptHtml = buildHtmlEmail({
       title: `Ticket #${ticket.ticketNumber} — Rejected and Closed`,
       subtitle: `${ticket.closedBy} rejected the request`,
@@ -1406,7 +1646,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
         { label: "Rejected By", value: ticket.closedBy },
         { label: "Rejected On", value: nowIST },
       ],
-      description: `The ticket has been rejected'}`,
+      description: `The ticket has been rejected`,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
@@ -1438,8 +1678,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
   }
 });
 
-// ---------------------- PART 4 ----------------------
-// Close Ticket
+// Close Ticket (keep existing)
 app.put("/tickets/:id/close", async (req, res) => {
   try {
     const { closedBy, closeReason } = req.body;
@@ -1528,7 +1767,7 @@ app.put("/tickets/:id/close", async (req, res) => {
   }
 });
 
-// Revive Ticket
+// Revive Ticket (keep existing)
 app.put("/tickets/:id/revive", async (req, res) => {
   try {
     const { revivedBy, reviveReason } = req.body;
@@ -1618,12 +1857,9 @@ app.put("/tickets/:id/revive", async (req, res) => {
 });
 
 // ---------------------- DOWNLOAD ATTACHMENT (ROBUST PROXY + ZIP) ----------------------
-
-// Helper: attempt multiple Graph endpoints to fetch item content stream
 async function fetchItemStream(token, itemId, driveId) {
   const attempts = [];
 
-  // If driveId known, try drives/{driveId}/items/{itemId}/content first
   if (driveId) {
     attempts.push({
       label: `drives/${driveId}/items/${itemId}`,
@@ -1631,7 +1867,6 @@ async function fetchItemStream(token, itemId, driveId) {
     });
   }
 
-  // Try site drive if configured
   if (process.env.SHAREPOINT_SITE && process.env.SHAREPOINT_SITE_NAME) {
     try {
       const siteHost = process.env.SHAREPOINT_SITE;
@@ -1650,13 +1885,11 @@ async function fetchItemStream(token, itemId, driveId) {
     }
   }
 
-  // Generic drive attempt
   attempts.push({
     label: `drive/items/${itemId}`,
     url: `https://graph.microsoft.com/v1.0/drive/items/${itemId}/content`
   });
 
-  // Try each until one succeeds
   for (const att of attempts) {
     try {
       const resp = await axios.get(att.url, {
@@ -1673,17 +1906,12 @@ async function fetchItemStream(token, itemId, driveId) {
     } catch (err) {
       const errMsg = err?.response?.data ? JSON.stringify(err.response.data) : err.message || err;
       console.warn(`Attempt failed for ${att.label}:`, errMsg);
-      // continue to next attempt
     }
   }
 
   throw new Error('All attempts to fetch item failed');
 }
 
-
-// Download multiple attachments as a ZIP
-// GET /attachments/zip?ids=id1,id2&driveIds=did1,did2 (driveIds optional, comma-aligned with ids)
-// npm install archiver p-limit
 const pLimit = require('p-limit').default;
 
 app.get("/attachments/zip", async (req, res) => {
@@ -1695,7 +1923,6 @@ app.get("/attachments/zip", async (req, res) => {
     if (ids.length === 0) return res.status(400).send('No ids provided');
     if (ids.length > 5) return res.status(400).send('Max 5 files');
 
-    // ✅ FIX: properly clean driveIds
     const driveIds = (req.query.driveIds || '')
       .split(',')
       .map(s => s.trim())
@@ -1736,7 +1963,6 @@ app.get("/attachments/zip", async (req, res) => {
     const fetchPromises = ids.map((id, i) =>
       limit(async () => {
         try {
-          // ✅ FIX: do NOT pass empty / invalid driveId
           const driveId = driveIds.length > i ? driveIds[i] : null;
 
           const fetched = await Promise.race([
@@ -1764,7 +1990,6 @@ app.get("/attachments/zip", async (req, res) => {
 
         } catch (err) {
           console.warn(`Skip ${id}:`, err.message);
-          // continue other files
         }
       })
     );
@@ -1780,7 +2005,6 @@ app.get("/attachments/zip", async (req, res) => {
   }
 });
 
-// Single file proxy: /attachments/:fileId?driveId=<optional>
 app.get("/attachments/:fileId", async (req, res) => {
   try {
     const fileId = req.params.fileId;
@@ -1805,7 +2029,6 @@ app.get("/attachments/:fileId", async (req, res) => {
       }
     }
 
-    // pipe stream to client
     fetched.stream.pipe(res);
   } catch (err) {
     console.error('Attachment proxy error:', err?.response?.data || err?.message || err);
@@ -1813,11 +2036,8 @@ app.get("/attachments/:fileId", async (req, res) => {
   }
 });
 
-
-
 // ---------------------- Start Server ----------------------
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, "0.0.0.0", () =>
-  console.log(`Server running on port ${PORT} (Attachments proxy enabled)`)
+  console.log(`✅ Server running on port ${PORT}`)
 );
-// ---------------------- END ----------------------
