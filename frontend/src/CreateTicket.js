@@ -640,11 +640,24 @@ function CreateTicket() {
     setIsDragging(true);
   };
 
-  useEffect(() => {
-    return () => {
-      attachments.forEach(a => { if (a.preview) try { URL.revokeObjectURL(a.preview); } catch (e) {} });
-    };
-  }, []);
+  // Add this near the top with other refs
+const attachmentsRef = useRef(attachments);
+
+// Update ref when attachments change
+useEffect(() => {
+  attachmentsRef.current = attachments;
+}, [attachments]);
+
+// Then at the end, use the ref for cleanup
+useEffect(() => {
+  return () => {
+    attachmentsRef.current.forEach(a => { 
+      if (a.preview) {
+        try { URL.revokeObjectURL(a.preview); } catch (e) {} 
+      }
+    });
+  };
+}, []);
 
   return (
     <div style={styles.pageWrap}>
