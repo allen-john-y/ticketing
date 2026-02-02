@@ -1989,7 +1989,7 @@ const removeSubCategory = (idx) => {
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 700 }}>{c.name}</div>
+                    <div style={{ fontWeight: 700 }}>{c.name || categoryName}</div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>{c.description || ''}</div>
                   </div>
                 </div>
