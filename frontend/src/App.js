@@ -597,6 +597,7 @@ const removeSubCategory = (idx) => {
 
     // ✅ FIX: Changed 'name' to 'categoryName' to match backend schema
     const payload = {
+      name: categoryName.trim(),
       categoryName: categoryName.trim(), // ← FIXED: was 'name', now 'categoryName'
       features: {
         onBehalf: enableOnBehalf 
