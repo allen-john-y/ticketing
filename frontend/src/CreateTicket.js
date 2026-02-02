@@ -39,7 +39,7 @@ function CreateTicket() {
     alternativeEmail: '',
     subQuery: '',
     otherSubQueryText: '',
-    subCategory: '',  // NEW: for dynamic subcategory
+    subCategory: '',
   });
 
   // NEW: Store fetched categories configuration
@@ -48,6 +48,12 @@ function CreateTicket() {
   const [selectedCategoryConfig, setSelectedCategoryConfig] = useState(null);
   const [otherSubCategoryText, setOtherSubCategoryText] = useState('');
 
+  // NEW: Dynamic On Behalf states (separate from Password Reset)
+  const [dynamicOnBehalfSelection, setDynamicOnBehalfSelection] = useState('Self');
+  const [dynamicOnBehalfEmail, setDynamicOnBehalfEmail] = useState('');
+  const [dynamicOnBehalfSearchResults, setDynamicOnBehalfSearchResults] = useState([]);
+  const [dynamicOnBehalfSearching, setDynamicOnBehalfSearching] = useState(false);
+  const [dynamicOnBehalfSelectedUser, setDynamicOnBehalfSelectedUser] = useState(null);
 
   // Attachments state
   const [attachments, setAttachments] = useState([]);
@@ -173,6 +179,44 @@ function CreateTicket() {
     }
   }, [formData.category, categoriesConfig]);
 
+  // NEW: Search users for dynamic On Behalf feature
+  const handleDynamicOnBehalfSearch = async (searchText) => {
+    if (!searchText || searchText.trim().length < 2) {
+      setDynamicOnBehalfSearchResults([]);
+      return;
+    }
+
+    setDynamicOnBehalfSearching(true);
+    try {
+      const token = await instance.acquireTokenSilent({ 
+        scopes: ['User.Read.All'], 
+        account: accounts[0] 
+      });
+
+      // Search users in Azure AD
+      const response = await axios.get(
+        `https://graph.microsoft.com/v1.0/users?$filter=startswith(mail,'${searchText}') or startswith(displayName,'${searchText}') or startswith(userPrincipalName,'${searchText}')&$top=5`,
+        {
+          headers: { Authorization: `Bearer ${token.accessToken}` }
+        }
+      );
+
+      setDynamicOnBehalfSearchResults(response.data.value || []);
+    } catch (err) {
+      console.error('Error searching users:', err);
+      setDynamicOnBehalfSearchResults([]);
+    } finally {
+      setDynamicOnBehalfSearching(false);
+    }
+  };
+
+  // NEW: Handle selecting a user from search results
+  const handleSelectDynamicOnBehalfUser = (user) => {
+    setDynamicOnBehalfSelectedUser(user);
+    setDynamicOnBehalfEmail(user.mail || user.userPrincipalName);
+    setDynamicOnBehalfSearchResults([]);
+  };
+
   const handleVerifyOther = async () => {
     const email = (formData.onBehalfEmail || '').trim();
     setVerifyError('');
@@ -226,23 +270,21 @@ function CreateTicket() {
     }
 
     // NEW: Validation for dynamic subcategory (if enabled and required)
-if (selectedCategoryConfig?.features?.subCategories?.enabled) {
+    if (selectedCategoryConfig?.features?.subCategories?.enabled) {
+      if (
+        selectedCategoryConfig.features.subCategories.required &&
+        !formData.subCategory
+      ) {
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please select a sub-category.',
+          type: 'error'
+        });
+        setLoading(false);
+        return;
+      }
 
-  if (
-    selectedCategoryConfig.features.subCategories.required &&
-    !formData.subCategory
-  ) {
-    setModal({
-      open: true,
-      title: 'Validation',
-      message: 'Please select a sub-category.',
-      type: 'error'
-    });
-    setLoading(false);
-    return;
-  }
-
-  // ✅ NEW : when "Other" is selected, custom text is mandatory
       if (
         formData.subCategory === 'Other' &&
         !otherSubCategoryText.trim()
@@ -259,10 +301,10 @@ if (selectedCategoryConfig?.features?.subCategories?.enabled) {
     }
 
     // NEW: Validation for dynamic onBehalf (if enabled and required)
-    if (selectedCategoryConfig?.features?.onBehalf?.enabled) {
+    if (selectedCategoryConfig?.features?.onBehalf?.enabled && formData.category !== 'Password Reset') {
       if (
         selectedCategoryConfig.features.onBehalf.required &&
-        !formData.onBehalf
+        !dynamicOnBehalfSelection
       ) {
         setModal({
           open: true,
@@ -273,8 +315,18 @@ if (selectedCategoryConfig?.features?.subCategories?.enabled) {
         setLoading(false);
         return;
       }
-    }
 
+      if (dynamicOnBehalfSelection === 'Other' && !dynamicOnBehalfSelectedUser) {
+        setModal({
+          open: true,
+          title: 'Validation',
+          message: 'Please search and select a user to create ticket on their behalf.',
+          type: 'error'
+        });
+        setLoading(false);
+        return;
+      }
+    }
 
     // NEW: Validation for dynamic attachments (if enabled and required)
     if (selectedCategoryConfig?.features?.attachments?.enabled) {
@@ -474,14 +526,41 @@ if (selectedCategoryConfig?.features?.subCategories?.enabled) {
         }
       }
 
+      // NEW: Determine ticket creation details based on dynamic On Behalf
+      let ticketUserName = latestName || accounts[0]?.username;
+      let ticketUserEmail = latestEmail;
+      let ticketCreatedBy = latestEmail; // Track who actually created it
+
+      if (selectedCategoryConfig?.features?.onBehalf?.enabled && 
+          formData.category !== 'Password Reset' && 
+          dynamicOnBehalfSelection === 'Other' && 
+          dynamicOnBehalfSelectedUser) {
+        // Creating ticket on behalf of someone else
+        ticketUserName = dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail;
+        ticketUserEmail = dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName;
+      }
+
       const ticketData = {
         category: formData.category,
         description: formData.description,
         priority: formData.priority,
         userId: accounts[0]?.localAccountId,
-        userName: latestName || accounts[0]?.username,
-        userEmail: latestEmail,
+        userName: ticketUserName,
+        userEmail: ticketUserEmail,
         status: 'Waiting for approval',
+        
+        // NEW: Add creator info when creating on behalf
+        ...(selectedCategoryConfig?.features?.onBehalf?.enabled && 
+            formData.category !== 'Password Reset' && 
+            dynamicOnBehalfSelection === 'Other' && 
+            dynamicOnBehalfSelectedUser
+          ? { 
+              createdBy: ticketCreatedBy,
+              createdByName: latestName,
+              onBehalfOf: ticketUserEmail 
+            }
+          : {}),
+
         ...(onBehalf ? { onBehalf } : {}),
         ...(onBehalfEmail ? { onBehalfEmail } : {}),
         ...(formData.alternativeEmail && formData.alternativeEmail.trim()
@@ -500,7 +579,12 @@ if (selectedCategoryConfig?.features?.subCategories?.enabled) {
           : {}),
 
         // NEW: Dynamic subcategory
-        ...(formData.subCategory ? { subCategory: formData.subCategory } : {}),
+        ...(formData.subCategory ? { 
+            subCategory: formData.subCategory,
+            ...(formData.subCategory === 'Other' && otherSubCategoryText.trim()
+              ? { otherSubCategoryText: otherSubCategoryText.trim() }
+              : {})
+          } : {}),
 
         // Attachments metadata
         ...(attachmentsMeta && attachmentsMeta.length ? { attachments: attachmentsMeta } : {}),
@@ -517,13 +601,16 @@ if (selectedCategoryConfig?.features?.subCategories?.enabled) {
         null;
       if (id) setCreatedTicketId(id);
 
+      const successMessage = dynamicOnBehalfSelection === 'Other' && dynamicOnBehalfSelectedUser
+        ? `Ticket created successfully on behalf of ${dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail}!`
+        : formData.category === 'Password Reset'
+          ? 'Your password reset ticket has been created and is now Waiting for approval category head approval. If approved, the new password will be sent to the delivery email you provided.'
+          : 'Ticket created successfully!';
+
       setModal({
         open: true,
         title: 'Ticket Created',
-        message:
-          formData.category === 'Password Reset'
-            ? 'Your password reset ticket has been created and is now Waiting for approval category head approval. If approved, the new password will be sent to the delivery email you provided.'
-            : 'Ticket created successfully!',
+        message: successMessage,
         type: 'success'
       });
     } catch (error) {
@@ -665,24 +752,21 @@ if (selectedCategoryConfig?.features?.subCategories?.enabled) {
     setIsDragging(true);
   };
 
-  // Add this near the top with other refs
-const attachmentsRef = useRef(attachments);
+  const attachmentsRef = useRef(attachments);
 
-// Update ref when attachments change
-useEffect(() => {
-  attachmentsRef.current = attachments;
-}, [attachments]);
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
 
-// Then at the end, use the ref for cleanup
-useEffect(() => {
-  return () => {
-    attachmentsRef.current.forEach(a => { 
-      if (a.preview) {
-        try { URL.revokeObjectURL(a.preview); } catch (e) {} 
-      }
-    });
-  };
-}, []);
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach(a => { 
+        if (a.preview) {
+          try { URL.revokeObjectURL(a.preview); } catch (e) {} 
+        }
+      });
+    };
+  }, []);
 
   return (
     <div style={styles.pageWrap}>
@@ -723,11 +807,16 @@ useEffect(() => {
                     onBehalf: val === 'Password Reset' ? 'Self' : prev.onBehalf,
                     onBehalfEmail: val === 'Password Reset' ? prev.onBehalfEmail : '',
                     alternativeEmail: val === 'Password Reset' ? prev.alternativeEmail : '',
-                    subCategory: '', // Reset subcategory when category changes
+                    subCategory: '',
                     ...(val !== 'Operational & Finance'
                       ? { subQuery: '', otherSubQueryText: '' }
                       : {})
                   }));
+                  // Reset dynamic on behalf when category changes
+                  setDynamicOnBehalfSelection('Self');
+                  setDynamicOnBehalfEmail('');
+                  setDynamicOnBehalfSelectedUser(null);
+                  setDynamicOnBehalfSearchResults([]);
                   setVerifyStatus('idle');
                   setVerifiedName('');
                   setVerifyError('');
@@ -737,14 +826,12 @@ useEffect(() => {
               >
                 <option value="">Select Category</option>
                 
-                {/* Show configured categories */}
                 {categoriesConfig.map(cat => (
                   <option key={cat.id || cat.name} value={cat.name}>
                     {cat.name}
                   </option>
                 ))}
                 
-                {/* Legacy hardcoded categories (if not in config) */}
                 {!categoriesConfig.find(c => c.name === 'Password Reset') && (
                   <option value="Password Reset">🔑 Password Reset</option>
                 )}
@@ -772,22 +859,135 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* NEW: Dynamic On Behalf field (if enabled for this category) */}
-          {selectedCategoryConfig?.features?.onBehalf?.enabled && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={styles.label}>
-                On behalf of {selectedCategoryConfig.features.onBehalf.required && <span style={{ color: '#ef4444' }}>*</span>}
-              </label>
+          {/* NEW: Dynamic On Behalf field (ONLY for non-Password Reset categories) */}
+          {selectedCategoryConfig?.features?.onBehalf?.enabled && formData.category !== 'Password Reset' && (
+            <div style={{ 
+              padding: 16, 
+              border: '1px solid #e6e9ee', 
+              borderRadius: 8,
+              background: '#f0f9ff',
+              marginBottom: 12
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ fontWeight: 700, fontSize: 14 }}>
+                  On Behalf {selectedCategoryConfig.features.onBehalf.required && <span style={{ color: '#ef4444' }}>*</span>}
+                </label>
+              </div>
+              
+              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                Create this ticket for yourself or on behalf of someone else
+              </div>
+
               <select
-                value={formData.onBehalf}
-                onChange={(e) => setFormData({ ...formData, onBehalf: e.target.value })}
+                value={dynamicOnBehalfSelection}
+                onChange={(e) => {
+                  setDynamicOnBehalfSelection(e.target.value);
+                  if (e.target.value === 'Self') {
+                    setDynamicOnBehalfEmail('');
+                    setDynamicOnBehalfSelectedUser(null);
+                    setDynamicOnBehalfSearchResults([]);
+                  }
+                }}
                 style={styles.select}
                 required={selectedCategoryConfig.features.onBehalf.required}
               >
-                {selectedCategoryConfig.features.onBehalf.options?.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
+                <option value="Self">Self</option>
+                <option value="Other">Other</option>
               </select>
+
+              {dynamicOnBehalfSelection === 'Other' && (
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, display: 'block' }}>
+                    Search User by Email or Name
+                  </label>
+                  
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={dynamicOnBehalfEmail}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDynamicOnBehalfEmail(val);
+                        handleDynamicOnBehalfSearch(val);
+                      }}
+                      placeholder="Type email or name to search..."
+                      style={styles.input}
+                    />
+
+                    {dynamicOnBehalfSearching && (
+                      <div style={{ 
+                        position: 'absolute', 
+                        right: 12, 
+                        top: '50%', 
+                        transform: 'translateY(-50%)',
+                        color: '#6b7280',
+                        fontSize: 12 
+                      }}>
+                        Searching...
+                      </div>
+                    )}
+
+                    {dynamicOnBehalfSearchResults.length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        background: 'white',
+                        border: '1px solid #e6e9ee',
+                        borderRadius: 8,
+                        marginTop: 4,
+                        maxHeight: 200,
+                        overflowY: 'auto',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        zIndex: 1000
+                      }}>
+                        {dynamicOnBehalfSearchResults.map((user) => (
+                          <div
+                            key={user.id}
+                            onClick={() => handleSelectDynamicOnBehalfUser(user)}
+                            style={{
+                              padding: '10px 12px',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid #f3f4f6',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                          >
+                            <div style={{ fontWeight: 600, fontSize: 13, color: '#1f2937' }}>
+                              {user.displayName || user.mail}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#6b7280' }}>
+                              {user.mail || user.userPrincipalName}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {dynamicOnBehalfSelectedUser && (
+                    <div style={{
+                      marginTop: 10,
+                      padding: 10,
+                      background: '#f0fdf4',
+                      border: '1px solid #86efac',
+                      borderRadius: 6
+                    }}>
+                      <div style={{ fontSize: 12, color: '#166534', fontWeight: 600 }}>
+                        ✅ Selected User:
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d', marginTop: 4 }}>
+                        {dynamicOnBehalfSelectedUser.displayName}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#166534' }}>
+                        {dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -810,7 +1010,6 @@ useEffect(() => {
                     subCategory: val
                   }));
 
-                  // clear text when not Other
                   if (val !== 'Other') {
                     setOtherSubCategoryText('');
                   }
@@ -825,7 +1024,6 @@ useEffect(() => {
                 ))}
               </select>
 
-              {/* When "Other" is selected, show single line input */}
               {formData.subCategory === 'Other' && (
                 <div style={{ marginTop: 8 }}>
                   <input
@@ -841,10 +1039,8 @@ useEffect(() => {
             </div>
           )}
 
-
           {/* Password Reset - conditional UI (legacy - keep for backward compatibility) */}
-          {formData.category === 'Password Reset' && selectedCategoryConfig?.features?.onBehalf?.enabled
-  && formData.onBehalf === 'Other' && (
+          {formData.category === 'Password Reset' && (
             <div style={{ marginBottom: 12 }}>
               <label style={styles.label}>On behalf of *</label>
               <div style={{ display: 'flex', gap: 12 }}>

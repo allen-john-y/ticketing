@@ -584,83 +584,92 @@ const removeSubCategory = (idx) => {
   };
 
   const createCategory = async () => {
-    if (!categoryName || !categoryName.trim()) {
-      setCategoryError('Category name is required');
-      return;
-    }
-    setCategoryError(null);
-    setCategoryLoading(true);
-    setCategorySuccess(null);
+  if (!categoryName || !categoryName.trim()) {
+    setCategoryError('Category name is required');
+    return;
+  }
+  setCategoryError(null);
+  setCategoryLoading(true);
+  setCategorySuccess(null);
 
+  try {
+    const token = await acquireTokenForAdmin();
+
+    // ✅ FIX: Changed 'name' to 'categoryName' to match backend schema
+    const payload = {
+      categoryName: categoryName.trim(), // ← FIXED: was 'name', now 'categoryName'
+      features: {
+        onBehalf: enableOnBehalf 
+          ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
+          : { enabled: false },
+        subCategories: enableSubCategory
+          ? {
+              enabled: true,
+              list: [
+                ...subCategories
+                  .map(s => s.trim())
+                  .filter(s => s && s !== FIXED_OTHER),
+                FIXED_OTHER
+              ],
+              required: !!requireSubCategory
+            }
+          : { enabled: false },
+        attachments: enableAttachmentsForCategory 
+          ? { enabled: true, required: !!requireAttachmentsForCategory } 
+          : { enabled: false },
+      },
+      categoryHeads: categoryHeads
+        .filter(h => h.email)
+        .map(h => ({ email: h.email.trim(), name: h.name || h.email.trim() })),
+      cc: ccEmails
+        .filter(c => c.email)
+        .map(c => ({ email: c.email.trim(), name: c.name || c.email.trim() })),
+      createdBy: {
+        id: accounts?.[0]?.homeAccountId || '',
+        name: accounts?.[0]?.name || accounts?.[0]?.username || '',
+        mail: accounts?.[0]?.username || '',
+      },
+    };
+
+    const res = await fetch(`${backendBase}/api/categories`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(t || `Create failed ${res.status}`);
+    }
+
+    setCategorySuccess('Category created successfully');
+    
+    // Notify backend to send mail to Helpdesk_Admins
     try {
-      const token = await acquireTokenForAdmin();
-
-      const payload = {
-        name: categoryName.trim(),
-        features: {
-          onBehalf: enableOnBehalf ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }: { enabled: false },
-          subCategories: enableSubCategory
-  ? {
-      enabled: true,
-      list: [
-        ...subCategories
-          .map(s => s.trim())
-          .filter(s => s && s !== FIXED_OTHER),
-        FIXED_OTHER
-      ],
-      required: !!requireSubCategory
-    }
-  : { enabled: false },
-          attachments: enableAttachmentsForCategory ? { enabled: true, required: !!requireAttachmentsForCategory } : { enabled: false },
-        },
-        categoryHeads: categoryHeads.filter(h => h.email).map(h => ({ email: h.email.trim(), name: h.name || h.email.trim() })),
-        cc: ccEmails.filter(c => c.email).map(c => ({ email: c.email.trim(), name: c.name || c.email.trim() })),
-        createdBy: {
-          id: accounts?.[0]?.homeAccountId || '',
-          name: accounts?.[0]?.name || accounts?.[0]?.username || '',
-          mail: accounts?.[0]?.username || '',
-        },
-      };
-
-      const res = await fetch(`${backendBase}/api/categories`, {
+      await fetch(`${backendBase}/api/notify-category-added`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor: payload.createdBy,
+          category: payload.categoryName, // ✅ Also updated here
+        }),
       });
-
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || `Create failed ${res.status}`);
-      }
-
-     // const j = await res.json();
-      setCategorySuccess('Category created successfully');
-      // notify backend to send mail to Helpdesk_Admins (server should handle group list & notifications)
-      try {
-        await fetch(`${backendBase}/api/notify-category-added`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            actor: payload.createdBy,
-            category: payload.name,
-          }),
-        });
-      } catch (notifyErr) {
-        console.error('notify-category-added failed', notifyErr);
-      }
-
-      // reset form & close after small delay
-      setTimeout(() => {
-        resetCategoryForm();
-        setAddFieldOpen(false);
-      }, 900);
-    } catch (err) {
-      console.error('create category failed', err);
-      setCategoryError(err.message || 'Failed to create category');
-    } finally {
-      setCategoryLoading(false);
+    } catch (notifyErr) {
+      console.error('notify-category-added failed', notifyErr);
     }
-  };
+
+    // Reset form & close after small delay
+    setTimeout(() => {
+      resetCategoryForm();
+      setAddFieldOpen(false);
+    }, 900);
+  } catch (err) {
+    console.error('create category failed', err);
+    setCategoryError(err.message || 'Failed to create category');
+  } finally {
+    setCategoryLoading(false);
+  }
+};
 
   // Load categories for remove modal
   const openRemoveFieldModal = async () => {
