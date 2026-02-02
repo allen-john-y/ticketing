@@ -667,21 +667,26 @@ app.get("/api/categories", async (req, res) => {
 app.post("/api/categories", async (req, res) => {
   try {
     const {
-      name,
-      features,
-      categoryHeads,
-      cc,
-      createdBy
-    } = req.body;
+  name,
+  categoryName,
+  features,
+  categoryHeads,
+  cc,
+  createdBy
+} = req.body;
+
 
     console.log("📥 [CREATE CATEGORY] Received payload:", JSON.stringify(req.body, null, 2));
 
     // Validate required fields
-    if (!name || !name.trim()) {
-      return res.status(400).json({ message: "Category name is required" });
-    }
+    const finalName = (name || categoryName || "").trim();
 
-    const normalizedName = name.trim();
+if (!finalName) {
+  return res.status(400).json({ message: "Category name is required" });
+}
+
+const normalizedName = finalName;
+
 
     // Check if category already exists (case-insensitive)
     const existing = await CategoryConfig.findOne({
@@ -704,12 +709,14 @@ app.post("/api/categories", async (req, res) => {
 
     // Create category
     const category = await CategoryConfig.create({
-      name: normalizedName,
-      features: finalFeatures,
-      categoryHeads: Array.isArray(categoryHeads) ? categoryHeads : [],
-      cc: Array.isArray(cc) ? cc : [],
-      createdBy: createdBy || {}
-    });
+  name: normalizedName,
+  categoryName: normalizedName,   // ✅ VERY IMPORTANT
+  features: finalFeatures,
+  categoryHeads: Array.isArray(categoryHeads) ? categoryHeads : [],
+  cc: Array.isArray(cc) ? cc : [],
+  createdBy: createdBy || {}
+});
+
 
     console.log("✅ [CREATE CATEGORY] Category created:", category._id);
 
