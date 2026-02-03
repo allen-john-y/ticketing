@@ -28,7 +28,7 @@ function Dashboard() {
         const isAdmin = groups.includes('Helpdesk_Admin');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
-        const backendUrl = 'https://helpdesk.sandeza.ai/backend';
+        const backendUrl = 'https://helpdesk.sandeza.ai/api';
 
         const endpoint = isAdmin
           ? `${backendUrl}/tickets`

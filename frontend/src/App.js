@@ -14,7 +14,7 @@ import logo from './sandeza.jpg';
 import gearIcon from './GearIcon.jpg';
 
 const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
-const backendBase = 'https://helpdesk.sandeza.ai/backend';
+const backendBase = 'https://helpdesk.sandeza.ai/api';
 
 const pca = new PublicClientApplication({
   auth: {

@@ -28,7 +28,7 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  const backendBase = "https://helpdesk.sandeza.ai/backend";
+  const backendBase = "https://helpdesk.sandeza.ai/api";
 
   const [formData, setFormData] = useState({
     category: '',

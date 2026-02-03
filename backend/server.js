@@ -517,7 +517,7 @@ app.post("/verify-user", async (req, res) => {
 });
 
 // ---------------------- ADMIN NOTIFICATION ROUTES ----------------------
-app.post("/api/notify-admin-added", async (req, res) => {
+app.post("/notify-admin-added", async (req, res) => {
   try {
     const { actor, target } = req.body || {};
     if (!actor || !target) return res.status(400).json({ message: "actor and target are required" });
@@ -577,7 +577,7 @@ app.post("/api/notify-admin-added", async (req, res) => {
   }
 });
 
-app.post("/api/notify-admin-removed", async (req, res) => {
+app.post("/notify-admin-removed", async (req, res) => {
   try {
     const { actor, target } = req.body || {};
     if (!actor || !target) return res.status(400).json({ message: "actor and target are required" });
@@ -640,7 +640,7 @@ app.post("/api/notify-admin-removed", async (req, res) => {
 // ===================== CATEGORY MANAGEMENT API =====================
 
 // GET /api/categories - List all categories
-app.get("/api/categories", async (req, res) => {
+app.get("/categories", async (req, res) => {
   try {
     const categories = await CategoryConfig.find().sort({ createdAt: -1 });
     
@@ -664,7 +664,7 @@ app.get("/api/categories", async (req, res) => {
 });
 
 // POST /api/categories - Create new category
-app.post("/api/categories", async (req, res) => {
+app.post("/categories", async (req, res) => {
   try {
     const {
   name,
@@ -848,7 +848,7 @@ const normalizedName = finalName;
 });
 
 // DELETE /api/categories/:id - Remove category
-app.delete("/api/categories/:id", async (req, res) => {
+app.delete("/categories/:id", async (req, res) => {
   try {
     const categoryId = req.params.id;
 
@@ -937,7 +937,7 @@ app.delete("/api/categories/:id", async (req, res) => {
 });
 
 // POST /api/notify-category-added - Notify about new category (optional, alternative to inline notifications)
-app.post("/api/notify-category-added", async (req, res) => {
+app.post("/notify-category-added", async (req, res) => {
   try {
     const { actor, category } = req.body || {};
     
