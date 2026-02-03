@@ -14,7 +14,7 @@ import logo from './sandeza.jpg';
 import gearIcon from './GearIcon.jpg';
 
 const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
-const backendBase = 'https://ticketing-hn59.onrender.com';
+const backendBase = 'https://helpdesk.sandeza.ai/backend';
 
 const pca = new PublicClientApplication({
   auth: {
@@ -1485,7 +1485,20 @@ const removeSubCategory = (idx) => {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {categoryHeads.map((h, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {h.name && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: '#059669',
+                                marginLeft: 4,
+                                marginTop: 4
+                              }}
+                            >
+                            {h.name}
+                            </div>
+                          )}
+
                         <input
                           value={h.email}
                           onChange={(e) => updateCategoryHeadEmail(idx, e.target.value)}

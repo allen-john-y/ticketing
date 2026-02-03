@@ -36,7 +36,7 @@ function TicketDetails() {
   const [confirmModal, setConfirmModal] = useState(false);
   const [confirmreopenModal, setConfirmreopenModal] = useState(false);
 
-  const backendBase = "https://ticketing-hn59.onrender.com";
+  const backendBase = "https://helpdesk.sandeza.ai/backend";
 
   // Category head / approval states
   const [showApprovalModal, setShowApprovalModal] = useState(false);

@@ -28,7 +28,7 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  const backendBase = "https://ticketing-hn59.onrender.com";
+  const backendBase = "https://helpdesk.sandeza.ai/backend";
 
   const [formData, setFormData] = useState({
     category: '',
