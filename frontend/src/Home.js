@@ -98,7 +98,7 @@ function Home() {
         const isAdmin = groups.includes('Helpdesk_Admin');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
-        const backendBase = "https://helpdesk.sandeza.ai/api";
+        const backendBase = process.env.BACKEND_URL;
         const endpoint = isAdmin
           ? `${backendBase}/tickets`
           : `${backendBase}/tickets?userId=${accounts[0].localAccountId}`;

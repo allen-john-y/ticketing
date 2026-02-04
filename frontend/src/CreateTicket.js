@@ -28,7 +28,7 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  const backendBase = "https://helpdesk.sandeza.ai/api";
+  const backendBase = process.env.BACKEND_URL;
 
   const [formData, setFormData] = useState({
     category: '',
@@ -99,7 +99,7 @@ function CreateTicket() {
           account: accounts[0] 
         });
         
-        const response = await axios.get(`${backendBase}/api/categories`, {
+        const response = await axios.get(`${backendBase}//categories`, {
           headers: { Authorization: `Bearer ${tokenResp.accessToken}` }
         });
         

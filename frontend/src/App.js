@@ -14,13 +14,13 @@ import logo from './sandeza.jpg';
 import gearIcon from './GearIcon.jpg';
 
 const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
-const backendBase = 'https://helpdesk.sandeza.ai/api';
+const backendBase = process.env.BACKEND_URL;
 
 const pca = new PublicClientApplication({
   auth: {
     clientId: '6541d73a-dbbd-4f74-9465-38a0eb03ec6b',
     authority: 'https://login.microsoftonline.com/11909ab3-5ecc-48e0-b898-acf7203a1ad7',
-    redirectUri: 'https://ticketing-psi-tawny.vercel.app/',
+    redirectUri: process.env.FRONTEND_URL,
   },
   cache: { cacheLocation: 'localStorage' },
 });
@@ -352,7 +352,7 @@ function Header({ logout }) {
         name: accounts?.[0]?.name || accounts?.[0]?.username || '',
         mail: accounts?.[0]?.username || accounts?.[0]?.username || '',
       };
-      await fetch(`${backendBase}/api/notify-admin-added`, {
+      await fetch(`${backendBase}/notify-admin-added`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -454,7 +454,7 @@ function Header({ logout }) {
         name: accounts?.[0]?.name || accounts?.[0]?.username || '',
         mail: accounts?.[0]?.username || accounts?.[0]?.username || '',
       };
-      await fetch(`${backendBase}/api/notify-admin-removed`, {
+      await fetch(`${backendBase}/notify-admin-removed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -632,7 +632,7 @@ const removeSubCategory = (idx) => {
       },
     };
 
-    const res = await fetch(`${backendBase}/api/categories`, {
+    const res = await fetch(`${backendBase}/categories`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -647,7 +647,7 @@ const removeSubCategory = (idx) => {
     
     // Notify backend to send mail to Helpdesk_Admins
     try {
-      await fetch(`${backendBase}/api/notify-category-added`, {
+      await fetch(`${backendBase}/notify-category-added`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -683,7 +683,7 @@ const removeSubCategory = (idx) => {
 
     try {
       const token = await acquireTokenForAdmin();
-      const r = await fetch(`${backendBase}/api/categories`, {
+      const r = await fetch(`${backendBase}/categories`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!r.ok) throw new Error(`Failed to load categories ${r.status}`);
@@ -706,7 +706,7 @@ const removeSubCategory = (idx) => {
     setRemoveCategoryError(null);
     try {
       const token = await acquireTokenForAdmin();
-      const r = await fetch(`${backendBase}/api/categories/${encodeURIComponent(selectedCategoryToRemove.id)}`, {
+      const r = await fetch(`${backendBase}/categories/${encodeURIComponent(selectedCategoryToRemove.id)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
