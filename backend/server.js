@@ -690,8 +690,14 @@ const normalizedName = finalName;
 
     // Check if category already exists (case-insensitive)
     const existing = await CategoryConfig.findOne({
-      name: { $regex: new RegExp("^" + normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$", "i") }
-    });
+  categoryName: {
+    $regex: new RegExp(
+      "^" + normalizedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$",
+      "i"
+    )
+  }
+});
+
 
     if (existing) {
       return res.status(400).json({ message: "Category with this name already exists" });
