@@ -98,7 +98,7 @@ function Home() {
         const isAdmin = groups.includes('Helpdesk_Admin');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
-        const backendBase = process.env.REACT_APP_BACKEND_URL;
+        const backendBase = "https://ticketing-hn59.onrender.com";
         const endpoint = isAdmin
           ? `${backendBase}/tickets`
           : `${backendBase}/tickets?userId=${accounts[0].localAccountId}`;

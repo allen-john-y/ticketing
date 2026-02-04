@@ -22,7 +22,10 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' }));
 
 // ---------------------- CORS ------------------------------
-const allowedOrigins = [process.env.FRONTEND_URL];
+const allowedOrigins = [
+  "https://ticketing-psi-tawny.vercel.app",
+  "http://localhost:3000",
+];
 
 app.use(
   cors({
@@ -514,7 +517,7 @@ app.post("/verify-user", async (req, res) => {
 });
 
 // ---------------------- ADMIN NOTIFICATION ROUTES ----------------------
-app.post("/notify-admin-added", async (req, res) => {
+app.post("/api/notify-admin-added", async (req, res) => {
   try {
     const { actor, target } = req.body || {};
     if (!actor || !target) return res.status(400).json({ message: "actor and target are required" });
@@ -540,7 +543,7 @@ app.post("/notify-admin-added", async (req, res) => {
       statusColor: "#16a34a",
       fields: actorFields,
       description: `You have successfully added ${targetName} as a Helpdesk Admin.`,
-      actionLink: process.env.FRONTEND_URL,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
       actionText: "Open Helpdesk"
     });
 
@@ -556,7 +559,7 @@ app.post("/notify-admin-added", async (req, res) => {
       statusColor: "#0ea5e9",
       fields: targetFields,
       description: `You are added as new admin in Helpdesk portal by ${actorName}. If this was unexpected, please contact your IT department.`,
-      actionLink: process.env.FRONTEND_URL,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
       actionText: "Open Helpdesk"
     });
 
@@ -574,7 +577,7 @@ app.post("/notify-admin-added", async (req, res) => {
   }
 });
 
-app.post("/notify-admin-removed", async (req, res) => {
+app.post("/api/notify-admin-removed", async (req, res) => {
   try {
     const { actor, target } = req.body || {};
     if (!actor || !target) return res.status(400).json({ message: "actor and target are required" });
@@ -600,7 +603,7 @@ app.post("/notify-admin-removed", async (req, res) => {
       statusColor: "#16a34a",
       fields: actorFields,
       description: `You have successfully removed ${targetName} from Helpdesk Admins.`,
-      actionLink: process.env.FRONTEND_URL,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
       actionText: "Open Helpdesk"
     });
 
@@ -616,7 +619,7 @@ app.post("/notify-admin-removed", async (req, res) => {
       statusColor: "#dc2626",
       fields: targetFields,
       description: `You are removed from admin in Helpdesk portal by ${actorName}. If this was unexpected, please contact your IT department.`,
-      actionLink: process.env.FRONTEND_URL,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
       actionText: "Open Helpdesk"
     });
 
@@ -637,7 +640,7 @@ app.post("/notify-admin-removed", async (req, res) => {
 // ===================== CATEGORY MANAGEMENT API =====================
 
 // GET /api/categories - List all categories
-app.get("/categories", async (req, res) => {
+app.get("/api/categories", async (req, res) => {
   try {
     const categories = await CategoryConfig.find().sort({ createdAt: -1 });
     
@@ -661,7 +664,7 @@ app.get("/categories", async (req, res) => {
 });
 
 // POST /api/categories - Create new category
-app.post("/categories", async (req, res) => {
+app.post("/api/categories", async (req, res) => {
   try {
     const {
   name,
@@ -757,7 +760,7 @@ const normalizedName = finalName;
       statusColor: "#16a34a",
       fields: emailFields,
       description: `Category "${normalizedName}" has been successfully created and is now available for ticket creation.`,
-      actionLink: process.env.FRONTEND_URL,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
       actionText: "Open Helpdesk"
     });
 
@@ -784,7 +787,7 @@ const normalizedName = finalName;
         statusColor: "#0ea5e9",
         fields: emailFields,
         description: `You have been assigned as a Category Head for "${normalizedName}". You will receive email notifications for ticket approvals and actions.`,
-        actionLink: process.env.FRONTEND_URL,
+        actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
         actionText: "Open Helpdesk"
       });
 
@@ -809,7 +812,7 @@ const normalizedName = finalName;
         statusColor: "#0ea5e9",
         fields: emailFields,
         description: `A new category "${normalizedName}" has been created. You are listed as a CC recipient and will receive notifications for ticket actions.`,
-        actionLink: process.env.FRONTEND_URL,
+        actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
         actionText: "Open Helpdesk"
       });
 
@@ -845,7 +848,7 @@ const normalizedName = finalName;
 });
 
 // DELETE /api/categories/:id - Remove category
-app.delete("/categories/:id", async (req, res) => {
+app.delete("/api/categories/:id", async (req, res) => {
   try {
     const categoryId = req.params.id;
 
@@ -887,7 +890,7 @@ app.delete("/categories/:id", async (req, res) => {
       statusColor: "#dc2626",
       fields: emailFields,
       description: `The category "${categoryName}" has been permanently deleted and is no longer available for ticket creation.`,
-      actionLink: process.env.FRONTEND_URL,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
       actionText: "Open Helpdesk"
     });
 
@@ -934,7 +937,7 @@ app.delete("/categories/:id", async (req, res) => {
 });
 
 // POST /api/notify-category-added - Notify about new category (optional, alternative to inline notifications)
-app.post("/notify-category-added", async (req, res) => {
+app.post("/api/notify-category-added", async (req, res) => {
   try {
     const { actor, category } = req.body || {};
     
@@ -963,7 +966,7 @@ app.post("/notify-category-added", async (req, res) => {
       statusColor: "#16a34a",
       fields,
       description: `${actorName} has created a new category "${category}" in the Helpdesk system.`,
-      actionLink: process.env.FRONTEND_URL,
+      actionLink: process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app",
       actionText: "View Categories"
     });
 
@@ -1183,7 +1186,7 @@ app.post("/tickets", async (req, res) => {
         { label: "Created At", value: nowIST },
       ],
       description: description,
-      actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
@@ -1212,7 +1215,7 @@ app.post("/tickets", async (req, res) => {
       statusColor: initialStatus === "Waiting for approval" ? "#f59e0b" : "#0ea5e9",
       fields: deptFields,
       description: description,
-      actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: initialStatus === "Waiting for approval" ? "Approve / Reject" : "Open Ticket"
     });
 
@@ -1327,7 +1330,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
         statusColor: "#16a34a",
         fields: userFields,
         description: `The new temporary password has been generated and applied successfully. Please sign in and change your password immediately.`,
-        actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
         actionText: "View Ticket"
       });
 
@@ -1349,7 +1352,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
         statusColor: "#16a34a",
         fields: deptFields,
         description: `Password reset performed successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
-        actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
         actionText: "Open Ticket"
       });
 
@@ -1392,7 +1395,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
           statusColor: "#0ea5e9",
           fields: otherFields,
           description: otherDesc,
-          actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+          actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
           actionText: "View Ticket"
         });
 
@@ -1484,7 +1487,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
         statusColor: "#16a34a",
         fields: userFields,
         description: `Your account (${userObj.mail || userIdentifier}) has been added to the device administrator group. Please sign out and sign in again for group changes to take effect.`,
-        actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
         actionText: "View Ticket"
       });
 
@@ -1503,7 +1506,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
         statusColor: "#16a34a",
         fields: deptFields,
         description: `User ${ticket.userName} was provided with admin access by ${ticket.closedBy}.`,
-        actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+        actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
         actionText: "Open Ticket"
       });
 
@@ -1542,7 +1545,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
           statusColor: "#0ea5e9",
           fields: otherFields,
           description: otherDesc,
-          actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+          actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
           actionText: "View Ticket"
         });
 
@@ -1635,7 +1638,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
       statusColor: "#dc2626",
       fields: userFields,
       description: `Reason:\n${reason || 'No reason provided.'}\n\nIf you believe this is in error, please contact the department or raise a new ticket.`,
-      actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
@@ -1651,7 +1654,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
         { label: "Rejected On", value: nowIST },
       ],
       description: `The ticket has been rejected`,
-      actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
 
@@ -1739,7 +1742,7 @@ app.put("/tickets/:id/close", async (req, res) => {
         { label: "Closed On", value: nowIST }
       ],
       description: `Reason for closing:\n${ticket.closeReason}`,
-      actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
@@ -1831,7 +1834,7 @@ app.put("/tickets/:id/revive", async (req, res) => {
         { label: "Revived On", value: nowIST }
       ],
       description: `Reason for reviving:\n${ticket.reviveReason}`,
-      actionLink: `${process.env.FRONTEND_URL}/ticket/${ticket._id}`,
+      actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 

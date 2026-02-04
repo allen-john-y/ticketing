@@ -14,13 +14,13 @@ import logo from './sandeza.jpg';
 import gearIcon from './GearIcon.jpg';
 
 const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
-const backendBase = process.env.REACT_APP_BACKEND_URL;
+const backendBase = 'https://ticketing-hn59.onrender.com';
 
 const pca = new PublicClientApplication({
   auth: {
     clientId: '6541d73a-dbbd-4f74-9465-38a0eb03ec6b',
     authority: 'https://login.microsoftonline.com/11909ab3-5ecc-48e0-b898-acf7203a1ad7',
-    redirectUri: process.env.REACT_APP_FRONTEND_URL,
+    redirectUri: 'https://ticketing-psi-tawny.vercel.app/',
   },
   cache: { cacheLocation: 'localStorage' },
 });
@@ -352,7 +352,7 @@ function Header({ logout }) {
         name: accounts?.[0]?.name || accounts?.[0]?.username || '',
         mail: accounts?.[0]?.username || accounts?.[0]?.username || '',
       };
-      await fetch(`${backendBase}/notify-admin-added`, {
+      await fetch(`${backendBase}/api/notify-admin-added`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -454,7 +454,7 @@ function Header({ logout }) {
         name: accounts?.[0]?.name || accounts?.[0]?.username || '',
         mail: accounts?.[0]?.username || accounts?.[0]?.username || '',
       };
-      await fetch(`${backendBase}/notify-admin-removed`, {
+      await fetch(`${backendBase}/api/notify-admin-removed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -632,7 +632,7 @@ const removeSubCategory = (idx) => {
       },
     };
 
-    const res = await fetch(`${backendBase}/categories`, {
+    const res = await fetch(`${backendBase}/api/categories`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -647,7 +647,7 @@ const removeSubCategory = (idx) => {
     
     // Notify backend to send mail to Helpdesk_Admins
     try {
-      await fetch(`${backendBase}/notify-category-added`, {
+      await fetch(`${backendBase}/api/notify-category-added`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -683,7 +683,7 @@ const removeSubCategory = (idx) => {
 
     try {
       const token = await acquireTokenForAdmin();
-      const r = await fetch(`${backendBase}/categories`, {
+      const r = await fetch(`${backendBase}/api/categories`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!r.ok) throw new Error(`Failed to load categories ${r.status}`);
@@ -706,7 +706,7 @@ const removeSubCategory = (idx) => {
     setRemoveCategoryError(null);
     try {
       const token = await acquireTokenForAdmin();
-      const r = await fetch(`${backendBase}/categories/${encodeURIComponent(selectedCategoryToRemove.id)}`, {
+      const r = await fetch(`${backendBase}/api/categories/${encodeURIComponent(selectedCategoryToRemove.id)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1485,20 +1485,7 @@ const removeSubCategory = (idx) => {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {categoryHeads.map((h, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        {h.name && (
-                            <div
-                              style={{
-                                fontSize: 12,
-                                color: '#059669',
-                                marginLeft: 4,
-                                marginTop: 4
-                              }}
-                            >
-                            {h.name}
-                            </div>
-                          )}
-
+                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
                         <input
                           value={h.email}
                           onChange={(e) => updateCategoryHeadEmail(idx, e.target.value)}

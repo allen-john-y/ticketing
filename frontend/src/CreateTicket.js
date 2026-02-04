@@ -28,7 +28,7 @@ function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
 
-  const backendBase = process.env.REACT_APP_BACKEND_URL;
+  const backendBase = "https://ticketing-hn59.onrender.com";
 
   const [formData, setFormData] = useState({
     category: '',
@@ -99,7 +99,7 @@ function CreateTicket() {
           account: accounts[0] 
         });
         
-        const response = await axios.get(`${backendBase}//categories`, {
+        const response = await axios.get(`${backendBase}/api/categories`, {
           headers: { Authorization: `Bearer ${tokenResp.accessToken}` }
         });
         
