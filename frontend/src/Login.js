@@ -61,6 +61,11 @@ function Login() {
 
   const login = async () => {
     try {
+
+      console.log(
+      "redirectUri =",
+      instance.getConfiguration().auth.redirectUri
+    );
       let loginResponse = null;
       let popupError = null;
 
@@ -111,7 +116,7 @@ function Login() {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link
         rel="stylesheet"
-        href="sandbox:/fonts.googleapis.com/css2?family=Red+Hat+Display:wght@700;900&family=Open+Sans:wght@400;600;800&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@700;900&family=Open+Sans:wght@400;600;800&display=swap"
       />
 
       <div
