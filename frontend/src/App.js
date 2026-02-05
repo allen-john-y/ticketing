@@ -1642,7 +1642,23 @@ function Header({ logout }) {
                               background: h.email ? '#ecfdf5' : 'white'
                             }}
                           />
-                          {idx === 0 ? (
+
+                          {h.email ? (
+                            <button 
+                              type="button" 
+                              onClick={() => removeCategoryHead(idx)} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#fff1f2', 
+                                border: '1px solid #fecaca',
+                                cursor: 'pointer',
+                                fontSize: 14
+                              }}
+                            >
+                              ✖
+                            </button>
+                          ) : (
                             <button 
                               type="button" 
                               onClick={addCategoryHead} 
@@ -1658,23 +1674,9 @@ function Header({ logout }) {
                             >
                               ＋
                             </button>
-                          ) : (
-                            <button 
-                              type="button" 
-                              onClick={() => removeCategoryHead(idx)} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#fff1f2', 
-                                border: '1px solid #fecaca',
-                                cursor: 'pointer',
-                                fontSize: 14
-                              }}
-                            >
-                              ✖
-                            </button>
                           )}
                         </div>
+
 
                         {/* Dropdown for search results */}
                         {h.showDropdown && h.searchResults.length > 0 && (
