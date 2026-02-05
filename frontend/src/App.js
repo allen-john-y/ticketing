@@ -1642,38 +1642,39 @@ function Header({ logout }) {
                               background: h.email ? '#ecfdf5' : 'white'
                             }}
                           />
-                          {idx === 0 ? (
-                            <button 
-                              type="button" 
-                              onClick={addCategoryHead} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#eef2ff', 
-                                border: '1px solid #c7d2fe',
-                                cursor: 'pointer',
-                                fontSize: 16,
-                                fontWeight: 600
-                              }}
-                            >
-                              ＋
-                            </button>
-                          ) : (
-                            <button 
-                              type="button" 
-                              onClick={() => removeCategoryHead(idx)} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#fff1f2', 
-                                border: '1px solid #fecaca',
-                                cursor: 'pointer',
-                                fontSize: 14
-                              }}
-                            >
-                              ✖
-                            </button>
-                          )}
+                          {h.email ? (
+  <button 
+    type="button" 
+    onClick={() => removeCategoryHead(idx)} 
+    style={{ 
+      padding: '8px 12px', 
+      borderRadius: 6, 
+      background: '#fff1f2', 
+      border: '1px solid #fecaca',
+      cursor: 'pointer',
+      fontSize: 14
+    }}
+  >
+    ✖
+  </button>
+) : (
+  <button 
+    type="button" 
+    onClick={addCategoryHead} 
+    style={{ 
+      padding: '8px 12px', 
+      borderRadius: 6, 
+      background: '#eef2ff', 
+      border: '1px solid #c7d2fe',
+      cursor: 'pointer',
+      fontSize: 16,
+      fontWeight: 600
+    }}
+  >
+    ＋
+  </button>
+)}
+
                         </div>
 
                         {/* Dropdown for search results */}
@@ -1761,38 +1762,39 @@ function Header({ logout }) {
                               background: c.email ? '#ecfdf5' : 'white'
                             }}
                           />
-                          {idx === 0 ? (
-                            <button 
-                              type="button" 
-                              onClick={addCcEmail} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#eef2ff', 
-                                border: '1px solid #c7d2fe',
-                                cursor: 'pointer',
-                                fontSize: 16,
-                                fontWeight: 600
-                              }}
-                            >
-                              ＋
-                            </button>
-                          ) : (
-                            <button 
-                              type="button" 
-                              onClick={() => removeCcEmail(idx)} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#fff1f2', 
-                                border: '1px solid #fecaca',
-                                cursor: 'pointer',
-                                fontSize: 14
-                              }}
-                            >
-                              ✖
-                            </button>
-                          )}
+                          {c.email ? (
+  <button 
+    type="button" 
+    onClick={() => removeCcEmail(idx)} 
+    style={{ 
+      padding: '8px 12px', 
+      borderRadius: 6, 
+      background: '#fff1f2', 
+      border: '1px solid #fecaca',
+      cursor: 'pointer',
+      fontSize: 14
+    }}
+  >
+    ✖
+  </button>
+) : (
+  <button 
+    type="button" 
+    onClick={addCcEmail} 
+    style={{ 
+      padding: '8px 12px', 
+      borderRadius: 6, 
+      background: '#eef2ff', 
+      border: '1px solid #c7d2fe',
+      cursor: 'pointer',
+      fontSize: 16,
+      fontWeight: 600
+    }}
+  >
+    ＋
+  </button>
+)}
+
                         </div>
 
                         {/* Dropdown for search results */}
