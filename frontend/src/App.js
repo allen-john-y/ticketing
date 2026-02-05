@@ -1,10 +1,11 @@
-/* Patched App.js — added Add Field / Remove Field admin flows inside Header.
-   Keep in mind: adjust backend endpoints if your server uses different routes.
+/* Patched App.js — added real-time search for Category Heads and CC Emails in Add Field modal.
+   Using the same search pattern as CreateTicket.js for consistency.
 */
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import axios from 'axios';
 import Login from './Login';
 import Home from './Home';
 import CreateTicket from './CreateTicket';
@@ -79,8 +80,25 @@ function Header({ logout }) {
   const [enableAttachmentsForCategory, setEnableAttachmentsForCategory] = useState(false);
   const [requireAttachmentsForCategory, setRequireAttachmentsForCategory] = useState(false);
 
-  const [categoryHeads, setCategoryHeads] = useState([{ email: '', name: '', verifying: false }]);
-  const [ccEmails, setCcEmails] = useState([{ email: '', name: '', verifying: false }]);
+  // Updated Category Heads with search functionality (using CreateTicket.js pattern)
+  const [categoryHeads, setCategoryHeads] = useState([{ 
+    email: '', 
+    name: '', 
+    searchQuery: '',
+    searchResults: [],
+    searching: false,
+    showDropdown: false
+  }]);
+
+  // Updated CC Emails with search functionality (using CreateTicket.js pattern)
+  const [ccEmails, setCcEmails] = useState([{ 
+    email: '', 
+    name: '', 
+    searchQuery: '',
+    searchResults: [],
+    searching: false,
+    showDropdown: false
+  }]);
 
   const [availableCategories, setAvailableCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
@@ -90,11 +108,33 @@ function Header({ logout }) {
   const [removeCategorySuccess, setRemoveCategorySuccess] = useState(null);
   const FIXED_OTHER = 'Other';
 
+  // Refs for click outside detection
+  const categoryHeadsRefs = useRef([]);
+  const ccEmailsRefs = useRef([]);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setProfileOpen(false);
       }
+
+      // Close category heads dropdowns
+      categoryHeadsRefs.current.forEach((ref, idx) => {
+        if (ref && !ref.contains(e.target)) {
+          setCategoryHeads(prev => prev.map((h, i) => 
+            i === idx ? { ...h, showDropdown: false } : h
+          ));
+        }
+      });
+
+      // Close CC emails dropdowns
+      ccEmailsRefs.current.forEach((ref, idx) => {
+        if (ref && !ref.contains(e.target)) {
+          setCcEmails(prev => prev.map((c, i) => 
+            i === idx ? { ...c, showDropdown: false } : c
+          ));
+        }
+      });
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -476,201 +516,299 @@ function Header({ logout }) {
   const resetCategoryForm = () => {
     setCategoryName('');
     setEnableOnBehalf(false);
-    //setOnBehalfOptions([{ label: 'Self', key: 'Self' }]);
     setRequireOnBehalf(false);
     setEnableSubCategory(false);
     setSubCategories([]);
     setRequireSubCategory(false);
     setEnableAttachmentsForCategory(false);
     setRequireAttachmentsForCategory(false);
-    setCategoryHeads([{ email: '', name: '', verifying: false }]);
-    setCcEmails([{ email: '', name: '', verifying: false }]);
+    setCategoryHeads([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
+    setCcEmails([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
     setCategoryError(null);
     setCategorySuccess(null);
   };
 
   const addSubCategory = () => {
-  setSubCategories(prev => [...prev, '']);
-};
+    setSubCategories(prev => [...prev, '']);
+  };
 
-const updateSubCategory = (idx, value) => {
-  setSubCategories(prev =>
-    prev.map((s, i) => (i === idx ? value : s))
-  );
-};
+  const updateSubCategory = (idx, value) => {
+    setSubCategories(prev =>
+      prev.map((s, i) => (i === idx ? value : s))
+    );
+  };
 
-const removeSubCategory = (idx) => {
-  setSubCategories(prev =>
-    prev.filter((_, i) => i !== idx)
-  );
-};
+  const removeSubCategory = (idx) => {
+    setSubCategories(prev =>
+      prev.filter((_, i) => i !== idx)
+    );
+  };
 
+  // --- NEW: Real-time search for Category Heads (using CreateTicket.js pattern) ---
+  const handleCategoryHeadSearch = async (idx, searchText) => {
+    if (!searchText || searchText.trim().length < 2) {
+      setCategoryHeads(prev => prev.map((h, i) => 
+        i === idx ? { ...h, searchResults: [], showDropdown: false } : h
+      ));
+      return;
+    }
+
+    setCategoryHeads(prev => prev.map((h, i) => 
+      i === idx ? { ...h, searching: true, showDropdown: true } : h
+    ));
+
+    try {
+      const token = await instance.acquireTokenSilent({ 
+        scopes: ['User.Read.All'], 
+        account: accounts[0] 
+      });
+
+      // Search users in Azure AD - exactly like CreateTicket.js
+      const response = await axios.get(
+        `https://graph.microsoft.com/v1.0/users?$filter=startswith(mail,'${searchText}') or startswith(displayName,'${searchText}') or startswith(userPrincipalName,'${searchText}')&$top=5`,
+        {
+          headers: { Authorization: `Bearer ${token.accessToken}` }
+        }
+      );
+
+      const results = (response.data.value || []).map(u => ({
+        id: u.id,
+        displayName: u.displayName || u.mail || u.userPrincipalName || '(no name)',
+        mail: u.mail || u.userPrincipalName || '',
+        userPrincipalName: u.userPrincipalName || ''
+      }));
+
+      setCategoryHeads(prev => prev.map((h, i) => 
+        i === idx ? { ...h, searchResults: results, searching: false } : h
+      ));
+    } catch (err) {
+      console.error('Error searching category heads:', err);
+      setCategoryHeads(prev => prev.map((h, i) => 
+        i === idx ? { ...h, searchResults: [], searching: false } : h
+      ));
+    }
+  };
+
+  const selectCategoryHead = (idx, user) => {
+    setCategoryHeads(prev => prev.map((h, i) => 
+      i === idx 
+        ? { 
+            email: user.mail, 
+            name: user.displayName, 
+            searchQuery: user.displayName,
+            searchResults: [],
+            searching: false,
+            showDropdown: false
+          } 
+        : h
+    ));
+  };
+
+  const updateCategoryHeadQuery = (idx, query) => {
+    setCategoryHeads(prev => prev.map((h, i) => 
+      i === idx ? { ...h, searchQuery: query, email: '', name: '' } : h
+    ));
+    handleCategoryHeadSearch(idx, query);
+  };
 
   const addCategoryHead = () => {
-    setCategoryHeads(prev => [...prev, { email: '', name: '', verifying: false }]);
+    setCategoryHeads(prev => [...prev, { 
+      email: '', 
+      name: '', 
+      searchQuery: '',
+      searchResults: [],
+      searching: false,
+      showDropdown: false
+    }]);
   };
-  const updateCategoryHeadEmail = (idx, email) => {
-    setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, email, name: '', verifying: false } : h)));
+
+  const removeCategoryHead = (idx) => {
+    setCategoryHeads(prev => prev.filter((_, i) => i !== idx));
+    categoryHeadsRefs.current = categoryHeadsRefs.current.filter((_, i) => i !== idx);
   };
-  const verifyCategoryHead = async (idx) => {
-    const head = categoryHeads[idx];
-    if (!head || !head.email) return;
-    setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, verifying: true } : h)));
-    try {
-      // try Graph lookup for user
-      const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
-      const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(head.email)}?$select=displayName,mail,userPrincipalName`, {
-        headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
-      });
-      if (r.ok) {
-        const json = await r.json();
-        const name = json.displayName || json.mail || json.userPrincipalName || head.email;
-        setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, name, verifying: false } : h)));
-        return;
-      }
 
-      // fallback by search
-      const searchR = await fetch(`https://graph.microsoft.com/v1.0/users?$filter=tolower(mail) eq '${head.email.toLowerCase()}' or tolower(userPrincipalName) eq '${head.email.toLowerCase()}'&$select=displayName,mail,userPrincipalName`, {
-        headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
-      });
-      if (searchR.ok) {
-        const j = await searchR.json();
-        const found = Array.isArray(j.value) && j.value[0];
-        if (found) {
-          const name = found.displayName || found.mail || found.userPrincipalName || head.email;
-          setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, name, verifying: false } : h)));
-          return;
-        }
-      }
-
-      // not found
-      setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, name: '', verifying: false } : h)));
-      setCategoryError('One or more Category Head emails could not be resolved in Azure AD.');
-    } catch (err) {
-      console.error('verify head error', err);
-      setCategoryError(err.message || 'Failed to verify head email');
-      setCategoryHeads(prev => prev.map((h, i) => (i === idx ? { ...h, verifying: false } : h)));
+  // --- NEW: Real-time search for CC Emails (using CreateTicket.js pattern) ---
+  const handleCcEmailSearch = async (idx, searchText) => {
+    if (!searchText || searchText.trim().length < 2) {
+      setCcEmails(prev => prev.map((c, i) => 
+        i === idx ? { ...c, searchResults: [], showDropdown: false } : c
+      ));
+      return;
     }
+
+    setCcEmails(prev => prev.map((c, i) => 
+      i === idx ? { ...c, searching: true, showDropdown: true } : c
+    ));
+
+    try {
+      const token = await instance.acquireTokenSilent({ 
+        scopes: ['User.Read.All'], 
+        account: accounts[0] 
+      });
+
+      // Search users in Azure AD - exactly like CreateTicket.js
+      const response = await axios.get(
+        `https://graph.microsoft.com/v1.0/users?$filter=startswith(mail,'${searchText}') or startswith(displayName,'${searchText}') or startswith(userPrincipalName,'${searchText}')&$top=5`,
+        {
+          headers: { Authorization: `Bearer ${token.accessToken}` }
+        }
+      );
+
+      const results = (response.data.value || []).map(u => ({
+        id: u.id,
+        displayName: u.displayName || u.mail || u.userPrincipalName || '(no name)',
+        mail: u.mail || u.userPrincipalName || '',
+        userPrincipalName: u.userPrincipalName || ''
+      }));
+
+      setCcEmails(prev => prev.map((c, i) => 
+        i === idx ? { ...c, searchResults: results, searching: false } : c
+      ));
+    } catch (err) {
+      console.error('Error searching CC emails:', err);
+      setCcEmails(prev => prev.map((c, i) => 
+        i === idx ? { ...c, searchResults: [], searching: false } : c
+      ));
+    }
+  };
+
+  const selectCcEmail = (idx, user) => {
+    setCcEmails(prev => prev.map((c, i) => 
+      i === idx 
+        ? { 
+            email: user.mail, 
+            name: user.displayName, 
+            searchQuery: user.displayName,
+            searchResults: [],
+            searching: false,
+            showDropdown: false
+          } 
+        : c
+    ));
+  };
+
+  const updateCcEmailQuery = (idx, query) => {
+    setCcEmails(prev => prev.map((c, i) => 
+      i === idx ? { ...c, searchQuery: query, email: '', name: '' } : c
+    ));
+    handleCcEmailSearch(idx, query);
   };
 
   const addCcEmail = () => {
-    setCcEmails(prev => [...prev, { email: '', name: '', verifying: false }]);
+    setCcEmails(prev => [...prev, { 
+      email: '', 
+      name: '', 
+      searchQuery: '',
+      searchResults: [],
+      searching: false,
+      showDropdown: false
+    }]);
   };
-  const updateCcEmail = (idx, email) => {
-    setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, email, name: '', verifying: false } : h)));
-  };
-  const verifyCcEmail = async (idx) => {
-    const head = ccEmails[idx];
-    if (!head || !head.email) return;
-    setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, verifying: true } : h)));
-    try {
-      const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
-      const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(head.email)}?$select=displayName,mail,userPrincipalName`, {
-        headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
-      });
-      if (r.ok) {
-        const json = await r.json();
-        const name = json.displayName || json.mail || json.userPrincipalName || head.email;
-        setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, name, verifying: false } : h)));
-        return;
-      }
-      setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, name: '', verifying: false } : h)));
-      setCategoryError('One or more CC emails could not be resolved in Azure AD.');
-    } catch (err) {
-      console.error('verify cc error', err);
-      setCategoryError(err.message || 'Failed to verify cc email');
-      setCcEmails(prev => prev.map((h, i) => (i === idx ? { ...h, verifying: false } : h)));
-    }
+
+  const removeCcEmail = (idx) => {
+    setCcEmails(prev => prev.filter((_, i) => i !== idx));
+    ccEmailsRefs.current = ccEmailsRefs.current.filter((_, i) => i !== idx);
   };
 
   const createCategory = async () => {
-  if (!categoryName || !categoryName.trim()) {
-    setCategoryError('Category name is required');
-    return;
-  }
-  setCategoryError(null);
-  setCategoryLoading(true);
-  setCategorySuccess(null);
-
-  try {
-    const token = await acquireTokenForAdmin();
-
-    // ✅ FIX: Changed 'name' to 'categoryName' to match backend schema
-    const payload = {
-      name: categoryName.trim(),
-      categoryName: categoryName.trim(), // ← FIXED: was 'name', now 'categoryName'
-      features: {
-        onBehalf: enableOnBehalf 
-          ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
-          : { enabled: false },
-        subCategories: enableSubCategory
-          ? {
-              enabled: true,
-              list: [
-                ...subCategories
-                  .map(s => s.trim())
-                  .filter(s => s && s !== FIXED_OTHER),
-                FIXED_OTHER
-              ],
-              required: !!requireSubCategory
-            }
-          : { enabled: false },
-        attachments: enableAttachmentsForCategory 
-          ? { enabled: true, required: !!requireAttachmentsForCategory } 
-          : { enabled: false },
-      },
-      categoryHeads: categoryHeads
-        .filter(h => h.email)
-        .map(h => ({ email: h.email.trim(), name: h.name || h.email.trim() })),
-      cc: ccEmails
-        .filter(c => c.email)
-        .map(c => ({ email: c.email.trim(), name: c.name || c.email.trim() })),
-      createdBy: {
-        id: accounts?.[0]?.homeAccountId || '',
-        name: accounts?.[0]?.name || accounts?.[0]?.username || '',
-        mail: accounts?.[0]?.username || '',
-      },
-    };
-
-    const res = await fetch(`${backendBase}/api/categories`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(t || `Create failed ${res.status}`);
+    if (!categoryName || !categoryName.trim()) {
+      setCategoryError('Category name is required');
+      return;
     }
 
-    setCategorySuccess('Category created successfully');
-    
-    // Notify backend to send mail to Helpdesk_Admins
+    // Validate category heads have emails
+    const validHeads = categoryHeads.filter(h => h.email && h.email.trim());
+    if (validHeads.length === 0) {
+      setCategoryError('At least one Category Head is required');
+      return;
+    }
+
+    setCategoryError(null);
+    setCategoryLoading(true);
+    setCategorySuccess(null);
+
     try {
-      await fetch(`${backendBase}/api/notify-category-added`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actor: payload.createdBy,
-          category: payload.categoryName, // ✅ Also updated here
-        }),
-      });
-    } catch (notifyErr) {
-      console.error('notify-category-added failed', notifyErr);
-    }
+      const token = await acquireTokenForAdmin();
 
-    // Reset form & close after small delay
-    setTimeout(() => {
-      resetCategoryForm();
-      setAddFieldOpen(false);
-    }, 900);
-  } catch (err) {
-    console.error('create category failed', err);
-    setCategoryError(err.message || 'Failed to create category');
-  } finally {
-    setCategoryLoading(false);
-  }
-};
+      const payload = {
+        name: categoryName.trim(),
+        categoryName: categoryName.trim(),
+        features: {
+          onBehalf: enableOnBehalf 
+            ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
+            : { enabled: false },
+          subCategories: enableSubCategory
+            ? {
+                enabled: true,
+                list: [
+                  ...subCategories
+                    .map(s => s.trim())
+                    .filter(s => s && s !== FIXED_OTHER),
+                  FIXED_OTHER
+                ],
+                required: !!requireSubCategory
+              }
+            : { enabled: false },
+          attachments: enableAttachmentsForCategory 
+            ? { enabled: true, required: !!requireAttachmentsForCategory } 
+            : { enabled: false },
+        },
+        categoryHeads: validHeads.map(h => ({ 
+          email: h.email.trim(), 
+          name: h.name || h.email.trim() 
+        })),
+        cc: ccEmails
+          .filter(c => c.email && c.email.trim())
+          .map(c => ({ 
+            email: c.email.trim(), 
+            name: c.name || c.email.trim() 
+          })),
+        createdBy: {
+          id: accounts?.[0]?.homeAccountId || '',
+          name: accounts?.[0]?.name || accounts?.[0]?.username || '',
+          mail: accounts?.[0]?.username || '',
+        },
+      };
+
+      const res = await fetch(`${backendBase}/api/categories`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `Create failed ${res.status}`);
+      }
+
+      setCategorySuccess('Category created successfully');
+      
+      // Notify backend to send mail to Helpdesk_Admins
+      try {
+        await fetch(`${backendBase}/api/notify-category-added`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            actor: payload.createdBy,
+            category: payload.categoryName,
+          }),
+        });
+      } catch (notifyErr) {
+        console.error('notify-category-added failed', notifyErr);
+      }
+
+      // Reset form & close after small delay
+      setTimeout(() => {
+        resetCategoryForm();
+        setAddFieldOpen(false);
+      }, 900);
+    } catch (err) {
+      console.error('create category failed', err);
+      setCategoryError(err.message || 'Failed to create category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
 
   // Load categories for remove modal
   const openRemoveFieldModal = async () => {
@@ -1396,7 +1534,7 @@ const removeSubCategory = (idx) => {
         </>
       )}
 
-     {/* --- ALIGNED: Add Field Modal --- */}
+     {/* --- UPDATED: Add Field Modal with CreateTicket.js-style Search --- */}
       {addFieldOpen && (
         <>
           <div
@@ -1475,170 +1613,242 @@ const removeSubCategory = (idx) => {
               {/* Two Column Layout for Category Heads and CC Emails */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 
-                {/* Category Heads */}
+                {/* Category Heads with Real-time Search (CreateTicket.js style) */}
                 <div>
                   <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                    Category Heads
+                    Category Heads <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                    They approve tickets & receive email notifications
+                    Start typing to search and select users
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {categoryHeads.map((h, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
-                        <input
-                          value={h.email}
-                          onChange={(e) => updateCategoryHeadEmail(idx, e.target.value)}
-                          placeholder="email@company.com"
-                          style={{ 
-                            flex: 1, 
-                            padding: '8px 10px', 
-                            borderRadius: 6, 
+                      <div 
+                        key={idx} 
+                        ref={el => categoryHeadsRefs.current[idx] = el}
+                        style={{ position: 'relative' }}
+                      >
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                          <input
+                            value={h.searchQuery}
+                            onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
+                            placeholder="Type name or email..."
+                            style={{ 
+                              flex: 1, 
+                              padding: '8px 10px', 
+                              borderRadius: 6, 
+                              border: h.email ? '1px solid #10b981' : '1px solid #e6e9ee',
+                              fontSize: 13,
+                              background: h.email ? '#ecfdf5' : 'white'
+                            }}
+                          />
+                          {idx === 0 ? (
+                            <button 
+                              type="button" 
+                              onClick={addCategoryHead} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#eef2ff', 
+                                border: '1px solid #c7d2fe',
+                                cursor: 'pointer',
+                                fontSize: 16,
+                                fontWeight: 600
+                              }}
+                            >
+                              ＋
+                            </button>
+                          ) : (
+                            <button 
+                              type="button" 
+                              onClick={() => removeCategoryHead(idx)} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#fff1f2', 
+                                border: '1px solid #fecaca',
+                                cursor: 'pointer',
+                                fontSize: 14
+                              }}
+                            >
+                              ✖
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Dropdown for search results */}
+                        {h.showDropdown && h.searchResults.length > 0 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            background: 'white',
                             border: '1px solid #e6e9ee',
-                            fontSize: 13
-                          }}
-                        />
-                        <button 
-                          type="button" 
-                          onClick={() => verifyCategoryHead(idx)} 
-                          disabled={h.verifying || !h.email}
-                          style={{ 
-                            padding: '8px 12px', 
-                            borderRadius: 6, 
-                            background: h.verifying ? '#9ec7df' : '#0b79bf', 
-                            color: 'white', 
-                            border: 'none',
-                            cursor: h.verifying || !h.email ? 'default' : 'pointer',
-                            fontSize: 13,
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {h.verifying ? 'Checking…' : 'Lookup'}
-                        </button>
-                        {idx === 0 ? (
-                          <button 
-                            type="button" 
-                            onClick={addCategoryHead} 
-                            style={{ 
-                              padding: '8px 12px', 
-                              borderRadius: 6, 
-                              background: '#eef2ff', 
-                              border: '1px solid #c7d2fe',
-                              cursor: 'pointer',
-                              fontSize: 16,
-                              fontWeight: 600
-                            }}
-                          >
-                            ＋
-                          </button>
-                        ) : (
-                          <button 
-                            type="button" 
-                            onClick={() => setCategoryHeads(prev => prev.filter((_, i) => i !== idx))} 
-                            style={{ 
-                              padding: '8px 12px', 
-                              borderRadius: 6, 
-                              background: '#fff1f2', 
-                              border: '1px solid #fecaca',
-                              cursor: 'pointer',
-                              fontSize: 14
-                            }}
-                          >
-                            ✖
-                          </button>
+                            borderRadius: 6,
+                            marginTop: 4,
+                            maxHeight: 200,
+                            overflowY: 'auto',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            zIndex: 110
+                          }}>
+                            {h.searchResults.map((user, userIdx) => (
+                              <div
+                                key={userIdx}
+                                onClick={() => selectCategoryHead(idx, user)}
+                                style={{
+                                  padding: '8px 12px',
+                                  cursor: 'pointer',
+                                  borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                  background: 'white',
+                                  transition: 'background 0.15s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                              >
+                                <div style={{ fontWeight: 600, fontSize: 13 }}>{user.displayName}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280' }}>{user.mail}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Show selected user */}
+                        {h.email && (
+                          <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>✓</span>
+                            <span>{h.name} ({h.email})</span>
+                          </div>
+                        )}
+
+                        {/* Loading indicator */}
+                        {h.searching && (
+                          <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
+                            Searching...
+                          </div>
                         )}
                       </div>
                     ))}
                   </div>
-                  {categoryHeads.some(h => h.name) && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#059669' }}>
-                      {categoryHeads.filter(h => h.name).map(h => `✓ ${h.name}`).join(', ')}
-                    </div>
-                  )}
                 </div>
 
-                {/* CC Emails */}
+                {/* CC Emails with Real-time Search (CreateTicket.js style) */}
                 <div>
                   <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
                     CC Emails (Optional)
                   </label>
                   <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                    Receive notifications on every ticket action
+                    Start typing to search and select users
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {ccEmails.map((c, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
-                        <input
-                          value={c.email}
-                          onChange={(e) => updateCcEmail(idx, e.target.value)}
-                          placeholder="email@company.com"
-                          style={{ 
-                            flex: 1, 
-                            padding: '8px 10px', 
-                            borderRadius: 6, 
+                      <div 
+                        key={idx}
+                        ref={el => ccEmailsRefs.current[idx] = el}
+                        style={{ position: 'relative' }}
+                      >
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                          <input
+                            value={c.searchQuery}
+                            onChange={(e) => updateCcEmailQuery(idx, e.target.value)}
+                            placeholder="Type name or email..."
+                            style={{ 
+                              flex: 1, 
+                              padding: '8px 10px', 
+                              borderRadius: 6, 
+                              border: c.email ? '1px solid #10b981' : '1px solid #e6e9ee',
+                              fontSize: 13,
+                              background: c.email ? '#ecfdf5' : 'white'
+                            }}
+                          />
+                          {idx === 0 ? (
+                            <button 
+                              type="button" 
+                              onClick={addCcEmail} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#eef2ff', 
+                                border: '1px solid #c7d2fe',
+                                cursor: 'pointer',
+                                fontSize: 16,
+                                fontWeight: 600
+                              }}
+                            >
+                              ＋
+                            </button>
+                          ) : (
+                            <button 
+                              type="button" 
+                              onClick={() => removeCcEmail(idx)} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#fff1f2', 
+                                border: '1px solid #fecaca',
+                                cursor: 'pointer',
+                                fontSize: 14
+                              }}
+                            >
+                              ✖
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Dropdown for search results */}
+                        {c.showDropdown && c.searchResults.length > 0 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            background: 'white',
                             border: '1px solid #e6e9ee',
-                            fontSize: 13
-                          }}
-                        />
-                        <button 
-                          type="button" 
-                          onClick={() => verifyCcEmail(idx)} 
-                          disabled={c.verifying || !c.email}
-                          style={{ 
-                            padding: '8px 12px', 
-                            borderRadius: 6, 
-                            background: c.verifying ? '#9ec7df' : '#0b79bf', 
-                            color: 'white', 
-                            border: 'none',
-                            cursor: c.verifying || !c.email ? 'default' : 'pointer',
-                            fontSize: 13,
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {c.verifying ? 'Checking…' : 'Lookup'}
-                        </button>
-                        {idx === 0 ? (
-                          <button 
-                            type="button" 
-                            onClick={addCcEmail} 
-                            style={{ 
-                              padding: '8px 12px', 
-                              borderRadius: 6, 
-                              background: '#eef2ff', 
-                              border: '1px solid #c7d2fe',
-                              cursor: 'pointer',
-                              fontSize: 16,
-                              fontWeight: 600
-                            }}
-                          >
-                            ＋
-                          </button>
-                        ) : (
-                          <button 
-                            type="button" 
-                            onClick={() => setCcEmails(prev => prev.filter((_, i) => i !== idx))} 
-                            style={{ 
-                              padding: '8px 12px', 
-                              borderRadius: 6, 
-                              background: '#fff1f2', 
-                              border: '1px solid #fecaca',
-                              cursor: 'pointer',
-                              fontSize: 14
-                            }}
-                          >
-                            ✖
-                          </button>
+                            borderRadius: 6,
+                            marginTop: 4,
+                            maxHeight: 200,
+                            overflowY: 'auto',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            zIndex: 110
+                          }}>
+                            {c.searchResults.map((user, userIdx) => (
+                              <div
+                                key={userIdx}
+                                onClick={() => selectCcEmail(idx, user)}
+                                style={{
+                                  padding: '8px 12px',
+                                  cursor: 'pointer',
+                                  borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                  background: 'white',
+                                  transition: 'background 0.15s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                              >
+                                <div style={{ fontWeight: 600, fontSize: 13 }}>{user.displayName}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280' }}>{user.mail}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Show selected user */}
+                        {c.email && (
+                          <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>✓</span>
+                            <span>{c.name} ({c.email})</span>
+                          </div>
+                        )}
+
+                        {/* Loading indicator */}
+                        {c.searching && (
+                          <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
+                            Searching...
+                          </div>
                         )}
                       </div>
                     ))}
                   </div>
-                  {ccEmails.some(c => c.name) && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#059669' }}>
-                      {ccEmails.filter(c => c.name).map(c => `✓ ${c.name}`).join(', ')}
-                    </div>
-                  )}
                 </div>
 
               </div>
@@ -1668,16 +1878,13 @@ const removeSubCategory = (idx) => {
 
                   {enableOnBehalf && (
                     <div style={{ marginTop: 12 }}>
-
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                         Options
                       </div>
-
                       <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>
                         • Self<br />
                         • Other
                       </div>
-
                       <div style={{ marginTop: 10 }}>
                         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
                           <input
@@ -1689,10 +1896,8 @@ const removeSubCategory = (idx) => {
                           <span>Required field</span>
                         </label>
                       </div>
-
                     </div>
                   )}
-
                 </div>
 
                 {/* Sub-Category Feature */}
@@ -1720,14 +1925,11 @@ const removeSubCategory = (idx) => {
 
                   {enableSubCategory && (
                     <div style={{ marginTop: 12 }}>
-
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                         Subcategories:
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-
-                        {/* When there are no sub-categories yet */}
                         {subCategories.length === 0 && (
                           <button
                             type="button"
@@ -1761,7 +1963,6 @@ const removeSubCategory = (idx) => {
                                 fontSize: 12
                               }}
                             />
-
                             {idx === subCategories.length - 1 ? (
                               <button
                                 type="button"
@@ -1782,7 +1983,6 @@ const removeSubCategory = (idx) => {
                           </div>
                         ))}
 
-                        {/* ✅ Fixed "Other" (always last, not editable, case-correct) */}
                         <div
                           style={{
                             padding: '6px 8px',
@@ -1795,7 +1995,6 @@ const removeSubCategory = (idx) => {
                         >
                           Other (fixed)
                         </div>
-
                       </div>
 
                       <div style={{ marginTop: 10 }}>
@@ -1809,12 +2008,9 @@ const removeSubCategory = (idx) => {
                           <span>Required field</span>
                         </label>
                       </div>
-
                     </div>
                   )}
-
                 </div>
-
 
                 {/* Attachments Feature */}
                 <div style={{ 
@@ -1930,7 +2126,7 @@ const removeSubCategory = (idx) => {
         </>
       )}
 
-      {/* --- NEW: Remove Field Modal --- */}
+      {/* --- Remove Field Modal (unchanged) --- */}
       {removeFieldOpen && (
         <>
           <div
@@ -1990,7 +2186,7 @@ const removeSubCategory = (idx) => {
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 700 }}>{c.name || categoryName}</div>
+                    <div style={{ fontWeight: 700 }}>{c.name || c.categoryName}</div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>{c.description || ''}</div>
                   </div>
                 </div>
@@ -2124,6 +2320,16 @@ const removeSubCategory = (idx) => {
 
             {profileData && (
               <div style={{ display: 'grid', gap: '10px' }}>
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Email</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.email || '—'}</div>
+                </div>
+
                 <div>
                   <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
                   <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
