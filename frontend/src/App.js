@@ -2320,16 +2320,7 @@ function Header({ logout }) {
 
             {profileData && (
               <div style={{ display: 'grid', gap: '10px' }}>
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Email</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.email || '—'}</div>
-                </div>
-
+              
                 <div>
                   <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
                   <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
@@ -2343,6 +2334,11 @@ function Header({ logout }) {
                 <div>
                   <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Department</div>
                   <div style={{ fontWeight: 600 }}>{profileData.department || '—'}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Reporting Manager</div>
+                  <div style={{ fontWeight: 600 }}>{profileData.manager || '—'}</div>
                 </div>
 
                 <div>
