@@ -896,6 +896,7 @@ function Header({ logout }) {
         state: data.state || '',
         postalCode: data.postalCode || '',
         jobTitle: data.jobTitle || '',
+        manager: data.manager?.displayName || ''
       });
 
       try {
