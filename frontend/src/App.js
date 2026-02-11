@@ -866,70 +866,80 @@ function Header({ logout }) {
 
   // ---------------- Existing profile / full profile functions (unchanged) ----------------
   const fetchFullProfile = async () => {
-    if (!accounts || !accounts[0]) return;
-    setLoadingProfile(true);
-    setProfileError(null);
+  if (!accounts || !accounts[0]) return;
+  setLoadingProfile(true);
+  setProfileError(null);
 
+  try {
+    const response = await instance.acquireTokenSilent({
+      scopes: ['User.Read', 'User.ReadBasic.All', 'User.Read.All'],  // Added User.Read.All for manager
+      account: accounts[0],
+    });
+
+    const token = response.accessToken;
+    
+    // Updated query: Added manager to $select and $expand for full manager details
+    const graphRes = await fetch(
+      'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode,jobTitle,manager&$expand=manager($select=displayName)',
+      { 
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'ConsistencyLevel': 'eventual'  // Helps with eventual consistency for relationships [web:14]
+        } 
+      }
+    );
+
+    if (!graphRes.ok) throw new Error(`Graph ${graphRes.status}`);
+
+    const data = await graphRes.json();
+
+    setProfileData({
+      name: data.displayName || '',
+      email: data.mail || data.userPrincipalName || '',
+      department: data.department || '',
+      employeeId: data.employeeId || '',
+      mobilePhone: data.mobilePhone || '',
+      streetAddress: data.streetAddress || '',
+      state: data.state || '',
+      postalCode: data.postalCode || '',
+      jobTitle: data.jobTitle || '',
+      manager: data.manager ? data.manager.displayName || '' : ''  // Now correctly accesses nested object [page:2]
+    });
+
+    // Photo fetch unchanged
     try {
-      const response = await instance.acquireTokenSilent({
-        scopes: ['User.Read', 'User.ReadBasic.All'],
+      const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (photoRes.ok) {
+        const arrayBuffer = await photoRes.arrayBuffer();
+        const u8 = new Uint8Array(arrayBuffer);
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < u8.length; i += chunkSize) {
+          const slice = u8.subarray(i, i + chunkSize);
+          binary += String.fromCharCode.apply(null, slice);
+        }
+        const b64 = btoa(binary);
+        const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
+        setProfilePhoto(`data:${contentType};base64,${b64}`);
+      }
+    } catch {}
+
+  } catch (err) {
+    if (err instanceof InteractionRequiredAuthError) {
+      instance.acquireTokenRedirect({
+        scopes: ['User.Read', 'User.ReadBasic.All', 'User.Read.All'],
         account: accounts[0],
       });
-
-      const token = response.accessToken;
-      const graphRes = await fetch(
-        'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode,jobTitle&$expand=manager($select=displayName,mail,userPrincipalName',
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!graphRes.ok) throw new Error(`Graph ${graphRes.status}`);
-
-      const data = await graphRes.json();
-
-      setProfileData({
-        name: data.displayName || '',
-        email: data.mail || data.userPrincipalName || '',
-        department: data.department || '',
-        employeeId: data.employeeId || '',
-        mobilePhone: data.mobilePhone || '',
-        streetAddress: data.streetAddress || '',
-        state: data.state || '',
-        postalCode: data.postalCode || '',
-        jobTitle: data.jobTitle || '',
-        manager: data.manager?.displayName || ''
-      });
-
-      try {
-        const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (photoRes.ok) {
-          const arrayBuffer = await photoRes.arrayBuffer();
-          const u8 = new Uint8Array(arrayBuffer);
-          let binary = '';
-          const chunkSize = 0x8000;
-          for (let i = 0; i < u8.length; i += chunkSize) {
-            const slice = u8.subarray(i, i + chunkSize);
-            binary += String.fromCharCode.apply(null, slice);
-          }
-          const b64 = btoa(binary);
-          const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
-          setProfilePhoto(`data:${contentType};base64,${b64}`);
-        }
-      } catch {}
-    } catch (err) {
-      if (err instanceof InteractionRequiredAuthError) {
-        instance.acquireTokenRedirect({
-          scopes: ['User.Read', 'User.ReadBasic.All'],
-          account: accounts[0],
-        });
-      } else {
-        setProfileError(err.message);
-      }
-    } finally {
-      setLoadingProfile(false);
+    } else {
+      setProfileError(err.message);
     }
-  };
+  } finally {
+    setLoadingProfile(false);
+  }
+};
+
 
   const openFullProfile = () => {
     setFullProfileOpen(true);
