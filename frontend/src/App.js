@@ -878,7 +878,7 @@ function Header({ logout }) {
 
       const token = response.accessToken;
       const graphRes = await fetch(
-        'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode,jobTitle',
+        'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode,jobTitle&$expand=manager($select=displayName,mail,userPrincipalName',
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
