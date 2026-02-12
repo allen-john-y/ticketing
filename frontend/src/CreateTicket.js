@@ -301,7 +301,7 @@ function CreateTicket() {
     }
 
     // NEW: Validation for dynamic onBehalf (if enabled and required)
-    if (selectedCategoryConfig?.features?.onBehalf?.enabled && formData.category !== 'Password Reset') {
+    if ( selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET') {
       if (
         selectedCategoryConfig.features.onBehalf.required &&
         !dynamicOnBehalfSelection
@@ -515,10 +515,12 @@ function CreateTicket() {
       let ticketUserEmail = latestEmail;
       let ticketCreatedBy = latestEmail; // Track who actually created it
 
-      if (selectedCategoryConfig?.features?.onBehalf?.enabled && 
-          formData.category !== 'Password Reset' && 
-          dynamicOnBehalfSelection === 'Other' && 
-          dynamicOnBehalfSelectedUser) {
+      if (
+          selectedCategoryConfig?.features?.onBehalf?.enabled &&
+          selectedCategoryConfig?.type !== 'PASSWORD_RESET' &&
+          dynamicOnBehalfSelection === 'Other' &&
+          dynamicOnBehalfSelectedUser
+        ) {
         // Creating ticket on behalf of someone else
         ticketUserName = dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail;
         ticketUserEmail = dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName;
@@ -534,9 +536,9 @@ function CreateTicket() {
         status: 'Waiting for approval',
         
         // NEW: Add creator info when creating on behalf
-        ...(selectedCategoryConfig?.features?.onBehalf?.enabled && 
-            formData.category !== 'Password Reset' && 
-            dynamicOnBehalfSelection === 'Other' && 
+        ...(selectedCategoryConfig?.features?.onBehalf?.enabled &&
+            selectedCategoryConfig?.type !== 'PASSWORD_RESET' &&
+            dynamicOnBehalfSelection === 'Other' &&
             dynamicOnBehalfSelectedUser
           ? { 
               createdBy: ticketCreatedBy,
@@ -544,6 +546,7 @@ function CreateTicket() {
               onBehalfOf: ticketUserEmail 
             }
           : {}),
+
 
         ...(onBehalf ? { onBehalf } : {}),
         ...(onBehalfEmail ? { onBehalfEmail } : {}),
@@ -834,7 +837,7 @@ function CreateTicket() {
           </div>
 
           {/* NEW: Dynamic On Behalf field (ONLY for non-Password Reset categories) */}
-          {selectedCategoryConfig?.features?.onBehalf?.enabled && formData.category !== 'Password Reset' && (
+          {selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && (
             <div style={{ 
               padding: 16, 
               border: '1px solid #e6e9ee', 
