@@ -1,5 +1,7 @@
-/* Patched App.js — added real-time search for Category Heads and CC Emails in Add Field modal.
-   Using the same search pattern as CreateTicket.js for consistency.
+/* Updated App.js with Edit Field functionality
+   - Shows all categories (hardcoded and created) in Edit Field modal
+   - Allows editing category configuration including heads, CCs, and features
+   - Real-time search for Category Heads and CC Emails using CreateTicket.js pattern
 */
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
@@ -59,11 +61,12 @@ function Header({ logout }) {
   const [removeMessage, setRemoveMessage] = useState(null);
   const [removeError, setRemoveError] = useState(null);
 
-  // --- NEW: Add Field / Remove Field states ---
+  // Add Field / Remove Field / Edit Field states
   const [addFieldOpen, setAddFieldOpen] = useState(false);
   const [removeFieldOpen, setRemoveFieldOpen] = useState(false);
+  const [editFieldOpen, setEditFieldOpen] = useState(false);
 
-  // Category form state for Add Field
+  // Category form state for Add/Edit Field
   const [categoryName, setCategoryName] = useState('');
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [categoryError, setCategoryError] = useState(null);
@@ -80,7 +83,7 @@ function Header({ logout }) {
   const [enableAttachmentsForCategory, setEnableAttachmentsForCategory] = useState(false);
   const [requireAttachmentsForCategory, setRequireAttachmentsForCategory] = useState(false);
 
-  // Updated Category Heads with search functionality (using CreateTicket.js pattern)
+  // Category Heads with search functionality
   const [categoryHeads, setCategoryHeads] = useState([{ 
     email: '', 
     name: '', 
@@ -90,7 +93,7 @@ function Header({ logout }) {
     showDropdown: false
   }]);
 
-  // Updated CC Emails with search functionality (using CreateTicket.js pattern)
+  // CC Emails with search functionality
   const [ccEmails, setCcEmails] = useState([{ 
     email: '', 
     name: '', 
@@ -106,6 +109,12 @@ function Header({ logout }) {
   const [removeCategoryLoading, setRemoveCategoryLoading] = useState(false);
   const [removeCategoryError, setRemoveCategoryError] = useState(null);
   const [removeCategorySuccess, setRemoveCategorySuccess] = useState(null);
+
+  // NEW: Edit Field states
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoriesForEdit, setCategoriesForEdit] = useState([]);
+  const [editCategoriesLoading, setEditCategoriesLoading] = useState(false);
+
   const FIXED_OTHER = 'Other';
 
   // Refs for click outside detection
@@ -190,7 +199,6 @@ function Header({ logout }) {
         });
         const token = tokenResponse.accessToken;
 
-        // Use checkMemberGroups to test membership
         const res = await fetch('https://graph.microsoft.com/v1.0/me/checkMemberGroups', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -204,7 +212,6 @@ function Header({ logout }) {
           return;
         }
 
-        // fallback: /me/memberOf
         const fallback = await fetch('https://graph.microsoft.com/v1.0/me/memberOf?$select=id,displayName', {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -232,7 +239,6 @@ function Header({ logout }) {
     return () => { cancelled = true; };
   }, [accounts, instance]);
 
-  // Helper: acquire token with required scopes for admin actions (interactive redirect if required)
   const acquireTokenForAdmin = async () => {
     if (!accounts || !accounts[0]) throw new Error('No signed-in account');
     try {
@@ -243,7 +249,6 @@ function Header({ logout }) {
       return resp.accessToken;
     } catch (err) {
       if (err instanceof InteractionRequiredAuthError) {
-        // request interactive consent for elevated scopes
         await instance.acquireTokenRedirect({
           scopes: ['Group.ReadWrite.All', 'User.Read.All'],
           account: accounts[0],
@@ -254,7 +259,7 @@ function Header({ logout }) {
     }
   };
 
-  // ---------------- Existing Add user / Remove user flows unchanged ----------------
+  // ---------------- Existing Add user / Remove user flows (unchanged) ----------------
   const openAddModal = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -289,7 +294,6 @@ function Header({ logout }) {
         return;
       }
 
-      // Try exact user by UPN or ID first
       const tryExact = async (identifier) => {
         const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(identifier)}?$select=id,displayName,mail,userPrincipalName`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -303,14 +307,12 @@ function Header({ logout }) {
 
       let results = [];
 
-      // If query contains '@', try exact lookup first
       if (q.includes('@')) {
         results = await tryExact(q);
       }
 
-      // If none found or not an email, fallback to searching by startswith on mail/userPrincipalName/displayName
       if (results.length === 0) {
-        const safeQ = q.replace(/'/g, "''"); // escape single quotes by doubling
+        const safeQ = q.replace(/'/g, "''");
         const realFilter = `startswith(tolower(mail),'${safeQ.toLowerCase()}') or startswith(tolower(userPrincipalName),'${safeQ.toLowerCase()}') or startswith(tolower(displayName),'${safeQ.toLowerCase()}')`;
 
         const r = await fetch(`https://graph.microsoft.com/v1.0/users?$filter=${encodeURIComponent(realFilter)}&$select=id,displayName,mail,userPrincipalName&$top=10`, {
@@ -322,7 +324,6 @@ function Header({ logout }) {
         }
       }
 
-      // normalize results to include id, displayName, mail, userPrincipalName
       const normalized = (results || []).map(u => ({
         id: u.id,
         displayName: u.displayName || u.userPrincipalName || u.mail || '(no name)',
@@ -355,7 +356,6 @@ function Header({ logout }) {
     try {
       const token = await acquireTokenForAdmin();
 
-      // POST /groups/{id}/members/$ref
       const body = {
         "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${selectedSearchUser.id}`,
       };
@@ -368,9 +368,7 @@ function Header({ logout }) {
 
       if (res.ok || res.status === 204) {
         setAddMessage(`${selectedSearchUser.displayName} has been added to Helpdesk_Admin`);
-        // notify backend to send emails to actor and target
         notifyServerAboutAdd(selectedSearchUser).catch(e => console.error('notify failed', e));
-        // clear selection so admin can add another if needed
         setSelectedSearchUser(null);
         setSearchResults([]);
       } else {
@@ -409,7 +407,6 @@ function Header({ logout }) {
     }
   };
 
-  // --- REMOVE USER FLOW (existing) ---
   const openRemoveModal = async () => {
     setRemoveModalOpen(true);
     setMembersLoading(true);
@@ -420,7 +417,6 @@ function Header({ logout }) {
 
     try {
       const token = await acquireTokenForAdmin();
-      // list members
       const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${HELP_DESK_GROUP_ID}/members?$select=id,displayName,mail,userPrincipalName&$top=200`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -472,7 +468,6 @@ function Header({ logout }) {
       if (res.ok || res.status === 204) {
         setRemoveMessage(`${selectedMember.displayName} has been removed from Helpdesk_Admin`);
         notifyServerAboutRemove(selectedMember).catch(e => console.error('notify failed', e));
-        // refresh members list locally
         setGroupMembers(prev => prev.filter(m => m.id !== selectedMember.id));
         setSelectedMember(null);
       } else {
@@ -511,7 +506,7 @@ function Header({ logout }) {
     }
   };
 
-  // ---------------- NEW: Category Add / Remove helpers ----------------
+  // ---------------- Category Add / Remove / Edit helpers ----------------
 
   const resetCategoryForm = () => {
     setCategoryName('');
@@ -526,6 +521,7 @@ function Header({ logout }) {
     setCcEmails([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
     setCategoryError(null);
     setCategorySuccess(null);
+    setEditingCategory(null);
   };
 
   const addSubCategory = () => {
@@ -544,7 +540,7 @@ function Header({ logout }) {
     );
   };
 
-  // --- NEW: Real-time search for Category Heads (using CreateTicket.js pattern) ---
+  // Real-time search for Category Heads
   const handleCategoryHeadSearch = async (idx, searchText) => {
     if (!searchText || searchText.trim().length < 2) {
       setCategoryHeads(prev => prev.map((h, i) => 
@@ -563,7 +559,6 @@ function Header({ logout }) {
         account: accounts[0] 
       });
 
-      // Search users in Azure AD - exactly like CreateTicket.js
       const response = await axios.get(
         `https://graph.microsoft.com/v1.0/users?$filter=startswith(mail,'${searchText}') or startswith(displayName,'${searchText}') or startswith(userPrincipalName,'${searchText}')&$top=5`,
         {
@@ -627,7 +622,7 @@ function Header({ logout }) {
     categoryHeadsRefs.current = categoryHeadsRefs.current.filter((_, i) => i !== idx);
   };
 
-  // --- NEW: Real-time search for CC Emails (using CreateTicket.js pattern) ---
+  // Real-time search for CC Emails
   const handleCcEmailSearch = async (idx, searchText) => {
     if (!searchText || searchText.trim().length < 2) {
       setCcEmails(prev => prev.map((c, i) => 
@@ -646,7 +641,6 @@ function Header({ logout }) {
         account: accounts[0] 
       });
 
-      // Search users in Azure AD - exactly like CreateTicket.js
       const response = await axios.get(
         `https://graph.microsoft.com/v1.0/users?$filter=startswith(mail,'${searchText}') or startswith(displayName,'${searchText}') or startswith(userPrincipalName,'${searchText}')&$top=5`,
         {
@@ -716,7 +710,6 @@ function Header({ logout }) {
       return;
     }
 
-    // Validate category heads have emails
     const validHeads = categoryHeads.filter(h => h.email && h.email.trim());
     if (validHeads.length === 0) {
       setCategoryError('At least one Category Head is required');
@@ -783,7 +776,6 @@ function Header({ logout }) {
 
       setCategorySuccess('Category created successfully');
       
-      // Notify backend to send mail to Helpdesk_Admins
       try {
         await fetch(`${backendBase}/api/notify-category-added`, {
           method: 'POST',
@@ -797,7 +789,6 @@ function Header({ logout }) {
         console.error('notify-category-added failed', notifyErr);
       }
 
-      // Reset form & close after small delay
       setTimeout(() => {
         resetCategoryForm();
         setAddFieldOpen(false);
@@ -810,7 +801,6 @@ function Header({ logout }) {
     }
   };
 
-  // Load categories for remove modal
   const openRemoveFieldModal = async () => {
     setRemoveFieldOpen(true);
     setCategoriesLoading(true);
@@ -853,7 +843,6 @@ function Header({ logout }) {
         throw new Error(t || `Delete failed ${r.status}`);
       }
       setRemoveCategorySuccess('Category removed');
-      // locally remove
       setAvailableCategories(prev => prev.filter(c => c.id !== selectedCategoryToRemove.id));
       setSelectedCategoryToRemove(null);
     } catch (err) {
@@ -864,82 +853,269 @@ function Header({ logout }) {
     }
   };
 
-  // ---------------- Existing profile / full profile functions (unchanged) ----------------
-  const fetchFullProfile = async () => {
-  if (!accounts || !accounts[0]) return;
-  setLoadingProfile(true);
-  setProfileError(null);
+  // NEW: Edit Field functions
+  const openEditFieldModal = async () => {
+    setEditFieldOpen(true);
+    setEditCategoriesLoading(true);
+    setCategoriesForEdit([]);
+    setEditingCategory(null);
+    resetCategoryForm();
 
-  try {
-    const response = await instance.acquireTokenSilent({
-      scopes: ['User.Read', 'User.ReadBasic.All', 'User.Read.All'],  // Added User.Read.All for manager
-      account: accounts[0],
-    });
-
-    const token = response.accessToken;
-    
-    // Updated query: Added manager to $select and $expand for full manager details
-    const graphRes = await fetch(
-      'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode,jobTitle,manager&$expand=manager($select=displayName)',
-      { 
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'ConsistencyLevel': 'eventual'  // Helps with eventual consistency for relationships [web:14]
-        } 
-      }
-    );
-
-    if (!graphRes.ok) throw new Error(`Graph ${graphRes.status}`);
-
-    const data = await graphRes.json();
-
-    setProfileData({
-      name: data.displayName || '',
-      email: data.mail || data.userPrincipalName || '',
-      department: data.department || '',
-      employeeId: data.employeeId || '',
-      mobilePhone: data.mobilePhone || '',
-      streetAddress: data.streetAddress || '',
-      state: data.state || '',
-      postalCode: data.postalCode || '',
-      jobTitle: data.jobTitle || '',
-      manager: data.manager ? data.manager.displayName || '' : ''  // Now correctly accesses nested object [page:2]
-    });
-
-    // Photo fetch unchanged
     try {
-      const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+      const token = await acquireTokenForAdmin();
+      const r = await fetch(`${backendBase}/api/categories`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (photoRes.ok) {
-        const arrayBuffer = await photoRes.arrayBuffer();
-        const u8 = new Uint8Array(arrayBuffer);
-        let binary = '';
-        const chunkSize = 0x8000;
-        for (let i = 0; i < u8.length; i += chunkSize) {
-          const slice = u8.subarray(i, i + chunkSize);
-          binary += String.fromCharCode.apply(null, slice);
-        }
-        const b64 = btoa(binary);
-        const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
-        setProfilePhoto(`data:${contentType};base64,${b64}`);
-      }
-    } catch {}
+      if (!r.ok) throw new Error(`Failed to load categories ${r.status}`);
+      const j = await r.json();
+      setCategoriesForEdit(Array.isArray(j) ? j : []);
+    } catch (err) {
+      console.error('load categories for edit failed', err);
+      setCategoryError(err.message || 'Failed to load categories');
+    } finally {
+      setEditCategoriesLoading(false);
+    }
+  };
 
-  } catch (err) {
-    if (err instanceof InteractionRequiredAuthError) {
-      instance.acquireTokenRedirect({
+  const selectCategoryForEdit = (category) => {
+    setEditingCategory(category);
+    
+    // Populate form with category data
+    setCategoryName(category.name || category.categoryName || '');
+    
+    // Features
+    const features = category.features || {};
+    
+    // OnBehalf
+    if (features.onBehalf && features.onBehalf.enabled) {
+      setEnableOnBehalf(true);
+      setRequireOnBehalf(!!features.onBehalf.required);
+    } else {
+      setEnableOnBehalf(false);
+      setRequireOnBehalf(false);
+    }
+    
+    // SubCategories
+    if (features.subCategories && features.subCategories.enabled) {
+      setEnableSubCategory(true);
+      const list = features.subCategories.list || [];
+      // Filter out 'Other' as it's fixed
+      const filteredList = list.filter(s => s !== FIXED_OTHER);
+      setSubCategories(filteredList);
+      setRequireSubCategory(!!features.subCategories.required);
+    } else {
+      setEnableSubCategory(false);
+      setSubCategories([]);
+      setRequireSubCategory(false);
+    }
+    
+    // Attachments
+    if (features.attachments && features.attachments.enabled) {
+      setEnableAttachmentsForCategory(true);
+      setRequireAttachmentsForCategory(!!features.attachments.required);
+    } else {
+      setEnableAttachmentsForCategory(false);
+      setRequireAttachmentsForCategory(false);
+    }
+    
+    // Category Heads
+    const heads = category.categoryHeads || [];
+    if (heads.length > 0) {
+      setCategoryHeads(heads.map(h => ({
+        email: h.email || '',
+        name: h.name || h.email || '',
+        searchQuery: h.name || h.email || '',
+        searchResults: [],
+        searching: false,
+        showDropdown: false
+      })));
+    } else {
+      setCategoryHeads([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
+    }
+    
+    // CC Emails
+    const ccs = category.cc || [];
+    if (ccs.length > 0) {
+      setCcEmails(ccs.map(c => ({
+        email: c.email || '',
+        name: c.name || c.email || '',
+        searchQuery: c.name || c.email || '',
+        searchResults: [],
+        searching: false,
+        showDropdown: false
+      })));
+    } else {
+      setCcEmails([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
+    }
+  };
+
+  const updateCategory = async () => {
+    if (!editingCategory) {
+      setCategoryError('No category selected for editing');
+      return;
+    }
+
+    if (!categoryName || !categoryName.trim()) {
+      setCategoryError('Category name is required');
+      return;
+    }
+
+    const validHeads = categoryHeads.filter(h => h.email && h.email.trim());
+    if (validHeads.length === 0) {
+      setCategoryError('At least one Category Head is required');
+      return;
+    }
+
+    setCategoryError(null);
+    setCategoryLoading(true);
+    setCategorySuccess(null);
+
+    try {
+      const token = await acquireTokenForAdmin();
+
+      const payload = {
+        name: categoryName.trim(),
+        categoryName: categoryName.trim(),
+        features: {
+          onBehalf: enableOnBehalf 
+            ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
+            : { enabled: false },
+          subCategories: enableSubCategory
+            ? {
+                enabled: true,
+                list: [
+                  ...subCategories
+                    .map(s => s.trim())
+                    .filter(s => s && s !== FIXED_OTHER),
+                  FIXED_OTHER
+                ],
+                required: !!requireSubCategory
+              }
+            : { enabled: false },
+          attachments: enableAttachmentsForCategory 
+            ? { enabled: true, required: !!requireAttachmentsForCategory } 
+            : { enabled: false },
+        },
+        categoryHeads: validHeads.map(h => ({ 
+          email: h.email.trim(), 
+          name: h.name || h.email.trim() 
+        })),
+        cc: ccEmails
+          .filter(c => c.email && c.email.trim())
+          .map(c => ({ 
+            email: c.email.trim(), 
+            name: c.name || c.email.trim() 
+          })),
+        updatedBy: {
+          id: accounts?.[0]?.homeAccountId || '',
+          name: accounts?.[0]?.name || accounts?.[0]?.username || '',
+          mail: accounts?.[0]?.username || '',
+        },
+      };
+
+      const res = await fetch(`${backendBase}/api/categories/${encodeURIComponent(editingCategory.id)}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `Update failed ${res.status}`);
+      }
+
+      setCategorySuccess('Category updated successfully');
+      
+      // Update the local list
+      setCategoriesForEdit(prev => prev.map(c => 
+        c.id === editingCategory.id ? { ...c, ...payload } : c
+      ));
+
+      setTimeout(() => {
+        resetCategoryForm();
+        setEditingCategory(null);
+      }, 900);
+    } catch (err) {
+      console.error('update category failed', err);
+      setCategoryError(err.message || 'Failed to update category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  // ---------------- Profile functions (unchanged) ----------------
+  const fetchFullProfile = async () => {
+    if (!accounts || !accounts[0]) return;
+    setLoadingProfile(true);
+    setProfileError(null);
+
+    try {
+      const response = await instance.acquireTokenSilent({
         scopes: ['User.Read', 'User.ReadBasic.All', 'User.Read.All'],
         account: accounts[0],
       });
-    } else {
-      setProfileError(err.message);
-    }
-  } finally {
-    setLoadingProfile(false);
-  }
-};
 
+      const token = response.accessToken;
+      
+      const graphRes = await fetch(
+        'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode,jobTitle,manager&$expand=manager($select=displayName)',
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'ConsistencyLevel': 'eventual'
+          } 
+        }
+      );
+
+      if (!graphRes.ok) throw new Error(`Graph ${graphRes.status}`);
+
+      const data = await graphRes.json();
+
+      setProfileData({
+        name: data.displayName || '',
+        email: data.mail || data.userPrincipalName || '',
+        department: data.department || '',
+        employeeId: data.employeeId || '',
+        mobilePhone: data.mobilePhone || '',
+        streetAddress: data.streetAddress || '',
+        state: data.state || '',
+        postalCode: data.postalCode || '',
+        jobTitle: data.jobTitle || '',
+        manager: data.manager ? data.manager.displayName || '' : ''
+      });
+
+      try {
+        const photoRes = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (photoRes.ok) {
+          const arrayBuffer = await photoRes.arrayBuffer();
+          const u8 = new Uint8Array(arrayBuffer);
+          let binary = '';
+          const chunkSize = 0x8000;
+          for (let i = 0; i < u8.length; i += chunkSize) {
+            const slice = u8.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, slice);
+          }
+          const b64 = btoa(binary);
+          const contentType = photoRes.headers.get('content-type') || 'image/jpeg';
+          setProfilePhoto(`data:${contentType};base64,${b64}`);
+        }
+      } catch {}
+
+    } catch (err) {
+      if (err instanceof InteractionRequiredAuthError) {
+        instance.acquireTokenRedirect({
+          scopes: ['User.Read', 'User.ReadBasic.All', 'User.Read.All'],
+          account: accounts[0],
+        });
+      } else {
+        setProfileError(err.message);
+      }
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
 
   const openFullProfile = () => {
     setFullProfileOpen(true);
@@ -1036,10 +1212,9 @@ function Header({ logout }) {
           </div>
         </div>
 
-        {/* RIGHT PROFILE + GEAR (only) */}
+        {/* RIGHT PROFILE + GEAR */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Only gear icon for admins - menu inside has Add/Remove */}
             {isAdmin && (
               <div style={{ position: 'relative' }}>
                 <button
@@ -1116,7 +1291,6 @@ function Header({ logout }) {
                       Remove user
                     </button>
 
-                    {/* NEW: Add Field */}
                     <button
                       onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
                       style={{
@@ -1134,7 +1308,24 @@ function Header({ logout }) {
                       Add field
                     </button>
 
-                    {/* NEW: Remove Field */}
+                    {/* NEW: Edit Field Button */}
+                    <button
+                      onClick={() => { openEditFieldModal(); setSettingsOpen(false); }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '10px 8px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: '#8b5cf6',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Edit field
+                    </button>
+
                     <button
                       onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
                       style={{
@@ -1165,7 +1356,7 @@ function Header({ logout }) {
               </div>
             )}
 
-            {/* PROFILE BUTTON (unchanged) */}
+            {/* PROFILE BUTTON */}
             <div ref={profileRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setProfileOpen(prev => !prev)}
@@ -1325,7 +1516,7 @@ function Header({ logout }) {
         </div>
       </header>
 
-      {/* --- Add User Modal (unchanged) --- */}
+      {/* Add User Modal (unchanged) */}
       {addModalOpen && (
         <>
           <div
@@ -1418,7 +1609,6 @@ function Header({ logout }) {
                     <div style={{ fontWeight: 700 }}>{u.displayName}</div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>{u.mail || u.userPrincipalName}</div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>{/* intentionally hidden id area */}</div>
                 </div>
               ))}
             </div>
@@ -1450,7 +1640,7 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* --- Remove User Modal (unchanged) --- */}
+      {/* Remove User Modal (unchanged) */}
       {removeModalOpen && (
         <>
           <div
@@ -1513,7 +1703,6 @@ function Header({ logout }) {
                     <div style={{ fontWeight: 700 }}>{m.displayName}</div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>{m.mail || m.userPrincipalName}</div>
                   </div>
-                  {/* ID intentionally not shown */}
                 </div>
               ))}
             </div>
@@ -1545,7 +1734,7 @@ function Header({ logout }) {
         </>
       )}
 
-     {/* --- UPDATED: Add Field Modal with CreateTicket.js-style Search --- */}
+      {/* Add Field Modal - same as before */}
       {addFieldOpen && (
         <>
           <div
@@ -1577,7 +1766,6 @@ function Header({ logout }) {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Add Category / Field</h3>
               <button 
@@ -1598,10 +1786,8 @@ function Header({ logout }) {
               Define a new category and required fields. Users in Category Heads and CCs will be notified for ticket actions.
             </div>
 
-            {/* Form Fields */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               
-              {/* Category Name - Full Width */}
               <div style={{ width: '100%' }}>
                 <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
                   Category Name <span style={{ color: '#ef4444' }}>*</span>
@@ -1621,10 +1807,8 @@ function Header({ logout }) {
                 />
               </div>
 
-              {/* Two Column Layout for Category Heads and CC Emails */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 
-                {/* Category Heads with Real-time Search (CreateTicket.js style) */}
                 <div>
                   <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
                     Category Heads <span style={{ color: '#ef4444' }}>*</span>
@@ -1687,7 +1871,6 @@ function Header({ logout }) {
                           )}
                         </div>
 
-                        {/* Dropdown for search results */}
                         {h.showDropdown && h.searchResults.length > 0 && (
                           <div style={{
                             position: 'absolute',
@@ -1724,7 +1907,6 @@ function Header({ logout }) {
                           </div>
                         )}
 
-                        {/* Show selected user */}
                         {h.email && (
                           <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span>✓</span>
@@ -1732,7 +1914,6 @@ function Header({ logout }) {
                           </div>
                         )}
 
-                        {/* Loading indicator */}
                         {h.searching && (
                           <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
                             Searching...
@@ -1743,7 +1924,6 @@ function Header({ logout }) {
                   </div>
                 </div>
 
-                {/* CC Emails with Real-time Search (CreateTicket.js style) */}
                 <div>
                   <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
                     CC Emails (Optional)
@@ -1806,7 +1986,6 @@ function Header({ logout }) {
                           )}
                         </div>
 
-                        {/* Dropdown for search results */}
                         {c.showDropdown && c.searchResults.length > 0 && (
                           <div style={{
                             position: 'absolute',
@@ -1843,7 +2022,6 @@ function Header({ logout }) {
                           </div>
                         )}
 
-                        {/* Show selected user */}
                         {c.email && (
                           <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span>✓</span>
@@ -1851,7 +2029,6 @@ function Header({ logout }) {
                           </div>
                         )}
 
-                        {/* Loading indicator */}
                         {c.searching && (
                           <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
                             Searching...
@@ -1864,10 +2041,8 @@ function Header({ logout }) {
 
               </div>
 
-              {/* Feature Toggles - Three Columns */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 8 }}>
                 
-                {/* On Behalf Feature */}
                 <div style={{ 
                   padding: 16, 
                   border: '1px solid #e6e9ee', 
@@ -1911,7 +2086,6 @@ function Header({ logout }) {
                   )}
                 </div>
 
-                {/* Sub-Category Feature */}
                 <div
                   style={{
                     padding: 16,
@@ -2023,7 +2197,6 @@ function Header({ logout }) {
                   )}
                 </div>
 
-                {/* Attachments Feature */}
                 <div style={{ 
                   padding: 16, 
                   border: '1px solid #e6e9ee', 
@@ -2061,7 +2234,6 @@ function Header({ logout }) {
               </div>
             </div>
 
-            {/* Success/Error Messages */}
             {categorySuccess && (
               <div style={{ 
                 marginTop: 16, 
@@ -2092,7 +2264,6 @@ function Header({ logout }) {
               </div>
             )}
 
-            {/* Action Buttons */}
             <div style={{ 
               display: 'flex', 
               justifyContent: 'flex-end', 
@@ -2137,7 +2308,722 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* --- Remove Field Modal (unchanged) --- */}
+      {/* NEW: Edit Field Modal */}
+      {editFieldOpen && (
+        <>
+          <div
+            onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              zIndex: 90,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'white',
+              borderRadius: '10px',
+              padding: '24px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              width: editingCategory ? '800px' : '600px',
+              maxWidth: '90vw',
+              zIndex: 100,
+              maxHeight: '85vh',
+              overflow: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
+                {editingCategory ? 'Edit Category' : 'Edit Field'}
+              </h3>
+              <button 
+                onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }} 
+                style={{ 
+                  background: 'transparent', 
+                  border: 'none', 
+                  cursor: 'pointer',
+                  fontSize: '1.2rem',
+                  color: '#6b7280'
+                }}
+              >
+                ✖
+              </button>
+            </div>
+
+            {!editingCategory && (
+              <>
+                <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
+                  Select a category to edit its configuration.
+                </div>
+
+                <div style={{ maxHeight: 400, overflow: 'auto', marginBottom: 16 }}>
+                  {editCategoriesLoading && <div style={{ color: '#6b7280' }}>Loading categories…</div>}
+                  {!editCategoriesLoading && categoriesForEdit.length === 0 && (
+                    <div style={{ color: '#6b7280' }}>No categories found.</div>
+		   )}
+                  {categoriesForEdit.map(c => (
+                    <div
+                      key={c.id}
+                      onClick={() => selectCategoryForEdit(c)}
+                      style={{
+                        padding: 16,
+                        borderRadius: 8,
+                        marginBottom: 12,
+                        background: '#fff',
+                        border: '2px solid #e6e9ee',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#8b5cf6';
+                        e.currentTarget.style.background = '#faf5ff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#e6e9ee';
+                        e.currentTarget.style.background = '#fff';
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8, color: '#0f172a' }}>
+                        {c.name || c.categoryName}
+                      </div>
+                      
+                      {/* Show feature badges */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                        {c.features?.onBehalf?.enabled && (
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '2px 8px', 
+                            borderRadius: 4, 
+                            background: '#dbeafe', 
+                            color: '#1e40af',
+                            fontWeight: 600
+                          }}>
+                            On Behalf {c.features.onBehalf.required ? '(Required)' : ''}
+                          </span>
+                        )}
+                        {c.features?.subCategories?.enabled && (
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '2px 8px', 
+                            borderRadius: 4, 
+                            background: '#dcfce7', 
+                            color: '#166534',
+                            fontWeight: 600
+                          }}>
+                            Sub-Category {c.features.subCategories.required ? '(Required)' : ''}
+                          </span>
+                        )}
+                        {c.features?.attachments?.enabled && (
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '2px 8px', 
+                            borderRadius: 4, 
+                            background: '#fee2e2', 
+                            color: '#991b1b',
+                            fontWeight: 600
+                          }}>
+                            Attachments {c.features.attachments.required ? '(Required)' : ''}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Show category heads count */}
+                      <div style={{ fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ fontWeight: 600 }}>Category Heads:</span> {c.categoryHeads?.length || 0}
+                        {' '} | {' '}
+                        <span style={{ fontWeight: 600 }}>CC Emails:</span> {c.cc?.length || 0}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Show edit form when category is selected */}
+            {editingCategory && (
+              <>
+                <div style={{ 
+                  fontSize: 13, 
+                  color: '#6b7280', 
+                  marginBottom: 20,
+                  padding: 12,
+                  background: '#f0fdf4',
+                  borderRadius: 8,
+                  border: '1px solid #bbf7d0'
+                }}>
+                  Editing: <strong>{editingCategory.name || editingCategory.categoryName}</strong>
+                  <button
+                    onClick={() => {
+                      setEditingCategory(null);
+                      resetCategoryForm();
+                    }}
+                    style={{
+                      marginLeft: 12,
+                      fontSize: 11,
+                      padding: '4px 10px',
+                      borderRadius: 4,
+                      background: '#fff',
+                      border: '1px solid #e6e9ee',
+                      cursor: 'pointer',
+                      fontWeight: 600
+                    }}
+                  >
+                    ← Back to list
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  
+                  {/* Category Name */}
+                  <div style={{ width: '100%' }}>
+                    <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
+                      Category Name <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input 
+                      value={categoryName} 
+                      onChange={(e) => setCategoryName(e.target.value)} 
+                      placeholder="Enter category name" 
+                      style={{ 
+                        width: '100%', 
+                        padding: '10px 12px', 
+                        borderRadius: 8, 
+                        border: '1px solid #e6e9ee',
+                        fontSize: 14,
+                        boxSizing: 'border-box'
+                      }} 
+                    />
+                  </div>
+
+                  {/* Two Column Layout for Category Heads and CC Emails */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                    
+                    {/* Category Heads with Real-time Search */}
+                    <div>
+                      <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
+                        Category Heads <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                        Start typing to search and select users
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {categoryHeads.map((h, idx) => (
+                          <div 
+                            key={idx} 
+                            ref={el => categoryHeadsRefs.current[idx] = el}
+                            style={{ position: 'relative' }}
+                          >
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                              <input
+                                value={h.searchQuery}
+                                onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
+                                placeholder="Type name or email..."
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '8px 10px', 
+                                  borderRadius: 6, 
+                                  border: h.email ? '1px solid #10b981' : '1px solid #e6e9ee',
+                                  fontSize: 13,
+                                  background: h.email ? '#ecfdf5' : 'white'
+                                }}
+                              />
+                              {idx === categoryHeads.length - 1 ? (
+                                <button 
+                                  type="button" 
+                                  onClick={addCategoryHead} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#eef2ff', 
+                                    border: '1px solid #c7d2fe',
+                                    cursor: 'pointer',
+                                    fontSize: 16,
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  ＋
+                                </button>
+                              ) : (
+                                <button 
+                                  type="button" 
+                                  onClick={() => removeCategoryHead(idx)} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#fff1f2', 
+                                    border: '1px solid #fecaca',
+                                    cursor: 'pointer',
+                                    fontSize: 14
+                                  }}
+                                >
+                                  ✖
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Dropdown for search results */}
+                            {h.showDropdown && h.searchResults.length > 0 && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                right: 0,
+                                background: 'white',
+                                border: '1px solid #e6e9ee',
+                                borderRadius: 6,
+                                marginTop: 4,
+                                maxHeight: 200,
+                                overflowY: 'auto',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                zIndex: 110
+                              }}>
+                                {h.searchResults.map((user, userIdx) => (
+                                  <div
+                                    key={userIdx}
+                                    onClick={() => selectCategoryHead(idx, user)}
+                                    style={{
+                                      padding: '8px 12px',
+                                      cursor: 'pointer',
+                                      borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                      background: 'white',
+                                      transition: 'background 0.15s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                                  >
+                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{user.displayName}</div>
+                                    <div style={{ fontSize: 11, color: '#6b7280' }}>{user.mail}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Show selected user */}
+                            {h.email && (
+                              <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>✓</span>
+                                <span>{h.name} ({h.email})</span>
+                              </div>
+                            )}
+
+                            {/* Loading indicator */}
+                            {h.searching && (
+                              <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
+                                Searching...
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* CC Emails with Real-time Search */}
+                    <div>
+                      <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
+                        CC Emails (Optional)
+                      </label>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                        Start typing to search and select users
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {ccEmails.map((c, idx) => (
+                          <div 
+                            key={idx}
+                            ref={el => ccEmailsRefs.current[idx] = el}
+                            style={{ position: 'relative' }}
+                          >
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                              <input
+                                value={c.searchQuery}
+                                onChange={(e) => updateCcEmailQuery(idx, e.target.value)}
+                                placeholder="Type name or email..."
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '8px 10px', 
+                                  borderRadius: 6, 
+                                  border: c.email ? '1px solid #10b981' : '1px solid #e6e9ee',
+                                  fontSize: 13,
+                                  background: c.email ? '#ecfdf5' : 'white'
+                                }}
+                              />
+                              {idx === ccEmails.length - 1 ? (
+                                <button 
+                                  type="button" 
+                                  onClick={addCcEmail} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#eef2ff', 
+                                    border: '1px solid #c7d2fe',
+                                    cursor: 'pointer',
+                                    fontSize: 16,
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  ＋
+                                </button>
+                              ) : (
+                                <button 
+                                  type="button" 
+                                  onClick={() => removeCcEmail(idx)} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#fff1f2', 
+                                    border: '1px solid #fecaca',
+                                    cursor: 'pointer',
+                                    fontSize: 14
+                                  }}
+                                >
+                                  ✖
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Dropdown for search results */}
+                            {c.showDropdown && c.searchResults.length > 0 && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                right: 0,
+                                background: 'white',
+                                border: '1px solid #e6e9ee',
+                                borderRadius: 6,
+                                marginTop: 4,
+                                maxHeight: 200,
+                                overflowY: 'auto',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                zIndex: 110
+                              }}>
+                                {c.searchResults.map((user, userIdx) => (
+                                  <div
+                                    key={userIdx}
+                                    onClick={() => selectCcEmail(idx, user)}
+                                    style={{
+                                      padding: '8px 12px',
+                                      cursor: 'pointer',
+                                      borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                      background: 'white',
+                                      transition: 'background 0.15s'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                                  >
+                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{user.displayName}</div>
+                                    <div style={{ fontSize: 11, color: '#6b7280' }}>{user.mail}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Show selected user */}
+                            {c.email && (
+                              <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>✓</span>
+                                <span>{c.name} ({c.email})</span>
+                              </div>
+                            )}
+
+                            {/* Loading indicator */}
+                            {c.searching && (
+                              <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
+                                Searching...
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Feature Toggles - Three Columns */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 8 }}>
+                    
+                    {/* On Behalf Feature */}
+                    <div style={{ 
+                      padding: 16, 
+                      border: '1px solid #e6e9ee', 
+                      borderRadius: 8,
+                      background: enableOnBehalf ? '#f0f9ff' : '#fafafa'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <label style={{ fontWeight: 700, fontSize: 14 }}>On Behalf</label>
+                        <input 
+                          type="checkbox" 
+                          checked={enableOnBehalf} 
+                          onChange={(e) => setEnableOnBehalf(e.target.checked)}
+                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                        />
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                        Allow users to submit tickets for themselves or others
+                      </div>
+
+                      {enableOnBehalf && (
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                            Options
+                          </div>
+                          <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>
+                            • Self<br />
+                            • Other
+                          </div>
+                          <div style={{ marginTop: 10 }}>
+                            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="checkbox"
+                                checked={requireOnBehalf}
+                                onChange={(e) => setRequireOnBehalf(e.target.checked)}
+                                style={{ width: 14, height: 14 }}
+                              />
+                              <span>Required field</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Sub-Category Feature */}
+                    <div
+                      style={{
+                        padding: 16,
+                        border: '1px solid #e6e9ee',
+                        borderRadius: 8,
+                        background: enableSubCategory ? '#f0fdf4' : '#fafafa'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
+                        <input
+                          type="checkbox"
+                          checked={enableSubCategory}
+                          onChange={(e) => setEnableSubCategory(e.target.checked)}
+                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                        />
+                      </div>
+
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                        Add multiple subcategories for users to choose from
+                      </div>
+
+                      {enableSubCategory && (
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                            Subcategories:
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {subCategories.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={addSubCategory}
+                                style={{
+                                  alignSelf: 'flex-start',
+                                  background: '#eef2ff',
+                                  border: '1px solid #c7d2fe',
+                                  borderRadius: 6,
+                                  padding: '4px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  fontWeight: 600
+                                }}
+                              >
+                                + Add sub-category
+                              </button>
+                            )}
+
+                            {subCategories.map((s, idx) => (
+                              <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input
+                                  value={s}
+                                  onChange={(e) => updateSubCategory(idx, e.target.value)}
+                                  placeholder="e.g., Salary, Benefits"
+                                  style={{
+                                    flex: 1,
+                                    padding: '6px 8px',
+                                    borderRadius: 4,
+                                    border: '1px solid #e6e9ee',
+                                    fontSize: 12
+                                  }}
+                                />
+                                {idx === subCategories.length - 1 ? (
+                                  <button
+                                    type="button"
+                                    onClick={addSubCategory}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}
+                                  >
+                                    ＋
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSubCategory(idx)}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}
+                                  >
+                                    ✖
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+
+                            <div
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 4,
+                                border: '1px dashed #cbd5e1',
+                                fontSize: 12,
+                                color: '#475569',
+                                background: '#f8fafc'
+                              }}
+                            >
+                              Other (fixed)
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: 10 }}>
+                            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="checkbox"
+                                checked={requireSubCategory}
+                                onChange={(e) => setRequireSubCategory(e.target.checked)}
+                                style={{ width: 14, height: 14 }}
+                              />
+                              <span>Required field</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Attachments Feature */}
+                    <div style={{ 
+                      padding: 16, 
+                      border: '1px solid #e6e9ee', 
+                      borderRadius: 8,
+                      background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <label style={{ fontWeight: 700, fontSize: 14 }}>Attachments</label>
+                        <input 
+                          type="checkbox" 
+                          checked={enableAttachmentsForCategory} 
+                          onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)}
+                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                        />
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                        Allow file attachments on tickets in this category
+                      </div>
+
+                      {enableAttachmentsForCategory && (
+                        <div style={{ marginTop: 12 }}>
+                          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input 
+                              type="checkbox" 
+                              checked={requireAttachmentsForCategory} 
+                              onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)}
+                              style={{ width: 14, height: 14 }}
+                            /> 
+                            <span>Required field</span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Success/Error Messages */}
+                {categorySuccess && (
+                  <div style={{ 
+                    marginTop: 16, 
+                    padding: '12px 16px', 
+                    background: '#ecfdf5', 
+                    color: '#065f46', 
+                    borderRadius: 8,
+                    border: '1px solid #a7f3d0',
+                    fontSize: 14,
+                    fontWeight: 600
+                  }}>
+                    ✓ {categorySuccess}
+                  </div>
+                )}
+                
+                {categoryError && (
+                  <div style={{ 
+                    marginTop: 16, 
+                    padding: '12px 16px', 
+                    background: '#fff1f2', 
+                    color: '#9f1239', 
+                    borderRadius: 8,
+                    border: '1px solid #fecaca',
+                    fontSize: 14,
+                    fontWeight: 600
+                  }}>
+                    ✕ {categoryError}
+                  </div>
+                )}
+
+                {/* Action Buttons for Edit */}
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'flex-end', 
+                  gap: 12, 
+                  marginTop: 20,
+                  paddingTop: 20,
+                  borderTop: '1px solid #e6e9ee'
+                }}>
+                  <button 
+                    onClick={() => { 
+                      setEditingCategory(null); 
+                      resetCategoryForm(); 
+                    }} 
+                    style={{ 
+                      background: 'transparent', 
+                      border: '1px solid #e6e9ee', 
+                      color: '#6b7280', 
+                      cursor: 'pointer',
+                      padding: '10px 20px',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      fontSize: 14
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={updateCategory} 
+                    disabled={categoryLoading || !categoryName.trim()} 
+                    style={{ 
+                      padding: '10px 24px', 
+                      borderRadius: 8, 
+                      background: categoryLoading || !categoryName.trim() ? '#c4b5fd' : '#8b5cf6', 
+                      color: 'white', 
+                      border: 'none', 
+                      cursor: categoryLoading || !categoryName.trim() ? 'not-allowed' : 'pointer', 
+                      fontWeight: 700,
+                      fontSize: 14
+                    }}
+                  >
+                    {categoryLoading ? 'Updating Category…' : 'Update Category'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Remove Field Modal (unchanged) */}
       {removeFieldOpen && (
         <>
           <div
@@ -2437,7 +3323,6 @@ function AppContent() {
 function App() {
   return (
     <>
-      {/* moved animation into component so it is valid JSX */}
       <style>{`
         @keyframes floatGlow {
           0% { transform: translateX(-50%) translateY(0); opacity: 0.95; }

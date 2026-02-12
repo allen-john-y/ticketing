@@ -5,14 +5,7 @@ import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 import DownloadIcon from './Download.png'; // make sure Download.png is in the same folder
 
-// CATEGORY HEAD EMAIL MAP (mirrors backend deptEmails)
-const deptEmails = {
-  "Password Reset": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
-  "Admin Access": ["kodhan@sandeza-inc.com", "allenj@sandeza-inc.com"],
-  "Operational & Finance": "vigneshm@sandeza-inc.com"
-};
 
-const approvalCategories = ["Password Reset", "Admin Access"];
 
 function TicketDetails() {
   const { id } = useParams();
@@ -35,6 +28,7 @@ function TicketDetails() {
 
   const [confirmModal, setConfirmModal] = useState(false);
   const [confirmreopenModal, setConfirmreopenModal] = useState(false);
+  const [categoryMeta, setCategoryMeta] = useState(null);
 
   const backendBase = "https://ticketing-hn59.onrender.com";
 
@@ -110,6 +104,14 @@ function TicketDetails() {
       try {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
+        try {
+          const catRes = await axios.get(
+            `${backendBase}/api/categories/by-name/${encodeURIComponent(res.data.category)}`
+          );
+          setCategoryMeta(catRes.data);
+        } catch (e) {
+          setCategoryMeta(null);
+        }
 
         // prepare attachments list if present
         const list = [];
@@ -143,8 +145,9 @@ function TicketDetails() {
         }
         setAttachmentList(list);
 
-        // CATEGORY HEAD CHECK
+        // CATEGORY HEAD CHECK (dynamic from categories collection)
         if (accounts[0] && res.data) {
+
           const acct = accounts[0] || {};
           const possibleEmails = [
             acct.username,
@@ -157,24 +160,28 @@ function TicketDetails() {
             .toLowerCase()
             .trim();
 
-          const headEntry = deptEmails[res.data.category];
-          const headList = Array.isArray(headEntry) ? headEntry : (headEntry ? [headEntry] : []);
-          const normalizedHeadList = headList
-            .map(h => (h || '').toLowerCase().trim())
-            .filter(Boolean);
+          const heads =
+            (categoryMeta?.categoryHeads || [])
+              .map(h => (h.email || '').toLowerCase().trim())
+              .filter(Boolean);
 
-          if (loggedEmail && normalizedHeadList.includes(loggedEmail)) {
-            setIsCategoryHead(true);
+          const isHead =
+            loggedEmail && heads.includes(loggedEmail);
 
-            const status = (res.data.status || '').toString();
-            if (
-              approvalCategories.includes(res.data.category) &&
-              (status === "Waiting for approval" || status === "Open")
-            ) {
-              setShowApprovalModal(true);
-            }
+          setIsCategoryHead(!!isHead);
+
+          const status = (res.data.status || '').toString();
+
+          const approvalEnabled =
+            categoryMeta?.features?.approvalRequired === true;
+
+          if (
+            isHead &&
+            approvalEnabled &&
+            (status === 'Waiting for approval' || status === 'Open')
+          ) {
+            setShowApprovalModal(true);
           } else {
-            setIsCategoryHead(false);
             setShowApprovalModal(false);
           }
         }
@@ -183,7 +190,7 @@ function TicketDetails() {
       }
     };
     fetchTicket();
-  }, [id, accounts, instance, backendBase]);
+  }, [id, accounts, instance, backendBase, categoryMeta]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
@@ -199,11 +206,12 @@ function TicketDetails() {
 
   // Derived: show inline "Waiting for Approval" banner
   const needsApprovalBanner =
-    isCategoryHead &&
-    ticket &&
-    (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
-    !showApprovalModal &&
-    approvalCategories.includes(ticket.category);
+  isCategoryHead &&
+  ticket &&
+  (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
+  !showApprovalModal &&
+  categoryMeta?.features?.approvalRequired === true;
+
 
   const copyToClipboard = (text) => {
     try {
@@ -217,10 +225,11 @@ function TicketDetails() {
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
-      if (!ticket || !approvalCategories.includes(ticket.category)) {
+      if (!ticket || categoryMeta?.features?.approvalRequired !== true) {
         alert("Approval not supported for this ticket type.");
         return;
       }
+
 
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
         approvedBy: accounts[0]?.name || accounts[0]?.username,
@@ -899,7 +908,7 @@ const downloadAllAttachments = async () => {
       {/* APPROVAL MODAL – Password Reset + Admin Access */}
       {showApprovalModal &&
         isCategoryHead &&
-        approvalCategories.includes(ticket.category) && (
+        categoryMeta?.features?.approvalRequired === true && (
         <div className="overlay">
           <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
