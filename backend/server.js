@@ -152,6 +152,9 @@ const categoryConfigSchema = new mongoose.Schema(
     },
 
     features: {
+
+      approvalRequired: { type: Boolean, default: false }, 
+      
       onBehalf: {
         enabled: { type: Boolean, default: false },
         options: [{ type: String }],
@@ -1249,61 +1252,83 @@ app.post("/tickets", async (req, res) => {
 
     console.log("📥 [CREATE TICKET] Category:", category);
 
-    // Check if it's a legacy category or dynamic category
-    const isLegacyCategory = ["Password Reset", "Admin Access", "Operational & Finance"].includes(category);
-    
-    if (!isLegacyCategory) {
-      // Validate against CategoryConfig
-      const config = await CategoryConfig.findOne({ 
-        name: { $regex: new RegExp("^" + category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$", "i") }
-      });
+    // ----------------------------------------------------
+    // Load category config (ONLY DB, no legacy)
+    // ----------------------------------------------------
+    const categoryConfig = await CategoryConfig.findOne({
+      name: {
+        $regex: new RegExp(
+          "^" + category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$",
+          "i"
+        )
+      }
+    });
 
-      if (!config) {
-        return res.status(400).json({ error: "Invalid category" });
-      }
-
-      // Validate required fields based on config
-      if (config.features?.subCategories?.enabled && config.features.subCategories.required && !subCategory) {
-        return res.status(400).json({ message: "Sub-category is required for this category" });
-      }
-
-      if (config.features?.attachments?.enabled && config.features.attachments.required && (!attachments || attachments.length === 0)) {
-        return res.status(400).json({ message: "Attachments are required for this category" });
-      }
-    } else {
-      // Legacy validation
-      if (!deptEmails[category]) {
-        return res.status(400).json({ error: "Invalid category" });
-      }
+    if (!categoryConfig) {
+      return res.status(400).json({ message: "Invalid category" });
     }
 
-    // Password Reset validation (legacy)
+    // ----------------------------------------------------
+    // Dynamic validation
+    // ----------------------------------------------------
+    if (
+      categoryConfig.features?.subCategories?.enabled &&
+      categoryConfig.features.subCategories.required &&
+      !subCategory
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Sub-category is required for this category" });
+    }
+
+    if (
+      categoryConfig.features?.attachments?.enabled &&
+      categoryConfig.features.attachments.required &&
+      (!attachments || attachments.length === 0)
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Attachments are required for this category" });
+    }
+
+    // ----------------------------------------------------
+    // Password Reset validation (keep your special logic)
+    // ----------------------------------------------------
     if (category === "Password Reset" && (onBehalf === "Self" || !onBehalf)) {
       if (!deliveryEmail || !deliveryEmail.trim()) {
-        return res.status(400).json({ message: "Alternative delivery email is required for self password reset." });
+        return res.status(400).json({
+          message: "Alternative delivery email is required for self password reset."
+        });
       }
+
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(deliveryEmail.trim())) {
-        return res.status(400).json({ message: "Alternative delivery email is not valid." });
+        return res.status(400).json({
+          message: "Alternative delivery email is not valid."
+        });
       }
     }
 
     if (category === "Password Reset" && onBehalf === "Other") {
       if (!onBehalfEmail || !onBehalfEmail.trim()) {
-        return res.status(400).json({ message: "On-behalf email is required for other password reset." });
+        return res.status(400).json({
+          message: "On-behalf email is required for other password reset."
+        });
       }
+
       if (!deliveryEmail || !deliveryEmail.trim()) {
-        return res.status(400).json({ message: "Delivery email is required when requesting for other user." });
+        return res.status(400).json({
+          message: "Delivery email is required when requesting for other user."
+        });
       }
     }
 
+    // ----------------------------------------------------
+    // Initial status
+    // ----------------------------------------------------
     let initialStatus = "Open";
 
-    const config = await CategoryConfig.findOne({
-      name: { $regex: new RegExp("^" + category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") }
-    });
-
-    if (config?.features?.approvalRequired === true) {
+    if (categoryConfig?.features?.approvalRequired === true) {
       initialStatus = "Waiting for approval";
     }
 
@@ -1329,21 +1354,23 @@ app.post("/tickets", async (req, res) => {
           action: "created",
           by: userName,
           at: new Date(),
-          reason: null,
-        },
-      ],
+          reason: null
+        }
+      ]
     };
 
-    // Handle attachments
+    // ----------------------------------------------------
+    // Attachments
+    // ----------------------------------------------------
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
       ticketPayload.attachments = attachments.map((a) => ({
-        fileName: a.fileName || a.file_name || a.name || '',
-        fileType: a.fileType || a.file_type || a.type || '',
+        fileName: a.fileName || a.file_name || a.name || "",
+        fileType: a.fileType || a.file_type || a.type || "",
         fileUrl: a.url || a.fileUrl || a.path || null,
         id: a.id || a.fileId || null,
         driveId: a.driveId || null
       }));
-      
+
       if (!ticketPayload.attachment && ticketPayload.attachments.length > 0) {
         const first = ticketPayload.attachments[0];
         ticketPayload.attachment = {
@@ -1358,29 +1385,39 @@ app.post("/tickets", async (req, res) => {
 
     console.log("✅ [CREATE TICKET] Ticket created:", ticket.ticketNumber);
 
-    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const nowIST = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata"
+    });
+
     const itHead = process.env.IT_HEAD_EMAIL;
 
-    // Creator email
+    // ----------------------------------------------------
+    // Creator mail
+    // ----------------------------------------------------
     const creatorHtml = buildHtmlEmail({
       title: `Ticket #${ticketCounter} Created`,
-      subtitle: initialStatus === "Waiting for approval" ? "Your ticket is waiting for department approval" : "Your ticket has been created",
+      subtitle:
+        initialStatus === "Waiting for approval"
+          ? "Your ticket is waiting for department approval"
+          : "Your ticket has been created",
       statusColor: "#0ea5e9",
       fields: [
         { label: "Ticket No", value: ticketCounter },
         { label: "Category", value: category },
         { label: "Priority", value: priority },
         { label: "Status", value: initialStatus },
-        { label: "Created At", value: nowIST },
+        { label: "Created At", value: nowIST }
       ],
-      description: description,
+      description,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
     await sendEmail(userEmail, `Ticket #${ticketCounter} Created`, creatorHtml, itHead);
 
-    // Department notification
+    // ----------------------------------------------------
+    // Department mail
+    // ----------------------------------------------------
     const deptFields = [
       { label: "Ticket No", value: ticketCounter },
       { label: "Created By", value: `${userName} (${userEmail})` },
@@ -1389,54 +1426,47 @@ app.post("/tickets", async (req, res) => {
       { label: "Status", value: initialStatus }
     ];
 
-    if (subCategory) {
-      deptFields.push({ label: "Sub-Category", value: subCategory });
-    }
-
-    if (deliveryEmail) {
-      deptFields.push({ label: "Delivery Email", value: deliveryEmail });
-    }
+    if (subCategory) deptFields.push({ label: "Sub-Category", value: subCategory });
+    if (deliveryEmail) deptFields.push({ label: "Delivery Email", value: deliveryEmail });
 
     const deptHtml = buildHtmlEmail({
       title: `New Ticket #${ticketCounter} — ${category}`,
-      subtitle: `Action required: please review the ticket${initialStatus === "Waiting for approval" ? ' (approval required)' : ''}.`,
-      statusColor: initialStatus === "Waiting for approval" ? "#f59e0b" : "#0ea5e9",
+      subtitle: `Action required${initialStatus === "Waiting for approval" ? " (approval required)" : ""}`,
+      statusColor:
+        initialStatus === "Waiting for approval" ? "#f59e0b" : "#0ea5e9",
       fields: deptFields,
-      description: description,
+      description,
       actionLink: `${process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"}/ticket/${ticket._id}`,
-      actionText: initialStatus === "Waiting for approval" ? "Approve / Reject" : "Open Ticket"
+      actionText:
+        initialStatus === "Waiting for approval" ? "Approve / Reject" : "Open Ticket"
     });
 
-    // Get recipients for this category
-    let deptTo = [];
-    let deptCcList = [];
+    // ----------------------------------------------------
+    // Recipients (ONLY from CategoryConfig)
+    // ----------------------------------------------------
+    const deptTo = (categoryConfig.categoryHeads || [])
+      .map(h => h.email)
+      .filter(Boolean);
 
-    if (isLegacyCategory) {
-      deptTo = [deptEmails[category]];
-      if (category === "Password Reset" || category === "Admin Access") {
-        deptCcList.push(passwordResetSecondary);
-      }
-    } else {
-      // Get from CategoryConfig
-      const config = await CategoryConfig.findOne({ 
-        name: { $regex: new RegExp("^" + category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$", "i") }
-      });
-
-      if (config) {
-        deptTo = (config.categoryHeads || []).map(h => h.email).filter(Boolean);
-        deptCcList = (config.cc || []).map(c => c.email).filter(Boolean);
-      }
-    }
+    const deptCcList = (categoryConfig.cc || [])
+      .map(c => c.email)
+      .filter(Boolean);
 
     if (itHead) deptCcList.push(itHead);
 
-    if (deptTo.length > 0) {
-      await sendEmail(deptTo, `[TICKET #${ticketCounter}] ${category} - Action Required`, deptHtml, deptCcList.length ? deptCcList : itHead);
+    if (deptTo.length) {
+      await sendEmail(
+        deptTo,
+        `[TICKET #${ticketCounter}] ${category} - Action Required`,
+        deptHtml,
+        deptCcList.length ? deptCcList : itHead
+      );
     }
 
     res.status(201).json(ticket);
+
   } catch (err) {
-    console.error("Error creating ticket:", err.message);
+    console.error("Error creating ticket:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
