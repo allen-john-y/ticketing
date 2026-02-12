@@ -141,15 +141,25 @@ const categoryConfigSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, unique: true },
 
+    // ✅ keep categoryName because your APIs and indexes already use it
+    categoryName: { type: String, required: true, unique: true },
+
+    // ✅ special category marker (Password Reset, later Admin Access, etc.)
+    type: {
+      type: String,
+      enum: ["NORMAL", "PASSWORD_RESET"],
+      default: "NORMAL"
+    },
+
     features: {
       onBehalf: {
         enabled: { type: Boolean, default: false },
-        options: [{ type: String }], // e.g., ["Self", "Manager", "HR"]
+        options: [{ type: String }],
         required: { type: Boolean, default: false }
       },
       subCategories: {
         enabled: { type: Boolean, default: false },
-        list: [{ type: String }], // e.g., ["Leave", "Benefits", "Salary", "Other"]
+        list: [{ type: String }],
         required: { type: Boolean, default: false }
       },
       attachments: {
@@ -181,7 +191,11 @@ const categoryConfigSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const CategoryConfig = mongoose.model("CategoryConfig", categoryConfigSchema);
+const CategoryConfig = mongoose.model(
+  "CategoryConfig",
+  categoryConfigSchema
+);
+
 
 // ---------------------- Counter ---------------------------
 let ticketCounter = 0;
