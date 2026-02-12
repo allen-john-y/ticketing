@@ -710,14 +710,21 @@ const normalizedName = finalName;
     }
 
     // Create category
+    const categoryType =
+      normalizedName.toLowerCase() === "password reset"
+        ? "PASSWORD_RESET"
+        : "NORMAL";
+
     const category = await CategoryConfig.create({
-  name: normalizedName,
-  categoryName: normalizedName,   // ✅ VERY IMPORTANT
-  features: finalFeatures,
-  categoryHeads: Array.isArray(categoryHeads) ? categoryHeads : [],
-  cc: Array.isArray(cc) ? cc : [],
-  createdBy: createdBy || {}
-});
+      name: normalizedName,
+      categoryName: normalizedName,
+      type: categoryType,   // ✅ THIS IS THE FIX
+      features: finalFeatures,
+      categoryHeads: Array.isArray(categoryHeads) ? categoryHeads : [],
+      cc: Array.isArray(cc) ? cc : [],
+      createdBy: createdBy || {}
+    });
+
 
 
     console.log("✅ [CREATE CATEGORY] Category created:", category._id);
