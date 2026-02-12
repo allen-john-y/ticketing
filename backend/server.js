@@ -844,6 +844,134 @@ const normalizedName = finalName;
   }
 });
 
+app.put("/api/categories/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      name,
+      categoryName,
+      features,
+      categoryHeads,
+      cc,
+      updatedBy   // <-- send this from App.js { name, mail }
+    } = req.body;
+
+    const finalName = (name || categoryName || "").trim();
+    if (!finalName) {
+      return res.status(400).json({ message: "Category name is required" });
+    }
+
+    const oldCategory = await CategoryConfig.findById(id);
+    if (!oldCategory) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    // ensure "Other"
+    let finalFeatures = features || {};
+    if (finalFeatures.subCategories?.enabled) {
+      const list = finalFeatures.subCategories.list || [];
+      if (!list.some(v => v.toLowerCase() === "other")) list.push("Other");
+      finalFeatures.subCategories.list = list;
+    }
+
+    const newHeads = Array.isArray(categoryHeads) ? categoryHeads : [];
+    const newCc = Array.isArray(cc) ? cc : [];
+
+    const updated = await CategoryConfig.findByIdAndUpdate(
+      id,
+      {
+        name: finalName,
+        categoryName: finalName,
+        features: finalFeatures,
+        categoryHeads: newHeads,
+        cc: newCc
+      },
+      { new: true }
+    );
+
+    // -------------------- build change list --------------------
+
+    const changes = [];
+
+    const diff = (label, oldVal, newVal) => {
+      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+        changes.push({
+          label,
+          old: oldVal,
+          new: newVal
+        });
+      }
+    };
+
+    diff("Category Name", oldCategory.name, finalName);
+    diff("Features", oldCategory.features, finalFeatures);
+    diff("Category Heads", oldCategory.categoryHeads, newHeads);
+    diff("CC", oldCategory.cc, newCc);
+
+    // -------------------- notify old heads + old cc --------------------
+
+    const notifyTo = [
+      ...(oldCategory.categoryHeads || []).map(h => h.email),
+      ...(oldCategory.cc || []).map(c => c.email)
+    ].filter(Boolean);
+
+    const uniqueNotifyTo = [...new Set(notifyTo)];
+
+    if (uniqueNotifyTo.length && changes.length) {
+
+      const changedBy =
+        updatedBy?.name
+          ? `${updatedBy.name} (${updatedBy.mail || "—"})`
+          : "Admin";
+
+      const fields = changes.map(c => ({
+        label: c.label,
+        value:
+          `Old:\n${JSON.stringify(c.old, null, 2)}\n\nNew:\n${JSON.stringify(c.new, null, 2)}`
+      }));
+
+      const html = buildHtmlEmail({
+        title: `Category Updated: ${oldCategory.name}`,
+        subtitle: `${changedBy} updated this category`,
+        statusColor: "#0ea5e9",
+        fields,
+        description: `The category configuration has been updated.`,
+        actionLink:
+          (process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"),
+        actionText: "Open Helpdesk"
+      });
+
+      const itHead = process.env.IT_HEAD_EMAIL;
+
+      await sendEmail(
+        uniqueNotifyTo,
+        `[HELPDESK] Category updated: ${oldCategory.name}`,
+        html,
+        itHead
+      );
+    }
+
+    // -------------------- response --------------------
+
+    res.json({
+      id: updated._id.toString(),
+      name: updated.name,
+      features: updated.features,
+      categoryHeads: updated.categoryHeads,
+      cc: updated.cc,
+      createdBy: updated.createdBy,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt
+    });
+
+  } catch (err) {
+    console.error("Update category error:", err.message);
+    res.status(500).json({ message: "Failed to update category" });
+  }
+});
+
+
 // DELETE /api/categories/:id - Remove category
 app.delete("/api/categories/:id", async (req, res) => {
   try {
