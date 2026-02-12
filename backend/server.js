@@ -890,30 +890,71 @@ app.put("/api/categories/:id", async (req, res) => {
       { new: true }
     );
 
-    // -------------------- build change list --------------------
+// -------------------- build human readable changes --------------------
 
     const changes = [];
 
-    const diff = (label, oldVal, newVal) => {
-      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-        changes.push({
-          label,
-          old: oldVal,
-          new: newVal
-        });
-      }
-    };
+    // helpers
+    const emails = arr => (arr || []).map(x => x.email).filter(Boolean);
 
-    diff("Category Name", oldCategory.name, finalName);
-    diff("Features", oldCategory.features, finalFeatures);
-    diff("Category Heads", oldCategory.categoryHeads, newHeads);
-    diff("CC", oldCategory.cc, newCc);
+    const oldHeads = emails(oldCategory.categoryHeads);
+    const newHeadsArr = emails(newHeads);
 
-    // -------------------- notify old heads + old cc --------------------
+    const oldCc = emails(oldCategory.cc);
+    const newCcArr = emails(newCc);
+
+    // heads added / removed
+    const addedHeads = newHeadsArr.filter(e => !oldHeads.includes(e));
+    const removedHeads = oldHeads.filter(e => !newHeadsArr.includes(e));
+
+    if (addedHeads.length)
+      changes.push(`Category head added: ${addedHeads.join(", ")}`);
+
+    if (removedHeads.length)
+      changes.push(`Category head removed: ${removedHeads.join(", ")}`);
+
+    // cc added / removed
+    const addedCc = newCcArr.filter(e => !oldCc.includes(e));
+    const removedCc = oldCc.filter(e => !newCcArr.includes(e));
+
+    if (addedCc.length)
+      changes.push(`CC added: ${addedCc.join(", ")}`);
+
+    if (removedCc.length)
+      changes.push(`CC removed: ${removedCc.join(", ")}`);
+
+    // feature changes
+    const oldF = oldCategory.features || {};
+    const newF = finalFeatures || {};
+
+    if (!!oldF.onBehalf?.enabled !== !!newF.onBehalf?.enabled)
+      changes.push(`On behalf ${newF.onBehalf?.enabled ? "enabled" : "disabled"}`);
+
+    if (!!oldF.onBehalf?.required !== !!newF.onBehalf?.required)
+      changes.push(`On behalf required ${newF.onBehalf?.required ? "enabled" : "disabled"}`);
+
+    if (!!oldF.subCategories?.enabled !== !!newF.subCategories?.enabled)
+      changes.push(`Sub category ${newF.subCategories?.enabled ? "enabled" : "disabled"}`);
+
+    if (!!oldF.subCategories?.required !== !!newF.subCategories?.required)
+      changes.push(`Sub category required ${newF.subCategories?.required ? "enabled" : "disabled"}`);
+
+    if (!!oldF.attachments?.enabled !== !!newF.attachments?.enabled)
+      changes.push(`Attachments ${newF.attachments?.enabled ? "enabled" : "disabled"}`);
+
+    if (!!oldF.attachments?.required !== !!newF.attachments?.required)
+      changes.push(`Attachments required ${newF.attachments?.required ? "enabled" : "disabled"}`);
+
+    // category name
+    if (oldCategory.name !== finalName)
+      changes.push(`Category name changed to "${finalName}"`);
+
+    // -------------------- notify (old heads + old cc + editor) --------------------
 
     const notifyTo = [
       ...(oldCategory.categoryHeads || []).map(h => h.email),
-      ...(oldCategory.cc || []).map(c => c.email)
+      ...(oldCategory.cc || []).map(c => c.email),
+      updatedBy?.mail
     ].filter(Boolean);
 
     const uniqueNotifyTo = [...new Set(notifyTo)];
@@ -922,21 +963,20 @@ app.put("/api/categories/:id", async (req, res) => {
 
       const changedBy =
         updatedBy?.name
-          ? `${updatedBy.name} (${updatedBy.mail || "—"})`
+          ? `${updatedBy.name} (${updatedBy.mail || ""})`
           : "Admin";
 
-      const fields = changes.map(c => ({
-        label: c.label,
-        value:
-          `Old:\n${JSON.stringify(c.old, null, 2)}\n\nNew:\n${JSON.stringify(c.new, null, 2)}`
+      const fields = changes.map((c, i) => ({
+        label: `Change ${i + 1}`,
+        value: c
       }));
 
       const html = buildHtmlEmail({
-        title: `Category Updated: ${oldCategory.name}`,
-        subtitle: `${changedBy} updated this category`,
+        title: `Category updated: ${oldCategory.name}`,
+        subtitle: `${changedBy} updated the category`,
         statusColor: "#0ea5e9",
         fields,
-        description: `The category configuration has been updated.`,
+        description: "The following updates were made:",
         actionLink:
           (process.env.PROD_URL || "https://ticketing-psi-tawny.vercel.app"),
         actionText: "Open Helpdesk"
