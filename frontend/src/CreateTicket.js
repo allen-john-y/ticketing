@@ -342,32 +342,9 @@ function CreateTicket() {
       }
     }
 
-    // validation for Operational & Finance subQuery (legacy - keep for backward compatibility)
-    if (formData.category === 'Operational & Finance') {
-      if (!formData.subQuery) {
-        setModal({
-          open: true,
-          title: 'Validation',
-          message: 'Please select a sub category under Operational & Finance.',
-          type: 'error'
-        });
-        setLoading(false);
-        return;
-      }
-      if (formData.subQuery === 'Other' && !formData.otherSubQueryText.trim()) {
-        setModal({
-          open: true,
-          title: 'Validation',
-          message: 'Please describe the issue for Other sub category.',
-          type: 'error'
-        });
-        setLoading(false);
-        return;
-      }
-    }
 
     // Validation for Password Reset
-    if (formData.category === 'Password Reset' && formData.onBehalf === 'Other') {
+    if (selectedCategoryConfig?.type === 'PASSWORD_RESET' && formData.onBehalf === 'Other') {
       if (!formData.onBehalfEmail.trim()) {
         setModal({
           open: true,
@@ -402,7 +379,7 @@ function CreateTicket() {
       }
     }
 
-    if (formData.category === 'Password Reset' && formData.onBehalf === 'Self') {
+    if (selectedCategoryConfig?.type === 'PASSWORD_RESET' && formData.onBehalf === 'Self') {
       const alt = (formData.alternativeEmail || '').trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!alt) {
@@ -445,13 +422,20 @@ function CreateTicket() {
         // ignore
       }
 
-      const onBehalf = formData.category === 'Password Reset' ? formData.onBehalf : undefined;
-      const onBehalfEmail = formData.category === 'Password Reset'
-        ? (formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail)
+      const isPasswordReset =
+        selectedCategoryConfig?.type === 'PASSWORD_RESET';
+
+      const onBehalf = isPasswordReset ? formData.onBehalf : undefined;
+
+      const onBehalfEmail = isPasswordReset
+        ? (formData.onBehalf === 'Other'
+            ? formData.onBehalfEmail.trim()
+            : latestEmail)
         : undefined;
 
       const returnPasswordToRequester =
-        formData.category === 'Password Reset' && formData.onBehalf === 'Self';
+            isPasswordReset && formData.onBehalf === 'Self';
+
 
       const normalizeServerResp = (serverData, file) => {
         const sd = serverData || {};
@@ -831,16 +815,6 @@ function CreateTicket() {
                     {cat.name}
                   </option>
                 ))}
-                
-                {!categoriesConfig.find(c => c.name === 'Password Reset') && (
-                  <option value="Password Reset">🔑 Password Reset</option>
-                )}
-                {!categoriesConfig.find(c => c.name === 'Admin Access') && (
-                  <option value="Admin Access">🛠️ Admin Access</option>
-                )}
-                {!categoriesConfig.find(c => c.name === 'Operational & Finance') && (
-                  <option value="Operational & Finance">💼 Operational & Finance</option>
-                )}
               </select>
             </div>
 
@@ -1040,7 +1014,7 @@ function CreateTicket() {
           )}
 
           {/* Password Reset - conditional UI (legacy - keep for backward compatibility) */}
-          {formData.category === 'Password Reset' && (
+          {selectedCategoryConfig?.type === 'PASSWORD_RESET' && (
             <div style={{ marginBottom: 12 }}>
               <label style={styles.label}>On behalf of *</label>
               <div style={{ display: 'flex', gap: 12 }}>
@@ -1181,47 +1155,7 @@ function CreateTicket() {
             </>
           )}
 
-          {/* Operational & Finance - legacy subQuery (keep for backward compatibility) */}
-          {formData.category === 'Operational & Finance' && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={styles.label}>Sub Category *</label>
-              <select
-                value={formData.subQuery}
-                onChange={(e) => setFormData({
-                  ...formData,
-                  subQuery: e.target.value,
-                  otherSubQueryText: ''
-                })}
-                style={styles.select}
-                required
-              >
-                <option value="">Select sub category</option>
-                <option value="Salary">Salary</option>
-                <option value="Reimbursement">Reimbursement</option>
-                <option value="Invoice issue">Invoice issue</option>
-                <option value="Tax / GST">Tax / GST</option>
-                <option value="Payroll Issue">Payroll Issue</option>
-                <option value="PO Request">PO Request</option>
-                <option value="PO Change">PO Change</option>
-                <option value="Vendor Onboarding Request">Vendor Onboarding Request</option>
-                <option value="Vendor Offboarding Request">Vendor Offboarding Request</option>
-                <option value="Other">Other</option>
-              </select>
-
-              {formData.subQuery === 'Other' && (
-                <div style={{ marginTop: 8 }}>
-                  <input
-                    type="text"
-                    placeholder="Please describe the issue"
-                    value={formData.otherSubQueryText}
-                    onChange={(e) => setFormData({ ...formData, otherSubQueryText: e.target.value })}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-              )}
-            </div>
-          )}
+          
 
           {/* NEW: Dynamic Attachments (if enabled for this category) */}
           {selectedCategoryConfig?.features?.attachments?.enabled && (
@@ -1367,150 +1301,6 @@ function CreateTicket() {
                 {selectedCategoryConfig.features.attachments.required 
                   ? 'Attachments are required for this category.'
                   : 'Attach supporting documents if needed.'}
-              </div>
-            </div>
-          )}
-
-          {/* Legacy attachment for Operational & Finance (backward compatibility) */}
-          {formData.category === 'Operational & Finance' && !selectedCategoryConfig?.features?.attachments?.enabled && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={styles.label}>Attachment (optional)</label>
-
-              <div
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={() => setIsDragging(false)}
-                style={{
-                  border: isDragging ? '2px dashed #2563eb' : '1px dashed #e6e9ee',
-                  borderRadius: 8,
-                  padding: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  background: isDragging ? '#eff6ff' : '#fff',
-                  cursor: 'pointer'
-                }}
-                onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                role="button"
-                tabIndex={0}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: '#1f2937' }}>
-                    Drag & drop files here or click to browse
-                  </div>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
-                    Supported: images, PDF, Word, Excel, txt, zip. Max {formatBytes(MAX_FILE_SIZE)} each. Up to {MAX_FILES} files.
-                  </div>
-                </div>
-
-                <div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    onChange={(e) => handleFilesSelected(e.target.files)}
-                    style={{ display: 'none' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                    style={{
-                      padding: '8px 12px',
-                      background: '#2563eb',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Browse
-                  </button>
-                </div>
-              </div>
-
-              {attachments.length > 0 && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {attachments.map((att, idx) => (
-                      <div
-                        key={`${att.file.name}-${idx}`}
-                        style={{
-                          width: 180,
-                          border: '1px solid #e6e9ee',
-                          borderRadius: 8,
-                          padding: 8,
-                          background: '#ffffff',
-                          display: 'flex',
-                          gap: 8,
-                          alignItems: 'center',
-                          boxSizing: 'border-box'
-                        }}
-                      >
-                        <div style={{ width: 44, height: 44, flex: '0 0 44px' }}>
-                          {att.preview ? (
-                            <img
-                              src={att.preview}
-                              alt={att.file.name}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }}
-                            />
-                          ) : (
-                            <div style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', borderRadius: 6, fontSize: 12 }}>
-                              {fileTypeLabel(att.file.type, att.file.name)}
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {att.file.name}
-                          </div>
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>{formatBytes(att.file.size)}</div>
-
-                          {att.uploading && (
-                            <div style={{ marginTop: 6 }}>
-                              <div style={{ height: 8, background: '#f3f4f6', borderRadius: 6 }}>
-                                <div style={{ width: `${att.progress}%`, height: '100%', background: '#2563eb', borderRadius: 6 }} />
-                              </div>
-                              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{att.progress}%</div>
-                            </div>
-                          )}
-                          {att.error && (
-                            <div style={{ marginTop: 6, color: '#dc2626', fontSize: 12 }}>{att.error}</div>
-                          )}
-                          {att.uploaded && (
-                            <div style={{ marginTop: 6, color: '#16a34a', fontSize: 12 }}>Uploaded</div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveAttachment(idx)}
-                            title="Remove"
-                            style={{
-                              border: 'none',
-                              background: 'transparent',
-                              cursor: 'pointer',
-                              color: '#ef4444',
-                              fontSize: 16,
-                              padding: 4
-                            }}
-                          >
-                            ✖
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                    <button type="button" onClick={handleClearAllAttachments} style={{ ...styles.ghostButton }}>Clear all</button>
-                  </div>
-                </div>
-              )}
-
-              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>
-                Attach supporting documents like invoice, payslip, etc. Files will be uploaded when you submit the ticket.
               </div>
             </div>
           )}

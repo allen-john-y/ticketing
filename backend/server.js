@@ -639,6 +639,7 @@ app.get("/api/categories", async (req, res) => {
     const transformed = categories.map(cat => ({
       id: cat._id.toString(),
       name: cat.name,
+      type: cat.type,   // ✅ ADD THIS LINE
       features: cat.features || {},
       categoryHeads: cat.categoryHeads || [],
       cc: cat.cc || [],
@@ -646,6 +647,7 @@ app.get("/api/categories", async (req, res) => {
       createdAt: cat.createdAt,
       updatedAt: cat.updatedAt
     }));
+
     
     res.json(transformed);
   } catch (err) {
