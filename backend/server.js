@@ -22,7 +22,7 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' }));
 
 // ---------------------- CORS ------------------------------
-const allowedOrigins = [process.env.PROD_URL];
+const allowedOrigins = [process.env.CORS_ORIGIN?.trim()];
 
 app.use(
   cors({
