@@ -105,13 +105,17 @@ function TicketDetails() {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
         try {
-          const catRes = await axios.get(
-            `${backendBase}/api/categories/by-name/${encodeURIComponent(res.data.category)}`
+          const all = await axios.get(`${backendBase}/api/categories`);
+
+          const found = all.data.find(
+            c => c.name?.toLowerCase() === res.data.category?.toLowerCase()
           );
-          setCategoryMeta(catRes.data);
+
+          setCategoryMeta(found || null);
         } catch (e) {
           setCategoryMeta(null);
         }
+
 
         // prepare attachments list if present
         const list = [];
@@ -160,8 +164,10 @@ function TicketDetails() {
             .toLowerCase()
             .trim();
 
+          setCategoryMeta(found || null);
+
           const heads =
-            (categoryMeta?.categoryHeads || [])
+            (found?.categoryHeads || [])
               .map(h => (h.email || '').toLowerCase().trim())
               .filter(Boolean);
 
@@ -173,7 +179,7 @@ function TicketDetails() {
           const status = (res.data.status || '').toString();
 
           const approvalEnabled =
-            categoryMeta?.features?.approvalRequired === true;
+            found?.type === "PASSWORD_RESET";
 
           if (
             isHead &&
@@ -190,7 +196,7 @@ function TicketDetails() {
       }
     };
     fetchTicket();
-  }, [id, accounts, instance, backendBase, categoryMeta]);
+  }, [id, accounts, instance, backendBase]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
@@ -210,7 +216,7 @@ function TicketDetails() {
   ticket &&
   (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
   !showApprovalModal &&
-  categoryMeta?.features?.approvalRequired === true;
+  categoryMeta?.type === "PASSWORD_RESET";
 
 
   const copyToClipboard = (text) => {
@@ -225,10 +231,11 @@ function TicketDetails() {
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
-      if (!ticket || categoryMeta?.features?.approvalRequired !== true) {
+      if (!ticket || categoryMeta?.type !== "PASSWORD_RESET") {
         alert("Approval not supported for this ticket type.");
         return;
       }
+
 
 
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
@@ -908,7 +915,7 @@ const downloadAllAttachments = async () => {
       {/* APPROVAL MODAL – Password Reset + Admin Access */}
       {showApprovalModal &&
         isCategoryHead &&
-        categoryMeta?.features?.approvalRequired === true && (
+        categoryMeta?.type === "PASSWORD_RESET" && (
         <div className="overlay">
           <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
