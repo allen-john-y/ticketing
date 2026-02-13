@@ -1,28 +1,65 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// Password Popup Component
 function PasswordPopup({ password, onClose }) {
   const [copied, setCopied] = useState(false);
+
   const handleCopy = () => {
     navigator.clipboard.writeText(password);
     setCopied(true);
   };
+
   return (
-    <div style={styles.overlay}>
-      <div style={styles.passwordBox}>
-        <h2 style={{ marginBottom: '1rem' }}>🎉 Password Reset</h2>
-        <p><strong>Your new password:</strong></p>
-        <p style={styles.passwordText}>{password}</p>
-        <button onClick={handleCopy} style={styles.copyButton}>Copy Password</button>
-        {copied && <p style={{ color: 'green', marginTop: '0.5rem' }}>Copied!</p>}
-        <button onClick={onClose} style={styles.modalCloseButton}>✖</button>
+    <div className="modal-overlay">
+      <div className="modal-box">
+        <div className="modal-title">🎉 Password Reset</div>
+
+        <div className="modal-message">
+          <strong>Your new password:</strong>
+          <div
+            style={{
+              marginTop: '10px',
+              padding: '10px 12px',
+              background: '#f1f5f9',
+              borderRadius: '6px',
+              fontFamily: 'monospace',
+              fontSize: '15px'
+            }}
+          >
+            {password}
+          </div>
+
+          {copied && (
+            <div style={{ marginTop: '8px', color: '#059669', fontSize: '13px' }}>
+              Copied!
+            </div>
+          )}
+        </div>
+
+        <div className="modal-actions">
+          <button
+            className="btn-modal info"
+            onClick={handleCopy}
+            type="button"
+          >
+            Copy
+          </button>
+
+          <button
+            className="btn-modal success"
+            onClick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+
 
 function CreateTicket() {
   const { instance, accounts } = useMsal();
