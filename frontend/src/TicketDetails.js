@@ -167,7 +167,7 @@ function TicketDetails() {
           setCategoryMeta(found || null);
 
           const heads =
-            (found?.categoryHeads || [])
+            (categoryMeta?.categoryHeads || [])
               .map(h => (h.email || '').toLowerCase().trim())
               .filter(Boolean);
 
@@ -179,7 +179,7 @@ function TicketDetails() {
           const status = (res.data.status || '').toString();
 
           const approvalEnabled =
-            found?.type === "PASSWORD_RESET";
+            categoryMeta?.type === "PASSWORD_RESET";
 
           if (
             isHead &&
