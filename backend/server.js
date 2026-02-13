@@ -1494,144 +1494,194 @@ app.post("/tickets", async (req, res) => {
 
 // ---------------------- APPROVE / REJECT / CLOSE / REVIVE ----------------------
 // (Keep all existing logic unchanged)
-
-// Approve endpoint
 app.post("/tickets/:id/approve", async (req, res) => {
   try {
     const { approvedBy, note } = req.body;
     const ticket = await Ticket.findById(req.params.id);
-    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
-    if (ticket.status === "Closed") {
+    if (!ticket)
+      return res.status(404).json({ message: "Ticket not found" });
+
+    if (ticket.status === "Closed")
       return res.status(400).json({ message: "Ticket is already closed" });
-    }
-
-    const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
-    if (!userIdentifier) {
-      return res.status(400).json({ message: "No user identifier available for approval action" });
-    }
 
     const itHead = process.env.IT_HEAD_EMAIL;
     const now = new Date();
 
+    /* =====================================================
+       PASSWORD RESET
+    ===================================================== */
     if (ticket.category === "Password Reset") {
+
+      const userIdentifier =
+        ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
+
+      if (!userIdentifier) {
+        return res.status(400).json({
+          message: "No user identifier available for approval action"
+        });
+      }
+
       let newPassword;
       try {
         newPassword = await resetAzurePassword(userIdentifier);
       } catch (err) {
         console.error("Password reset failed during approve:", err.message);
-        return res.status(500).json({ message: "Password reset failed", error: err.message });
+        return res.status(500).json({
+          message: "Password reset failed",
+          error: err.message
+        });
       }
 
       ticket.history.push({
         action: "approved",
         by: approvedBy || "Department Head",
         at: now,
-        reason: note || "Approved and password reset performed",
+        reason: note || "Approved and password reset performed"
       });
 
       ticket.status = "Closed";
       ticket.closedBy = approvedBy || "Department Head";
-      ticket.closeReason = note ? `Approved: ${note}` : "Approved by Department Head";
+      ticket.closeReason = note
+        ? `Approved: ${note}`
+        : "Approved by Department Head";
       ticket.closedAt = now;
 
       ticket.history.push({
         action: "closed",
         by: ticket.closedBy,
         at: now,
-        reason: ticket.closeReason,
+        reason: ticket.closeReason
       });
 
       await ticket.save();
 
       const nowIST = new Date().toLocaleString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
+        timeZone: "Asia/Kolkata"
       });
-
-      const userTitle = `Password Reset Approved — Ticket #${ticket.ticketNumber}`;
-      const userFields = [
-        { label: "Ticket No", value: ticket.ticketNumber },
-        { label: "Category", value: ticket.category },
-        { label: "Approved By", value: ticket.closedBy },
-        { label: "Approved On", value: nowIST },
-        { label: "New Password", value: newPassword },
-        { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail }
-      ];
 
       const userHtml = buildHtmlEmail({
-        title: userTitle,
+        title: `Password Reset Approved — Ticket #${ticket.ticketNumber}`,
         subtitle: "Temporary password generated — change on next sign-in",
         statusColor: "#16a34a",
-        fields: userFields,
-        description: `The new temporary password has been generated and applied successfully. Please sign in and change your password immediately.`,
+        fields: [
+          { label: "Ticket No", value: ticket.ticketNumber },
+          { label: "Category", value: ticket.category },
+          { label: "Approved By", value: ticket.closedBy },
+          { label: "Approved On", value: nowIST },
+          { label: "New Password", value: newPassword },
+          {
+            label: "Affected User",
+            value: ticket.onBehalfEmail || ticket.userEmail
+          }
+        ],
+        description:
+          "The new temporary password has been generated and applied successfully.",
         actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
         actionText: "View Ticket"
       });
 
-      await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
+      await sendEmail(
+        ticket.userEmail,
+        `[TICKET #${ticket.ticketNumber}] Password Reset Approved`,
+        userHtml,
+        itHead
+      );
 
-      if (ticket.deliveryEmail && ticket.deliveryEmail.trim() && ticket.deliveryEmail.trim() !== ticket.userEmail.trim()) {
-        await sendEmail(ticket.deliveryEmail.trim(), `[TICKET #${ticket.ticketNumber}] Password Reset Approved`, userHtml, itHead);
+      if (
+        ticket.deliveryEmail &&
+        ticket.deliveryEmail.trim() &&
+        ticket.deliveryEmail.trim() !== ticket.userEmail.trim()
+      ) {
+        await sendEmail(
+          ticket.deliveryEmail.trim(),
+          `[TICKET #${ticket.ticketNumber}] Password Reset Approved`,
+          userHtml,
+          itHead
+        );
+      }
+    }
+
+    /* =====================================================
+       ADMIN ACCESS  ✅ add to Azure group + close
+    ===================================================== */
+    else if (ticket.category === "Admin Access") {
+
+      const targetUpn =
+        ticket.onBehalfEmail || ticket.userEmail;
+
+      if (!targetUpn) {
+        return res.status(400).json({
+          message: "No target user found for Admin Access"
+        });
       }
 
-      const deptTitle = `Ticket #${ticket.ticketNumber} — Approved and Closed`;
-      const deptFields = [
-        { label: "Ticket No", value: ticket.ticketNumber },
-        { label: "Affected User", value: ticket.onBehalfEmail || ticket.userEmail },
-        { label: "Closed By", value: ticket.closedBy },
-        { label: "Closed On", value: nowIST },
-      ];
+      // 🔴 THIS WAS MISSING
+      const user = await getUserByUpn(targetUpn);
 
-      const deptHtml = buildHtmlEmail({
-        title: deptTitle,
-        subtitle: "Password reset performed and ticket closed",
-        statusColor: "#16a34a",
-        fields: deptFields,
-        description: `Password reset performed successfully for user: ${ticket.onBehalfEmail || ticket.userEmail}`,
-        actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
-        actionText: "Open Ticket"
+      await addUserToGroup(
+        AZURE_DEVICE_ADMIN_GROUP_ID,
+        user.id
+      );
+
+      ticket.history.push({
+        action: "approved",
+        by: approvedBy || "Department Head",
+        at: now,
+        reason: note || "Admin access approved and group assigned"
       });
 
-      const approverDisplay = approvedBy || "Department Head";
-      const ticketCreator = ticket.userName || ticket.userEmail;
+      ticket.status = "Closed";
+      ticket.closedBy = approvedBy || "Department Head";
+      ticket.closeReason = note
+        ? `Approved: ${note}`
+        : "Admin access approved";
+      ticket.closedAt = now;
 
-      const affectedPerson = ticket.onBehalfEmail && ticket.onBehalfEmail.trim()
-        ? ticket.onBehalfEmail.trim()
-        : null;
+      ticket.history.push({
+        action: "closed",
+        by: ticket.closedBy,
+        at: now,
+        reason: ticket.closeReason
+      });
 
-      const otherDesc = affectedPerson
-        ? `${approverDisplay} has approved the password reset request of ${ticketCreator} on behalf of ${affectedPerson}.`
-        : `${approverDisplay} has approved the password reset request of ${ticketCreator}.`;
+      await ticket.save();
 
-      const otherFields = [
-        { label: "Ticket No", value: ticket.ticketNumber },
-        { label: "Category", value: ticket.category },
-        { label: "Approved By", value: approverDisplay },
-        { label: "Approved On", value: nowIST },
-        { label: "Requested By", value: ticketCreator },
-        { label: "Affected User", value: affectedPerson || ticket.userEmail }
-      ];
+      const nowIST = new Date().toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata"
+      });
 
-      const otherHtml = buildHtmlEmail({
-        title: `${ticket.category} Approved — Ticket #${ticket.ticketNumber}`,
-        subtitle: `${approverDisplay} approved the request`,
-        statusColor: "#0ea5e9",
-        fields: otherFields,
-        description: otherDesc,
+      /* user mail */
+      const userHtml = buildHtmlEmail({
+        title: `Admin Access Approved — Ticket #${ticket.ticketNumber}`,
+        subtitle: "Your request has been approved",
+        statusColor: "#16a34a",
+        fields: [
+          { label: "Ticket No", value: ticket.ticketNumber },
+          { label: "Category", value: ticket.category },
+          { label: "Approved By", value: ticket.closedBy },
+          { label: "Approved On", value: nowIST }
+        ],
+        description:
+          note || "Admin access has been granted successfully.",
         actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
         actionText: "View Ticket"
       });
 
+      await sendEmail(
+        ticket.userEmail,
+        `[TICKET #${ticket.ticketNumber}] Admin Access Approved`,
+        userHtml,
+        itHead
+      );
+
+      /* department mail */
       const catCfg = await CategoryConfig.findOne({
         name: {
           $regex: new RegExp(
-            "^" + ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$",
+            "^" +
+              ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+              "$",
             "i"
           )
         }
@@ -1648,40 +1698,53 @@ app.post("/tickets/:id/approve", async (req, res) => {
       if (itHead) deptCcList.push(itHead);
 
       if (deptTo.length) {
+        const deptHtml = buildHtmlEmail({
+          title: `Ticket #${ticket.ticketNumber} — Admin Access Approved`,
+          subtitle: "Request approved and ticket closed",
+          statusColor: "#16a34a",
+          fields: [
+            { label: "Ticket No", value: ticket.ticketNumber },
+            { label: "Category", value: ticket.category },
+            { label: "Approved By", value: ticket.closedBy },
+            { label: "Approved On", value: nowIST }
+          ],
+          description: note || "Admin access granted.",
+          actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
+          actionText: "Open Ticket"
+        });
+
         await sendEmail(
           deptTo,
-          `[CLOSED] Ticket #${ticket.ticketNumber} - ${ticket.category}`,
+          `[CLOSED] Ticket #${ticket.ticketNumber} - Admin Access`,
           deptHtml,
           deptCcList
         );
       }
-
-      try {
-        const notifyTargets = (catCfg?.categoryHeads || [])
-          .map(h => h.email)
-          .filter(Boolean);
-
-        for (const t of notifyTargets) {
-          await sendEmail(
-            t,
-            `[TICKET #${ticket.ticketNumber}] ${ticket.category} Approved by ${approverDisplay}`,
-            otherHtml,
-            itHead
-          );
-        }
-      } catch (notifyErr) {
-        console.error("Error notifying category heads:", notifyErr.message);
-      }
     }
 
-    // Success response for the main request
-    res.status(200).json({ message: "Ticket approved successfully", ticket });
+    /* =====================================================
+       UNKNOWN CATEGORY
+    ===================================================== */
+    else {
+      return res.status(400).json({
+        message: "Approval not supported for this category"
+      });
+    }
+
+    return res.status(200).json({
+      message: "Ticket approved successfully",
+      ticket
+    });
 
   } catch (error) {
     console.error("Approval error:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message
+    });
   }
 });
+
 
 // Reject endpoint (keep existing)
 app.post("/tickets/:id/reject", async (req, res) => {

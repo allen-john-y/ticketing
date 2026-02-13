@@ -242,11 +242,10 @@ function TicketDetails() {
             categoryMeta?.type === "ADMIN_ACCESS"
           )
         ) {
-
-        alert("Approval not supported for this ticket type.");
-        return;
-      }
-
+          alert("Approval not supported for this ticket type.");
+          setApproveLoading(false);
+          return;
+        }
 
 
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
