@@ -1679,6 +1679,15 @@ app.post("/tickets/:id/approve", async (req, res) => {
   try {
     const { approvedBy, note } = req.body;
     const ticket = await Ticket.findById(req.params.id);
+    const categoryConfig = await CategoryConfig.findOne({
+      name: {
+        $regex: new RegExp(
+          "^" + ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$",
+          "i"
+        )
+      }
+    });
+
 
     if (!ticket) {
       return res.status(404).json({ message: "Ticket not found" });
