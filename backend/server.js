@@ -413,31 +413,31 @@ const resetAzurePassword = async (userIdentifier) => {
   return newPassword;
 };
 
-const addUserToDirectoryRole = async (roleId, userObjectId) => {
-  const token = await getAccessToken();
+// const addUserToDirectoryRole = async (roleId, userObjectId) => {
+//   const token = await getAccessToken();
 
-  const url = `https://graph.microsoft.com/v1.0/directoryRoles/${roleId}/members/$ref`;
+//   const url = `https://graph.microsoft.com/v1.0/directoryRoles/${roleId}/members/$ref`;
 
-  const body = {
-    "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}`
-  };
+//   const body = {
+//     "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}`
+//   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
+//   const res = await fetch(url, {
+//     method: "POST",
+//     headers: {
+//       Authorization: `Bearer ${token}`,
+//       "Content-Type": "application/json"
+//     },
+//     body: JSON.stringify(body)
+//   });
 
-  if (res.status !== 204) {
-    const text = await res.text();
-    throw new Error(`Add to directory role failed: ${res.status} ${text}`);
-  }
+//   if (res.status !== 204) {
+//     const text = await res.text();
+//     throw new Error(`Add to directory role failed: ${res.status} ${text}`);
+//   }
 
-  return true;
-};
+//   return true;
+// };
 
 
 const getUserByUpn = async (upn) => {
@@ -1629,13 +1629,12 @@ app.post("/tickets/:id/approve", async (req, res) => {
       }
     }
 
-    /* =====================================================
-       ADMIN ACCESS  ✅ add to Azure group + close
+ /* =====================================================
+      ADMIN ACCESS - Add to Azure Group + Close Ticket
     ===================================================== */
     else if (ticket.category === "Admin Access") {
 
-      const targetUpn =
-        ticket.onBehalfEmail || ticket.userEmail;
+      const targetUpn = ticket.onBehalfEmail || ticket.userEmail;
 
       if (!targetUpn) {
         return res.status(400).json({
@@ -1643,18 +1642,34 @@ app.post("/tickets/:id/approve", async (req, res) => {
         });
       }
 
-      console.log("ADMIN ACCESS approve for:", targetUpn);
-      console.log("GROUP ID:", AZURE_DEVICE_ADMIN_GROUP_ID);
+      console.log("🔵 ADMIN ACCESS approval for:", targetUpn);
+      console.log("🔵 GROUP ID:", AZURE_DEVICE_ADMIN_GROUP_ID);
 
+      try {
+        // ✅ Step 1: Get user object ID
+        const user = await getUserByUpn(targetUpn);
+        console.log("✅ User found:", user.id, user.displayName);
 
-      // 🔴 THIS WAS MISSING
-      const user = await getUserByUpn(targetUpn);
+        // ✅ Step 2: Add to group (use constant)
+        await addUserToGroup(
+          AZURE_DEVICE_ADMIN_GROUP_ID,  // ✅ Use the constant
+          user.id
+        );
 
-      await addUserToDirectoryRole(
-        process.env.AZURE_DEVICE_ADMIN_GROUP_ID,
-        user.id
-      );
+        console.log(`✅ Successfully added ${targetUpn} to admin group`);
 
+      } catch (err) {
+        console.error("❌ Failed to add user to admin group:", err.message);
+        
+        // ✅ Return error to frontend
+        return res.status(500).json({
+          message: "Failed to add user to admin group",
+          error: err.message,
+          details: "Please verify the group ID and user permissions"
+        });
+      }
+
+      // ✅ Step 3: Update ticket history
       ticket.history.push({
         action: "approved",
         by: approvedBy || "Department Head",
@@ -1662,6 +1677,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
         reason: note || "Admin access approved and group assigned"
       });
 
+      // ✅ Step 4: Close ticket
       ticket.status = "Closed";
       ticket.closedBy = approvedBy || "Department Head";
       ticket.closeReason = note
@@ -1682,19 +1698,19 @@ app.post("/tickets/:id/approve", async (req, res) => {
         timeZone: "Asia/Kolkata"
       });
 
-      /* user mail */
+      // ✅ Step 5: Notify user
       const userHtml = buildHtmlEmail({
         title: `Admin Access Approved — Ticket #${ticket.ticketNumber}`,
-        subtitle: "Your request has been approved",
+        subtitle: "Your admin access request has been granted",
         statusColor: "#16a34a",
         fields: [
           { label: "Ticket No", value: ticket.ticketNumber },
           { label: "Category", value: ticket.category },
           { label: "Approved By", value: ticket.closedBy },
-          { label: "Approved On", value: nowIST }
+          { label: "Approved On", value: nowIST },
+          { label: "Access Level", value: "Device Admin Group" }
         ],
-        description:
-          note || "Admin access has been granted successfully.",
+        description: note || "You have been added to the Device Admin group successfully.",
         actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
         actionText: "View Ticket"
       });
@@ -1706,13 +1722,11 @@ app.post("/tickets/:id/approve", async (req, res) => {
         itHead
       );
 
-      /* department mail */
+      // ✅ Step 6: Notify department
       const catCfg = await CategoryConfig.findOne({
         name: {
           $regex: new RegExp(
-            "^" +
-              ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
-              "$",
+            "^" + ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$",
             "i"
           )
         }
@@ -1730,27 +1744,31 @@ app.post("/tickets/:id/approve", async (req, res) => {
 
       if (deptTo.length) {
         const deptHtml = buildHtmlEmail({
-          title: `Ticket #${ticket.ticketNumber} — Admin Access Approved`,
-          subtitle: "Request approved and ticket closed",
+          title: `Ticket #${ticket.ticketNumber} — Admin Access Granted`,
+          subtitle: "User added to Device Admin group",
           statusColor: "#16a34a",
           fields: [
             { label: "Ticket No", value: ticket.ticketNumber },
             { label: "Category", value: ticket.category },
+            { label: "Target User", value: `${user.displayName || targetUpn} (${targetUpn})` },
             { label: "Approved By", value: ticket.closedBy },
-            { label: "Approved On", value: nowIST }
+            { label: "Approved On", value: nowIST },
+            { label: "Group", value: "Device Admin Group" }
           ],
-          description: note || "Admin access granted.",
+          description: note || "Admin access approved and group membership granted successfully.",
           actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
           actionText: "Open Ticket"
         });
 
         await sendEmail(
           deptTo,
-          `[CLOSED] Ticket #${ticket.ticketNumber} - Admin Access`,
+          `[CLOSED] Ticket #${ticket.ticketNumber} - Admin Access Granted`,
           deptHtml,
           deptCcList
         );
       }
+
+      console.log(`✅ Admin Access ticket #${ticket.ticketNumber} approved and closed`);
     }
 
     /* =====================================================
