@@ -185,19 +185,15 @@ function TicketDetails() {
 
   const status = (ticket.status || '').toString();
 
-  const approvalEnabled =
-    categoryMeta.type === "PASSWORD_RESET" ||
-  categoryMeta.type === "ADMIN_ACCESS";
-
   if (
-    isHead &&
-    approvalEnabled &&
-    (status === "Waiting for approval" || status === "Open")
-  ) {
-    setShowApprovalModal(true);
-  } else {
-    setShowApprovalModal(false);
-  }
+      isHead &&
+      status === "Waiting for approval"
+    ) {
+      setShowApprovalModal(true);
+    } else {
+      setShowApprovalModal(false);
+    }
+
 
 }, [accounts, ticket, categoryMeta]);
 
@@ -215,12 +211,11 @@ function TicketDetails() {
 
   // Derived: show inline "Waiting for Approval" banner
   const needsApprovalBanner =
-  isCategoryHead &&
-  ticket &&
-  (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
-  !showApprovalModal &&
-  (categoryMeta?.type === "PASSWORD_RESET" ||
-   categoryMeta?.type === "ADMIN_ACCESS");
+        isCategoryHead &&
+        ticket &&
+        ticket.status === 'Waiting for approval' &&
+        !showApprovalModal;
+
 
 
   const copyToClipboard = (text) => {
@@ -235,17 +230,12 @@ function TicketDetails() {
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
-      if (
-          !ticket ||
-          !(
-            categoryMeta?.type === "PASSWORD_RESET" ||
-            categoryMeta?.type === "ADMIN_ACCESS"
-          )
-        ) {
-          alert("Approval not supported for this ticket type.");
-          setApproveLoading(false);
-          return;
-        }
+      if (!ticket || ticket.status !== "Waiting for approval") {
+      alert("Approval is not allowed for this ticket.");
+      setApproveLoading(false);
+      return;
+    }
+
 
 
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
@@ -926,9 +916,6 @@ const downloadAllAttachments = async () => {
       {showApprovalModal &&
         isCategoryHead &&
         (
-          categoryMeta?.type === "PASSWORD_RESET" ||
-          categoryMeta?.type === "ADMIN_ACCESS"
-        ) && (
         <div className="overlay">
           <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
