@@ -1624,9 +1624,9 @@ app.post("/tickets/:id/approve", async (req, res) => {
       const user = await getUserByUpn(targetUpn);
 
       await addUserToGroup(
-        AZURE_DEVICE_ADMIN_GROUP_ID,
+        process.env.AZURE_DEVICE_ADMIN_GROUP_ID,
         user.id
-      );
+      )
 
       ticket.history.push({
         action: "approved",
