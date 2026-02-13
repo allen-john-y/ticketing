@@ -3,7 +3,7 @@ import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// Password Popup Component (kept)
+// Password Popup Component
 function PasswordPopup({ password, onClose }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
@@ -42,24 +42,21 @@ function CreateTicket() {
     subCategory: '',
   });
 
-  // NEW: Store fetched categories configuration
   const [categoriesConfig, setCategoriesConfig] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [selectedCategoryConfig, setSelectedCategoryConfig] = useState(null);
   const [otherSubCategoryText, setOtherSubCategoryText] = useState('');
 
-  // NEW: Dynamic On Behalf states (separate from Password Reset)
   const [dynamicOnBehalfSelection, setDynamicOnBehalfSelection] = useState('Self');
   const [dynamicOnBehalfEmail, setDynamicOnBehalfEmail] = useState('');
   const [dynamicOnBehalfSearchResults, setDynamicOnBehalfSearchResults] = useState([]);
   const [dynamicOnBehalfSearching, setDynamicOnBehalfSearching] = useState(false);
   const [dynamicOnBehalfSelectedUser, setDynamicOnBehalfSelectedUser] = useState(null);
 
-  // Attachments state
   const [attachments, setAttachments] = useState([]);
 
   const MAX_FILES = 5;
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
+  const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const ALLOWED_TYPES = [
     'image/png', 'image/jpeg', 'image/jpg', 'image/gif',
     'application/pdf',
@@ -78,6 +75,7 @@ function CreateTicket() {
 
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
   const [verifyStatus, setVerifyStatus] = useState('idle');
   const [verifiedName, setVerifiedName] = useState('');
@@ -88,7 +86,7 @@ function CreateTicket() {
 
   const fileInputRef = useRef(null);
 
-  // NEW: Fetch categories configuration on mount
+  // Fetch categories configuration
   useEffect(() => {
     let mounted = true;
     const fetchCategories = async () => {
@@ -120,31 +118,58 @@ function CreateTicket() {
     return () => { mounted = false; };
   }, [instance, accounts, backendBase]);
 
-  // Fetch user profile
+  // Fetch user profile and photo
   useEffect(() => {
     let mounted = true;
     const fetchUser = async () => {
       if (!accounts || !accounts[0]) return;
       try {
-        const tokenResp = await instance.acquireTokenSilent({ scopes: ['User.Read'], account: accounts[0] });
+        const tokenResp = await instance.acquireTokenSilent({ 
+          scopes: ['User.Read'], 
+          account: accounts[0] 
+        });
+        
         const resp = await axios.get('https://graph.microsoft.com/v1.0/me', {
           headers: { Authorization: `Bearer ${tokenResp.accessToken}` }
         });
+        
         if (!mounted) return;
+        
         setDisplayName(resp.data.displayName || accounts[0]?.name || '');
         const email = (resp.data.mail && resp.data.mail.trim()) ||
                       (resp.data.userPrincipalName && resp.data.userPrincipalName.trim()) ||
                       accounts[0]?.username || '';
         setDisplayEmail(email);
+
+        // Try to fetch profile photo
+        try {
+          const photoRes = await axios.get('https://graph.microsoft.com/v1.0/me/photo/$value', {
+            headers: { Authorization: `Bearer ${tokenResp.accessToken}` },
+            responseType: 'arraybuffer'
+          });
+
+          const u8 = new Uint8Array(photoRes.data);
+          let binary = '';
+          const chunkSize = 0x8000;
+          for (let i = 0; i < u8.length; i += chunkSize) {
+            const slice = u8.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, slice);
+          }
+          const b64 = btoa(binary);
+          const contentType = (photoRes.headers && photoRes.headers['content-type']) || 'image/jpeg';
+          setProfilePhoto(`data:${contentType};base64,${b64}`);
+        } catch (photoErr) {
+          // No photo available
+        }
       } catch (err) {
-        console.debug('Could not fetch user profile for form display:', err?.message || err);
+        console.debug('Could not fetch user profile:', err?.message || err);
       }
     };
     fetchUser();
     return () => { mounted = false; };
   }, [instance, accounts]);
 
-  // Fetch groups and detect GS_DeviceAdministrator membership
+  // Fetch groups and detect device admin
   useEffect(() => {
     if (!accounts || !accounts[0]) return;
     const fetchGroups = async () => {
@@ -159,8 +184,8 @@ function CreateTicket() {
         });
         const groups = (res.data?.value || []).map(g => (g.displayName || '').toString());
         const hasDeviceAdmin = groups.some(
-            name => name === 'GS_DeviceAdministrator' || name === 'GS_DeviceAdmin_Managed'
-          );
+          name => name === 'GS_DeviceAdministrator' || name === 'GS_DeviceAdmin_Managed'
+        );
         setIsDeviceAdmin(hasDeviceAdmin);
       } catch (err) {
         console.error('Error fetching groups:', err?.message || err);
@@ -171,7 +196,7 @@ function CreateTicket() {
     fetchGroups();
   }, [instance, accounts]);
 
-  // NEW: Update selected category config when category changes
+  // Update selected category config
   useEffect(() => {
     if (formData.category && categoriesConfig.length > 0) {
       const config = categoriesConfig.find(c => c.name === formData.category);
@@ -181,7 +206,6 @@ function CreateTicket() {
     }
   }, [formData.category, categoriesConfig]);
 
-  // NEW: Search users for dynamic On Behalf feature
   const handleDynamicOnBehalfSearch = async (searchText) => {
     if (!searchText || searchText.trim().length < 2) {
       setDynamicOnBehalfSearchResults([]);
@@ -195,7 +219,6 @@ function CreateTicket() {
         account: accounts[0] 
       });
 
-      // Search users in Azure AD
       const response = await axios.get(
         `https://graph.microsoft.com/v1.0/users?$filter=startswith(mail,'${searchText}') or startswith(displayName,'${searchText}') or startswith(userPrincipalName,'${searchText}')&$top=5`,
         {
@@ -212,7 +235,6 @@ function CreateTicket() {
     }
   };
 
-  // NEW: Handle selecting a user from search results
   const handleSelectDynamicOnBehalfUser = (user) => {
     setDynamicOnBehalfSelectedUser(user);
     setDynamicOnBehalfEmail(user.mail || user.userPrincipalName);
@@ -259,7 +281,6 @@ function CreateTicket() {
     setLoading(true);
     setCreatedTicketId(null);
 
-    // If user is device admin, block creation of Admin Access tickets
     if (formData.category === 'Admin Access' && isDeviceAdmin) {
       setModal({
         open: true,
@@ -271,7 +292,6 @@ function CreateTicket() {
       return;
     }
 
-    // NEW: Validation for dynamic subcategory (if enabled and required)
     if (selectedCategoryConfig?.features?.subCategories?.enabled) {
       if (
         selectedCategoryConfig.features.subCategories.required &&
@@ -302,8 +322,7 @@ function CreateTicket() {
       }
     }
 
-    // NEW: Validation for dynamic onBehalf (if enabled and required)
-    if ( selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET') {
+    if (selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET') {
       if (
         selectedCategoryConfig.features.onBehalf.required &&
         !dynamicOnBehalfSelection
@@ -330,7 +349,6 @@ function CreateTicket() {
       }
     }
 
-    // NEW: Validation for dynamic attachments (if enabled and required)
     if (selectedCategoryConfig?.features?.attachments?.enabled) {
       if (selectedCategoryConfig.features.attachments.required && attachments.length === 0) {
         setModal({
@@ -344,8 +362,6 @@ function CreateTicket() {
       }
     }
 
-
-    // Validation for Password Reset
     if (selectedCategoryConfig?.type === 'PASSWORD_RESET' && formData.onBehalf === 'Other') {
       if (!formData.onBehalfEmail.trim()) {
         setModal({
@@ -424,20 +440,14 @@ function CreateTicket() {
         // ignore
       }
 
-      const isPasswordReset =
-        selectedCategoryConfig?.type === 'PASSWORD_RESET';
-
+      const isPasswordReset = selectedCategoryConfig?.type === 'PASSWORD_RESET';
       const onBehalf = isPasswordReset ? formData.onBehalf : undefined;
-
       const onBehalfEmail = isPasswordReset
         ? (formData.onBehalf === 'Other'
             ? formData.onBehalfEmail.trim()
             : latestEmail)
         : undefined;
-
-      const returnPasswordToRequester =
-            isPasswordReset && formData.onBehalf === 'Self';
-
+      const returnPasswordToRequester = isPasswordReset && formData.onBehalf === 'Self';
 
       const normalizeServerResp = (serverData, file) => {
         const sd = serverData || {};
@@ -451,7 +461,6 @@ function CreateTicket() {
         };
       };
 
-      // Upload attachments (if any) before creating ticket
       let attachmentsMeta = [];
       if (attachments && attachments.length > 0) {
         for (let i = 0; i < attachments.length; i++) {
@@ -512,18 +521,16 @@ function CreateTicket() {
         }
       }
 
-      // NEW: Determine ticket creation details based on dynamic On Behalf
       let ticketUserName = latestName || accounts[0]?.username;
       let ticketUserEmail = latestEmail;
-      let ticketCreatedBy = latestEmail; // Track who actually created it
+      let ticketCreatedBy = latestEmail;
 
       if (
-          selectedCategoryConfig?.features?.onBehalf?.enabled &&
-          selectedCategoryConfig?.type !== 'PASSWORD_RESET' &&
-          dynamicOnBehalfSelection === 'Other' &&
-          dynamicOnBehalfSelectedUser
-        ) {
-        // Creating ticket on behalf of someone else
+        selectedCategoryConfig?.features?.onBehalf?.enabled &&
+        selectedCategoryConfig?.type !== 'PASSWORD_RESET' &&
+        dynamicOnBehalfSelection === 'Other' &&
+        dynamicOnBehalfSelectedUser
+      ) {
         ticketUserName = dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail;
         ticketUserEmail = dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName;
       }
@@ -536,7 +543,6 @@ function CreateTicket() {
         userName: ticketUserName,
         userEmail: ticketUserEmail,
         
-        // NEW: Add creator info when creating on behalf
         ...(selectedCategoryConfig?.features?.onBehalf?.enabled &&
             selectedCategoryConfig?.type !== 'PASSWORD_RESET' &&
             dynamicOnBehalfSelection === 'Other' &&
@@ -548,7 +554,6 @@ function CreateTicket() {
             }
           : {}),
 
-
         ...(onBehalf ? { onBehalf } : {}),
         ...(onBehalfEmail ? { onBehalfEmail } : {}),
         ...(formData.alternativeEmail && formData.alternativeEmail.trim()
@@ -556,7 +561,6 @@ function CreateTicket() {
           : {}),
         ...(returnPasswordToRequester ? { returnPasswordToRequester: true } : {}),
 
-        // SubQuery for Operational & Finance (legacy)
         ...(formData.category === 'Operational & Finance' && formData.subQuery
           ? {
               subQuery: formData.subQuery,
@@ -566,7 +570,6 @@ function CreateTicket() {
             }
           : {}),
 
-        // NEW: Dynamic subcategory
         ...(formData.subCategory ? { 
             subCategory: formData.subCategory,
             ...(formData.subCategory === 'Other' && otherSubCategoryText.trim()
@@ -574,7 +577,6 @@ function CreateTicket() {
               : {})
           } : {}),
 
-        // Attachments metadata
         ...(attachmentsMeta && attachmentsMeta.length ? { attachments: attachmentsMeta } : {}),
       };
 
@@ -582,17 +584,13 @@ function CreateTicket() {
         headers: { Authorization: `Bearer ${token.accessToken}` }
       });
 
-      const id =
-        response?.data?._id ||
-        response?.data?.id ||
-        response?.data?.ticketId ||
-        null;
+      const id = response?.data?._id || response?.data?.id || response?.data?.ticketId || null;
       if (id) setCreatedTicketId(id);
 
       const successMessage = dynamicOnBehalfSelection === 'Other' && dynamicOnBehalfSelectedUser
         ? `Ticket created successfully on behalf of ${dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail}!`
         : formData.category === 'Password Reset'
-          ? 'Your password reset ticket has been created and is now Waiting for approval category head approval. If approved, the new password will be sent to the delivery email you provided.'
+          ? 'Your password reset ticket has been created and is now waiting for category head approval. If approved, the new password will be sent to the delivery email you provided.'
           : 'Ticket created successfully!';
 
       setModal({
@@ -628,10 +626,8 @@ function CreateTicket() {
     .join('')
     .toUpperCase();
 
-  const disableCreateBecauseDeviceAdmin =
-    formData.category === 'Admin Access' && isDeviceAdmin;
+  const disableCreateBecauseDeviceAdmin = formData.category === 'Admin Access' && isDeviceAdmin;
 
-  // Attachment helpers
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -727,6 +723,7 @@ function CreateTicket() {
   };
 
   const [isDragging, setIsDragging] = useState(false);
+  
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
@@ -757,131 +754,800 @@ function CreateTicket() {
   }, []);
 
   return (
-    <div style={styles.pageWrap}>
-      <div style={styles.card}>
-        <div style={styles.headerRow}>
-          <div style={styles.avatar}>{initials}</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#1f2937' }}>
-              {displayName || displayEmail || 'Unknown User'}
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+      <style>{`
+        * { box-sizing: border-box; }
+        
+        /* Header - Matching Home.js */
+        .header-bar {
+          background: linear-gradient(135deg, #002060 0%, #003380 100%);
+          color: white;
+          padding: 1.5rem 2rem;
+          box-shadow: 0 4px 16px rgba(0, 32, 96, 0.15);
+        }
+        
+        .header-content {
+          max-width: 1400px;
+          margin: 0 auto;*
+	            display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 2rem;
+        }
+        
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 1.5rem;
+        }
+        
+        .avatar {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          color: #002060;
+          font-size: 18px;
+          overflow: hidden;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
+        .user-info h1 {
+          margin: 0;
+          font-size: 24px;
+          font-weight: 700;
+        }
+        
+        .subtitle {
+          font-size: 14px;
+          opacity: 0.9;
+          margin-top: 4px;
+        }
+        
+        .header-actions {
+          display: flex;
+          gap: 1rem;
+        }
+        
+        .btn-header {
+          padding: 10px 20px;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-decoration: none;
+          display: inline-block;
+        }
+        
+        .btn-back {
+          background: white;
+          color: #002060;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-back:hover {
+          background: #f1f5f9;
+          transform: translateY(-2px);
+        }
+        
+        /* Main Container */
+        .main-container {
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 2rem;
+        }
+        
+        /* Form Card */
+        .form-card {
+          background: white;
+          padding: 2rem;
+          border-radius: 12px;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+          margin-bottom: 2rem;
+        }
+        
+        .form-title {
+          font-size: 22px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 0 0 1.5rem 0;
+          padding-bottom: 1rem;
+          border-bottom: 2px solid #f1f5f9;
+        }
+        
+        /* Form Fields */
+        .form-row {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 1.5rem;
+          margin-bottom: 1.5rem;
+        }
+        
+        .form-field {
+          display: flex;
+          flex-direction: column;
+        }
+        
+        .form-label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+          margin-bottom: 0.5rem;
+        }
+        
+        .required {
+          color: #ef4444;
+          margin-left: 4px;
+        }
+        
+        .form-input,
+        .form-select,
+        .form-textarea {
+          width: 100%;
+          padding: 12px 16px;
+          border: 2px solid #e2e8f0;
+          border-radius: 8px;
+          font-size: 15px;
+          transition: all 0.2s;
+          background: white;
+        }
+        
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+          outline: none;
+          border-color: #002060;
+          box-shadow: 0 0 0 3px rgba(0, 32, 96, 0.1);
+        }
+        
+        .form-textarea {
+          min-height: 140px;
+          resize: vertical;
+          font-family: inherit;
+        }
+        
+        .form-hint {
+          font-size: 12px;
+          color: #64748b;
+          margin-top: 0.5rem;
+        }
+        
+        /* Special Sections */
+        .info-box {
+          padding: 1rem;
+          border-radius: 8px;
+          margin-bottom: 1.5rem;
+          border-left: 4px solid;
+        }
+        
+        .info-box.warning {
+          background: #fffbeb;
+          border-left-color: #e98404;
+          color: #92400e;
+        }
+        
+        .info-box.info {
+          background: #eff6ff;
+          border-left-color: #002060;
+          color: #1e3a8a;
+        }
+        
+        .info-box.success {
+          background: #f0fdf4;
+          border-left-color: #10b981;
+          color: #065f46;
+        }
+        
+        /* On Behalf Section */
+        .onbehalf-section {
+          background: #f8fafc;
+          padding: 1.5rem;
+          border-radius: 10px;
+          border: 2px solid #e2e8f0;
+          margin-bottom: 1.5rem;
+        }
+        
+        .onbehalf-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 1rem;
+        }
+        
+        .search-results {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: white;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          margin-top: 4px;
+          max-height: 200px;
+          overflow-y: auto;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          z-index: 1000;
+        }
+        
+        .search-result-item {
+          padding: 12px;
+          cursor: pointer;
+          border-bottom: 1px solid #f3f4f6;
+          transition: background 0.2s;
+        }
+        
+        .search-result-item:hover {
+          background: #f9fafb;
+        }
+        
+        .search-result-name {
+          font-weight: 600;
+          font-size: 14px;
+          color: #1f2937;
+        }
+        
+        .search-result-email {
+          font-size: 12px;
+          color: #6b7280;
+          margin-top: 2px;
+        }
+        
+        .selected-user-box {
+          margin-top: 1rem;
+          padding: 1rem;
+          background: #f0fdf4;
+          border: 1px solid #86efac;
+          border-radius: 8px;
+        }
+        
+        /* Verify Button Section */
+        .verify-section {
+          display: flex;
+          gap: 0.5rem;
+          align-items: flex-start;
+        }
+        
+        .btn-verify {
+          padding: 12px 20px;
+          background: #002060;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.2s;
+        }
+        
+        .btn-verify:hover {
+          background: #003380;
+          transform: translateY(-2px);
+        }
+        
+        .btn-verify:disabled {
+          background: #94a3b8;
+          cursor: not-allowed;
+          transform: none;
+        }
+        
+        .verify-status {
+          margin-top: 0.5rem;
+          font-size: 13px;
+          padding: 8px 12px;
+          border-radius: 6px;
+        }
+        
+        .verify-status.idle {
+          background: #f8fafc;
+          color: #64748b;
+        }
+        
+        .verify-status.verifying {
+          background: #dbeafe;
+          color: #1e40af;
+        }
+        
+        .verify-status.verified {
+          background: #d1fae5;
+          color: #065f46;
+        }
+        
+        .verify-status.error {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+        
+        /* Attachments Section */
+        .attachment-dropzone {
+          border: 2px dashed #e2e8f0;
+          border-radius: 10px;
+          padding: 2rem;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.2s;
+          background: white;
+        }
+        
+        .attachment-dropzone:hover,
+        .attachment-dropzone.dragging {
+          border-color: #002060;
+          background: #eff6ff;
+        }
+        
+        .dropzone-icon {
+          font-size: 48px;
+          margin-bottom: 1rem;
+        }
+        
+        .dropzone-title {
+          font-size: 16px;
+          font-weight: 700;
+          color: #0f172a;
+          margin-bottom: 0.5rem;
+        }
+        
+        .dropzone-hint {
+          font-size: 13px;
+          color: #64748b;
+        }
+        
+        .attachments-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 1rem;
+          margin-top: 1rem;
+        }
+        
+        .attachment-item {
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 1rem;
+          background: white;
+          position: relative;
+        }
+        
+        .attachment-preview {
+          width: 100%;
+          height: 120px;
+          border-radius: 6px;
+          overflow: hidden;
+          margin-bottom: 0.75rem;
+          background: #f8fafc;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .attachment-preview img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
+        .file-type-icon {
+          font-size: 36px;
+          color: #64748b;
+        }
+        
+        .attachment-name {
+          font-size: 13px;
+          font-weight: 600;
+          color: #1f2937;
+          margin-bottom: 4px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        
+        .attachment-size {
+          font-size: 12px;
+          color: #6b7280;
+        }
+        
+        .attachment-progress {
+          margin-top: 0.5rem;
+        }
+        
+        .progress-bar {
+          height: 6px;
+          background: #e2e8f0;
+          border-radius: 3px;
+          overflow: hidden;
+        }
+        
+        .progress-fill {
+          height: 100%;
+          background: #002060;
+          transition: width 0.3s;
+        }
+        
+        .progress-text {
+          font-size: 11px;
+          color: #64748b;
+          margin-top: 4px;
+        }
+        
+        .attachment-status {
+          font-size: 12px;
+          margin-top: 0.5rem;
+          padding: 4px 8px;
+          border-radius: 4px;
+          display: inline-block;
+        }
+        
+        .attachment-status.uploading {
+          background: #dbeafe;
+          color: #1e40af;
+        }
+        
+        .attachment-status.uploaded {
+          background: #d1fae5;
+          color: #065f46;
+        }
+        
+        .attachment-status.error {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+        
+        .btn-remove-attachment {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: rgba(239, 68, 68, 0.9);
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-size: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        
+        .btn-remove-attachment:hover {
+          background: #dc2626;
+          transform: scale(1.1);
+        }
+        
+        .attachment-actions {
+          display: flex;
+          gap: 0.5rem;
+          margin-top: 1rem;
+        }
+        
+        /* Form Actions */
+        .form-actions {
+          display: flex;
+          gap: 1rem;
+          margin-top: 2rem;
+          padding-top: 2rem;
+          border-top: 2px solid #f1f5f9;
+        }
+        
+        .btn-primary {
+          flex: 1;
+          padding: 14px 24px;
+          background: #e98404;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(233, 132, 4, 0.3);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+          background: #d17703;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(233, 132, 4, 0.4);
+        }
+        
+        .btn-primary:disabled {
+          background: #94a3b8;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+        
+        .btn-secondary {
+          padding: 14px 24px;
+          background: #f1f5f9;
+          color: #475569;
+          border: none;
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .btn-secondary:hover {
+          background: #e2e8f0;
+          transform: translateY(-2px);
+        }
+        
+        .btn-ghost {
+          padding: 10px 16px;
+          background: #f8fafc;
+          color: #64748b;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .btn-ghost:hover {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
+        }
+        
+        /* Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10000;
+          padding: 1rem;
+        }
+        
+        .modal-box {
+          background: white;
+          padding: 2rem;
+          border-radius: 12px;
+          max-width: 480px;
+          width: 100%;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-title {
+          font-size: 20px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 0 0 1rem 0;
+        }
+        
+        .modal-message {
+          color: #475569;
+          line-height: 1.6;
+          margin-bottom: 1.5rem;
+        }
+        
+        .modal-actions {
+          display: flex;
+          gap: 0.75rem;
+          justify-content: flex-end;
+        }
+        
+        .btn-modal {
+          padding: 10px 20px;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .btn-modal.success {
+          background: #10b981;
+          color: white;
+        }
+        
+        .btn-modal.success:hover {
+          background: #059669;
+        }
+        
+        .btn-modal.error {
+          background: #ef4444;
+          color: white;
+        }
+        
+        .btn-modal.error:hover {
+          background: #dc2626;
+        }
+        
+        .btn-modal.info {
+          background: #002060;
+          color: white;
+        }
+        
+        .btn-modal.info:hover {
+          background: #003380;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+          .header-content {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          
+          .header-actions {
+            width: 100%;
+            flex-direction: column;
+          }
+          
+          .btn-header {
+            width: 100%;
+            text-align: center;
+          }
+          
+          .main-container {
+            padding: 1rem;
+          }
+          
+          .form-card {
+            padding: 1.5rem;
+          }
+          
+          .form-row {
+            grid-template-columns: 1fr;
+          }
+          
+          .form-actions {
+            flex-direction: column;
+          }
+          
+          .attachments-list {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      {/* Header */}
+      <div className="header-bar">
+        <div className="header-content">
+          <div className="header-left">
+            <div className="avatar">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt={`${displayName} profile`} />
+              ) : (
+                initials
+              )}
             </div>
-            <div style={{ fontSize: 13, color: '#6b7280' }}>{displayEmail || '—'}</div>
+            <div className="user-info">
+              <h1>Create New Ticket</h1>
+              <div className="subtitle">Submit a support request</div>
+            </div>
           </div>
-          <div style={{ marginLeft: 12, textAlign: 'right' }}>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>Status</div>
-            <div style={{ fontWeight: 700, color: '#10b981' }}>Signed in</div>
+          <div className="header-actions">
+            <button onClick={() => navigate('/')} className="btn-header btn-back">
+              ← Back to Home
+            </button>
           </div>
         </div>
+      </div>
 
-        <h1 style={{ textAlign: 'center', margin: '18px 0 8px' }}>Create New Ticket</h1>
-        
+      {/* Main Content */}
+      <div className="main-container">
         {loadingCategories && (
-          <div style={{ textAlign: 'center', color: '#6b7280', marginBottom: 12 }}>
+          <div className="info-box info">
             Loading categories...
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
-          <div style={styles.gridRow}>
-            <div style={styles.field}>
-              <label style={styles.label}>Category *</label>
-              <select
-                value={formData.category}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setFormData(prev => ({
-                    ...prev,
-                    category: val,
-                    onBehalf: val === 'Password Reset' ? 'Self' : prev.onBehalf,
-                    onBehalfEmail: val === 'Password Reset' ? prev.onBehalfEmail : '',
-                    alternativeEmail: val === 'Password Reset' ? prev.alternativeEmail : '',
-                    subCategory: '',
-                    ...(val !== 'Operational & Finance'
-                      ? { subQuery: '', otherSubQueryText: '' }
-                      : {})
-                  }));
-                  // Reset dynamic on behalf when category changes
-                  setDynamicOnBehalfSelection('Self');
-                  setDynamicOnBehalfEmail('');
-                  setDynamicOnBehalfSelectedUser(null);
-                  setDynamicOnBehalfSearchResults([]);
-                  setVerifyStatus('idle');
-                  setVerifiedName('');
-                  setVerifyError('');
-                }}
-                required
-                style={styles.select}
-              >
-                <option value="">Select Category</option>
-                
-                {categoriesConfig.map(cat => (
-                  <option key={cat.id || cat.name} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="form-card">
+            <h2 className="form-title">Ticket Details</h2>
 
-            <div style={styles.field}>
-              <label style={styles.label}>Priority *</label>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                required
-                style={styles.select}
-              >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
-            </div>
-          </div>
-
-          {/* NEW: Dynamic On Behalf field (ONLY for non-Password Reset categories) */}
-          {selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && (
-            <div style={{ 
-              padding: 16, 
-              border: '1px solid #e6e9ee', 
-              borderRadius: 8,
-              background: '#f0f9ff',
-              marginBottom: 12
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <label style={{ fontWeight: 700, fontSize: 14 }}>
-                  On Behalf {selectedCategoryConfig.features.onBehalf.required && <span style={{ color: '#ef4444' }}>*</span>}
+            {/* Category & Priority */}
+            <div className="form-row">
+              <div className="form-field">
+                <label className="form-label">
+                  Category<span className="required">*</span>
                 </label>
-              </div>
-              
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                Create this ticket for yourself or on behalf of someone else
-              </div>
-
-              <select
-                value={dynamicOnBehalfSelection}
-                onChange={(e) => {
-                  setDynamicOnBehalfSelection(e.target.value);
-                  if (e.target.value === 'Self') {
+                <select
+                  className="form-select"
+                  value={formData.category}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(prev => ({
+                      ...prev,
+                      category: val,
+                      onBehalf: val === 'Password Reset' ? 'Self' : prev.onBehalf,
+                      onBehalfEmail: val === 'Password Reset' ? prev.onBehalfEmail : '',
+                      alternativeEmail: val === 'Password Reset' ? prev.alternativeEmail : '',
+                      subCategory: '',
+                      ...(val !== 'Operational & Finance'
+                        ? { subQuery: '', otherSubQueryText: '' }
+                        : {})
+                    }));
+                    setDynamicOnBehalfSelection('Self');
                     setDynamicOnBehalfEmail('');
                     setDynamicOnBehalfSelectedUser(null);
                     setDynamicOnBehalfSearchResults([]);
-                  }
-                }}
-                style={styles.select}
-                required={selectedCategoryConfig.features.onBehalf.required}
-              >
-                <option value="Self">Self</option>
-                <option value="Other">Other</option>
-              </select>
+                    setVerifyStatus('idle');
+                    setVerifiedName('');
+                    setVerifyError('');
+                  }}
+                  required
+                >
+                  <option value="">Select Category</option>
+                  {categoriesConfig.map(cat => (
+                    <option key={cat.id || cat.name} value={cat.name}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              {dynamicOnBehalfSelection === 'Other' && (
-                <div style={{ marginTop: 12 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, display: 'block' }}>
-                    Search User by Email or Name
+              <div className="form-field">
+                <label className="form-label">
+                  Priority<span className="required">*</span>
+                </label>
+                <select
+                  className="form-select"
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  required
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Dynamic On Behalf (non-password reset) */}
+            {selectedCategoryConfig?.features?.onBehalf?.enabled && 
+             selectedCategoryConfig?.type !== 'PASSWORD_RESET' && (
+              <div className="onbehalf-section">
+                <div className="onbehalf-header">
+                  <label className="form-label" style={{ margin: 0 }}>
+                    On Behalf Of {selectedCategoryConfig.features.onBehalf.required && <span className="required">*</span>}
                   </label>
-                  
-                  <div style={{ position: 'relative' }}>
+                </div>
+                
+                <div className="form-hint" style={{ marginBottom: '1rem' }}>
+                  Create this ticket for yourself or on behalf of someone else
+                </div>
+
+                <select
+                  className="form-select"
+                  value={dynamicOnBehalfSelection}
+                  onChange={(e) => {
+                    setDynamicOnBehalfSelection(e.target.value);
+                    if (e.target.value === 'Self') {
+                      setDynamicOnBehalfEmail('');
+                      setDynamicOnBehalfSelectedUser(null);
+                      setDynamicOnBehalfSearchResults([]);
+                    }
+                  }}
+                  required={selectedCategoryConfig.features.onBehalf.required}
+                >
+                  <option value="Self">Self</option>
+                  <option value="Other">Other</option>
+                </select>
+
+                {dynamicOnBehalfSelection === 'Other' && (
+                  <div style={{ marginTop: '1rem', position: 'relative' }}>
+                    <label className="form-label">Search User</label>
                     <input
                       type="text"
+                      className="form-input"
                       value={dynamicOnBehalfEmail}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -889,663 +1555,395 @@ function CreateTicket() {
                         handleDynamicOnBehalfSearch(val);
                       }}
                       placeholder="Type email or name to search..."
-                      style={styles.input}
                     />
 
                     {dynamicOnBehalfSearching && (
-                      <div style={{ 
-                        position: 'absolute', 
-                        right: 12, 
-                        top: '50%', 
-                        transform: 'translateY(-50%)',
-                        color: '#6b7280',
-                        fontSize: 12 
-                      }}>
-                        Searching...
-                      </div>
+                      <div className="form-hint">Searching...</div>
                     )}
 
                     {dynamicOnBehalfSearchResults.length > 0 && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        background: 'white',
-                        border: '1px solid #e6e9ee',
-                        borderRadius: 8,
-                        marginTop: 4,
-                        maxHeight: 200,
-                        overflowY: 'auto',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                        zIndex: 1000
-                      }}>
+                      <div className="search-results">
                         {dynamicOnBehalfSearchResults.map((user) => (
                           <div
                             key={user.id}
+                            className="search-result-item"
                             onClick={() => handleSelectDynamicOnBehalfUser(user)}
-                            style={{
-                              padding: '10px 12px',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid #f3f4f6',
-                              transition: 'background 0.2s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                           >
-                            <div style={{ fontWeight: 600, fontSize: 13, color: '#1f2937' }}>
+                            <div className="search-result-name">
                               {user.displayName || user.mail}
                             </div>
-                            <div style={{ fontSize: 12, color: '#6b7280' }}>
+                            <div className="search-result-email">
                               {user.mail || user.userPrincipalName}
                             </div>
                           </div>
                         ))}
                       </div>
                     )}
-                  </div>
 
-                  {dynamicOnBehalfSelectedUser && (
-                    <div style={{
-                      marginTop: 10,
-                      padding: 10,
-                      background: '#f0fdf4',
-                      border: '1px solid #86efac',
-                      borderRadius: 6
-                    }}>
-                      <div style={{ fontSize: 12, color: '#166534', fontWeight: 600 }}>
-                        ✅ Selected User:
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d', marginTop: 4 }}>
-                        {dynamicOnBehalfSelectedUser.displayName}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#166534' }}>
-                        {dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* NEW: Dynamic Sub-Category field (with Other support) */}
-          {selectedCategoryConfig?.features?.subCategories?.enabled && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={styles.label}>
-                Sub-Category{" "}
-                {selectedCategoryConfig.features.subCategories.required && (
-                  <span style={{ color: '#ef4444' }}>*</span>
-                )}
-              </label>
-
-              <select
-                value={formData.subCategory}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setFormData(prev => ({
-                    ...prev,
-                    subCategory: val
-                  }));
-
-                  if (val !== 'Other') {
-                    setOtherSubCategoryText('');
-                  }
-                }}
-                style={styles.select}
-                required={selectedCategoryConfig.features.subCategories.required}
-              >
-                <option value="">Select sub-category</option>
-
-                {selectedCategoryConfig.features.subCategories.list?.map(sub => (
-                  <option key={sub} value={sub}>{sub}</option>
-                ))}
-              </select>
-
-              {formData.subCategory === 'Other' && (
-                <div style={{ marginTop: 8 }}>
-                  <input
-                    type="text"
-                    value={otherSubCategoryText}
-                    onChange={(e) => setOtherSubCategoryText(e.target.value)}
-                    placeholder="Please describe the issue"
-                    style={styles.input}
-                    required
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Password Reset - conditional UI (legacy - keep for backward compatibility) */}
-          {selectedCategoryConfig?.type === 'PASSWORD_RESET' && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={styles.label}>On behalf of *</label>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <select
-                  value={formData.onBehalf}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setFormData(prev => ({
-                      ...prev,
-                      onBehalf: val,
-                      ...(val === 'Self' ? { onBehalfEmail: '' } : {})
-                    }));
-                    setVerifyStatus('idle');
-                    setVerifiedName('');
-                    setVerifyError('');
-                  }}
-                  style={{ ...styles.select, flex: '0 0 220px' }}
-                >
-                  <option value="Self">Self</option>
-                  <option value="Other">Other</option>
-                </select>
-
-                {formData.onBehalf === 'Other' && (
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        type="text"
-                        placeholder="Enter company email of target user"
-                        value={formData.onBehalfEmail}
-                        onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
-                        style={{ ...styles.input, flex: 1 }}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={handleVerifyOther}
-                        style={{
-                          padding: '10px 14px',
-                          borderRadius: 8,
-                          border: 'none',
-                          cursor: 'pointer',
-                          background: '#2563eb',
-                          color: 'white',
-                          fontWeight: 700
-                        }}
-                        disabled={verifyStatus === 'verifying'}
-                      >
-                        {verifyStatus === 'verifying' ? 'Verifying...' : 'Verify'}
-                      </button>
-                    </div>
-
-                    <div style={{ marginTop: 8, fontSize: 13 }}>
-                      {verifyStatus === 'idle' && (
-                        <span style={{ color: '#6b7280' }}>Click Verify to confirm the user exists in Azure AD.</span>
-                      )}
-                      {verifyStatus === 'verifying' && (
-                        <span style={{ color: '#0ea5e9' }}>Verifying presence in Azure AD...</span>
-                      )}
-                      {verifyStatus === 'verified' && (
-                        <span style={{ color: '#16a34a' }}>✅ User verified: <strong>{verifiedName}</strong></span>
-                      )}
-                      {verifyStatus === 'notfound' && (
-                        <span style={{ color: '#dc2626' }}>❌ User not found in Azure AD. Check the email.</span>
-                      )}
-                      {verifyStatus === 'error' && (
-                        <span style={{ color: '#dc2626' }}>❌ Verification error: {verifyError}</span>
-                      )}
-                    </div>
-
-                    {verifyStatus === 'verified' && (
-                      <div style={{ marginTop: 10 }}>
-                        <input
-                          type="email"
-                          placeholder="Alternative email to receive reset (required)"
-                          value={formData.alternativeEmail}
-                          onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
-                          style={{ ...styles.input }}
-                          required
-                        />
-                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
-                          The reset password will be sent to both the requester's primary email (if applicable) and this alternative email.
+                    {dynamicOnBehalfSelectedUser && (
+                      <div className="selected-user-box">
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#065f46', marginBottom: '4px' }}>
+                          ✅ Selected User:
+                        </div>
+                        <div style={{ fontWeight: '700', color: '#0f172a' }}>
+                          {dynamicOnBehalfSelectedUser.displayName}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>
+                          {dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName}
                         </div>
                       </div>
                     )}
                   </div>
                 )}
+              </div>
+            )}
 
-                {formData.onBehalf === 'Self' && (
+            {/* Dynamic Sub-Category */}
+            {selectedCategoryConfig?.features?.subCategories?.enabled && (
+              <div className="form-field">
+                <label className="form-label">
+                  Sub-Category{" "}
+                  {selectedCategoryConfig.features.subCategories.required && (
+                    <span className="required">*</span>
+                  )}
+                </label>
+
+                <select
+                  className="form-select"
+                  value={formData.subCategory}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(prev => ({
+                      ...prev,
+                      subCategory: val
+                    }));
+                    if (val !== 'Other') {
+                      setOtherSubCategoryText('');
+                    }
+                  }}
+                  required={selectedCategoryConfig.features.subCategories.required}
+                >
+                  <option value="">Select sub-category</option>
+                  {selectedCategoryConfig.features.subCategories.list?.map(sub => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+
+                {formData.subCategory === 'Other' && (
                   <input
-                    type="email"
-                    placeholder="Alternative email (required) to receive reset"
-                    value={formData.alternativeEmail}
-                    onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
-                    style={{ ...styles.input, flex: 1 }}
+                    type="text"
+                    className="form-input"
+                    style={{ marginTop: '0.75rem' }}
+                    value={otherSubCategoryText}
+                    onChange={(e) => setOtherSubCategoryText(e.target.value)}
+                    placeholder="Please describe the issue"
                     required
                   />
                 )}
               </div>
+            )}
 
-              <div style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
-                Choose who the password reset is for. If "Other", provide their company email and click Verify.
-              </div>
-            </div>
-          )}
+            {/* Password Reset - On Behalf */}
+            {selectedCategoryConfig?.type === 'PASSWORD_RESET' && (
+              <div className="onbehalf-section">
+                <label className="form-label">
+                  On behalf of<span className="required">*</span>
+                </label>
 
-          {/* Admin Access note */}
-          {formData.category === 'Admin Access' && (
-            <>
-              {groupsLoading ? (
-                <div style={{ marginTop: 12, color: '#6b7280' }}>Checking access...</div>
-              ) : isDeviceAdmin ? (
-                <div style={{
-                  marginTop: 12,
-                  padding: 12,
-                  background: '#fffbeb',
-                  borderRadius: 8,
-                  border: '1px solid #fef3c7',
-                  color: '#92400e'
-                }}>
-                  <strong>You already have device admin access.</strong>
-                  <div style={{ marginTop: 6 }}>
-                    Your account already have admin access, so creating an Admin Access ticket is disabled.
+                <div className="form-row">
+                  <div className="form-field">
+                    <select
+                      className="form-select"
+                      value={formData.onBehalf}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          onBehalf: val,
+                          ...(val === 'Self' ? { onBehalfEmail: '' } : {})
+                        }));
+                        setVerifyStatus('idle');
+                        setVerifiedName('');
+                        setVerifyError('');
+                      }}
+                    >
+                      <option value="Self">Self</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
-                </div>
-              ) : (
-                <div style={{
-                  marginTop: 12,
-                  padding: 12,
-                  background: '#f8fafc',
-                  borderRadius: 8,
-                  border: '1px solid #e6f0ff',
-                  color: '#064e3b'
-                }}>
-                  <strong>Need Admin Access?</strong>
-                  <div style={{ marginTop: 6 }}>Create an Admin Access ticket</div>
-                </div>
-              )}
-            </>
-          )}
 
-          
-
-          {/* NEW: Dynamic Attachments (if enabled for this category) */}
-          {selectedCategoryConfig?.features?.attachments?.enabled && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={styles.label}>
-                Attachments {selectedCategoryConfig.features.attachments.required && <span style={{ color: '#ef4444' }}>*</span>}
-              </label>
-
-              <div
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={() => setIsDragging(false)}
-                style={{
-                  border: isDragging ? '2px dashed #2563eb' : '1px dashed #e6e9ee',
-                  borderRadius: 8,
-                  padding: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  background: isDragging ? '#eff6ff' : '#fff',
-                  cursor: 'pointer'
-                }}
-                onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                role="button"
-                tabIndex={0}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: '#1f2937' }}>
-                    Drag & drop files here or click to browse
-                  </div>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
-                    Supported: images, PDF, Word, Excel, txt, zip. Max {formatBytes(MAX_FILE_SIZE)} each. Up to {MAX_FILES} files.
-                  </div>
-                </div>
-
-                <div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    onChange={(e) => handleFilesSelected(e.target.files)}
-                    style={{ display: 'none' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                    style={{
-                      padding: '8px 12px',
-                      background: '#2563eb',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Browse
-                  </button>
-                </div>
-              </div>
-
-              {attachments.length > 0 && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {attachments.map((att, idx) => (
-                      <div
-                        key={`${att.file.name}-${idx}`}
-                        style={{
-                          width: 180,
-                          border: '1px solid #e6e9ee',
-                          borderRadius: 8,
-                          padding: 8,
-                          background: '#ffffff',
-                          display: 'flex',
-                          gap: 8,
-                          alignItems: 'center',
-                          boxSizing: 'border-box'
-                        }}
-                      >
-                        <div style={{ width: 44, height: 44, flex: '0 0 44px' }}>
-                          {att.preview ? (
-                            <img
-                              src={att.preview}
-                              alt={att.file.name}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }}
-                            />
-                          ) : (
-                            <div style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', borderRadius: 6, fontSize: 12 }}>
-                              {fileTypeLabel(att.file.type, att.file.name)}
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {att.file.name}
-                          </div>
-                          <div style={{ fontSize: 12, color: '#6b7280' }}>{formatBytes(att.file.size)}</div>
-
-                          {att.uploading && (
-                            <div style={{ marginTop: 6 }}>
-                              <div style={{ height: 8, background: '#f3f4f6', borderRadius: 6 }}>
-                                <div style={{ width: `${att.progress}%`, height: '100%', background: '#2563eb', borderRadius: 6 }} />
-                              </div>
-                              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>{att.progress}%</div>
-                            </div>
-                          )}
-                          {att.error && (
-                            <div style={{ marginTop: 6, color: '#dc2626', fontSize: 12 }}>{att.error}</div>
-                          )}
-                          {att.uploaded && (
-                            <div style={{ marginTop: 6, color: '#16a34a', fontSize: 12 }}>Uploaded</div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveAttachment(idx)}
-                            title="Remove"
-                            style={{
-                              border: 'none',
-                              background: 'transparent',
-                              cursor: 'pointer',
-                              color: '#ef4444',
-                              fontSize: 16,
-                              padding: 4
-                            }}
-                          >
-                            ✖
-                          </button>
-                        </div>
+                  {formData.onBehalf === 'Other' && (
+                    <div className="form-field">
+                      <div className="verify-section">
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Enter company email"
+                          value={formData.onBehalfEmail}
+                          onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="btn-verify"
+                          onClick={handleVerifyOther}
+                          disabled={verifyStatus === 'verifying'}
+                        >
+                          {verifyStatus === 'verifying' ? 'Verifying...' : 'Verify'}
+                        </button>
                       </div>
-                    ))}
+
+                      <div className={`verify-status ${verifyStatus}`}>
+                        {verifyStatus === 'idle' && 'Click Verify to confirm user exists'}
+                        {verifyStatus === 'verifying' && '🔍 Verifying user...'}
+                        {verifyStatus === 'verified' && `✅ Verified: ${verifiedName}`}
+                        {verifyStatus === 'notfound' && '❌ User not found'}
+                        {verifyStatus === 'error' && `❌ ${verifyError}`}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {((formData.onBehalf === 'Other' && verifyStatus === 'verified') || 
+                  formData.onBehalf === 'Self') && (
+                  <div className="form-field" style={{ marginTop: '1rem' }}>
+                    <label className="form-label">
+                      Alternative Email<span className="required">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="Email to receive reset password"
+                      value={formData.alternativeEmail}
+                      onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
+                      required
+                    />
+                    <div className="form-hint">
+                      The reset password will be sent to this email address
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Admin Access Warning */}
+            {formData.category === 'Admin Access' && (
+              <>
+                {groupsLoading ? (
+                  <div className="info-box info">Checking access...</div>
+                ) : isDeviceAdmin ? (
+                  <div className="info-box warning">
+                    <strong>⚠️ You already have device admin access.</strong>
+                                          <div style={{ marginTop: '6px' }}>
+                        Your account already has admin access, so creating an Admin Access ticket is disabled.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="info-box info">
+                      <strong>Need Admin Access?</strong>
+                      <div style={{ marginTop: '6px' }}>
+                        Please submit this request for approval.
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Description */}
+              <div className="form-field">
+                <label className="form-label">
+                  Description<span className="required">*</span>
+                </label>
+
+                <textarea
+                  className="form-textarea"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Describe your issue..."
+                  required
+                />
+              </div>
+
+              {/* Attachments */}
+              {selectedCategoryConfig?.features?.attachments?.enabled && (
+                <div className="form-field" style={{ marginTop: '1.5rem' }}>
+                  <label className="form-label">
+                    Attachments
+                    {selectedCategoryConfig.features.attachments.required && (
+                      <span className="required">*</span>
+                    )}
+                  </label>
+
+                  <div
+                    className={`attachment-dropzone ${isDragging ? 'dragging' : ''}`}
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={() => setIsDragging(false)}
+                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                  >
+                    <div className="dropzone-icon">📎</div>
+                    <div className="dropzone-title">
+                      Drag & drop files here or click to browse
+                    </div>
+                    <div className="dropzone-hint">
+                      Max {formatBytes(MAX_FILE_SIZE)} each. Up to {MAX_FILES} files.
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      onChange={(e) => handleFilesSelected(e.target.files)}
+                      style={{ display: 'none' }}
+                    />
                   </div>
 
-                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                    <button type="button" onClick={handleClearAllAttachments} style={{ ...styles.ghostButton }}>Clear all</button>
+                  {attachments.length > 0 && (
+                    <>
+                      <div className="attachments-list">
+                        {attachments.map((att, idx) => (
+                          <div key={idx} className="attachment-item">
+                            <button
+                              type="button"
+                              className="btn-remove-attachment"
+                              onClick={() => handleRemoveAttachment(idx)}
+                            >
+                              ✖
+                            </button>
+
+                            <div className="attachment-preview">
+                              {att.preview ? (
+                                <img src={att.preview} alt={att.file.name} />
+                              ) : (
+                                <div className="file-type-icon">
+                                  {fileTypeLabel(att.file.type, att.file.name)}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="attachment-name">
+                              {att.file.name}
+                            </div>
+
+                            <div className="attachment-size">
+                              {formatBytes(att.file.size)}
+                            </div>
+
+                            {att.uploading && (
+                              <div className="attachment-progress">
+                                <div className="progress-bar">
+                                  <div
+                                    className="progress-fill"
+                                    style={{ width: `${att.progress}%` }}
+                                  />
+                                </div>
+                                <div className="progress-text">{att.progress}%</div>
+                              </div>
+                            )}
+
+                            {att.uploaded && (
+                              <div className="attachment-status uploaded">
+                                Uploaded
+                              </div>
+                            )}
+
+                            {att.error && (
+                              <div className="attachment-status error">
+                                {att.error}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="attachment-actions">
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={handleClearAllAttachments}
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="form-hint" style={{ marginTop: '0.5rem' }}>
+                    {selectedCategoryConfig.features.attachments.required
+                      ? 'Attachments are required for this category.'
+                      : 'Attach supporting documents if needed.'}
                   </div>
                 </div>
               )}
 
-              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>
-                {selectedCategoryConfig.features.attachments.required 
-                  ? 'Attachments are required for this category.'
-                  : 'Attach supporting documents if needed.'}
+              {/* Form actions */}
+              <div className="form-actions">
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={loading || disableCreateBecauseDeviceAdmin}
+                  title={
+                    disableCreateBecauseDeviceAdmin
+                      ? 'You already have device admin access'
+                      : undefined
+                  }
+                >
+                  {loading ? 'Creating...' : 'Create Ticket'}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => navigate('/')}
+                >
+                  Cancel
+                </button>
+              </div>
+
+            </div>
+          </form>
+
+          {/* Modal */}
+          {modal.open && (
+            <div className="modal-overlay">
+              <div className="modal-box">
+                <div className="modal-title">{modal.title}</div>
+                <div className="modal-message">{modal.message}</div>
+
+                <div className="modal-actions">
+                  <button
+                    className={`btn-modal ${modal.type}`}
+                    onClick={handleCloseModal}
+                  >
+                    OK
+                  </button>
+
+                  {modal.type === 'success' && createdTicketId && (
+                    <button
+                      className="btn-modal info"
+                      onClick={handleViewTicket}
+                    >
+                      View Ticket
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
-          <div style={styles.field}>
-            <label style={styles.label}>Description *</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              required
-              rows="5"
-              style={styles.textarea}
-              placeholder="Describe your issue..."
+          {showPasswordPopup && (
+            <PasswordPopup
+              password={newPassword}
+              onClose={() => setShowPasswordPopup(false)}
             />
-          </div>
+          )}
 
-          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-            <button
-              type="submit"
-              style={{ ...styles.primaryButton, flex: 1 }}
-              disabled={loading || disableCreateBecauseDeviceAdmin}
-              title={
-                disableCreateBecauseDeviceAdmin
-                  ? 'You already have device admin access — cannot create Admin Access ticket'
-                  : undefined
-              }
-            >
-              {loading ? 'Creating...' : 'Create Ticket'}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              style={{ ...styles.ghostButton }}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
       </div>
-
-      {modal.open && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalBox}>
-            <h3 style={{ marginBottom: 12 }}>{modal.title}</h3>
-            <p style={{ marginBottom: 20 }}>{modal.message}</p>
-
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
-              <button
-                onClick={handleCloseModal}
-                style={{
-                  padding: '10px 18px',
-                  background: modal.type === 'success' ? '#27ae60' : '#e74c3c',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 6,
-                  cursor: 'pointer'
-                }}
-              >
-                OK
-              </button>
-
-              {modal.type === 'success' && createdTicketId && (
-                <button
-                  onClick={handleViewTicket}
-                  style={{
-                    padding: '10px 18px',
-                    background: '#2563eb',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 6,
-                    cursor: 'pointer'
-                  }}
-                >
-                  View Ticket
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPasswordPopup && (
-        <PasswordPopup
-          password={newPassword}
-          onClose={() => setShowPasswordPopup(false)}
-        />
-      )}
     </div>
   );
 }
 
-const styles = {
-  pageWrap: { padding: '2rem', maxWidth: 820, margin: '0 auto', boxSizing: 'border-box' },
-  card: {
-    background: 'white',
-    padding: '1.25rem 1.5rem',
-    borderRadius: 12,
-    boxShadow: '0 6px 30px rgba(2,6,23,0.08)',
-    boxSizing: 'border-box',
-    overflow: 'hidden'
-  },
-  headerRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    background: '#eef2ff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 700,
-    color: '#4338ca',
-    fontSize: 18
-  },
-  gridRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 12,
-    alignItems: 'start',
-    marginBottom: 12
-  },
-  field: { marginBottom: 12 },
-  label: {
-    display: 'block',
-    marginBottom: 6,
-    fontSize: 13,
-    color: '#374151',
-    fontWeight: 600
-  },
-  input: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #e6e9ee',
-    borderRadius: 8,
-    background: '#fafafa',
-    boxSizing: 'border-box'
-  },
-  select: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #e6e9ee',
-    borderRadius: 8,
-    background: 'white',
-    boxSizing: 'border-box'
-  },
-  textarea: {
-    width: '100%',
-    minHeight: 140,
-    maxHeight: 300,
-    padding: '12px',
-    border: '1px solid #e6e9ee',
-    borderRadius: 8,
-    background: 'white',
-    resize: 'vertical',
-    overflow: 'auto',
-    boxSizing: 'border-box'
-  },
-  primaryButton: {
-    background: '#2563eb',
-    color: 'white',
-    padding: '12px 18px',
-    border: 'none',
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontWeight: 700
-  },
-  ghostButton: {
-    background: '#f3f4f6',
-    color: '#374151',
-    padding: '12px 18px',
-    border: 'none',
-    borderRadius: 8,
-    cursor: 'pointer',
-    fontWeight: 600
-  },
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100vw",
-    height: "100vh",
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10000
-  },
-  modalBox: {
-    background: "white",
-    padding: "28px",
-    borderRadius: "10px",
-    width: "380px",
-    textAlign: "center",
-    boxShadow: "0 6px 24px rgba(2,6,23,0.12)"
-  },
-  overlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'rgba(0,0,0,0.5)',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 9999
-  },
-  passwordBox: {
-    background: 'white',
-    padding: '2rem',
-    borderRadius: '10px',
-    textAlign: 'center',
-    width: '400px',
-    boxShadow: '0 8px 30px rgba(2,6,23,0.12)',
-    position: 'relative'
-  },
-  passwordText: {
-    fontFamily: 'monospace',
-    fontSize: '1.1rem',
-    background: '#f1f1f1',
-    padding: '10px',
-    borderRadius: '6px'
-  },
-  copyButton: {
-    marginTop: '1rem',
-    background: '#3498db',
-    color: 'white',
-    padding: '8px 16px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer'
-  },
-  modalCloseButton: {
-    position: 'absolute',
-    top: '10px',
-    right: '10px',
-    background: 'transparent',
-    border: 'none',
-    fontSize: '1.2rem',
-    cursor: 'pointer'
-  }
-};
-
 export default CreateTicket;
+
