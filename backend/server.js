@@ -1022,8 +1022,12 @@ const normalizedName = finalName;
   }
 });
 
+// =====================================================
+// FIXED PUT /api/categories/:id ENDPOINT
+// Replace your existing PUT endpoint with this version
+// =====================================================
+
 app.put("/api/categories/:id", async (req, res) => {
-  console.log("🔥 UPDATE CATEGORY ROUTE HIT", req.params.id);
   try {
     const { id } = req.params;
 
@@ -1073,6 +1077,7 @@ app.put("/api/categories/:id", async (req, res) => {
 
     const changes = [];
 
+    // helpers
     const emails = arr => (arr || []).map(x => x.email).filter(Boolean);
 
     const oldHeads = emails(oldCategory.categoryHeads);
@@ -1081,6 +1086,7 @@ app.put("/api/categories/:id", async (req, res) => {
     const oldCc = emails(oldCategory.cc);
     const newCcArr = emails(newCc);
 
+    // heads added / removed
     const addedHeads = newHeadsArr.filter(e => !oldHeads.includes(e));
     const removedHeads = oldHeads.filter(e => !newHeadsArr.includes(e));
 
@@ -1090,6 +1096,7 @@ app.put("/api/categories/:id", async (req, res) => {
     if (removedHeads.length)
       changes.push(`Category head removed: ${removedHeads.join(", ")}`);
 
+    // cc added / removed
     const addedCc = newCcArr.filter(e => !oldCc.includes(e));
     const removedCc = oldCc.filter(e => !newCcArr.includes(e));
 
@@ -1099,6 +1106,7 @@ app.put("/api/categories/:id", async (req, res) => {
     if (removedCc.length)
       changes.push(`CC removed: ${removedCc.join(", ")}`);
 
+    // feature changes
     const oldF = oldCategory.features || {};
     const newF = finalFeatures || {};
 
@@ -1120,20 +1128,27 @@ app.put("/api/categories/:id", async (req, res) => {
     if (!!oldF.attachments?.required !== !!newF.attachments?.required)
       changes.push(`Attachments required ${newF.attachments?.required ? "enabled" : "disabled"}`);
 
+    // category name
     if (oldCategory.name !== finalName)
       changes.push(`Category name changed to "${finalName}"`);
 
-    // -------------------- notify OLD participants --------------------
+    console.log("📝 [UPDATE CATEGORY] Changes detected:", changes);
 
+    // -------------------- ✅ FIXED: notify ALL relevant people --------------------
+
+    // ✅ Notify BOTH old AND new people
     const notifyTo = [
-      ...(oldCategory.categoryHeads || []).map(h => h.email),
-      ...(oldCategory.cc || []).map(c => c.email),
-      updatedBy?.mail
+      ...oldHeads,              // ← OLD category heads (removed or staying)
+      ...newHeadsArr,           // ← NEW category heads (added or staying)
+      ...oldCc,                 // ← OLD cc recipients
+      ...newCcArr,              // ← NEW cc recipients
+      updatedBy?.mail           // ← Person who made the update
     ].filter(Boolean);
 
+    // Remove duplicates
     const uniqueNotifyTo = [...new Set(notifyTo)];
 
-    const itHead = process.env.IT_HEAD_EMAIL;
+    console.log("📧 [UPDATE CATEGORY] Will notify:", uniqueNotifyTo);
 
     if (uniqueNotifyTo.length && changes.length) {
 
@@ -1157,53 +1172,90 @@ app.put("/api/categories/:id", async (req, res) => {
         actionText: "Open Helpdesk"
       });
 
-      await sendEmail(
-        uniqueNotifyTo,
-        `[HELPDESK] Category updated: ${oldCategory.name}`,
-        html,
-        itHead
-      );
+      const itHead = process.env.IT_HEAD_EMAIL;
+
+      console.log("📧 [UPDATE CATEGORY] Sending notification emails...");
+
+      try {
+        await sendEmail(
+          uniqueNotifyTo,
+          `[HELPDESK] Category updated: ${oldCategory.name}`,
+          html,
+          itHead
+        );
+        console.log("✅ [UPDATE CATEGORY] Notification emails sent successfully");
+      } catch (err) {
+        console.error("❌ [UPDATE CATEGORY] Failed to send notification emails:", err.message);
+      }
+    } else {
+      console.log("ℹ️ [UPDATE CATEGORY] No notifications needed (no changes or no recipients)");
     }
 
-    // ======================================================
-    // ✅ NEW PART – notify newly added category heads
-    // ======================================================
+    // -------------------- ✅ BONUS: Send welcome email to NEW category heads --------------------
 
-    if (addedHeads.length) {
+    if (addedHeads.length > 0) {
+      console.log("📧 [UPDATE CATEGORY] Sending welcome emails to new category heads:", addedHeads);
 
-      const fields = [
-        { label: "Category", value: finalName },
-        {
-          label: "Assigned By",
-          value: updatedBy?.name
-            ? `${updatedBy.name} (${updatedBy.mail || ""})`
-            : "Admin"
-        }
-      ];
-
-      const newHeadHtml = buildHtmlEmail({
-        title: `You are assigned as Category Head: ${finalName}`,
-        subtitle: "You will receive notifications for this category",
+      const welcomeHtml = buildHtmlEmail({
+        title: `You are now a Category Head: ${finalName}`,
+        subtitle: "You will receive notifications for tickets in this category",
         statusColor: "#16a34a",
-        fields,
-        description:
-          `You have been assigned as a Category Head for "${finalName}".`,
+        fields: [
+          { label: "Category", value: finalName },
+          { label: "Added By", value: changedBy },
+          { label: "Role", value: "Category Head" }
+        ],
+        description: `You have been assigned as a Category Head for "${finalName}". You will receive email notifications for ticket approvals and actions in this category.`,
         actionLink: process.env.PROD_URL,
         actionText: "Open Helpdesk"
       });
 
-      const newCcForHeads = [
-        ...newCcArr,
-        itHead
-      ].filter(Boolean);
-
-      await sendEmail(
-        addedHeads,
-        `[HELPDESK] Assigned as Category Head: ${finalName}`,
-        newHeadHtml,
-        newCcForHeads
-      );
+      try {
+        await sendEmail(
+          addedHeads,
+          `[HELPDESK] You are now a Category Head: ${finalName}`,
+          welcomeHtml,
+          itHead
+        );
+        console.log("✅ [UPDATE CATEGORY] Welcome emails sent to new category heads");
+      } catch (err) {
+        console.error("❌ [UPDATE CATEGORY] Failed to send welcome emails:", err.message);
+      }
     }
+
+    // -------------------- ✅ BONUS: Send welcome email to NEW CC recipients --------------------
+
+    if (addedCc.length > 0) {
+      console.log("📧 [UPDATE CATEGORY] Sending welcome emails to new CC recipients:", addedCc);
+
+      const ccWelcomeHtml = buildHtmlEmail({
+        title: `You are now CC'd for: ${finalName}`,
+        subtitle: "You will receive notifications for tickets in this category",
+        statusColor: "#0ea5e9",
+        fields: [
+          { label: "Category", value: finalName },
+          { label: "Added By", value: changedBy },
+          { label: "Role", value: "CC Recipient" }
+        ],
+        description: `You have been added as a CC recipient for "${finalName}". You will receive email notifications for ticket actions in this category.`,
+        actionLink: process.env.PROD_URL,
+        actionText: "Open Helpdesk"
+      });
+
+      try {
+        await sendEmail(
+          addedCc,
+          `[HELPDESK] You are now CC'd for category: ${finalName}`,
+          ccWelcomeHtml,
+          itHead
+        );
+        console.log("✅ [UPDATE CATEGORY] Welcome emails sent to new CC recipients");
+      } catch (err) {
+        console.error("❌ [UPDATE CATEGORY] Failed to send CC welcome emails:", err.message);
+      }
+    }
+
+    console.log("✅ [UPDATE CATEGORY] Category update completed successfully");
 
     // -------------------- response --------------------
 
@@ -1219,99 +1271,8 @@ app.put("/api/categories/:id", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Update category error:", err.message);
+    console.error("❌ [UPDATE CATEGORY] Error:", err.message);
     res.status(500).json({ message: "Failed to update category" });
-  }
-});
-
-
-
-// DELETE /api/categories/:id - Remove category
-app.delete("/api/categories/:id", async (req, res) => {
-  try {
-    const categoryId = req.params.id;
-
-    console.log("🗑️ [DELETE CATEGORY] Attempting to delete:", categoryId);
-
-    // Find the category first
-    const category = await CategoryConfig.findById(categoryId);
-    
-    if (!category) {
-      return res.status(404).json({ message: "Category not found" });
-    }
-
-    const categoryName = category.name;
-
-    // Delete the category
-    await CategoryConfig.findByIdAndDelete(categoryId);
-
-    console.log("✅ [DELETE CATEGORY] Category deleted:", categoryName);
-
-    // ============ EMAIL NOTIFICATIONS ============
-    const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    const itHead = process.env.IT_HEAD_EMAIL;
-
-    // Get all helpdesk admins
-    const admins = process.env.HELPDESK_ADMINS_EMAILS
-      ? process.env.HELPDESK_ADMINS_EMAILS.split(",").map(e => e.trim())
-      : [];
-
-    const title = `Category Deleted: ${categoryName}`;
-    const emailFields = [
-      { label: "Category Name", value: categoryName },
-      { label: "Deleted At (IST)", value: nowIST },
-      { label: "Action", value: "Category Removed" }
-    ];
-
-    const emailHtml = buildHtmlEmail({
-      title,
-      subtitle: "A category has been removed from the Helpdesk system",
-      statusColor: "#dc2626",
-      fields: emailFields,
-      description: `The category "${categoryName}" has been permanently deleted and is no longer available for ticket creation.`,
-      actionLink: process.env.PROD_URL,
-      actionText: "Open Helpdesk"
-    });
-
-    // Notify all admins
-    if (admins.length) {
-      console.log("📧 [DELETE CATEGORY] Notifying admins:", admins);
-      await sendEmail(
-        admins,
-        `[HELPDESK] Category Deleted: ${categoryName}`,
-        emailHtml,
-        itHead
-      );
-    }
-
-    // Notify category heads and CC
-    const headEmails = (category.categoryHeads || []).map(h => h.email).filter(Boolean);
-    const ccEmails = (category.cc || []).map(c => c.email).filter(Boolean);
-    const allNotifyEmails = [...new Set([...headEmails, ...ccEmails])];
-
-    if (allNotifyEmails.length) {
-      console.log("📧 [DELETE CATEGORY] Notifying heads/CC:", allNotifyEmails);
-      await sendEmail(
-        allNotifyEmails,
-        `[HELPDESK] Category Deleted: ${categoryName}`,
-        emailHtml,
-        itHead
-      );
-    }
-
-    console.log("✅ [DELETE CATEGORY] All notifications sent");
-
-    return res.json({ 
-      message: "Category deleted successfully",
-      categoryName 
-    });
-
-  } catch (err) {
-    console.error("❌ [DELETE CATEGORY] Error:", err);
-    return res.status(500).json({ 
-      message: "Failed to delete category", 
-      error: err.message 
-    });
   }
 });
 
