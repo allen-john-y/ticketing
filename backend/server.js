@@ -22,22 +22,38 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: '25mb' }));
 
 // ---------------------- CORS ------------------------------
-const allowedOrigins = [process.env.CORS_ORIGIN?.trim()];
+const allowedOrigins = [
+  process.env.CORS_ORIGIN?.trim()
+];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.log(`Blocked by CORS: ${origin}`);
-        callback(new Error("Not allowed by CORS"));
+
+      // allow server-to-server / curl / render health checks
+      if (!origin) return callback(null, true);
+
+      // normalize (remove trailing slash)
+      const cleanOrigin = origin.replace(/\/$/, '');
+
+      const allowed = allowedOrigins
+        .filter(Boolean)
+        .map(o => o.replace(/\/$/, ''));
+
+      if (allowed.includes(cleanOrigin)) {
+        return callback(null, true);
       }
+
+      console.log("❌ Blocked by CORS:", cleanOrigin, "Allowed:", allowed);
+
+      // ❗IMPORTANT: do NOT throw error here
+      return callback(null, false);
     },
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   })
 );
+
 app.options("*", cors());
 
 // ---------------------- Rate Limiter ----------------------
