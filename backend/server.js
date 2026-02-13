@@ -413,6 +413,33 @@ const resetAzurePassword = async (userIdentifier) => {
   return newPassword;
 };
 
+const addUserToDirectoryRole = async (roleId, userObjectId) => {
+  const token = await getAccessToken();
+
+  const url = `https://graph.microsoft.com/v1.0/directoryRoles/${roleId}/members/$ref`;
+
+  const body = {
+    "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}`
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (res.status !== 204) {
+    const text = await res.text();
+    throw new Error(`Add to directory role failed: ${res.status} ${text}`);
+  }
+
+  return true;
+};
+
+
 const getUserByUpn = async (upn) => {
   const token = await getAccessToken();
   const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id,mail,displayName,userPrincipalName`;
@@ -1623,10 +1650,10 @@ app.post("/tickets/:id/approve", async (req, res) => {
       // 🔴 THIS WAS MISSING
       const user = await getUserByUpn(targetUpn);
 
-      await addUserToGroup(
+      await addUserToDirectoryRole(
         process.env.AZURE_DEVICE_ADMIN_GROUP_ID,
         user.id
-      )
+      );
 
       ticket.history.push({
         action: "approved",
