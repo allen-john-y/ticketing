@@ -2100,12 +2100,77 @@ app.post("/tickets/:id/approve", async (req, res) => {
     }
 
     else if (categoryConfig?.features?.approvalRequired === true) {
+
+        const now = new Date();
+
+        ticket.history.push({
+          action: "approved",
+          by: approvedBy || "Approver",
+          at: now,
+          reason: note || "Approved"
+        });
+
         ticket.status = "Closed";
         ticket.approvalStatus = "Approved";
         ticket.closedBy = approvedBy || "Approver";
-        ticket.closedAt = new Date();
+        ticket.closedAt = now;
 
+        ticket.history.push({
+          action: "closed",
+          by: ticket.closedBy,
+          at: now,
+          reason: note || "Approved"
+        });
+
+        await ticket.save();
+
+        // ---------------- MAIL PART ----------------
+
+        const catCfg = await CategoryConfig.findOne({
+          name: { $regex: new RegExp("^" + ticket.category + "$", "i") }
+        });
+
+        const to = [
+          ticket.userEmail
+        ].filter(Boolean);
+
+        const cc = [
+          ...(catCfg?.categoryHeads || []).map(h => h.email),
+          ...(catCfg?.cc || []).map(c => c.email)
+        ].filter(Boolean);
+
+        const html = buildHtmlEmail({
+          title: `Ticket #${ticket.ticketNumber} – Approved`,
+          subtitle: "Your ticket has been approved and closed",
+          statusColor: "#16a34a",
+          fields: [
+            { label: "Ticket No", value: ticket.ticketNumber },
+            { label: "Category", value: ticket.category },
+            { label: "Result", value: "Approved" },
+            { label: "Approved By", value: ticket.closedBy },
+            {
+              label: "Affected User",
+              value: ticket.onBehalfEmail || ticket.userEmail
+            }
+          ],
+          description: note || "Your request has been approved.",
+          actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
+          actionText: "View Ticket"
+        });
+
+        await sendEmail(
+          to,
+          `[APPROVED] Ticket #${ticket.ticketNumber} – ${ticket.category}`,
+          html,
+          cc
+        );
+
+        return res.status(200).json({
+          message: "Ticket approved successfully",
+          ticket
+        });
       }
+
     /* =====================================================
        OTHER CATEGORIES
     ===================================================== */
