@@ -111,7 +111,6 @@ function TicketDetails() {
             c => c.name?.toLowerCase() === res.data.category?.toLowerCase()
           );
 
-          setCategoryMeta(found || null);
         } catch (e) {
           setCategoryMeta(null);
         }
@@ -149,7 +148,7 @@ function TicketDetails() {
         }
         setAttachmentList(list);
 
-        // CATEGORY HEAD CHECK (dynamic from categories collection)
+       // CATEGORY HEAD CHECK (dynamic from categories collection)
         if (accounts[0] && res.data) {
 
           const acct = accounts[0] || {};
@@ -164,7 +163,7 @@ function TicketDetails() {
             .toLowerCase()
             .trim();
 
-          setCategoryMeta(found || null);
+          // 👉 USE categoryMeta ONLY (do NOT touch found here)
 
           const heads =
             (categoryMeta?.categoryHeads || [])
