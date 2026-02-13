@@ -444,6 +444,9 @@ const resetAzurePassword = async (userIdentifier) => {
 // Replace the existing addUserToGroup function with this version
 // =====================================================
 
+const AZURE_DEVICE_ADMIN_GROUP_ID = process.env.AZURE_DEVICE_ADMIN_GROUP_ID;
+
+
 const addUserToGroup = async (groupId, userObjectId, retries = 2) => {
   console.log(`🔵 [ADD TO GROUP] Attempting to add user ${userObjectId} to group ${groupId}`);
   
