@@ -151,53 +151,54 @@ function TicketDetails() {
         }
         setAttachmentList(list);
 
-       useEffect(() => {
-
-        if (!accounts[0] || !ticket || !categoryMeta) return;
-
-        const acct = accounts[0] || {};
-        const possibleEmails = [
-          acct.username,
-          acct.upn,
-          acct.preferred_username,
-          acct.email
-        ].filter(Boolean);
-
-        const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
-          .toLowerCase()
-          .trim();
-
-        const heads =
-          (categoryMeta.categoryHeads || [])
-            .map(h => (h.email || '').toLowerCase().trim())
-            .filter(Boolean);
-
-        const isHead = loggedEmail && heads.includes(loggedEmail);
-
-        setIsCategoryHead(!!isHead);
-
-        const status = (ticket.status || '').toString();
-
-        const approvalEnabled =
-          categoryMeta.type === "PASSWORD_RESET";
-
-        if (
-          isHead &&
-          approvalEnabled &&
-          (status === "Waiting for approval" || status === "Open")
-        ) {
-          setShowApprovalModal(true);
-        } else {
-          setShowApprovalModal(false);
-        }
-
-      }, [accounts, ticket, categoryMeta]);
       } catch (err) {
         console.error('Error fetching ticket:', err);
       }
     };
     fetchTicket();
   }, [id, accounts, instance, backendBase]);
+
+  useEffect(() => {
+
+  if (!accounts[0] || !ticket || !categoryMeta) return;
+
+  const acct = accounts[0] || {};
+  const possibleEmails = [
+    acct.username,
+    acct.upn,
+    acct.preferred_username,
+    acct.email
+  ].filter(Boolean);
+
+  const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
+    .toLowerCase()
+    .trim();
+
+  const heads =
+    (categoryMeta.categoryHeads || [])
+      .map(h => (h.email || '').toLowerCase().trim())
+      .filter(Boolean);
+
+  const isHead = loggedEmail && heads.includes(loggedEmail);
+
+  setIsCategoryHead(!!isHead);
+
+  const status = (ticket.status || '').toString();
+
+  const approvalEnabled =
+    categoryMeta.type === "PASSWORD_RESET";
+
+  if (
+    isHead &&
+    approvalEnabled &&
+    (status === "Waiting for approval" || status === "Open")
+  ) {
+    setShowApprovalModal(true);
+  } else {
+    setShowApprovalModal(false);
+  }
+
+}, [accounts, ticket, categoryMeta]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
