@@ -1824,52 +1824,55 @@ function Header({ logout }) {
                         style={{ position: 'relative' }}
                       >
                         <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
-                          <input
-                            value={h.searchQuery}
-                            onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
-                            placeholder="Type name or email..."
+                        <input
+                          value={h.searchQuery}
+                          onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
+                          placeholder="Type name or email..."
+                          style={{ 
+                            flex: 1, 
+                            padding: '8px 10px', 
+                            borderRadius: 6, 
+                            border: h.email ? '1px solid #10b981' : '1px solid #e6e9ee',
+                            fontSize: 13,
+                            background: h.email ? '#ecfdf5' : 'white'
+                          }}
+                        />
+                        
+                        {/* ✅ FIXED: Show + for all items */}
+                        <button 
+                          type="button" 
+                          onClick={addCategoryHead} 
+                          style={{ 
+                            padding: '8px 12px', 
+                            borderRadius: 6, 
+                            background: '#eef2ff', 
+                            border: '1px solid #c7d2fe',
+                            cursor: 'pointer',
+                            fontSize: 16,
+                            fontWeight: 600
+                          }}
+                        >
+                          ＋
+                        </button>
+                        
+                        {/* ✅ FIXED: Show × for all items except when it's the only one */}
+                        {categoryHeads.length > 1 && (
+                          <button 
+                            type="button" 
+                            onClick={() => removeCategoryHead(idx)} 
                             style={{ 
-                              flex: 1, 
-                              padding: '8px 10px', 
+                              padding: '8px 12px', 
                               borderRadius: 6, 
-                              border: h.email ? '1px solid #10b981' : '1px solid #e6e9ee',
-                              fontSize: 13,
-                              background: h.email ? '#ecfdf5' : 'white'
+                              background: '#fff1f2', 
+                              border: '1px solid #fecaca',
+                              cursor: 'pointer',
+                              fontSize: 14
                             }}
-                          />
-                          {idx === 0 ? (
-                            <button 
-                              type="button" 
-                              onClick={addCategoryHead} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#eef2ff', 
-                                border: '1px solid #c7d2fe',
-                                cursor: 'pointer',
-                                fontSize: 16,
-                                fontWeight: 600
-                              }}
-                            >
-                              ＋
-                            </button>
-                          ) : (
-                            <button 
-                              type="button" 
-                              onClick={() => removeCategoryHead(idx)} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#fff1f2', 
-                                border: '1px solid #fecaca',
-                                cursor: 'pointer',
-                                fontSize: 14
-                              }}
-                            >
-                              ✖
-                            </button>
-                          )}
-                        </div>
+                          >
+                            ✖
+                          </button>
+                        )}
+                      </div>
 
                         {h.showDropdown && h.searchResults.length > 0 && (
                           <div style={{
@@ -1952,38 +1955,39 @@ function Header({ logout }) {
                               background: c.email ? '#ecfdf5' : 'white'
                             }}
                           />
-                          {idx === 0 ? (
-                            <button 
-                              type="button" 
-                              onClick={addCcEmail} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#eef2ff', 
-                                border: '1px solid #c7d2fe',
-                                cursor: 'pointer',
-                                fontSize: 16,
-                                fontWeight: 600
-                              }}
-                            >
-                              ＋
-                            </button>
-                          ) : (
-                            <button 
-                              type="button" 
-                              onClick={() => removeCcEmail(idx)} 
-                              style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: 6, 
-                                background: '#fff1f2', 
-                                border: '1px solid #fecaca',
-                                cursor: 'pointer',
-                                fontSize: 14
-                              }}
-                            >
-                              ✖
-                            </button>
-                          )}
+                          
+                          {/* ✅ FIXED: Show + for all items */}
+                          <button 
+                            type="button" 
+                            onClick={addCcEmail} 
+                            style={{ 
+                              padding: '8px 12px', 
+                              borderRadius: 6, 
+                              background: '#eef2ff', 
+                              border: '1px solid #c7d2fe',
+                              cursor: 'pointer',
+                              fontSize: 16,
+                              fontWeight: 600
+                            }}
+                          >
+                            ＋
+                          </button>
+                          
+                          {/* ✅ FIXED: Show × for all items (CC is optional, so we can remove all) */}
+                          <button 
+                            type="button" 
+                            onClick={() => removeCcEmail(idx)} 
+                            style={{ 
+                              padding: '8px 12px', 
+                              borderRadius: 6, 
+                              background: '#fff1f2', 
+                              border: '1px solid #fecaca',
+                              cursor: 'pointer',
+                              fontSize: 14
+                            }}
+                          >
+                            ✖
+                          </button>
                         </div>
 
                         {c.showDropdown && c.searchResults.length > 0 && (
