@@ -219,7 +219,8 @@ function TicketDetails() {
   ticket &&
   (ticket.status === 'Waiting for approval' || ticket.status === 'Open') &&
   !showApprovalModal &&
-  categoryMeta?.type === "PASSWORD_RESET";
+  (categoryMeta?.type === "PASSWORD_RESET" ||
+   categoryMeta?.type === "ADMIN_ACCESS");
 
 
   const copyToClipboard = (text) => {
@@ -234,7 +235,14 @@ function TicketDetails() {
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
-      if (!ticket || categoryMeta?.type !== "PASSWORD_RESET") {
+      if (
+          !ticket ||
+          !(
+            categoryMeta?.type === "PASSWORD_RESET" ||
+            categoryMeta?.type === "ADMIN_ACCESS"
+          )
+        ) {
+
         alert("Approval not supported for this ticket type.");
         return;
       }
@@ -918,7 +926,10 @@ const downloadAllAttachments = async () => {
       {/* APPROVAL MODAL – Password Reset + Admin Access */}
       {showApprovalModal &&
         isCategoryHead &&
-        categoryMeta?.type === "PASSWORD_RESET" && (
+        (
+          categoryMeta?.type === "PASSWORD_RESET" ||
+          categoryMeta?.type === "ADMIN_ACCESS"
+        ) && (
         <div className="overlay">
           <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
