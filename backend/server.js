@@ -1023,6 +1023,7 @@ const normalizedName = finalName;
 });
 
 app.put("/api/categories/:id", async (req, res) => {
+  console.log("🔥 UPDATE CATEGORY ROUTE HIT", req.params.id);
   try {
     const { id } = req.params;
 
