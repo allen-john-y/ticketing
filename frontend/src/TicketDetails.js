@@ -107,9 +107,12 @@ function TicketDetails() {
         try {
           const all = await axios.get(`${backendBase}/api/categories`);
 
-          const found = all.data.find(
-            c => c.name?.toLowerCase() === res.data.category?.toLowerCase()
+          setCategoryMeta(
+            all.data.find(
+              c => c.name?.toLowerCase() === res.data.category?.toLowerCase()
+            ) || null
           );
+
 
         } catch (e) {
           setCategoryMeta(null);
@@ -148,48 +151,47 @@ function TicketDetails() {
         }
         setAttachmentList(list);
 
-       // CATEGORY HEAD CHECK (dynamic from categories collection)
-        if (accounts[0] && res.data) {
+       useEffect(() => {
 
-          const acct = accounts[0] || {};
-          const possibleEmails = [
-            acct.username,
-            acct.upn,
-            acct.preferred_username,
-            acct.email
-          ].filter(Boolean);
+        if (!accounts[0] || !ticket || !categoryMeta) return;
 
-          const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
-            .toLowerCase()
-            .trim();
+        const acct = accounts[0] || {};
+        const possibleEmails = [
+          acct.username,
+          acct.upn,
+          acct.preferred_username,
+          acct.email
+        ].filter(Boolean);
 
-          // 👉 USE categoryMeta ONLY (do NOT touch found here)
+        const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
+          .toLowerCase()
+          .trim();
 
-          const heads =
-            (categoryMeta?.categoryHeads || [])
-              .map(h => (h.email || '').toLowerCase().trim())
-              .filter(Boolean);
+        const heads =
+          (categoryMeta.categoryHeads || [])
+            .map(h => (h.email || '').toLowerCase().trim())
+            .filter(Boolean);
 
-          const isHead =
-            loggedEmail && heads.includes(loggedEmail);
+        const isHead = loggedEmail && heads.includes(loggedEmail);
 
-          setIsCategoryHead(!!isHead);
+        setIsCategoryHead(!!isHead);
 
-          const status = (res.data.status || '').toString();
+        const status = (ticket.status || '').toString();
 
-          const approvalEnabled =
-            categoryMeta?.type === "PASSWORD_RESET";
+        const approvalEnabled =
+          categoryMeta.type === "PASSWORD_RESET";
 
-          if (
-            isHead &&
-            approvalEnabled &&
-            (status === 'Waiting for approval' || status === 'Open')
-          ) {
-            setShowApprovalModal(true);
-          } else {
-            setShowApprovalModal(false);
-          }
+        if (
+          isHead &&
+          approvalEnabled &&
+          (status === "Waiting for approval" || status === "Open")
+        ) {
+          setShowApprovalModal(true);
+        } else {
+          setShowApprovalModal(false);
         }
+
+      }, [accounts, ticket, categoryMeta]);
       } catch (err) {
         console.error('Error fetching ticket:', err);
       }
