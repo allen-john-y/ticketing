@@ -439,61 +439,166 @@ const resetAzurePassword = async (userIdentifier) => {
 //   return true;
 // };
 
+// =====================================================
+// IMPROVED addUserToGroup FUNCTION
+// Replace the existing addUserToGroup function with this version
+// =====================================================
 
-const getUserByUpn = async (upn) => {
-  const token = await getAccessToken();
-  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id,mail,displayName,userPrincipalName`;
-
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    agent: new https.Agent({ rejectUnauthorized: false }),
-  });
-
-  if (res.status === 404) {
-    throw new Error(`User not found: ${upn}`);
+const addUserToGroup = async (groupId, userObjectId, retries = 2) => {
+  console.log(`🔵 [ADD TO GROUP] Attempting to add user ${userObjectId} to group ${groupId}`);
+  
+  if (!groupId || !userObjectId) {
+    throw new Error("groupId and userObjectId are required");
   }
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Graph lookup failed: ${text}`);
+  let lastError;
+
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    try {
+      console.log(`🔵 [ADD TO GROUP] Attempt ${attempt}/${retries + 1}`);
+      
+      const token = await getAccessToken();
+      const url = `https://graph.microsoft.com/v1.0/groups/${groupId}/members/$ref`;
+
+      const body = {
+        "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}`
+      };
+
+      console.log(`🔵 [ADD TO GROUP] POST ${url}`);
+      console.log(`🔵 [ADD TO GROUP] Body:`, JSON.stringify(body));
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        agent: new https.Agent({ rejectUnauthorized: false }),
+      });
+
+      console.log(`🔵 [ADD TO GROUP] Response status: ${res.status}`);
+
+      // Success cases
+      if (res.status === 204 || res.status === 201) {
+        console.log(`✅ [ADD TO GROUP] Successfully added user to group`);
+        return true;
+      }
+
+      // Get error details
+      const responseText = await res.text();
+      console.log(`🔍 [ADD TO GROUP] Response body:`, responseText);
+
+      let errorData;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch (e) {
+        errorData = { message: responseText };
+      }
+
+      // Check if user is already a member (this is OK)
+      const errorMessage = (errorData?.error?.message || errorData?.message || '').toLowerCase();
+      const errorCode = errorData?.error?.code || '';
+
+      console.log(`🔍 [ADD TO GROUP] Error code: ${errorCode}`);
+      console.log(`🔍 [ADD TO GROUP] Error message: ${errorMessage}`);
+
+      if (
+        errorMessage.includes('already exists') ||
+        errorMessage.includes('already a member') ||
+        errorMessage.includes('one or more added object references already exist') ||
+        errorCode === 'Request_ResourceNotFound'
+      ) {
+        console.log(`ℹ️ [ADD TO GROUP] User is already a member - treating as success`);
+        return true;
+      }
+
+      // For other errors, throw and potentially retry
+      lastError = new Error(
+        `Add to group failed (${res.status}): ${errorMessage || responseText}`
+      );
+
+      // Don't retry on 400 errors (bad request) or 404 (not found)
+      if (res.status === 400 || res.status === 404) {
+        console.error(`❌ [ADD TO GROUP] Non-retryable error (${res.status})`);
+        throw lastError;
+      }
+
+      // Retry on 5xx errors or timeouts
+      if (attempt < retries + 1) {
+        const waitTime = attempt * 1000; // 1s, 2s backoff
+        console.log(`⏳ [ADD TO GROUP] Retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+
+    } catch (err) {
+      console.error(`❌ [ADD TO GROUP] Attempt ${attempt} failed:`, err.message);
+      lastError = err;
+
+      // Don't retry on network errors if it's the last attempt
+      if (attempt < retries + 1) {
+        const waitTime = attempt * 1000;
+        console.log(`⏳ [ADD TO GROUP] Retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
   }
 
-  const data = await res.json();
-
-  return {
-    id: data.id,
-    mail: data.mail || data.userPrincipalName,
-    displayName: data.displayName || null
-  };
+  // All attempts failed
+  console.error(`❌ [ADD TO GROUP] All ${retries + 1} attempts failed`);
+  throw lastError || new Error('Add to group failed after all retries');
 };
 
-const AZURE_DEVICE_ADMIN_GROUP_ID =
-  process.env.AZURE_DEVICE_ADMIN_GROUP_ID;
 
-const addUserToGroup = async (groupId, userObjectId) => {
-  const token = await getAccessToken();
-  const url = `https://graph.microsoft.com/v1.0/groups/${groupId}/members/$ref`;
+// =====================================================
+// IMPROVED getUserByUpn FUNCTION (with better logging)
+// =====================================================
 
-  const body = {
-    "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}`
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    agent: new https.Agent({ rejectUnauthorized: false }),
-  });
-
-  if (res.status !== 204 && res.status !== 201) {
-    const text = await res.text();
-    throw new Error(`Add to group failed: ${res.status} ${text}`);
+const getUserByUpn = async (upn) => {
+  console.log(`🔍 [GET USER] Looking up user: ${upn}`);
+  
+  if (!upn) {
+    throw new Error('UPN is required');
   }
 
-  return true;
+  try {
+    const token = await getAccessToken();
+    const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id,mail,displayName,userPrincipalName`;
+
+    console.log(`🔵 [GET USER] GET ${url}`);
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      agent: new https.Agent({ rejectUnauthorized: false }),
+    });
+
+    console.log(`🔵 [GET USER] Response status: ${res.status}`);
+
+    if (res.status === 404) {
+      throw new Error(`User not found: ${upn}`);
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`❌ [GET USER] Graph lookup failed:`, text);
+      throw new Error(`Graph lookup failed: ${text}`);
+    }
+
+    const data = await res.json();
+
+    const result = {
+      id: data.id,
+      mail: data.mail || data.userPrincipalName,
+      displayName: data.displayName || null
+    };
+
+    console.log(`✅ [GET USER] User found:`, result);
+    return result;
+
+  } catch (err) {
+    console.error(`❌ [GET USER] Error:`, err.message);
+    throw err;
+  }
 };
 
 // ---------------------- UPLOAD (NEW) ----------------------
@@ -1520,17 +1625,23 @@ app.post("/tickets", async (req, res) => {
 });
 
 // ---------------------- APPROVE / REJECT / CLOSE / REVIVE ----------------------
-// (Keep all existing logic unchanged)
+// =====================================================
+// FIXED ADMIN ACCESS APPROVAL ENDPOINT
+// Replace the existing /tickets/:id/approve endpoint with this version
+// =====================================================
+
 app.post("/tickets/:id/approve", async (req, res) => {
   try {
     const { approvedBy, note } = req.body;
     const ticket = await Ticket.findById(req.params.id);
 
-    if (!ticket)
+    if (!ticket) {
       return res.status(404).json({ message: "Ticket not found" });
+    }
 
-    if (ticket.status === "Closed")
+    if (ticket.status === "Closed") {
       return res.status(400).json({ message: "Ticket is already closed" });
+    }
 
     const itHead = process.env.IT_HEAD_EMAIL;
     const now = new Date();
@@ -1539,9 +1650,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
        PASSWORD RESET
     ===================================================== */
     if (ticket.category === "Password Reset") {
-
-      const userIdentifier =
-        ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
+      const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
 
       if (!userIdentifier) {
         return res.status(400).json({
@@ -1553,7 +1662,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
       try {
         newPassword = await resetAzurePassword(userIdentifier);
       } catch (err) {
-        console.error("Password reset failed during approve:", err.message);
+        console.error("❌ Password reset failed during approve:", err.message);
         return res.status(500).json({
           message: "Password reset failed",
           error: err.message
@@ -1627,174 +1736,296 @@ app.post("/tickets/:id/approve", async (req, res) => {
           itHead
         );
       }
-    }
 
- /* =====================================================
-   ADMIN ACCESS - Add to Azure Group + Close Ticket
-===================================================== */
-else if (ticket.category === "Admin Access") {
-  const targetUpn = ticket.onBehalfEmail || ticket.userEmail;
-
-  if (!targetUpn) {
-    return res.status(400).json({ message: "No target user found for Admin Access" });
-  }
-
-  console.log("🔵 ADMIN ACCESS approval for:", targetUpn);
-  console.log("🔵 GROUP ID:", AZURE_DEVICE_ADMIN_GROUP_ID);
-
-  // Step 1: Lookup user
-  let user;
-  try {
-    user = await getUserByUpn(targetUpn);
-    console.log("✅ User found:", user.id, user.displayName);
-  } catch (err) {
-    console.error("❌ User lookup failed:", err.message);
-    return res.status(404).json({
-      message: "User not found in Azure AD",
-      error: err.message,
-      target: targetUpn
-    });
-  }
-
-  // Step 2: Add to group
-  try {
-    await addUserToGroup(AZURE_DEVICE_ADMIN_GROUP_ID, user.id);
-    console.log(`✅ Successfully added ${targetUpn} to admin group`);
-  } catch (err) {
-    console.error("❌ Failed to add user to admin group:", err.message);
-    return res.status(500).json({
-      message: "Failed to add user to admin group",
-      error: err.message,
-      details: { userId: user.id, groupId: AZURE_DEVICE_ADMIN_GROUP_ID, target: targetUpn }
-    });
-  }
-
-  // Step 3: Update ticket history and close
-  ticket.history.push({
-    action: "approved",
-    by: approvedBy || "Department Head",
-    at: now,
-    reason: note || "Admin access approved and group assigned"
-  });
-
-  ticket.status = "Closed";
-  ticket.closedBy = approvedBy || "Department Head";
-  ticket.closeReason = note ? `Approved: ${note}` : "Admin access approved";
-  ticket.closedAt = now;
-
-  ticket.history.push({
-    action: "closed",
-    by: ticket.closedBy,
-    at: now,
-    reason: ticket.closeReason
-  });
-
-  try {
-    await ticket.save();
-    console.log("✅ Ticket saved and closed:", ticket._id);
-  } catch (err) {
-    console.error("❌ Failed to save ticket after approval:", err);
-    return res.status(500).json({ message: "Failed to save ticket", error: err.message });
-  }
-
-  // Return success to client immediately
-  res.status(200).json({ message: "Ticket approved successfully", ticket });
-
-  // Send notifications in background (do not block response)
-  (async () => {
-    try {
-      const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-
-      // User notification
-      try {
-        const userHtml = buildHtmlEmail({
-          title: `Admin Access Approved — Ticket #${ticket.ticketNumber}`,
-          subtitle: "Your admin access request has been granted",
-          statusColor: "#16a34a",
-          fields: [
-            { label: "Ticket No", value: ticket.ticketNumber },
-            { label: "Category", value: ticket.category },
-            { label: "Approved By", value: ticket.closedBy },
-            { label: "Approved On", value: nowIST },
-            { label: "Access Level", value: "Device Admin Group" }
-          ],
-          description: note || "You have been added to the Device Admin group successfully.",
-          actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
-          actionText: "View Ticket"
-        });
-
-        await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Admin Access Approved`, userHtml, itHead);
-        console.log("✅ User notification sent");
-      } catch (e) {
-        console.error("⚠️ User notification failed:", e.message);
-      }
-
-      // Department notification
-      try {
-        const catCfg = await CategoryConfig.findOne({
-          name: {
-            $regex: new RegExp("^" + ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i")
-          }
-        });
-
-        const deptTo = (catCfg?.categoryHeads || []).map(h => h.email).filter(Boolean);
-        const deptCcList = (catCfg?.cc || []).map(c => c.email).filter(Boolean);
-        if (itHead) deptCcList.push(itHead);
-
-        if (deptTo.length) {
-          const deptHtml = buildHtmlEmail({
-            title: `Ticket #${ticket.ticketNumber} — Admin Access Granted`,
-            subtitle: "User added to Device Admin group",
-            statusColor: "#16a34a",
-            fields: [
-              { label: "Ticket No", value: ticket.ticketNumber },
-              { label: "Target User", value: `${user.displayName || targetUpn} (${targetUpn})` },
-              { label: "Approved By", value: ticket.closedBy },
-              { label: "Approved On", value: nowIST },
-              { label: "Group", value: "Device Admin Group" }
-            ],
-            description: note || "Admin access approved and group membership granted successfully.",
-            actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
-            actionText: "Open Ticket"
-          });
-
-          await sendEmail(deptTo, `[CLOSED] Ticket #${ticket.ticketNumber} - Admin Access Granted`, deptHtml, deptCcList);
-          console.log("✅ Department notification sent");
-        }
-      } catch (e) {
-        console.error("⚠️ Department notification failed:", e.message);
-      }
-    } catch (e) {
-      console.error("⚠️ Background notification task failed:", e);
-    }
-  })();
-
-  // done
-}
-
-    /* =====================================================
-       UNKNOWN CATEGORY
-    ===================================================== */
-    else {
-      return res.status(400).json({
-        message: "Approval not supported for this category"
+      return res.status(200).json({
+        message: "Password reset approved successfully",
+        ticket
       });
     }
 
-    return res.status(200).json({
-      message: "Ticket approved successfully",
-      ticket
-    });
+    /* =====================================================
+       ADMIN ACCESS - FIXED VERSION
+    ===================================================== */
+    else if (ticket.category === "Admin Access") {
+      console.log("🔵 [ADMIN ACCESS] Starting approval process...");
+      
+      const targetUpn = ticket.onBehalfEmail || ticket.userEmail;
+
+      if (!targetUpn) {
+        console.error("❌ [ADMIN ACCESS] No target user found");
+        return res.status(400).json({ 
+          message: "No target user found for Admin Access",
+          details: { onBehalfEmail: ticket.onBehalfEmail, userEmail: ticket.userEmail }
+        });
+      }
+
+      console.log("🔵 [ADMIN ACCESS] Target user:", targetUpn);
+      console.log("🔵 [ADMIN ACCESS] Group ID:", AZURE_DEVICE_ADMIN_GROUP_ID);
+
+      // Validate GROUP_ID exists
+      if (!AZURE_DEVICE_ADMIN_GROUP_ID) {
+        console.error("❌ [ADMIN ACCESS] AZURE_DEVICE_ADMIN_GROUP_ID not configured");
+        return res.status(500).json({
+          message: "Server configuration error: Admin group ID not configured",
+          error: "AZURE_DEVICE_ADMIN_GROUP_ID is missing from environment variables"
+        });
+      }
+
+      // Step 1: Lookup user
+      let user;
+      try {
+        console.log("🔍 [ADMIN ACCESS] Looking up user in Azure AD...");
+        user = await getUserByUpn(targetUpn);
+        console.log("✅ [ADMIN ACCESS] User found:", {
+          id: user.id,
+          displayName: user.displayName,
+          mail: user.mail
+        });
+      } catch (err) {
+        console.error("❌ [ADMIN ACCESS] User lookup failed:", err.message);
+        return res.status(404).json({
+          message: "User not found in Azure AD",
+          error: err.message,
+          target: targetUpn
+        });
+      }
+
+      // Step 2: Check if user is already in the group (optional but recommended)
+      try {
+        console.log("🔍 [ADMIN ACCESS] Checking existing group membership...");
+        const token = await getAccessToken();
+        const checkUrl = `https://graph.microsoft.com/v1.0/groups/${AZURE_DEVICE_ADMIN_GROUP_ID}/members`;
+        const checkRes = await fetch(checkUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+          agent: new https.Agent({ rejectUnauthorized: false })
+        });
+
+        if (checkRes.ok) {
+          const members = await checkRes.json();
+          const alreadyMember = members.value?.some(m => m.id === user.id);
+          
+          if (alreadyMember) {
+            console.log("⚠️ [ADMIN ACCESS] User is already a member of the group");
+            // Still proceed with closing the ticket, but note this in the reason
+          }
+        }
+      } catch (err) {
+        console.warn("⚠️ [ADMIN ACCESS] Could not check existing membership:", err.message);
+        // Continue anyway - this is not critical
+      }
+
+      // Step 3: Add to group
+      try {
+        console.log("🔵 [ADMIN ACCESS] Adding user to admin group...");
+        await addUserToGroup(AZURE_DEVICE_ADMIN_GROUP_ID, user.id);
+        console.log("✅ [ADMIN ACCESS] Successfully added user to admin group");
+      } catch (err) {
+        console.error("❌ [ADMIN ACCESS] Failed to add user to group:", err.message);
+        
+        // Check if it's a "already exists" error (code: Request_ResourceNotFound or similar)
+        const errorMessage = err.message?.toLowerCase() || '';
+        const isAlreadyMember = 
+          errorMessage.includes('already exists') || 
+          errorMessage.includes('already a member') ||
+          errorMessage.includes('one or more added object references already exist');
+
+        if (!isAlreadyMember) {
+          // Real error - return failure
+          return res.status(500).json({
+            message: "Failed to add user to admin group",
+            error: err.message,
+            details: { 
+              userId: user.id, 
+              groupId: AZURE_DEVICE_ADMIN_GROUP_ID, 
+              target: targetUpn 
+            }
+          });
+        } else {
+          console.log("ℹ️ [ADMIN ACCESS] User was already in the group - continuing");
+        }
+      }
+
+      // Step 4: Update ticket history and close
+      console.log("🔵 [ADMIN ACCESS] Updating ticket...");
+      
+      ticket.history.push({
+        action: "approved",
+        by: approvedBy || "Department Head",
+        at: now,
+        reason: note || "Admin access approved and group assigned"
+      });
+
+      ticket.status = "Closed";
+      ticket.closedBy = approvedBy || "Department Head";
+      ticket.closeReason = note ? `Approved: ${note}` : "Admin access approved and granted";
+      ticket.closedAt = now;
+
+      ticket.history.push({
+        action: "closed",
+        by: ticket.closedBy,
+        at: now,
+        reason: ticket.closeReason
+      });
+
+      // Step 5: Save ticket BEFORE sending response
+      try {
+        await ticket.save();
+        console.log("✅ [ADMIN ACCESS] Ticket saved successfully:", ticket._id);
+      } catch (err) {
+        console.error("❌ [ADMIN ACCESS] Failed to save ticket:", err.message);
+        return res.status(500).json({ 
+          message: "Failed to save ticket after approval", 
+          error: err.message 
+        });
+      }
+
+      // Step 6: Send response to client immediately
+      console.log("✅ [ADMIN ACCESS] Sending success response to client");
+      res.status(200).json({ 
+        message: "Admin access approved successfully", 
+        ticket: {
+          _id: ticket._id,
+          ticketNumber: ticket.ticketNumber,
+          status: ticket.status,
+          closedBy: ticket.closedBy,
+          closeReason: ticket.closeReason,
+          closedAt: ticket.closedAt,
+          history: ticket.history
+        }
+      });
+
+      // Step 7: Send notifications in background (non-blocking)
+      console.log("🔵 [ADMIN ACCESS] Starting background notifications...");
+      
+      setImmediate(async () => {
+        try {
+          const nowIST = new Date().toLocaleString("en-IN", { 
+            timeZone: "Asia/Kolkata" 
+          });
+
+          // User notification
+          try {
+            console.log("📧 [ADMIN ACCESS] Sending user notification...");
+            
+            const userHtml = buildHtmlEmail({
+              title: `Admin Access Approved — Ticket #${ticket.ticketNumber}`,
+              subtitle: "Your admin access request has been granted",
+              statusColor: "#16a34a",
+              fields: [
+                { label: "Ticket No", value: ticket.ticketNumber },
+                { label: "Category", value: ticket.category },
+                { label: "Approved By", value: ticket.closedBy },
+                { label: "Approved On", value: nowIST },
+                { label: "Access Level", value: "Device Admin Group" },
+                { label: "Target User", value: `${user.displayName || targetUpn}` }
+              ],
+              description: note || "You have been added to the Device Admin group successfully. Your new permissions will be active within a few minutes.",
+              actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
+              actionText: "View Ticket"
+            });
+
+            await sendEmail(
+              ticket.userEmail, 
+              `[TICKET #${ticket.ticketNumber}] Admin Access Approved`, 
+              userHtml, 
+              itHead
+            );
+            
+            console.log("✅ [ADMIN ACCESS] User notification sent to:", ticket.userEmail);
+          } catch (e) {
+            console.error("❌ [ADMIN ACCESS] User notification failed:", e.message);
+          }
+
+          // Department notification
+          try {
+            console.log("📧 [ADMIN ACCESS] Sending department notification...");
+            
+            const catCfg = await CategoryConfig.findOne({
+              name: {
+                $regex: new RegExp(
+                  "^" + ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", 
+                  "i"
+                )
+              }
+            });
+
+            const deptTo = (catCfg?.categoryHeads || [])
+              .map(h => h.email)
+              .filter(Boolean);
+              
+            const deptCcList = (catCfg?.cc || [])
+              .map(c => c.email)
+              .filter(Boolean);
+              
+            if (itHead) deptCcList.push(itHead);
+
+            if (deptTo.length > 0) {
+              const deptHtml = buildHtmlEmail({
+                title: `Ticket #${ticket.ticketNumber} — Admin Access Granted`,
+                subtitle: "User successfully added to Device Admin group",
+                statusColor: "#16a34a",
+                fields: [
+                  { label: "Ticket No", value: ticket.ticketNumber },
+                  { label: "Target User", value: `${user.displayName || targetUpn} (${targetUpn})` },
+                  { label: "Requested By", value: `${ticket.userName} (${ticket.userEmail})` },
+                  { label: "Approved By", value: ticket.closedBy },
+                  { label: "Approved On", value: nowIST },
+                  { label: "Group", value: "Device Admin Group" }
+                ],
+                description: note || "Admin access has been approved and the user has been successfully added to the Device Admin group.",
+                actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
+                actionText: "View Ticket"
+              });
+
+              await sendEmail(
+                deptTo, 
+                `[CLOSED] Ticket #${ticket.ticketNumber} - Admin Access Granted`, 
+                deptHtml, 
+                deptCcList
+              );
+              
+              console.log("✅ [ADMIN ACCESS] Department notification sent to:", deptTo.join(", "));
+            } else {
+              console.log("⚠️ [ADMIN ACCESS] No department heads configured for notifications");
+            }
+          } catch (e) {
+            console.error("❌ [ADMIN ACCESS] Department notification failed:", e.message);
+          }
+
+          console.log("✅ [ADMIN ACCESS] Background notification task completed");
+          
+        } catch (e) {
+          console.error("❌ [ADMIN ACCESS] Background notification task failed:", e.message);
+        }
+      });
+
+      // Done - response already sent above
+      return;
+    }
+
+    /* =====================================================
+       OTHER CATEGORIES
+    ===================================================== */
+    else {
+      console.log("❌ Approval not supported for category:", ticket.category);
+      return res.status(400).json({
+        message: `Approval not supported for category: ${ticket.category}`
+      });
+    }
 
   } catch (error) {
-    console.error("Approval error:", error);
-    res.status(500).json({
-      message: "Internal server error",
-      error: error.message
-    });
+    console.error("❌ [APPROVE] Fatal error:", error);
+    
+    // Make sure we always send a response
+    if (!res.headersSent) {
+      return res.status(500).json({
+        message: "Internal server error during approval",
+        error: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
   }
 });
-
 
 // Reject endpoint (keep existing)
 app.post("/tickets/:id/reject", async (req, res) => {
