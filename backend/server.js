@@ -1616,6 +1616,10 @@ app.post("/tickets/:id/approve", async (req, res) => {
         });
       }
 
+      console.log("ADMIN ACCESS approve for:", targetUpn);
+      console.log("GROUP ID:", AZURE_DEVICE_ADMIN_GROUP_ID);
+
+
       // 🔴 THIS WAS MISSING
       const user = await getUserByUpn(targetUpn);
 
