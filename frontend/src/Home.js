@@ -30,6 +30,7 @@ function Home() {
 
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' or 'list'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'open', 'progress', 'closed'
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -129,18 +130,23 @@ function Home() {
     };
   }, []);
 
-  const filteredTickets = authority === 'admin' && showMyTickets
+  // FIXED FILTERING LOGIC
+  // Step 1: Filter by "my tickets" if admin has toggled it
+  const baseFilteredTickets = authority === 'admin' && showMyTickets
     ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
     : tickets;
 
+  // Step 2: Apply category filters
   const categoryFiltered = appliedCategories.length === 0
-    ? filteredTickets
-    : filteredTickets.filter(t => appliedCategories.includes(t.category));
+    ? baseFilteredTickets
+    : baseFilteredTickets.filter(t => appliedCategories.includes(t.category));
 
+  // Step 3: Apply user filters
   const userFiltered = appliedUsers.length === 0
     ? categoryFiltered
     : categoryFiltered.filter(t => appliedUsers.includes(t.userName));
 
+  // Step 4: Apply search
   const searchFiltered = searchTerm.trim() === ''
     ? userFiltered
     : userFiltered.filter(t =>
@@ -149,19 +155,33 @@ function Home() {
         (t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
 
-  const openTickets = searchFiltered.filter(t => t.status !== 'Closed');
-  const closedTickets = tickets.filter(t => t.status === 'Closed');
-  const inProgressTickets = tickets.filter(t => t.status === 'In Progress');
-  const pendingTickets = tickets.filter(t => t.status === 'Pending' || t.status === 'Open');
+  // Step 5: Apply status filter (from clicking stat cards)
+  let statusFiltered = searchFiltered;
+  if (statusFilter === 'open') {
+    statusFiltered = searchFiltered.filter(t => t.status === 'Open' || t.status === 'Pending');
+  } else if (statusFilter === 'progress') {
+    statusFiltered = searchFiltered.filter(t => t.status === 'In Progress');
+  } else if (statusFilter === 'closed') {
+    statusFiltered = searchFiltered.filter(t => t.status === 'Closed');
+  }
 
-  // Priority breakdown
-  const highPriority = tickets.filter(t => t.priority === 'High' && t.status !== 'Closed');
-  const mediumPriority = tickets.filter(t => t.priority === 'Medium' && t.status !== 'Closed');
-  const lowPriority = tickets.filter(t => t.priority === 'Low' && t.status !== 'Closed');
+  // Calculate stats based on the filtered tickets (respecting "my tickets" toggle)
+  const allFilteredForStats = authority === 'admin' && showMyTickets
+    ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
+    : tickets;
+
+  const openTickets = allFilteredForStats.filter(t => t.status === 'Open' || t.status === 'Pending');
+  const closedTickets = allFilteredForStats.filter(t => t.status === 'Closed');
+  const inProgressTickets = allFilteredForStats.filter(t => t.status === 'In Progress');
+
+  // Priority breakdown (open tickets only)
+  const highPriority = allFilteredForStats.filter(t => t.priority === 'High' && t.status !== 'Closed');
+  const mediumPriority = allFilteredForStats.filter(t => t.priority === 'Medium' && t.status !== 'Closed');
+  const lowPriority = allFilteredForStats.filter(t => t.priority === 'Low' && t.status !== 'Closed');
 
   const applyFilters = () => {
-    setAppliedCategories(selectedCategories);
-    setAppliedUsers(selectedUsers);
+    setAppliedCategories([...selectedCategories]);
+    setAppliedUsers([...selectedUsers]);
     setDropdownOpen(null);
   };
 
@@ -182,6 +202,7 @@ function Home() {
     setSelectedUsers([]);
     setAppliedCategories([]);
     setAppliedUsers([]);
+    setStatusFilter('all');
   };
 
   const handleSelect = (type, value) => {
@@ -220,7 +241,7 @@ function Home() {
   const PieChart = ({ data, colors, size = 180 }) => {
     const total = data.reduce((sum, d) => sum + d.value, 0);
     if (total === 0) return (
-      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '14px' }}>
+      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '14px', fontWeight: '600' }}>
         No data
       </div>
     );
@@ -248,7 +269,7 @@ function Home() {
           d={`M ${radius} ${radius} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`}
           fill={colors[i]}
           stroke="white"
-          strokeWidth="2"
+          strokeWidth="3"
         />
       );
     });
@@ -261,7 +282,7 @@ function Home() {
   };
 
   const statusData = [
-    { label: 'Open/Pending', value: pendingTickets.length },
+    { label: 'Open/Pending', value: openTickets.length },
     { label: 'In Progress', value: inProgressTickets.length },
     { label: 'Closed', value: closedTickets.length }
   ];
@@ -275,6 +296,12 @@ function Home() {
   ];
 
   const priorityColors = ['#ef4444', '#e98404', '#10b981'];
+
+  // Handler for stat card clicks
+  const handleStatClick = (status) => {
+    setStatusFilter(status);
+    setViewMode('list');
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -432,11 +459,17 @@ function Home() {
           box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
           border-left: 4px solid;
           transition: all 0.2s;
+          cursor: pointer;
         }
         
         .stat-card:hover {
           transform: translateY(-4px);
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-card.active {
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+          transform: translateY(-4px);
         }
         
         .stat-card.orange { border-left-color: #e98404; }
@@ -523,6 +556,7 @@ function Home() {
           width: 16px;
           height: 16px;
           border-radius: 4px;
+          flex-shrink: 0;
         }
         
         .legend-label {
@@ -535,6 +569,55 @@ function Home() {
           font-size: 18px;
           font-weight: 700;
           color: #0f172a;
+        }
+        
+        /* Quick Actions - SMALLER */
+        .quick-actions {
+          background: white;
+          padding: 1.25rem;
+          border-radius: 12px;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+          margin-bottom: 2rem;
+        }
+        
+        .quick-actions h3 {
+          font-size: 16px;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 0 0 1rem 0;
+        }
+        
+        .quick-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+          gap: 0.75rem;
+        }
+        
+        .quick-btn {
+          padding: 1rem;
+          border-radius: 10px;
+          color: white;
+          text-align: center;
+          cursor: pointer;
+          transition: transform 0.2s;
+          text-decoration: none;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        
+        .quick-btn:hover {
+          transform: translateY(-3px);
+        }
+        
+        .quick-icon {
+          font-size: 24px;
+        }
+        
+        .quick-label {
+          font-weight: 700;
+          font-size: 13px;
         }
         
         /* Search & Filters */
@@ -717,8 +800,8 @@ function Home() {
           font-weight: 700;
         }
         
-        .status-open { background: #fef3c7; color: #92400e; }
-        .status-progress { background: #dbeafe; color: #1e3a8a; }
+        .status-open, .status-pending { background: #fef3c7; color: #92400e; }
+        .status-progress, .status-in { background: #dbeafe; color: #1e3a8a; }
         .status-closed { background: #d1fae5; color: #065f46; }
         
         .ticket-description {
@@ -762,6 +845,30 @@ function Home() {
         .empty-icon {
           font-size: 64px;
           margin-bottom: 1rem;
+        }
+
+        .my-tickets-toggle {
+          background: white;
+          padding: 1rem;
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          margin-bottom: 1.5rem;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .my-tickets-toggle input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          cursor: pointer;
+        }
+
+        .my-tickets-toggle label {
+          font-weight: 600;
+          color: #0f172a;
+          cursor: pointer;
+          user-select: none;
         }
         
         @media (max-width: 768px) {
@@ -813,7 +920,7 @@ function Home() {
               + Create Ticket
             </Link>
             <Link to="/dashboard" className="btn-header btn-secondary">
-              View All Tickets
+              Closed Tickets
             </Link>
           </div>
         </div>
@@ -821,11 +928,29 @@ function Home() {
 
       {/* Main Content */}
       <div className="main-container">
+        {/* Admin: Show only my tickets toggle */}
+        {authority === 'admin' && (
+          <div className="my-tickets-toggle">
+            <input
+              type="checkbox"
+              id="myTicketsToggle"
+              checked={showMyTickets}
+              onChange={() => setShowMyTickets(prev => !prev)}
+            />
+            <label htmlFor="myTicketsToggle">
+              Show only my tickets
+            </label>
+          </div>
+        )}
+
         {/* View Toggle */}
         <div className="view-toggle">
           <button 
             className={`view-btn ${viewMode === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setViewMode('dashboard')}
+            onClick={() => {
+              setViewMode('dashboard');
+              setStatusFilter('all');
+            }}
           >
             📊 Dashboard
           </button>
@@ -833,15 +958,18 @@ function Home() {
             className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
             onClick={() => setViewMode('list')}
           >
-            📋 Ticket List
+            📋 All Tickets
           </button>
         </div>
 
         {viewMode === 'dashboard' && (
           <>
-            {/* Stats Grid */}
+            {/* Stats Grid - CLICKABLE */}
             <div className="stats-grid">
-              <div className="stat-card orange">
+              <div 
+                className={`stat-card orange ${statusFilter === 'open' ? 'active' : ''}`}
+                onClick={() => handleStatClick('open')}
+              >
                 <div className="stat-header">
                   <div>
                     <div className="stat-value">{openTickets.length}</div>
@@ -851,7 +979,10 @@ function Home() {
                 </div>
               </div>
 
-              <div className="stat-card blue">
+              <div 
+                className={`stat-card blue ${statusFilter === 'progress' ? 'active' : ''}`}
+                onClick={() => handleStatClick('progress')}
+              >
                 <div className="stat-header">
                   <div>
                     <div className="stat-value">{inProgressTickets.length}</div>
@@ -861,7 +992,10 @@ function Home() {
                 </div>
               </div>
 
-              <div className="stat-card green">
+              <div 
+                className={`stat-card green ${statusFilter === 'closed' ? 'active' : ''}`}
+                onClick={() => handleStatClick('closed')}
+              >
                 <div className="stat-header">
                   <div>
                     <div className="stat-value">{closedTickets.length}</div>
@@ -919,35 +1053,28 @@ function Home() {
               </div>
             </div>
 
-            {/* Quick Actions Section */}
-            <div className="chart-card" style={{ marginBottom: '2rem' }}>
-              <h3 className="chart-title">Quick Actions</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
-                <Link to="/create" style={{ textDecoration: 'none' }}>
-                  <div style={{ padding: '1.5rem', background: 'linear-gradient(135deg, #e98404 0%, #f59e0b 100%)', borderRadius: '10px', color: 'white', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.2s' }}
-                    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
-                    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                    <div style={{ fontSize: '32px', marginBottom: '0.5rem' }}>➕</div>
-                    <div style={{ fontWeight: '700' }}>New Ticket</div>
-                  </div>
+            {/* Quick Actions - SMALLER */}
+            <div className="quick-actions">
+              <h3>Quick Actions</h3>
+              <div className="quick-grid">
+                <Link to="/create" className="quick-btn" style={{ background: 'linear-gradient(135deg, #e98404 0%, #f59e0b 100%)' }}>
+                  <div className="quick-icon">➕</div>
+                  <div className="quick-label">New Ticket</div>
                 </Link>
 
-                <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-                  <div style={{ padding: '1.5rem', background: 'linear-gradient(135deg, #002060 0%, #0039a6 100%)', borderRadius: '10px', color: 'white', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.2s' }}
-                    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
-                    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                    <div style={{ fontSize: '32px', marginBottom: '0.5rem' }}>📊</div>
-                    <div style={{ fontWeight: '700' }}>All Tickets</div>
-                  </div>
+                <Link to="/dashboard" className="quick-btn" style={{ background: 'linear-gradient(135deg, #002060 0%, #0039a6 100%)' }}>
+                  <div className="quick-icon">📋</div>
+                  <div className="quick-label">Closed Tickets</div>
                 </Link>
 
                 {authority === 'admin' && (
-                  <div style={{ padding: '1.5rem', background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)', borderRadius: '10px', color: 'white', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.2s' }}
+                  <div 
+                    className="quick-btn" 
+                    style={{ background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)' }}
                     onClick={() => setShowMyTickets(!showMyTickets)}
-                    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
-                    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                    <div style={{ fontSize: '32px', marginBottom: '0.5rem' }}>👤</div>
-                    <div style={{ fontWeight: '700' }}>{showMyTickets ? 'Show All' : 'My Tickets'}</div>
+                  >
+                    <div className="quick-icon">👤</div>
+                    <div className="quick-label">{showMyTickets ? 'All Tickets' : 'My Tickets'}</div>
                   </div>
                 )}
               </div>
@@ -990,7 +1117,7 @@ function Home() {
               </button>
             )}
 
-            {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
+            {(appliedCategories.length > 0 || appliedUsers.length > 0 || statusFilter !== 'all') && (
               <button
                 onClick={clearAllFilters}
                 style={{ marginLeft: 'auto', padding: '10px 16px', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
@@ -1054,15 +1181,18 @@ function Home() {
         {/* Tickets List */}
         <div className="tickets-header">
           <h2 className="section-title">
-            {authority === 'admin'
+            {statusFilter === 'open' && `Open Tickets (${statusFiltered.length})`}
+            {statusFilter === 'progress' && `In Progress Tickets (${statusFiltered.length})`}
+            {statusFilter === 'closed' && `Closed Tickets (${statusFiltered.length})`}
+            {statusFilter === 'all' && (authority === 'admin'
               ? showMyTickets
-                ? `My Open Tickets (${openTickets.length})`
-                : `All Open Tickets (${openTickets.length})`
-              : `Your Open Tickets (${openTickets.length})`}
+                ? `My Tickets (${statusFiltered.length})`
+                : `All Tickets (${statusFiltered.length})`
+              : `Your Tickets (${statusFiltered.length})`)}
           </h2>
         </div>
 
-        {openTickets.length === 0 ? (
+        {statusFiltered.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📭</div>
             <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>No tickets found</h3>
@@ -1070,7 +1200,7 @@ function Home() {
           </div>
         ) : (
           <div>
-            {openTickets.map(ticket => (
+            {statusFiltered.map(ticket => (
               <Link key={ticket._id} to={`/ticket/${ticket._id}`} className="ticket-card" style={{ borderLeftColor: categoryColor(ticket.category) }}>
                 <div className="ticket-header">
                   <h3 className="ticket-number">#{ticket.ticketNumber} - {ticket.category}</h3>
