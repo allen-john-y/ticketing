@@ -533,7 +533,6 @@ function CreateTicket() {
         userId: accounts[0]?.localAccountId,
         userName: ticketUserName,
         userEmail: ticketUserEmail,
-        status: 'Waiting for approval',
         
         // NEW: Add creator info when creating on behalf
         ...(selectedCategoryConfig?.features?.onBehalf?.enabled &&

@@ -186,7 +186,8 @@ function TicketDetails() {
   const status = (ticket.status || '').toString();
 
   const approvalEnabled =
-    categoryMeta.type === "PASSWORD_RESET";
+    categoryMeta.type === "PASSWORD_RESET" ||
+  categoryMeta.type === "ADMIN_ACCESS";
 
   if (
     isHead &&
