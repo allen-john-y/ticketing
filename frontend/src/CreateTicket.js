@@ -158,7 +158,9 @@ function CreateTicket() {
           headers: { Authorization: `Bearer ${tokenResp.accessToken}` }
         });
         const groups = (res.data?.value || []).map(g => (g.displayName || '').toString());
-        const hasDeviceAdmin = groups.some(name => name === 'GS_DeviceAdministrator');
+        const hasDeviceAdmin = groups.some(
+            name => name === 'GS_DeviceAdministrator' || name === 'GS_DeviceAdmin_Managed'
+          );
         setIsDeviceAdmin(hasDeviceAdmin);
       } catch (err) {
         console.error('Error fetching groups:', err?.message || err);

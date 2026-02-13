@@ -1032,7 +1032,7 @@ app.put("/api/categories/:id", async (req, res) => {
       features,
       categoryHeads,
       cc,
-      updatedBy   // <-- send this from App.js { name, mail }
+      updatedBy
     } = req.body;
 
     const finalName = (name || categoryName || "").trim();
@@ -1068,11 +1068,10 @@ app.put("/api/categories/:id", async (req, res) => {
       { new: true }
     );
 
-// -------------------- build human readable changes --------------------
+    // -------------------- build human readable changes --------------------
 
     const changes = [];
 
-    // helpers
     const emails = arr => (arr || []).map(x => x.email).filter(Boolean);
 
     const oldHeads = emails(oldCategory.categoryHeads);
@@ -1081,7 +1080,6 @@ app.put("/api/categories/:id", async (req, res) => {
     const oldCc = emails(oldCategory.cc);
     const newCcArr = emails(newCc);
 
-    // heads added / removed
     const addedHeads = newHeadsArr.filter(e => !oldHeads.includes(e));
     const removedHeads = oldHeads.filter(e => !newHeadsArr.includes(e));
 
@@ -1091,7 +1089,6 @@ app.put("/api/categories/:id", async (req, res) => {
     if (removedHeads.length)
       changes.push(`Category head removed: ${removedHeads.join(", ")}`);
 
-    // cc added / removed
     const addedCc = newCcArr.filter(e => !oldCc.includes(e));
     const removedCc = oldCc.filter(e => !newCcArr.includes(e));
 
@@ -1101,7 +1098,6 @@ app.put("/api/categories/:id", async (req, res) => {
     if (removedCc.length)
       changes.push(`CC removed: ${removedCc.join(", ")}`);
 
-    // feature changes
     const oldF = oldCategory.features || {};
     const newF = finalFeatures || {};
 
@@ -1123,11 +1119,10 @@ app.put("/api/categories/:id", async (req, res) => {
     if (!!oldF.attachments?.required !== !!newF.attachments?.required)
       changes.push(`Attachments required ${newF.attachments?.required ? "enabled" : "disabled"}`);
 
-    // category name
     if (oldCategory.name !== finalName)
       changes.push(`Category name changed to "${finalName}"`);
 
-    // -------------------- notify (old heads + old cc + editor) --------------------
+    // -------------------- notify OLD participants --------------------
 
     const notifyTo = [
       ...(oldCategory.categoryHeads || []).map(h => h.email),
@@ -1136,6 +1131,8 @@ app.put("/api/categories/:id", async (req, res) => {
     ].filter(Boolean);
 
     const uniqueNotifyTo = [...new Set(notifyTo)];
+
+    const itHead = process.env.IT_HEAD_EMAIL;
 
     if (uniqueNotifyTo.length && changes.length) {
 
@@ -1155,18 +1152,55 @@ app.put("/api/categories/:id", async (req, res) => {
         statusColor: "#0ea5e9",
         fields,
         description: "The following updates were made:",
-        actionLink:
-          (process.env.PROD_URL),
+        actionLink: process.env.PROD_URL,
         actionText: "Open Helpdesk"
       });
-
-      const itHead = process.env.IT_HEAD_EMAIL;
 
       await sendEmail(
         uniqueNotifyTo,
         `[HELPDESK] Category updated: ${oldCategory.name}`,
         html,
         itHead
+      );
+    }
+
+    // ======================================================
+    // ✅ NEW PART – notify newly added category heads
+    // ======================================================
+
+    if (addedHeads.length) {
+
+      const fields = [
+        { label: "Category", value: finalName },
+        {
+          label: "Assigned By",
+          value: updatedBy?.name
+            ? `${updatedBy.name} (${updatedBy.mail || ""})`
+            : "Admin"
+        }
+      ];
+
+      const newHeadHtml = buildHtmlEmail({
+        title: `You are assigned as Category Head: ${finalName}`,
+        subtitle: "You will receive notifications for this category",
+        statusColor: "#16a34a",
+        fields,
+        description:
+          `You have been assigned as a Category Head for "${finalName}".`,
+        actionLink: process.env.PROD_URL,
+        actionText: "Open Helpdesk"
+      });
+
+      const newCcForHeads = [
+        ...newCcArr,
+        itHead
+      ].filter(Boolean);
+
+      await sendEmail(
+        addedHeads,
+        `[HELPDESK] Assigned as Category Head: ${finalName}`,
+        newHeadHtml,
+        newCcForHeads
       );
     }
 
@@ -1188,6 +1222,7 @@ app.put("/api/categories/:id", async (req, res) => {
     res.status(500).json({ message: "Failed to update category" });
   }
 });
+
 
 
 // DELETE /api/categories/:id - Remove category
