@@ -1022,9 +1022,8 @@ const normalizedName = finalName;
   }
 });
 
-// =====================================================
-// FIXED PUT /api/categories/:id ENDPOINT
-// Replace your existing PUT endpoint with this version
+/// =====================================================
+// DIAGNOSTIC VERSION - Find out why changes aren't detected
 // =====================================================
 
 app.put("/api/categories/:id", async (req, res) => {
@@ -1040,6 +1039,13 @@ app.put("/api/categories/:id", async (req, res) => {
       updatedBy
     } = req.body;
 
+    console.log("📥 [UPDATE CATEGORY] Request body:", JSON.stringify({
+      name,
+      categoryName,
+      categoryHeads,
+      cc
+    }, null, 2));
+
     const finalName = (name || categoryName || "").trim();
     if (!finalName) {
       return res.status(400).json({ message: "Category name is required" });
@@ -1049,6 +1055,12 @@ app.put("/api/categories/:id", async (req, res) => {
     if (!oldCategory) {
       return res.status(404).json({ message: "Category not found" });
     }
+
+    console.log("📋 [UPDATE CATEGORY] Old category:", JSON.stringify({
+      name: oldCategory.name,
+      categoryHeads: oldCategory.categoryHeads,
+      cc: oldCategory.cc
+    }, null, 2));
 
     // ensure "Other"
     let finalFeatures = features || {};
@@ -1060,6 +1072,9 @@ app.put("/api/categories/:id", async (req, res) => {
 
     const newHeads = Array.isArray(categoryHeads) ? categoryHeads : [];
     const newCc = Array.isArray(cc) ? cc : [];
+
+    console.log("🆕 [UPDATE CATEGORY] New heads:", newHeads);
+    console.log("🆕 [UPDATE CATEGORY] New cc:", newCc);
 
     const updated = await CategoryConfig.findByIdAndUpdate(
       id,
@@ -1086,9 +1101,17 @@ app.put("/api/categories/:id", async (req, res) => {
     const oldCc = emails(oldCategory.cc);
     const newCcArr = emails(newCc);
 
+    console.log("🔍 [UPDATE CATEGORY] Old heads emails:", oldHeads);
+    console.log("🔍 [UPDATE CATEGORY] New heads emails:", newHeadsArr);
+    console.log("🔍 [UPDATE CATEGORY] Old cc emails:", oldCc);
+    console.log("🔍 [UPDATE CATEGORY] New cc emails:", newCcArr);
+
     // heads added / removed
     const addedHeads = newHeadsArr.filter(e => !oldHeads.includes(e));
     const removedHeads = oldHeads.filter(e => !newHeadsArr.includes(e));
+
+    console.log("➕ [UPDATE CATEGORY] Added heads:", addedHeads);
+    console.log("➖ [UPDATE CATEGORY] Removed heads:", removedHeads);
 
     if (addedHeads.length)
       changes.push(`Category head added: ${addedHeads.join(", ")}`);
@@ -1099,6 +1122,9 @@ app.put("/api/categories/:id", async (req, res) => {
     // cc added / removed
     const addedCc = newCcArr.filter(e => !oldCc.includes(e));
     const removedCc = oldCc.filter(e => !newCcArr.includes(e));
+
+    console.log("➕ [UPDATE CATEGORY] Added cc:", addedCc);
+    console.log("➖ [UPDATE CATEGORY] Removed cc:", removedCc);
 
     if (addedCc.length)
       changes.push(`CC added: ${addedCc.join(", ")}`);
@@ -1134,28 +1160,34 @@ app.put("/api/categories/:id", async (req, res) => {
 
     console.log("📝 [UPDATE CATEGORY] Changes detected:", changes);
 
-    // -------------------- ✅ FIXED: notify ALL relevant people --------------------
+    // -------------------- ✅ ALWAYS NOTIFY (even if no changes detected) --------------------
 
     // ✅ Notify BOTH old AND new people
     const notifyTo = [
-      ...oldHeads,              // ← OLD category heads (removed or staying)
-      ...newHeadsArr,           // ← NEW category heads (added or staying)
-      ...oldCc,                 // ← OLD cc recipients
-      ...newCcArr,              // ← NEW cc recipients
-      updatedBy?.mail           // ← Person who made the update
+      ...oldHeads,
+      ...newHeadsArr,
+      ...oldCc,
+      ...newCcArr,
+      updatedBy?.mail
     ].filter(Boolean);
 
-    // Remove duplicates
     const uniqueNotifyTo = [...new Set(notifyTo)];
 
     console.log("📧 [UPDATE CATEGORY] Will notify:", uniqueNotifyTo);
 
-    if (uniqueNotifyTo.length && changes.length) {
+    // ✅ FIXED: Always send notifications if there are recipients
+    // Even if changes.length === 0, we should notify new people
+    if (uniqueNotifyTo.length) {
 
       const changedBy =
         updatedBy?.name
           ? `${updatedBy.name} (${updatedBy.mail || ""})`
           : "Admin";
+
+      // If no changes detected, still notify about the update
+      if (changes.length === 0) {
+        changes.push("Category configuration reviewed");
+      }
 
       const fields = changes.map((c, i) => ({
         label: `Change ${i + 1}`,
@@ -1167,14 +1199,14 @@ app.put("/api/categories/:id", async (req, res) => {
         subtitle: `${changedBy} updated the category`,
         statusColor: "#0ea5e9",
         fields,
-        description: "The following updates were made:",
+        description: "The category configuration was updated.",
         actionLink: process.env.PROD_URL,
         actionText: "Open Helpdesk"
       });
 
       const itHead = process.env.IT_HEAD_EMAIL;
 
-      console.log("📧 [UPDATE CATEGORY] Sending notification emails...");
+      console.log("📧 [UPDATE CATEGORY] Sending notification emails to:", uniqueNotifyTo);
 
       try {
         await sendEmail(
@@ -1188,13 +1220,18 @@ app.put("/api/categories/:id", async (req, res) => {
         console.error("❌ [UPDATE CATEGORY] Failed to send notification emails:", err.message);
       }
     } else {
-      console.log("ℹ️ [UPDATE CATEGORY] No notifications needed (no changes or no recipients)");
+      console.log("⚠️ [UPDATE CATEGORY] No recipients to notify!");
     }
 
-    // -------------------- ✅ BONUS: Send welcome email to NEW category heads --------------------
+    // -------------------- Send welcome emails to NEW people --------------------
 
     if (addedHeads.length > 0) {
       console.log("📧 [UPDATE CATEGORY] Sending welcome emails to new category heads:", addedHeads);
+
+      const changedBy =
+        updatedBy?.name
+          ? `${updatedBy.name} (${updatedBy.mail || ""})`
+          : "Admin";
 
       const welcomeHtml = buildHtmlEmail({
         title: `You are now a Category Head: ${finalName}`,
@@ -1210,6 +1247,8 @@ app.put("/api/categories/:id", async (req, res) => {
         actionText: "Open Helpdesk"
       });
 
+      const itHead = process.env.IT_HEAD_EMAIL;
+
       try {
         await sendEmail(
           addedHeads,
@@ -1223,10 +1262,13 @@ app.put("/api/categories/:id", async (req, res) => {
       }
     }
 
-    // -------------------- ✅ BONUS: Send welcome email to NEW CC recipients --------------------
-
     if (addedCc.length > 0) {
       console.log("📧 [UPDATE CATEGORY] Sending welcome emails to new CC recipients:", addedCc);
+
+      const changedBy =
+        updatedBy?.name
+          ? `${updatedBy.name} (${updatedBy.mail || ""})`
+          : "Admin";
 
       const ccWelcomeHtml = buildHtmlEmail({
         title: `You are now CC'd for: ${finalName}`,
@@ -1241,6 +1283,8 @@ app.put("/api/categories/:id", async (req, res) => {
         actionLink: process.env.PROD_URL,
         actionText: "Open Helpdesk"
       });
+
+      const itHead = process.env.IT_HEAD_EMAIL;
 
       try {
         await sendEmail(
@@ -1272,6 +1316,7 @@ app.put("/api/categories/:id", async (req, res) => {
 
   } catch (err) {
     console.error("❌ [UPDATE CATEGORY] Error:", err.message);
+    console.error("❌ [UPDATE CATEGORY] Stack:", err.stack);
     res.status(500).json({ message: "Failed to update category" });
   }
 });
