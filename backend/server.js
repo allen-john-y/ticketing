@@ -166,7 +166,7 @@ const categoryConfigSchema = new mongoose.Schema(
 
     features: {
 
-      approvalRequired: { type: Boolean, default: false }, 
+      approvalRequired: { type: Boolean, default: false },
 
       onBehalf: {
         enabled: { type: Boolean, default: false },
@@ -1524,8 +1524,8 @@ app.post("/tickets", async (req, res) => {
     }
 
     if (
-        category === "Password Reset" ||
-        category === "Admin Access"
+        categoryConfig.type === "PASSWORD_RESET" ||
+        categoryConfig.type === "ADMIN_ACCESS"
       ) {
         initialStatus = "Waiting for approval";
       }
@@ -1694,7 +1694,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
     /* =====================================================
        PASSWORD RESET
     ===================================================== */
-    if (ticket.category === "Password Reset") {
+    if (categoryConfig.type === "PASSWORD_RESET") {
       const userIdentifier = ticket.onBehalfEmail || ticket.userId || ticket.userEmail;
 
       if (!userIdentifier) {
@@ -1769,6 +1769,57 @@ app.post("/tickets/:id/approve", async (req, res) => {
         itHead
       );
 
+      // ----------------------
+      // Notify category heads & CC
+      // ----------------------
+      const catCfg = await CategoryConfig.findOne({
+        name: {
+          $regex: new RegExp(
+            "^" + ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$",
+            "i"
+          )
+        }
+      });
+
+      const deptTo = (catCfg?.categoryHeads || [])
+        .map(h => h.email)
+        .filter(Boolean);
+
+      const deptCc = (catCfg?.cc || [])
+        .map(c => c.email)
+        .filter(Boolean);
+
+      if (itHead) deptCc.push(itHead);
+
+      if (deptTo.length) {
+
+        const deptHtml = buildHtmlEmail({
+          title: `Password Reset Approved — Ticket #${ticket.ticketNumber}`,
+          subtitle: "Password reset completed",
+          statusColor: "#16a34a",
+          fields: [
+            { label: "Ticket No", value: ticket.ticketNumber },
+            { label: "Approved By", value: ticket.closedBy },
+            {
+              label: "Affected User",
+              value: ticket.onBehalfEmail || ticket.userEmail
+            },
+            { label: "Temporary Password", value: newPassword }
+          ],
+          description: note || "Password reset has been completed successfully.",
+          actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
+          actionText: "View Ticket"
+        });
+
+        await sendEmail(
+          deptTo,
+          `[TICKET #${ticket.ticketNumber}] Password Reset Approved`,
+          deptHtml,
+          deptCc
+        );
+      }
+
+
       if (
         ticket.deliveryEmail &&
         ticket.deliveryEmail.trim() &&
@@ -1791,7 +1842,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
     /* =====================================================
        ADMIN ACCESS - FIXED VERSION
     ===================================================== */
-    else if (ticket.category === "Admin Access") {
+    else if (categoryConfig.type === "ADMIN_ACCESS") {
       console.log("🔵 [ADMIN ACCESS] Starting approval process...");
       
       const targetUpn = ticket.onBehalfEmail || ticket.userEmail;
@@ -2048,6 +2099,13 @@ app.post("/tickets/:id/approve", async (req, res) => {
       return;
     }
 
+    else if (categoryConfig?.features?.approvalRequired === true) {
+        ticket.status = "Closed";
+        ticket.approvalStatus = "Approved";
+        ticket.closedBy = approvedBy || "Approver";
+        ticket.closedAt = new Date();
+
+      }
     /* =====================================================
        OTHER CATEGORIES
     ===================================================== */

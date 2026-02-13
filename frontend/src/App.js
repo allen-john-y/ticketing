@@ -36,6 +36,7 @@ function Header({ logout }) {
   const [profileData, setProfileData] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState(null);
+  const [requireApproval, setRequireApproval] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(null);
 
   // admin states
@@ -516,6 +517,7 @@ function Header({ logout }) {
     setSubCategories([]);
     setRequireSubCategory(false);
     setEnableAttachmentsForCategory(false);
+    setRequireApproval(false);
     setRequireAttachmentsForCategory(false);
     setCategoryHeads([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
     setCcEmails([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
@@ -727,6 +729,8 @@ function Header({ logout }) {
         name: categoryName.trim(),
         categoryName: categoryName.trim(),
         features: {
+
+          approvalRequired: requireApproval,
           onBehalf: enableOnBehalf 
             ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
             : { enabled: false },
@@ -882,6 +886,8 @@ function Header({ logout }) {
     
     // Populate form with category data
     setCategoryName(category.name || category.categoryName || '');
+
+    setRequireApproval(!!category.features?.approvalRequired);
     
     // Features
     const features = category.features || {};
@@ -2182,7 +2188,7 @@ function Header({ logout }) {
                             background: '#f8fafc'
                           }}
                         >
-                          Other (fixed)
+                          Other
                         </div>
                       </div>
 
@@ -2237,6 +2243,31 @@ function Header({ logout }) {
 
               </div>
             </div>
+            <div
+              style={{
+                padding: 16,
+                border: '1px solid #e6e9ee',
+                borderRadius: 8,
+                background: requireApproval ? '#fff7ed' : '#fafafa'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ fontWeight: 700, fontSize: 14 }}>
+                  Approval Required
+                </label>
+                <input
+                  type="checkbox"
+                  checked={requireApproval}
+                  onChange={(e) => setRequireApproval(e.target.checked)}
+                  style={{ width: 18, height: 18, cursor: 'pointer' }}
+                />
+              </div>
+
+              <div style={{ fontSize: 12, color: '#6b7280' }}>
+                Tickets in this category must be approved by category head or CC head
+              </div>
+            </div>
+
 
             {categorySuccess && (
               <div style={{ 
