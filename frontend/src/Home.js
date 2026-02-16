@@ -14,6 +14,7 @@ function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showMyTickets, setShowMyTickets] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(null);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -170,36 +171,49 @@ function Home() {
   const priorityColors = ['#ef4444', '#e98404', '#10b981'];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex' }}>
       <style>{`
         * { box-sizing: border-box; }
         
-        /* Professional Header */
-        .header-bar {
+        /* Vertical Sidebar */
+        .vertical-sidebar {
+          position: fixed;
+          left: 0;
+          top: 0;
+          height: 100vh;
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
-          padding: 1.25rem 2rem;
-          box-shadow: 0 2px 12px rgba(0, 32, 96, 0.12);
+          width: 70px;
+          transition: width 0.3s ease;
+          overflow: hidden;
+          box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
+          z-index: 1000;
         }
         
-        .header-content {
-          max-width: 1400px;
-          margin: 0 auto;
+        .vertical-sidebar:hover {
+          width: 260px;
+        }
+        
+        .sidebar-content {
+          padding: 1.5rem 0;
+          height: 100%;
           display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 2rem;
+          flex-direction: column;
+          width: 260px;
         }
         
-        .header-left {
+        .sidebar-user {
           display: flex;
           align-items: center;
           gap: 1rem;
+          padding: 0 1rem;
+          margin-bottom: 2rem;
         }
         
         .avatar {
-          width: 48px;
-          height: 48px;
+          min-width: 42px;
+          width: 42px;
+          height: 42px;
           border-radius: 50%;
           background: white;
           display: flex;
@@ -207,10 +221,9 @@ function Home() {
           justify-content: center;
           font-weight: 700;
           color: #002060;
-          font-size: 16px;
+          font-size: 14px;
           overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-          flex-shrink: 0;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
         
         .avatar img {
@@ -219,77 +232,89 @@ function Home() {
           object-fit: cover;
         }
         
-        .user-info h1 {
-          margin: 0;
-          font-size: 20px;
-          font-weight: 600;
-          letter-spacing: -0.01em;
-        }
-        
-        .user-role {
-          display: inline-block;
-          background: rgba(255, 255, 255, 0.15);
-          color: rgba(255, 255, 255, 0.95);
-          padding: 3px 10px;
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 600;
-          margin-top: 4px;
-          letter-spacing: 0.5px;
-          text-transform: uppercase;
-        }
-        
-        .header-actions {
-          display: flex;
-          gap: 0.75rem;
-          align-items: center;
-        }
-        
-        .btn-header {
-          padding: 10px 20px;
-          border: none;
-          border-radius: 8px;
-          font-weight: 600;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
+        .user-details {
+          opacity: 0;
+          transition: opacity 0.2s ease 0.15s;
           white-space: nowrap;
         }
         
-        .btn-primary {
-          background: #e98404;
+        .vertical-sidebar:hover .user-details {
+          opacity: 1;
+        }
+        
+        .user-name {
+          font-size: 15px;
+          font-weight: 600;
+          margin-bottom: 2px;
+        }
+        
+        .user-role {
+          font-size: 11px;
+          opacity: 0.8;
+          background: rgba(255, 255, 255, 0.15);
+          padding: 2px 8px;
+          border-radius: 4px;
+          display: inline-block;
+        }
+        
+        .sidebar-nav {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          padding: 0 1rem;
+        }
+        
+        .nav-item {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 0.75rem;
+          border-radius: 8px;
+          text-decoration: none;
+          color: rgba(255, 255, 255, 0.8);
+          transition: all 0.2s;
+          white-space: nowrap;
+          cursor: pointer;
+          border: none;
+          background: none;
+          width: 100%;
+          font-size: 14px;
+          font-weight: 500;
+        }
+        
+        .nav-item:hover {
+          background: rgba(255, 255, 255, 0.1);
           color: white;
-          box-shadow: 0 2px 8px rgba(233, 132, 4, 0.25);
         }
         
-        .btn-primary:hover {
-          background: #d17703;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(233, 132, 4, 0.35);
+        .nav-icon {
+          font-size: 20px;
+          min-width: 24px;
+          display: flex;
+          justify-content: center;
         }
         
-        .btn-secondary {
-          background: rgba(255, 255, 255, 0.95);
-          color: #002060;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        .nav-label {
+          opacity: 0;
+          transition: opacity 0.2s ease 0.15s;
         }
         
-        .btn-secondary:hover {
-          background: white;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+        .vertical-sidebar:hover .nav-label {
+          opacity: 1;
         }
         
-        .main-container {
-          max-width: 1400px;
-          margin: 0 auto;
-          padding: 2rem;
+        .main-content {
+          flex: 1;
+          margin-left: 70px;
+          transition: margin-left 0.3s ease;
         }
-
+        
+        /* Adjust main content when sidebar expands */
+        .vertical-sidebar:hover + .main-content {
+          margin-left: 260px;
+        }
+        
         .my-tickets-toggle {
           background: white;
           padding: 1rem 1.5rem;
@@ -439,20 +464,16 @@ function Home() {
         }
         
         @media (max-width: 768px) {
-          .header-content {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 1rem;
+          .vertical-sidebar {
+            width: 0;
           }
           
-          .header-actions {
-            width: 100%;
-            flex-direction: column;
+          .vertical-sidebar:hover {
+            width: 260px;
           }
           
-          .btn-header {
-            width: 100%;
-            justify-content: center;
+          .main-content {
+            margin-left: 0;
           }
           
           .stats-grid {
@@ -469,10 +490,11 @@ function Home() {
         }
       `}</style>
 
-      {/* Professional Header */}
-      <div className="header-bar">
-        <div className="header-content">
-          <div className="header-left">
+      {/* Vertical Sidebar */}
+      <div className="vertical-sidebar">
+        <div className="sidebar-content">
+          {/* User Info */}
+          <div className="sidebar-user">
             <div className="avatar">
               {profilePhoto ? (
                 <img src={profilePhoto} alt={`${userName} profile`} />
@@ -480,126 +502,144 @@ function Home() {
                 initials
               )}
             </div>
-            <div className="user-info">
-              <h1>{userName}</h1>
-              <span className="user-role">{authority === 'admin' ? 'Administrator' : 'User'}</span>
+            <div className="user-details">
+              <div className="user-name">{userName}</div>
+              <span className="user-role">{authority === 'admin' ? 'Admin' : 'User'}</span>
             </div>
           </div>
-          <div className="header-actions">
-            <Link to="/create" className="btn-header btn-primary">
-              <span>+</span> Create Ticket
+
+          {/* Navigation Items */}
+          <div className="sidebar-nav">
+            <Link to="/create" className="nav-item">
+              <span className="nav-icon">+</span>
+              <span className="nav-label">Create Ticket</span>
             </Link>
-            <Link to="/tickets" className="btn-header btn-secondary">
-              View All Tickets
+            
+            <Link to="/tickets" className="nav-item">
+              <span className="nav-icon">🎫</span>
+              <span className="nav-label">View All Tickets</span>
             </Link>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="main-container">
-        {/* Admin: Show only my tickets toggle */}
-        {authority === 'admin' && (
-          <div className="my-tickets-toggle">
-            <input
-              type="checkbox"
-              id="myTicketsToggle"
-              checked={showMyTickets}
-              onChange={() => setShowMyTickets(prev => !prev)}
-            />
-            <label htmlFor="myTicketsToggle">
-              Show statistics for my tickets only
-            </label>
-          </div>
-        )}
-
-        {/* Stats Grid */}
-        <div className="stats-grid">
-          <div 
-            className="stat-card orange"
-            onClick={() => navigate('/tickets', { state: { filter: 'open' } })}
-          >
-            <div className="stat-header">
-              <div>
-                <div className="stat-value">{openTickets.length}</div>
-                <div className="stat-label">Open Tickets</div>
-              </div>
-              <div className="stat-icon orange">📝</div>
-            </div>
-          </div>
-
-          <div 
-            className="stat-card blue"
-            onClick={() => navigate('/tickets', { state: { filter: 'progress' } })}
-          >
-            <div className="stat-header">
-              <div>
-                <div className="stat-value">{inProgressTickets.length}</div>
-                <div className="stat-label">Waiting for approval</div>
-              </div>
-              <div className="stat-icon blue">⚙️</div>
-            </div>
-          </div>
-
-          <div 
-            className="stat-card green"
-            onClick={() => navigate('/dashboard')}
-          >
-            <div className="stat-header">
-              <div>
-                <div className="stat-value">{closedTickets.length}</div>
-                <div className="stat-label">Closed Tickets</div>
-              </div>
-              <div className="stat-icon green">✅</div>
-            </div>
-          </div>
-
-          <div 
-            className="stat-card red"
-            onClick={() => navigate('/tickets', { state: { filter: 'high' } })}
-          >
-            <div className="stat-header">
-              <div>
-                <div className="stat-value">{highPriority.length}</div>
-                <div className="stat-label">High Priority</div>
-              </div>
-              <div className="stat-icon red">⚠️</div>
-            </div>
-          </div>
+      <div className="main-content">
+        {/* Header (simplified) */}
+        <div style={{ 
+          background: 'white', 
+          padding: '1rem 2rem', 
+          borderBottom: '1px solid #e2e8f0',
+          marginBottom: '2rem'
+        }}>
+          <h2 style={{ margin: 0, color: '#0f172a', fontSize: '20px' }}>Dashboard</h2>
         </div>
 
-        {/* Charts Section */}
-        <div className="charts-section">
-          {/* Status Distribution */}
-          <div className="chart-card">
-            <h3 className="chart-title">Ticket Status Distribution</h3>
-            <div className="chart-content">
-              <PieChart data={statusData} colors={statusColors} size={180} />
-              <div className="chart-legend">
-                {statusData.map((item, idx) => (
-                  <div key={idx} className="legend-item">
-                    <div className="legend-color" style={{ background: statusColors[idx] }}></div>
-                    <span className="legend-label">{item.label}</span>
-                    <span className="legend-value">{item.value}</span>
-                  </div>
-                ))}
+        {/* Main Content Area */}
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 2rem 2rem 2rem' }}>
+          {/* Admin: Show only my tickets toggle */}
+          {authority === 'admin' && (
+            <div className="my-tickets-toggle">
+              <input
+                type="checkbox"
+                id="myTicketsToggle"
+                checked={showMyTickets}
+                onChange={() => setShowMyTickets(prev => !prev)}
+              />
+              <label htmlFor="myTicketsToggle">
+                Show statistics for my tickets only
+              </label>
+            </div>
+          )}
+
+          {/* Stats Grid */}
+          <div className="stats-grid">
+            <div 
+              className="stat-card orange"
+              onClick={() => navigate('/tickets', { state: { filter: 'open' } })}
+            >
+              <div className="stat-header">
+                <div>
+                  <div className="stat-value">{openTickets.length}</div>
+                  <div className="stat-label">Open Tickets</div>
+                </div>
+                <div className="stat-icon orange">📝</div>
+              </div>
+            </div>
+
+            <div 
+              className="stat-card blue"
+              onClick={() => navigate('/tickets', { state: { filter: 'progress' } })}
+            >
+              <div className="stat-header">
+                <div>
+                  <div className="stat-value">{inProgressTickets.length}</div>
+                  <div className="stat-label">Waiting for approval</div>
+                </div>
+                <div className="stat-icon blue">⚙️</div>
+              </div>
+            </div>
+
+            <div 
+              className="stat-card green"
+              onClick={() => navigate('/dashboard')}
+            >
+              <div className="stat-header">
+                <div>
+                  <div className="stat-value">{closedTickets.length}</div>
+                  <div className="stat-label">Closed Tickets</div>
+                </div>
+                <div className="stat-icon green">✅</div>
+              </div>
+            </div>
+
+            <div 
+              className="stat-card red"
+              onClick={() => navigate('/tickets', { state: { filter: 'high' } })}
+            >
+              <div className="stat-header">
+                <div>
+                  <div className="stat-value">{highPriority.length}</div>
+                  <div className="stat-label">High Priority</div>
+                </div>
+                <div className="stat-icon red">⚠️</div>
               </div>
             </div>
           </div>
 
-          {/* Priority Distribution */}
-          <div className="chart-card">
-            <h3 className="chart-title">Priority Breakdown (Open)</h3>
-            <div className="chart-content">
-              <PieChart data={priorityData} colors={priorityColors} size={180} />
-              <div className="chart-legend">
-                {priorityData.map((item, idx) => (
-                  <div key={idx} className="legend-item">
-                    <div className="legend-color" style={{ background: priorityColors[idx] }}></div>
-                    <span className="legend-label">{item.label} Priority</span>
-                    <span className="legend-value">{item.value}</span>
-                  </div>
-                ))}
+          {/* Charts Section */}
+          <div className="charts-section">
+            {/* Status Distribution */}
+            <div className="chart-card">
+              <h3 className="chart-title">Ticket Status Distribution</h3>
+              <div className="chart-content">
+                <PieChart data={statusData} colors={statusColors} size={180} />
+                <div className="chart-legend">
+                  {statusData.map((item, idx) => (
+                    <div key={idx} className="legend-item">
+                      <div className="legend-color" style={{ background: statusColors[idx] }}></div>
+                      <span className="legend-label">{item.label}</span>
+                      <span className="legend-value">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Priority Distribution */}
+            <div className="chart-card">
+              <h3 className="chart-title">Priority Breakdown (Open)</h3>
+              <div className="chart-content">
+                <PieChart data={priorityData} colors={priorityColors} size={180} />
+                <div className="chart-legend">
+                  {priorityData.map((item, idx) => (
+                    <div key={idx} className="legend-item">
+                      <div className="legend-color" style={{ background: priorityColors[idx] }}></div>
+                      <span className="legend-label">{item.label} Priority</span>
+                      <span className="legend-value">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
