@@ -243,8 +243,12 @@ function Home() {
         .main-content {
           flex: 1;
           width: 100%;
-          margin-left: 260px; /* Add this line to account for permanent sidebar */
-          width: calc(100% - 260px); /* Add this line to adjust width */
+        }
+
+        .content-wrapper {
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 2rem;
         }
 
         /* Page Header */
@@ -483,9 +487,8 @@ function Home() {
         }
         
         @media (max-width: 768px) {
-          .main-content {
-            margin-left: 0;
-            width: 100%;
+          .content-wrapper {
+            padding: 1rem;
           }
 
           .welcome-banner {

@@ -77,7 +77,7 @@ function Dashboard() {
       }
     };
     fetchData();
-  }, [accounts, instance, setProfilePhoto]);
+  }, [accounts, instance]);
 
   const handleCheckboxChange = (e) => {
     const checked = e.target.checked;
@@ -125,12 +125,6 @@ function Dashboard() {
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <style>{`
         * { box-sizing: border-box; }
-        
-        /* Main Content Area - Adjust for permanent sidebar */
-        .main-content {
-          margin-left: 260px;
-          width: calc(100% - 260px);
-        }
         
         .header-bar {
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
@@ -481,11 +475,6 @@ function Dashboard() {
         }
         
         @media (max-width: 768px) {
-          .main-content {
-            margin-left: 0;
-            width: 100%;
-          }
-          
           .header-content {
             flex-direction: column;
             align-items: flex-start;
@@ -512,194 +501,192 @@ function Dashboard() {
         }
       `}</style>
 
-      <div className="main-content">
-        {/* Header - Matching Home.js style */}
-        <div className="header-bar">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="avatar">
-                {profilePhoto ? (
-                  <img src={profilePhoto} alt={`${userName} profile`} />
-                ) : (
-                  initials
-                )}
+      {/* Header - Matching Home.js style */}
+      <div className="header-bar">
+        <div className="header-content">
+          <div className="header-left">
+            <div className="avatar">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt={`${userName} profile`} />
+              ) : (
+                initials
+              )}
+            </div>
+            <div className="user-info">
+              <h1>Closed Tickets Archive</h1>
+              <span className="user-role">{authority === 'admin' ? 'ADMINISTRATOR' : 'USER'}</span>
+              <div className="subtitle">Review and manage resolved tickets</div>
+            </div>
+          </div>
+          <div className="header-actions">
+            <button onClick={() => navigate('/')} className="btn-header btn-back">
+              ← Back to Home
+            </button>
+            <Link to="/create" className="btn-header btn-primary">
+              + New Ticket
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="main-container">
+        {/* Stats Grid */}
+        <div className="stats-grid">
+          <div className="stat-card blue">
+            <div className="stat-header">
+              <div>
+                <div className="stat-label">Total Closed</div>
+                <div className="stat-value">{totalClosed}</div>
               </div>
-              <div className="user-info">
-                <h1>Closed Tickets Archive</h1>
-                <span className="user-role">{authority === 'admin' ? 'ADMINISTRATOR' : 'USER'}</span>
-                <div className="subtitle">Review and manage resolved tickets</div>
+              <div className="stat-icon blue">📋</div>
+            </div>
+          </div>
+
+          {authority === 'admin' && (
+            <div className="stat-card green">
+              <div className="stat-header">
+                <div>
+                  <div className="stat-label">My Closed Tickets</div>
+                  <div className="stat-value">{myClosed}</div>
+                </div>
+                <div className="stat-icon green">👤</div>
               </div>
             </div>
-            <div className="header-actions">
-              <button onClick={() => navigate('/')} className="btn-header btn-back">
-                ← Back to Home
-              </button>
-              <Link to="/create" className="btn-header btn-primary">
-                + New Ticket
-              </Link>
+          )}
+
+          <div className="stat-card orange">
+            <div className="stat-header">
+              <div>
+                <div className="stat-label">High Priority Closed</div>
+                <div className="stat-value">{highPriorityClosed}</div>
+              </div>
+              <div className="stat-icon orange">⚠️</div>
+            </div>
+          </div>
+
+          <div className="stat-card purple">
+            <div className="stat-header">
+              <div>
+                <div className="stat-label">Closed This Month</div>
+                <div className="stat-value">{thisMonthClosed}</div>
+              </div>
+              <div className="stat-icon purple">📅</div>
             </div>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="main-container">
-          {/* Stats Grid */}
-          <div className="stats-grid">
-            <div className="stat-card blue">
-              <div className="stat-header">
-                <div>
-                  <div className="stat-label">Total Closed</div>
-                  <div className="stat-value">{totalClosed}</div>
-                </div>
-                <div className="stat-icon blue">📋</div>
-              </div>
-            </div>
-
-            {authority === 'admin' && (
-              <div className="stat-card green">
-                <div className="stat-header">
-                  <div>
-                    <div className="stat-label">My Closed Tickets</div>
-                    <div className="stat-value">{myClosed}</div>
-                  </div>
-                  <div className="stat-icon green">👤</div>
-                </div>
-              </div>
-            )}
-
-            <div className="stat-card orange">
-              <div className="stat-header">
-                <div>
-                  <div className="stat-label">High Priority Closed</div>
-                  <div className="stat-value">{highPriorityClosed}</div>
-                </div>
-                <div className="stat-icon orange">⚠️</div>
-              </div>
-            </div>
-
-            <div className="stat-card purple">
-              <div className="stat-header">
-                <div>
-                  <div className="stat-label">Closed This Month</div>
-                  <div className="stat-value">{thisMonthClosed}</div>
-                </div>
-                <div className="stat-icon purple">📅</div>
-              </div>
-            </div>
+        {/* Search & Filters */}
+        <div className="controls-section">
+          <div className="search-box">
+            <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="11" cy="11" r="8" strokeWidth="2" />
+              <path d="m21 21-4.35-4.35" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <input
+              className="search-input"
+              type="text"
+              placeholder="Search closed tickets by number, category, description, or user..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
 
-          {/* Search & Filters */}
-          <div className="controls-section">
-            <div className="search-box">
-              <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <circle cx="11" cy="11" r="8" strokeWidth="2" />
-                <path d="m21 21-4.35-4.35" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              <input
-                className="search-input"
-                type="text"
-                placeholder="Search closed tickets by number, category, description, or user..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            {authority === 'admin' && (
-              <div className="filters-row">
-                <div className="my-tickets-toggle">
-                  <input
-                    type="checkbox"
-                    id="showOnlyMineToggle"
-                    checked={showOnlyMine}
-                    onChange={handleCheckboxChange}
-                  />
-                  <label htmlFor="showOnlyMineToggle">
-                    Show only my closed tickets
-                  </label>
-                </div>
+          {authority === 'admin' && (
+            <div className="filters-row">
+              <div className="my-tickets-toggle">
+                <input
+                  type="checkbox"
+                  id="showOnlyMineToggle"
+                  checked={showOnlyMine}
+                  onChange={handleCheckboxChange}
+                />
+                <label htmlFor="showOnlyMineToggle">
+                  Show only my closed tickets
+                </label>
               </div>
-            )}
-          </div>
-
-          {/* Tickets List */}
-          <div className="tickets-header">
-            <h2 className="section-title">
-              {showOnlyMine ? 'My Closed Tickets' : 'All Closed Tickets'}
-            </h2>
-            <div className="ticket-count">
-              {searchFiltered.length} {searchFiltered.length === 1 ? 'ticket' : 'tickets'}
-            </div>
-          </div>
-
-          {searchFiltered.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">📭</div>
-              <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>No closed tickets found</h3>
-              <p style={{ color: '#94a3b8' }}>
-                {searchTerm ? 'Try adjusting your search terms' : 'All your tickets are still open or in progress'}
-              </p>
-            </div>
-          ) : (
-            <div>
-              {searchFiltered.map(ticket => (
-                <Link 
-                  key={ticket._id} 
-                  to={`/ticket/${ticket._id}`} 
-                  className="ticket-card" 
-                  style={{ borderLeftColor: categoryColor(ticket.category) }}
-                >
-                  <div className="ticket-header">
-                    <h3 className="ticket-number">#{ticket.ticketNumber} - {ticket.category}</h3>
-                    <span className="ticket-status">Closed</span>
-                  </div>
-                  
-                  <p className="ticket-description">{ticket.description}</p>
-                  
-                  {authority === 'admin' && (
-                    <div style={{ 
-                      marginTop: '0.75rem', 
-                      padding: '0.75rem',
-                      background: '#f8fafc',
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0',
-                      fontSize: '14px', 
-                      color: '#475569'
-                    }}>
-                      <div><strong style={{ color: '#0f172a' }}>Created by:</strong> {ticket.userName || '—'}</div>
-                      <div><strong style={{ color: '#0f172a' }}>Email:</strong> {ticket.userEmail || '—'}</div>
-                    </div>
-                  )}
-                  
-                  <div className="ticket-meta">
-                    <div className="meta-item">
-                      <span className={`priority-badge priority-${ticket.priority?.toLowerCase()}`}>
-                        {ticket.priority} Priority
-                      </span>
-                    </div>
-                    <div className="meta-item">
-                      📅 Closed: {new Date(ticket.updatedAt || ticket.createdAt).toLocaleDateString()}
-                    </div>
-                    {ticket.assignedTo && (
-                      <div className="meta-item">
-                        👤 Assigned to: {ticket.assignedTo}
-                      </div>
-                    )}
-                    {ticket.resolvedBy && (
-                      <div className="meta-item">
-                        ✓ Resolved by: {ticket.resolvedBy}
-                      </div>
-                    )}
-                    {ticket.closeReason && (
-                      <div className="meta-item" style={{ width: '100%', marginTop: '0.5rem' }}>
-                        <span style={{ fontWeight: 600 }}>Close reason:</span> {ticket.closeReason}
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              ))}
             </div>
           )}
         </div>
+
+        {/* Tickets List */}
+        <div className="tickets-header">
+          <h2 className="section-title">
+            {showOnlyMine ? 'My Closed Tickets' : 'All Closed Tickets'}
+          </h2>
+          <div className="ticket-count">
+            {searchFiltered.length} {searchFiltered.length === 1 ? 'ticket' : 'tickets'}
+          </div>
+        </div>
+
+        {searchFiltered.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">📭</div>
+            <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>No closed tickets found</h3>
+            <p style={{ color: '#94a3b8' }}>
+              {searchTerm ? 'Try adjusting your search terms' : 'All your tickets are still open or in progress'}
+            </p>
+          </div>
+        ) : (
+          <div>
+            {searchFiltered.map(ticket => (
+              <Link 
+                key={ticket._id} 
+                to={`/ticket/${ticket._id}`} 
+                className="ticket-card" 
+                style={{ borderLeftColor: categoryColor(ticket.category) }}
+              >
+                <div className="ticket-header">
+                  <h3 className="ticket-number">#{ticket.ticketNumber} - {ticket.category}</h3>
+                  <span className="ticket-status">Closed</span>
+                </div>
+                
+                <p className="ticket-description">{ticket.description}</p>
+                
+                {authority === 'admin' && (
+                  <div style={{ 
+                    marginTop: '0.75rem', 
+                    padding: '0.75rem',
+                    background: '#f8fafc',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '14px', 
+                    color: '#475569'
+                  }}>
+                    <div><strong style={{ color: '#0f172a' }}>Created by:</strong> {ticket.userName || '—'}</div>
+                    <div><strong style={{ color: '#0f172a' }}>Email:</strong> {ticket.userEmail || '—'}</div>
+                  </div>
+                )}
+                
+                <div className="ticket-meta">
+                  <div className="meta-item">
+                    <span className={`priority-badge priority-${ticket.priority?.toLowerCase()}`}>
+                      {ticket.priority} Priority
+                    </span>
+                  </div>
+                  <div className="meta-item">
+                    📅 Closed: {new Date(ticket.updatedAt || ticket.createdAt).toLocaleDateString()}
+                  </div>
+                  {ticket.assignedTo && (
+                    <div className="meta-item">
+                      👤 Assigned to: {ticket.assignedTo}
+                    </div>
+                  )}
+                  {ticket.resolvedBy && (
+                    <div className="meta-item">
+                      ✓ Resolved by: {ticket.resolvedBy}
+                    </div>
+                  )}
+                  {ticket.closeReason && (
+                    <div className="meta-item" style={{ width: '100%', marginTop: '0.5rem' }}>
+                      <span style={{ fontWeight: 600 }}>Close reason:</span> {ticket.closeReason}
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
