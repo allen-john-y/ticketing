@@ -4,6 +4,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 import DownloadIcon from './Download.png';
+import AttachmentIcon from './attachment.jpg';
+import HistoryIcon from './history.jpg';
 
 function TicketDetails() {
   const { id } = useParams();
@@ -467,7 +469,11 @@ function TicketDetails() {
     const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
     return (
       <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 600, fontSize: '14px', color: '#475569' }}>📎 Attachment:</span>
+        <span style={{ fontWeight: 600, fontSize: '14px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <img src={AttachmentIcon} alt="Attachment" style={{ width: '18px', height: '18px' }} />
+          Attachment:
+        </span>
+
         <button
           onClick={() => {
             if (isPdfType(typeLabel, url)) {
@@ -527,7 +533,11 @@ function TicketDetails() {
           borderRadius: '10px',
           border: '2px solid #e2e8f0'
         }}>
-          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>📎 Attachment:</span>
+          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <img src={AttachmentIcon} alt="Attachment" style={{ width: '18px', height: '18px' }} />
+            Attachment:
+          </span>
+
           <button
             onClick={() => {
               if (isPdf) {
@@ -599,7 +609,11 @@ function TicketDetails() {
         border: '2px solid #e2e8f0'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>📎 Attachments ({attachmentList.length}):</span>
+          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <img src={AttachmentIcon} alt="Attachments" style={{ width: '18px', height: '18px' }} />
+            Attachments ({attachmentList.length}):
+          </span>
+
           <button
             onClick={() => {
               if (attachmentList.length) {
@@ -1225,12 +1239,13 @@ function TicketDetails() {
           marginBottom: '2.5rem', 
           textAlign: 'center', 
           fontWeight: 800,
-          background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text'
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px'
         }}>
-          📋 Ticket History
+          <img src={HistoryIcon} alt="History" style={{ width: '28px', height: '28px' }} />
+          Ticket History
         </h2>
         <div>
           {historyEvents.map((event, index) => {
@@ -1571,7 +1586,11 @@ function TicketDetails() {
           <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1100px' }}>
             <div className="att-viewer">
               <div className="att-toolbar">
-                <div className="att-title">📎 {activeAttachment.fileName || 'Attachment'}</div>
+                <div className="att-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <img src={AttachmentIcon} alt="Attachment" style={{ width: '20px', height: '20px' }} />
+                  {activeAttachment.fileName || 'Attachment'}
+                </div>
+
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   {attachmentList && attachmentList.length > 1 && (
                     <div style={{ fontSize: '13px', color: '#64748b', marginRight: '8px', fontWeight: 600 }}>

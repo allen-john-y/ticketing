@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import attachmentIcon from './attachment.jpg';
 
 function PasswordPopup({ password, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -1122,11 +1123,19 @@ function CreateTicket() {
           background: #eff6ff;
         }
         
-        .dropzone-icon {
-          font-size: 48px;
-          margin-bottom: 1rem;
-        }
-        
+        <div className="dropzone-icon">
+          <img
+            src={attachmentIcon}
+            alt="Attachment"
+            style={{
+              width: 42,
+              height: 42,
+              objectFit: 'contain',
+              opacity: 0.9
+            }}
+          />
+        </div>
+
         .dropzone-title {
           font-size: 16px;
           font-weight: 700;
@@ -1820,7 +1829,14 @@ function CreateTicket() {
                     onDragLeave={() => setIsDragging(false)}
                     onClick={() => fileInputRef.current && fileInputRef.current.click()}
                   >
-                    <div className="dropzone-icon">📎</div>
+                    <div className="dropzone-icon">
+                      <img
+                        src={attachmentIcon}
+                        alt="Attachment"
+                        style={{ width: 40, height: 40 }}
+                      />
+                    </div>
+
                     <div className="dropzone-title">
                       Drag & drop files here or click to browse
                     </div>
