@@ -14,7 +14,6 @@ function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showMyTickets, setShowMyTickets] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(null);
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -175,38 +174,45 @@ function Home() {
       <style>{`
         * { box-sizing: border-box; }
         
-        /* Vertical Sidebar Navigation */
-        .sidebar {
+        /* Vertical Sidebar */
+        .vertical-sidebar {
           position: fixed;
           left: 0;
           top: 0;
           height: 100vh;
-          width: 80px;
-          background: linear-gradient(180deg, #002060 0%, #003380 100%);
-          box-shadow: 4px 0 16px rgba(0, 32, 96, 0.15);
-          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          z-index: 1000;
+          background: linear-gradient(135deg, #002060 0%, #003380 100%);
+          color: white;
+          width: 70px;
+          transition: width 0.3s ease;
           overflow: hidden;
-          display: flex;
-          flex-direction: column;
+          box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
+          z-index: 1000;
         }
-
-        .sidebar:hover {
+        
+        .vertical-sidebar:hover {
           width: 260px;
         }
-
-        .sidebar-header {
-          padding: 1.5rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        
+        .sidebar-content {
+          padding: 1.5rem 0;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          width: 260px;
+        }
+        
+        .sidebar-user {
           display: flex;
           align-items: center;
           gap: 1rem;
-          min-height: 100px;
+          padding: 0 1rem;
+          margin-bottom: 2rem;
         }
-
+        
         .avatar {
-          width: 48px;
-          height: 48px;
+          min-width: 42px;
+          width: 42px;
+          height: 42px;
           border-radius: 50%;
           background: white;
           display: flex;
@@ -214,10 +220,9 @@ function Home() {
           justify-content: center;
           font-weight: 700;
           color: #002060;
-          font-size: 16px;
+          font-size: 14px;
           overflow: hidden;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-          flex-shrink: 0;
         }
         
         .avatar img {
@@ -225,113 +230,90 @@ function Home() {
           height: 100%;
           object-fit: cover;
         }
-
-        .user-info {
+        
+        .user-details {
           opacity: 0;
-          transition: opacity 0.3s ease;
+          transition: opacity 0.2s ease 0.15s;
           white-space: nowrap;
-          overflow: hidden;
-          color: white;
         }
-
-        .sidebar:hover .user-info {
+        
+        .vertical-sidebar:hover .user-details {
           opacity: 1;
         }
-
-        .user-info h1 {
-          margin: 0;
-          font-size: 16px;
+        
+        .user-name {
+          font-size: 15px;
           font-weight: 600;
-          color: white;
+          margin-bottom: 2px;
         }
-
+        
         .user-role {
-          display: inline-block;
+          font-size: 11px;
+          opacity: 0.8;
           background: rgba(255, 255, 255, 0.15);
-          color: rgba(255, 255, 255, 0.95);
           padding: 2px 8px;
           border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          margin-top: 4px;
-          letter-spacing: 0.5px;
-          text-transform: uppercase;
+          display: inline-block;
         }
-
+        
         .sidebar-nav {
           flex: 1;
-          padding: 1rem 0;
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
+          padding: 0 1rem;
         }
-
+        
         .nav-item {
           display: flex;
           align-items: center;
-          padding: 1rem 1.5rem;
-          color: rgba(255, 255, 255, 0.9);
+          gap: 1rem;
+          padding: 0.75rem;
+          border-radius: 8px;
           text-decoration: none;
-          transition: all 0.2s ease;
-          position: relative;
+          color: rgba(255, 255, 255, 0.8);
+          transition: all 0.2s;
+          white-space: nowrap;
           cursor: pointer;
+          border: none;
+          background: none;
+          width: 100%;
+          font-size: 14px;
+          font-weight: 500;
         }
-
+        
         .nav-item:hover {
           background: rgba(255, 255, 255, 0.1);
+          color: white;
         }
-
-        .nav-item::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 0;
-          height: 100%;
-          width: 4px;
-          background: #e98404;
-          transform: scaleY(0);
-          transition: transform 0.2s ease;
-        }
-
-        .nav-item:hover::before {
-          transform: scaleY(1);
-        }
-
+        
         .nav-icon {
-          width: 48px;
+          font-size: 20px;
+          min-width: 24px;
           display: flex;
-          align-items: center;
           justify-content: center;
-          font-size: 24px;
-          flex-shrink: 0;
         }
-
-        .nav-text {
+        
+        .nav-label {
           opacity: 0;
-          transition: opacity 0.3s ease;
-          white-space: nowrap;
-          font-weight: 600;
-          font-size: 14px;
+          transition: opacity 0.2s ease 0.15s;
         }
-
-        .sidebar:hover .nav-text {
+        
+        .vertical-sidebar:hover .nav-label {
           opacity: 1;
         }
-
-        /* Main Content Area */
+        
         .main-content {
-          margin-left: 80px;
           flex: 1;
-          transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          width: calc(100% - 80px);
+          margin-left: 70px;
+          transition: margin-left 0.3s ease;
         }
-
-        .content-wrapper {
-          max-width: 1400px;
-          margin: 0 auto;
-          padding: 2rem;
+        
+        /* Adjust main content when sidebar expands */
+        .vertical-sidebar:hover + .main-content {
+          margin-left: 260px;
         }
-
+        
         .my-tickets-toggle {
           background: white;
           padding: 1rem 1.5rem;
@@ -481,17 +463,16 @@ function Home() {
         }
         
         @media (max-width: 768px) {
-          .sidebar {
-            width: 60px;
+          .vertical-sidebar {
+            width: 0;
           }
-
-          .sidebar:hover {
-            width: 220px;
+          
+          .vertical-sidebar:hover {
+            width: 260px;
           }
-
+          
           .main-content {
-            margin-left: 60px;
-            width: calc(100% - 60px);
+            margin-left: 0;
           }
           
           .stats-grid {
@@ -509,44 +490,52 @@ function Home() {
       `}</style>
 
       {/* Vertical Sidebar */}
-      <div className="sidebar">
-        {/* User Profile Section */}
-        <div className="sidebar-header">
-          <div className="avatar">
-            {profilePhoto ? (
-              <img src={profilePhoto} alt={`${userName} profile`} />
-            ) : (
-              initials
-            )}
+      <div className="vertical-sidebar">
+        <div className="sidebar-content">
+          {/* User Info */}
+          <div className="sidebar-user">
+            <div className="avatar">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt={`${userName} profile`} />
+              ) : (
+                initials
+              )}
+            </div>
+            <div className="user-details">
+              <div className="user-name">{userName}</div>
+              <span className="user-role">{authority === 'admin' ? 'Admin' : 'User'}</span>
+            </div>
           </div>
-          <div className="user-info">
-            <h1>{userName}</h1>
-            <span className="user-role">{authority === 'admin' ? 'Administrator' : 'User'}</span>
+
+          {/* Navigation Items */}
+          <div className="sidebar-nav">
+            <Link to="/create" className="nav-item">
+              <span className="nav-icon">+</span>
+              <span className="nav-label">Create Ticket</span>
+            </Link>
+            
+            <Link to="/tickets" className="nav-item">
+              <span className="nav-icon">🎫</span>
+              <span className="nav-label">View All Tickets</span>
+            </Link>
           </div>
         </div>
-
-        {/* Navigation Items */}
-        <nav className="sidebar-nav">
-          <Link to="/create" className="nav-item">
-            <div className="nav-icon">+</div>
-            <div className="nav-text">Create Ticket</div>
-          </Link>
-
-          <Link to="/tickets" className="nav-item">
-            <div className="nav-icon">📋</div>
-            <div className="nav-text">View All Tickets</div>
-          </Link>
-
-          <Link to="/dashboard" className="nav-item">
-            <div className="nav-icon">✅</div>
-            <div className="nav-text">Closed Tickets</div>
-          </Link>
-        </nav>
       </div>
 
       {/* Main Content */}
       <div className="main-content">
-        <div className="content-wrapper">
+        {/* Header (simplified) */}
+        <div style={{ 
+          background: 'white', 
+          padding: '1rem 2rem', 
+          borderBottom: '1px solid #e2e8f0',
+          marginBottom: '2rem'
+        }}>
+          <h2 style={{ margin: 0, color: '#0f172a', fontSize: '20px' }}>Dashboard</h2>
+        </div>
+
+        {/* Main Content Area */}
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 2rem 2rem 2rem' }}>
           {/* Admin: Show only my tickets toggle */}
           {authority === 'admin' && (
             <div className="my-tickets-toggle">
