@@ -1,8 +1,3 @@
-/* Updated App.js with Edit Field functionality
-   - Shows all categories (hardcoded and created) in Edit Field modal
-   - Allows editing category configuration including heads, CCs, and features
-   - Real-time search for Category Heads and CC Emails using CreateTicket.js pattern
-*/
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
@@ -39,11 +34,9 @@ function Header({ logout }) {
   const [requireApproval, setRequireApproval] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(null);
 
-  // admin states
   const [isAdmin, setIsAdmin] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Add user modal (existing)
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -53,7 +46,6 @@ function Header({ logout }) {
   const [addMessage, setAddMessage] = useState(null);
   const [addError, setAddError] = useState(null);
 
-  // Remove user modal (existing)
   const [removeModalOpen, setRemoveModalOpen] = useState(false);
   const [groupMembers, setGroupMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -62,12 +54,10 @@ function Header({ logout }) {
   const [removeMessage, setRemoveMessage] = useState(null);
   const [removeError, setRemoveError] = useState(null);
 
-  // Add Field / Remove Field / Edit Field states
   const [addFieldOpen, setAddFieldOpen] = useState(false);
   const [removeFieldOpen, setRemoveFieldOpen] = useState(false);
   const [editFieldOpen, setEditFieldOpen] = useState(false);
 
-  // Category form state for Add/Edit Field
   const [categoryName, setCategoryName] = useState('');
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [categoryError, setCategoryError] = useState(null);
@@ -84,24 +74,12 @@ function Header({ logout }) {
   const [enableAttachmentsForCategory, setEnableAttachmentsForCategory] = useState(false);
   const [requireAttachmentsForCategory, setRequireAttachmentsForCategory] = useState(false);
 
-  // Category Heads with search functionality
   const [categoryHeads, setCategoryHeads] = useState([{ 
-    email: '', 
-    name: '', 
-    searchQuery: '',
-    searchResults: [],
-    searching: false,
-    showDropdown: false
+    email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false
   }]);
 
-  // CC Emails with search functionality
   const [ccEmails, setCcEmails] = useState([{ 
-    email: '', 
-    name: '', 
-    searchQuery: '',
-    searchResults: [],
-    searching: false,
-    showDropdown: false
+    email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false
   }]);
 
   const [availableCategories, setAvailableCategories] = useState([]);
@@ -111,14 +89,12 @@ function Header({ logout }) {
   const [removeCategoryError, setRemoveCategoryError] = useState(null);
   const [removeCategorySuccess, setRemoveCategorySuccess] = useState(null);
 
-  // NEW: Edit Field states
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoriesForEdit, setCategoriesForEdit] = useState([]);
   const [editCategoriesLoading, setEditCategoriesLoading] = useState(false);
 
   const FIXED_OTHER = 'Other';
 
-  // Refs for click outside detection
   const categoryHeadsRefs = useRef([]);
   const ccEmailsRefs = useRef([]);
 
@@ -127,22 +103,14 @@ function Header({ logout }) {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setProfileOpen(false);
       }
-
-      // Close category heads dropdowns
       categoryHeadsRefs.current.forEach((ref, idx) => {
         if (ref && !ref.contains(e.target)) {
-          setCategoryHeads(prev => prev.map((h, i) => 
-            i === idx ? { ...h, showDropdown: false } : h
-          ));
+          setCategoryHeads(prev => prev.map((h, i) => i === idx ? { ...h, showDropdown: false } : h));
         }
       });
-
-      // Close CC emails dropdowns
       ccEmailsRefs.current.forEach((ref, idx) => {
         if (ref && !ref.contains(e.target)) {
-          setCcEmails(prev => prev.map((c, i) => 
-            i === idx ? { ...c, showDropdown: false } : c
-          ));
+          setCcEmails(prev => prev.map((c, i) => i === idx ? { ...c, showDropdown: false } : c));
         }
       });
     };
@@ -150,7 +118,6 @@ function Header({ logout }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // fetch small profile photo silently
   useEffect(() => {
     const fetchPhotoSilently = async () => {
       if (!accounts || !accounts[0]) return;
@@ -185,7 +152,6 @@ function Header({ logout }) {
     fetchPhotoSilently();
   }, [accounts, instance]);
 
-  // check whether current user belongs to Helpdesk_Admin
   useEffect(() => {
     let cancelled = false;
     const checkMembership = async () => {
@@ -260,7 +226,6 @@ function Header({ logout }) {
     }
   };
 
-  // ---------------- Existing Add user / Remove user flows (unchanged) ----------------
   const openAddModal = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -507,8 +472,6 @@ function Header({ logout }) {
     }
   };
 
-  // ---------------- Category Add / Remove / Edit helpers ----------------
-
   const resetCategoryForm = () => {
     setCategoryName('');
     setEnableOnBehalf(false);
@@ -531,18 +494,13 @@ function Header({ logout }) {
   };
 
   const updateSubCategory = (idx, value) => {
-    setSubCategories(prev =>
-      prev.map((s, i) => (i === idx ? value : s))
-    );
+    setSubCategories(prev => prev.map((s, i) => (i === idx ? value : s)));
   };
 
   const removeSubCategory = (idx) => {
-    setSubCategories(prev =>
-      prev.filter((_, i) => i !== idx)
-    );
+    setSubCategories(prev => prev.filter((_, i) => i !== idx));
   };
 
-  // Real-time search for Category Heads
   const handleCategoryHeadSearch = async (idx, searchText) => {
     if (!searchText || searchText.trim().length < 2) {
       setCategoryHeads(prev => prev.map((h, i) => 
@@ -610,12 +568,7 @@ function Header({ logout }) {
 
   const addCategoryHead = () => {
     setCategoryHeads(prev => [...prev, { 
-      email: '', 
-      name: '', 
-      searchQuery: '',
-      searchResults: [],
-      searching: false,
-      showDropdown: false
+      email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false
     }]);
   };
 
@@ -624,7 +577,6 @@ function Header({ logout }) {
     categoryHeadsRefs.current = categoryHeadsRefs.current.filter((_, i) => i !== idx);
   };
 
-  // Real-time search for CC Emails
   const handleCcEmailSearch = async (idx, searchText) => {
     if (!searchText || searchText.trim().length < 2) {
       setCcEmails(prev => prev.map((c, i) => 
@@ -692,12 +644,7 @@ function Header({ logout }) {
 
   const addCcEmail = () => {
     setCcEmails(prev => [...prev, { 
-      email: '', 
-      name: '', 
-      searchQuery: '',
-      searchResults: [],
-      searching: false,
-      showDropdown: false
+      email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false
     }]);
   };
 
@@ -729,7 +676,6 @@ function Header({ logout }) {
         name: categoryName.trim(),
         categoryName: categoryName.trim(),
         features: {
-
           approvalRequired: requireApproval,
           onBehalf: enableOnBehalf 
             ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
@@ -738,9 +684,7 @@ function Header({ logout }) {
             ? {
                 enabled: true,
                 list: [
-                  ...subCategories
-                    .map(s => s.trim())
-                    .filter(s => s && s !== FIXED_OTHER),
+                  ...subCategories.map(s => s.trim()).filter(s => s && s !== FIXED_OTHER),
                   FIXED_OTHER
                 ],
                 required: !!requireSubCategory
@@ -857,7 +801,6 @@ function Header({ logout }) {
     }
   };
 
-  // NEW: Edit Field functions
   const openEditFieldModal = async () => {
     setEditFieldOpen(true);
     setEditCategoriesLoading(true);
@@ -884,15 +827,11 @@ function Header({ logout }) {
   const selectCategoryForEdit = (category) => {
     setEditingCategory(category);
     
-    // Populate form with category data
     setCategoryName(category.name || category.categoryName || '');
-
     setRequireApproval(!!category.features?.approvalRequired);
     
-    // Features
     const features = category.features || {};
     
-    // OnBehalf
     if (features.onBehalf && features.onBehalf.enabled) {
       setEnableOnBehalf(true);
       setRequireOnBehalf(!!features.onBehalf.required);
@@ -901,11 +840,9 @@ function Header({ logout }) {
       setRequireOnBehalf(false);
     }
     
-    // SubCategories
     if (features.subCategories && features.subCategories.enabled) {
       setEnableSubCategory(true);
       const list = features.subCategories.list || [];
-      // Filter out 'Other' as it's fixed
       const filteredList = list.filter(s => s !== FIXED_OTHER);
       setSubCategories(filteredList);
       setRequireSubCategory(!!features.subCategories.required);
@@ -915,7 +852,6 @@ function Header({ logout }) {
       setRequireSubCategory(false);
     }
     
-    // Attachments
     if (features.attachments && features.attachments.enabled) {
       setEnableAttachmentsForCategory(true);
       setRequireAttachmentsForCategory(!!features.attachments.required);
@@ -924,7 +860,6 @@ function Header({ logout }) {
       setRequireAttachmentsForCategory(false);
     }
     
-    // Category Heads
     const heads = category.categoryHeads || [];
     if (heads.length > 0) {
       setCategoryHeads(heads.map(h => ({
@@ -939,7 +874,6 @@ function Header({ logout }) {
       setCategoryHeads([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
     }
     
-    // CC Emails
     const ccs = category.cc || [];
     if (ccs.length > 0) {
       setCcEmails(ccs.map(c => ({
@@ -983,6 +917,7 @@ function Header({ logout }) {
         name: categoryName.trim(),
         categoryName: categoryName.trim(),
         features: {
+          approvalRequired: requireApproval,
           onBehalf: enableOnBehalf 
             ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
             : { enabled: false },
@@ -990,9 +925,7 @@ function Header({ logout }) {
             ? {
                 enabled: true,
                 list: [
-                  ...subCategories
-                    .map(s => s.trim())
-                    .filter(s => s && s !== FIXED_OTHER),
+                  ...subCategories.map(s => s.trim()).filter(s => s && s !== FIXED_OTHER),
                   FIXED_OTHER
                 ],
                 required: !!requireSubCategory
@@ -1032,7 +965,6 @@ function Header({ logout }) {
 
       setCategorySuccess('Category updated successfully');
       
-      // Update the local list
       setCategoriesForEdit(prev => prev.map(c => 
         c.id === editingCategory.id ? { ...c, ...payload } : c
       ));
@@ -1049,7 +981,6 @@ function Header({ logout }) {
     }
   };
 
-  // ---------------- Profile functions (unchanged) ----------------
   const fetchFullProfile = async () => {
     if (!accounts || !accounts[0]) return;
     setLoadingProfile(true);
@@ -1141,685 +1072,779 @@ function Header({ logout }) {
     .join('')
     .toUpperCase();
 
-  // ---------------- JSX ----------------
   return (
     <>
-      <header
-        style={{
-          background: 'white',
-          padding: '14px 20px',
-          borderBottom: '1px solid rgba(15,23,42,0.06)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 12,
-          position: 'sticky',
-          top: 0,
-          zIndex: 40,
-        }}
-      >
-        {/* LEFT LOGO BLOCK */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <img
-            src={logo}
-            alt="Sandeza logo"
-            style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8 }}
-          />
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h1
-                style={{
-                  color: '#0f172a',
-                  margin: 0,
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  letterSpacing: 0.2,
-                }}
-              >
-                SANDEZA INC
-              </h1>
-            </div>
-            <div style={{ color: '#6b7280', fontSize: 12 }}>IT Ticket Portal</div>
+      <style>{`
+        * { box-sizing: border-box; }
+        
+        .app-header {
+          background: linear-gradient(135deg, #002060 0%, #003380 100%);
+          color: white;
+          padding: 1.25rem 2rem;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          box-shadow: 0 4px 16px rgba(0, 32, 96, 0.15);
+          position: sticky;
+          top: 0;
+          z-index: 50;
+        }
+        
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 1.25rem;
+        }
+        
+        .logo-img {
+          width: 48px;
+          height: 48px;
+          border-radius: 10px;
+          object-fit: cover;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .company-info h1 {
+          margin: 0;
+          font-size: 1.15rem;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+        }
+        
+        .company-subtitle {
+          color: rgba(255, 255, 255, 0.85);
+          font-size: 12px;
+          margin-top: 2px;
+          font-weight: 500;
+        }
+        
+        .header-center {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          text-align: center;
+        }
+        
+        .header-title {
+          font-size: 1.25rem;
+          font-weight: 900;
+          letter-spacing: 0.5px;
+          margin: 0;
+        }
+        
+        .header-tagline {
+          font-size: 11px;
+          opacity: 0.9;
+          margin-top: 2px;
+          font-weight: 600;
+          letter-spacing: 0.3px;
+        }
+        
+        .header-right {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        
+        .settings-btn {
+          width: 42px;
+          height: 42px;
+          border-radius: 10px;
+          border: none;
+          background: rgba(255, 255, 255, 0.15);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        
+        .settings-btn:hover {
+          background: rgba(255, 255, 255, 0.25);
+          transform: scale(1.05);
+        }
+        
+        .settings-btn img {
+          width: 20px;
+          height: 20px;
+        }
+        
+        .settings-dropdown {
+          position: absolute;
+          right: 0;
+          margin-top: 8px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+          padding: 12px;
+          width: 280px;
+          z-index: 60;
+        }
+        
+        .dropdown-title {
+          font-weight: 800;
+          color: #0f172a;
+          margin-bottom: 12px;
+          padding-bottom: 12px;
+          border-bottom: 2px solid #e2e8f0;
+          font-size: 15px;
+        }
+        
+        .dropdown-item {
+          width: 100%;
+          text-align: left;
+          background: transparent;
+          border: none;
+          padding: 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 14px;
+          transition: all 0.15s;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        
+        .dropdown-item:hover {
+          background: #f8fafc;
+          transform: translateX(2px);
+        }
+        
+        .dropdown-item.add { color: #002060; }
+        .dropdown-item.remove { color: #ef4444; }
+        .dropdown-item.edit { color: #8b5cf6; }
+        
+        .profile-btn {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 14px;
+          border-radius: 999px;
+          border: none;
+          background: rgba(255, 255, 255, 0.15);
+          color: white;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .profile-btn:hover {
+          background: rgba(255, 255, 255, 0.25);
+        }
+        
+        .profile-avatar {
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+          font-size: 14px;
+          overflow: hidden;
+        }
+        
+        .profile-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
+        .profile-info {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          line-height: 1.2;
+        }
+        
+        .profile-name {
+          font-size: 13px;
+          font-weight: 700;
+        }
+        
+        .profile-email {
+          font-size: 11px;
+          opacity: 0.85;
+        }
+        
+        .profile-dropdown {
+          position: absolute;
+          right: 0;
+          margin-top: 10px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+          padding: 16px;
+          width: 320px;
+          z-index: 60;
+          color: #0f172a;
+        }
+        
+        .profile-dropdown-header {
+          display: flex;
+          gap: 14px;
+          align-items: center;
+          margin-bottom: 16px;
+          padding-bottom: 16px;
+          border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .profile-dropdown-avatar {
+          width: 52px;
+          height: 52px;
+          border-radius: 12px;
+          background: #eef2ff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+          color: #002060;
+          overflow: hidden;
+        }
+        
+        .profile-dropdown-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
+        .profile-dropdown-info {
+          flex: 1;
+        }
+        
+        .profile-dropdown-name {
+          font-weight: 800;
+          font-size: 15px;
+          margin-bottom: 4px;
+        }
+        
+        .profile-dropdown-email {
+          font-size: 13px;
+          color: #64748b;
+        }
+        
+        .profile-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        
+        .profile-action-btn {
+          width: 100%;
+          text-align: left;
+          padding: 12px;
+          border-radius: 8px;
+          border: none;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+          font-size: 14px;
+        }
+        
+        .btn-view-profile {
+          background: #eff6ff;
+          color: #002060;
+        }
+        
+        .btn-view-profile:hover {
+          background: #dbeafe;
+        }
+        
+        .btn-logout {
+          background: #ef4444;
+          color: white;
+        }
+        
+        .btn-logout:hover {
+          background: #dc2626;
+        }
+        
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 90;
+          backdrop-filter: blur(2px);
+        }
+        
+        .modal {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: white;
+          border-radius: 16px;
+          padding: 28px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          z-index: 100;
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+        
+        .modal-small { width: 560px; max-width: 90vw; }
+        .modal-large { width: 840px; max-width: 95vw; }
+        
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+          padding-bottom: 16px;
+          border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .modal-title {
+          margin: 0;
+          font-size: 1.4rem;
+          font-weight: 800;
+          color: #0f172a;
+        }
+        
+        .modal-close {
+          background: transparent;
+          border: none;
+          font-size: 1.4rem;
+          color: #94a3b8;
+          cursor: pointer;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 6px;
+          transition: all 0.15s;
+        }
+        
+        .modal-close:hover {
+          background: #f1f5f9;
+          color: #64748b;
+        }
+        
+        .modal-subtitle {
+          font-size: 14px;
+          color: #64748b;
+          margin-bottom: 24px;
+          line-height: 1.5;
+        }
+        
+        .form-group {
+          margin-bottom: 20px;
+        }
+        
+        .form-label {
+          display: block;
+          font-weight: 700;
+          font-size: 14px;
+          color: #0f172a;
+          margin-bottom: 8px;
+        }
+        
+        .form-input {
+          width: 100%;
+          padding: 12px 14px;
+          border: 2px solid #e2e8f0;
+          border-radius: 10px;
+          font-size: 14px;
+          transition: all 0.2s;
+        }
+        
+        .form-input:focus {
+          outline: none;
+          border-color: #002060;
+          box-shadow: 0 0 0 3px rgba(0, 32, 96, 0.1);
+        }
+        
+        .btn {
+          padding: 12px 24px;
+          border-radius: 10px;
+          font-weight: 700;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: none;
+        }
+        
+        .btn-primary {
+          background: #002060;
+          color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+          background: #001a4d;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(0, 32, 96, 0.3);
+        }
+        
+        .btn-primary:disabled {
+          background: #94a3b8;
+          cursor: not-allowed;
+        }
+        
+        .btn-danger {
+          background: #ef4444;
+          color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+          background: #dc2626;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+        }
+        
+        .btn-secondary {
+          background: #f1f5f9;
+          color: #475569;
+          border: 2px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+          background: #e2e8f0;
+        }
+        
+        .btn-success {
+          background: #10b981;
+          color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+          background: #059669;
+        }
+        
+        .message {
+          padding: 14px 18px;
+          border-radius: 10px;
+          font-size: 14px;
+          font-weight: 600;
+          margin-top: 16px;
+        }
+        
+        .message-success {
+          background: #d1fae5;
+          color: #065f46;
+          border: 2px solid #a7f3d0;
+        }
+        
+        .message-error {
+          background: #fee2e2;
+          color: #991b1b;
+          border: 2px solid #fecaca;
+        }
+        
+        .user-list {
+          max-height: 320px;
+          overflow-y: auto;
+          margin-bottom: 16px;
+        }
+        
+        .user-item {
+          padding: 14px;
+          border-radius: 10px;
+          margin-bottom: 10px;
+          background: white;
+          border: 2px solid #e2e8f0;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        
+        .user-item:hover {
+          border-color: #002060;
+          background: #f8fafc;
+        }
+        
+        .user-item.selected {
+          background: #eff6ff;
+          border-color: #002060;
+        }
+        
+        .user-item.danger-selected {
+          background: #fee2e2;
+          border-color: #ef4444;
+        }
+        
+        .user-name {
+          font-weight: 700;
+          font-size: 14px;
+          margin-bottom: 4px;
+        }
+        
+        .user-email {
+          font-size: 13px;
+          color: #64748b;
+        }
+        
+        .modal-footer {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          margin-top: 24px;
+          padding-top: 20px;
+          border-top: 2px solid #e2e8f0;
+        }
+        
+        @media (max-width: 768px) {
+          .header-center {
+            display: none;
+          }
+          
+          .app-header {
+            padding: 1rem 1.5rem;
+          }
+          
+          .modal-small,
+          .modal-large {
+            width: 95vw;
+            padding: 20px;
+          }
+        }
+      `}</style>
+
+      <header className="app-header">
+        <div className="header-left">
+          <img src={logo} alt="Sandeza logo" className="logo-img" />
+          <div className="company-info">
+            <h1>SANDEZA INC</h1>
+            <div className="company-subtitle">IT Ticket Portal</div>
           </div>
         </div>
 
-        {/* CENTER TITLE */}
-        <div
-          style={{
-            position: 'absolute',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            textAlign: 'center',
-            pointerEvents: 'none',
-            animation: 'floatGlow 3s ease-in-out infinite',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '1.15rem',
-              fontWeight: 900,
-              letterSpacing: '0.5px',
-              color: '#0f172a',
-              textShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            }}
-          >
-            SANDEZA HELPDESK
-          </div>
-          <div
-            style={{
-              fontSize: '0.75rem',
-              marginTop: 2,
-              fontWeight: 600,
-              color: '#64748b',
-              letterSpacing: '0.3px',
-            }}
-          >
-            Empowering Support • Every Step
-          </div>
+        <div className="header-center">
+          <h2 className="header-title">SANDEZA HELPDESK</h2>
+          <div className="header-tagline">Empowering Support • Every Step</div>
         </div>
 
-        {/* RIGHT PROFILE + GEAR */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {isAdmin && (
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => setSettingsOpen(s => !s)}
-                  aria-label="Admin settings"
-                  title="Admin settings"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    border: '1px solid rgba(15,23,42,0.06)',
-                    background: settingsOpen ? '#eef2ff' : 'linear-gradient(180deg,#ffffff,#fbfdff)',
-                    cursor: 'pointer',
-                    boxShadow: '0 6px 18px rgba(2,6,23,0.04)',
-                    color: '#374151',
-                  }}
-                >
-                  <img src={gearIcon} alt="Settings" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-                </button>
-
-                {settingsOpen && (
-                  <div
-                    role="menu"
-                    aria-label="Admin settings"
-                    style={{
-                      position: 'absolute',
-                      right: 0,
-                      marginTop: 8,
-                      background: 'white',
-                      border: '1px solid rgba(15,23,42,0.06)',
-                      borderRadius: 8,
-                      boxShadow: '0 12px 40px rgba(2,6,23,0.12)',
-                      padding: 10,
-                      width: 260,
-                      zIndex: 60,
-                    }}
-                  >
-                    <div style={{ fontWeight: 800, marginBottom: 8 }}>Admin Settings</div>
-
-                    <button
-                      onClick={() => { openAddModal(); setSettingsOpen(false); }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '10px 8px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        color: '#0b79bf',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Add user
-                    </button>
-
-                    <button
-                      onClick={() => { openRemoveModal(); setSettingsOpen(false); }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '10px 8px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        color: '#ef4444',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Remove user
-                    </button>
-
-                    <button
-                      onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '10px 8px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        color: '#0b79bf',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Add field
-                    </button>
-
-                    {/* NEW: Edit Field Button */}
-                    <button
-                      onClick={() => { openEditFieldModal(); setSettingsOpen(false); }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '10px 8px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        color: '#8b5cf6',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Edit field
-                    </button>
-
-                    <button
-                      onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '10px 8px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        color: '#ef4444',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Remove field
-                    </button>
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-                      <button
-                        onClick={() => setSettingsOpen(false)}
-                        style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* PROFILE BUTTON */}
-            <div ref={profileRef} style={{ position: 'relative' }}>
+        <div className="header-right">
+          {isAdmin && (
+            <div style={{ position: 'relative' }}>
               <button
-                onClick={() => setProfileOpen(prev => !prev)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '8px 12px',
-                  borderRadius: 999,
-                  border: '1px solid rgba(15,23,42,0.06)',
-                  background: 'linear-gradient(180deg,#ffffff,#fbfdff)',
-                  cursor: 'pointer',
-                  boxShadow: '0 6px 18px rgba(2,6,23,0.06)',
-                }}
-                aria-haspopup="true"
-                aria-expanded={profileOpen}
+                onClick={() => setSettingsOpen(s => !s)}
+                className="settings-btn"
+                aria-label="Admin settings"
               >
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: '#eef2ff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 800,
-                    color: '#3730a3',
-                    fontSize: 14,
-                    flexShrink: 0,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {profilePhoto ? (
-                    <img
-                      src={profilePhoto}
-                      alt="profile"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    />
-                  ) : (
-                    <span>{initials}</span>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                    {accounts?.[0]?.name || accounts?.[0]?.username}
-                  </span>
-                  <span style={{ fontSize: 11, color: '#6b7280' }}>
-                    {accounts?.[0]?.username}
-                  </span>
-                </div>
-
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="M6 8l4 4 4-4"
-                    stroke="#374151"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                <img src={gearIcon} alt="Settings" />
               </button>
 
-              {profileOpen && (
-                <div
-                  role="menu"
-                  aria-label="Profile menu"
-                  style={{
-                    position: 'absolute',
-                    right: 0,
-                    marginTop: 10,
-                    background: 'white',
-                    border: '1px solid rgba(15,23,42,0.06)',
-                    borderRadius: 10,
-                    boxShadow: '0 12px 40px rgba(2,6,23,0.12)',
-                    padding: 12,
-                    width: 300,
-                    zIndex: 60,
-                  }}
-                >
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
-                    <div
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 12,
-                        background: '#eef2ff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 800,
-                        color: '#3730a3',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {profilePhoto ? (
-                        <img
-                          src={profilePhoto}
-                          alt="profile"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                        />
-                      ) : (
-                        <span style={{ fontSize: 18 }}>{initials}</span>
-                      )}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 800, color: '#0f172a' }}>
-                        {accounts?.[0]?.name || 'Unknown'}
-                      </div>
-                      <div style={{ color: '#6b7280', fontSize: 13 }}>
-                        {accounts?.[0]?.username}
-                      </div>
-                    </div>
-                  </div>
+              {settingsOpen && (
+                <div className="settings-dropdown">
+                  <div className="dropdown-title">⚙️ Admin Settings</div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <button
-                      onClick={() => {
-                        openFullProfile();
-                        setProfileOpen(false);
-                      }}
-                      style={{
-                        textAlign: 'left',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '10px',
-                        borderRadius: 8,
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        color: '#2563eb',
-                      }}
-                    >
-                      View Full Profile
-                    </button>
+                  <button onClick={() => { openAddModal(); setSettingsOpen(false); }} className="dropdown-item add">
+                    ➕ Add User
+                  </button>
 
-                    <button
-                      onClick={logout}
-                      style={{
-                        textAlign: 'left',
-                        background: '#d91515ff',
-                        border: 'none',
-                        padding: '10px',
-                        borderRadius: 8,
-                        cursor: 'pointer',
-                        color: 'white',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Logout
-                    </button>
-                  </div>
+                  <button onClick={() => { openRemoveModal(); setSettingsOpen(false); }} className="dropdown-item remove">
+                    ➖ Remove User
+                  </button>
+
+                  <button onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }} className="dropdown-item add">
+                    📝 Add Field
+                  </button>
+
+                  <button onClick={() => { openEditFieldModal(); setSettingsOpen(false); }} className="dropdown-item edit">
+                    ✏️ Edit Field
+                  </button>
+
+                  <button onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }} className="dropdown-item remove">
+                    🗑️ Remove Field
+                  </button>
                 </div>
               )}
             </div>
+          )}
+
+          <div ref={profileRef} style={{ position: 'relative' }}>
+            <button onClick={() => setProfileOpen(prev => !prev)} className="profile-btn">
+              <div className="profile-avatar">
+                {profilePhoto ? (
+                  <img src={profilePhoto} alt="profile" />
+                ) : (
+                  <span>{initials}</span>
+                )}
+              </div>
+
+              <div className="profile-info">
+                <span className="profile-name">{accounts?.[0]?.name || accounts?.[0]?.username}</span>
+                <span className="profile-email">{accounts?.[0]?.username}</span>
+              </div>
+
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                <path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {profileOpen && (
+              <div className="profile-dropdown">
+                <div className="profile-dropdown-header">
+                  <div className="profile-dropdown-avatar">
+                    {profilePhoto ? (
+                      <img src={profilePhoto} alt="profile" />
+                    ) : (
+                      <span style={{ fontSize: 18 }}>{initials}</span>
+                    )}
+                  </div>
+                  <div className="profile-dropdown-info">
+                    <div className="profile-dropdown-name">{accounts?.[0]?.name || 'Unknown'}</div>
+                    <div className="profile-dropdown-email">{accounts?.[0]?.username}</div>
+                  </div>
+                </div>
+
+                <div className="profile-actions">
+                  <button onClick={() => { openFullProfile(); setProfileOpen(false); }} className="profile-action-btn btn-view-profile">
+                    👤 View Full Profile
+                  </button>
+
+                  <button onClick={logout} className="profile-action-btn btn-logout">
+                    🚪 Logout
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Add User Modal (unchanged) */}
+      {/* Add User Modal */}
       {addModalOpen && (
         <>
-          <div
-            onClick={closeAddModal}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.4)',
-              zIndex: 90,
-            }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'white',
-              borderRadius: '10px',
-              padding: '18px',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              width: '560px',
-              zIndex: 100,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>Add user to Helpdesk_Admin</h3>
-              <button onClick={closeAddModal} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                ✖
-              </button>
+          <div className="modal-overlay" onClick={closeAddModal} />
+          <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Add Admin User</h3>
+              <button onClick={closeAddModal} className="modal-close">✖</button>
             </div>
 
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
-              Search users by email.
+            <div className="modal-subtitle">
+              Search for users by email to add them to the Helpdesk_Admin group.
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by email"
-                style={{
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  border: '1px solid rgba(15,23,42,0.08)',
-                  outline: 'none',
-                  flex: 1,
-                }}
+                placeholder="Search by email..."
+                className="form-input"
                 onKeyDown={(e) => { if (e.key === 'Enter') performSearch(); }}
+                style={{ flex: 1 }}
               />
-              <button
-                onClick={performSearch}
-                disabled={searchLoading}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: 8,
-                  background: '#0b79bf',
-                  color: 'white',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontWeight: 700,
-                }}
-              >
-                {searchLoading ? 'Searching…' : 'Search'}
+              <button onClick={performSearch} disabled={searchLoading} className="btn btn-primary">
+                {searchLoading ? '🔍 Searching...' : '🔍 Search'}
               </button>
             </div>
 
-            <div style={{ maxHeight: 240, overflow: 'auto', marginBottom: 8 }}>
-              {searchResults.length === 0 && !searchLoading && <div style={{ color: '#6b7280' }}>No results</div>}
+            <div className="user-list">
+              {searchResults.length === 0 && !searchLoading && (
+                <div style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>
+                  No results yet. Search for a user above.
+                </div>
+              )}
               {searchResults.map(u => (
                 <div
                   key={u.id}
                   onClick={() => setSelectedSearchUser(u)}
-                  style={{
-                    padding: 10,
-                    borderRadius: 8,
-                    marginBottom: 8,
-                    background: selectedSearchUser?.id === u.id ? '#eef2ff' : '#fff',
-                    border: '1px solid rgba(15,23,42,0.04)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
+                  className={`user-item ${selectedSearchUser?.id === u.id ? 'selected' : ''}`}
                 >
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{u.displayName}</div>
-                    <div style={{ fontSize: 13, color: '#6b7280' }}>{u.mail || u.userPrincipalName}</div>
-                  </div>
+                  <div className="user-name">{u.displayName}</div>
+                  <div className="user-email">{u.mail || u.userPrincipalName}</div>
                 </div>
               ))}
             </div>
 
-            {addMessage && <div style={{ padding: 10, background: '#ecfdf5', color: '#065f46', borderRadius: 8 }}>{addMessage}</div>}
-            {addError && <div style={{ padding: 10, background: '#fff1f2', color: '#9f1239', borderRadius: 8 }}>{addError}</div>}
+            {addMessage && <div className="message message-success">✓ {addMessage}</div>}
+            {addError && <div className="message message-error">✕ {addError}</div>}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-              <button onClick={closeAddModal} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
-                Cancel
-              </button>
+            <div className="modal-footer">
+              <button onClick={closeAddModal} className="btn btn-secondary">Cancel</button>
               <button
                 onClick={confirmAddUser}
                 disabled={addLoading || !selectedSearchUser}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: addLoading ? '#9ec7df' : '#0b79bf',
-                  color: 'white',
-                  border: 'none',
-                  cursor: addLoading ? 'default' : 'pointer',
-                  fontWeight: 700,
-                }}
+                className="btn btn-primary"
               >
-                {addLoading ? 'Adding…' : 'Add as admin'}
+                {addLoading ? 'Adding...' : 'Add as Admin'}
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* Remove User Modal (unchanged) */}
+      {/* Remove User Modal */}
       {removeModalOpen && (
         <>
-          <div
-            onClick={closeRemoveModal}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.4)',
-              zIndex: 90,
-            }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'white',
-              borderRadius: '10px',
-              padding: '18px',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              width: '560px',
-              zIndex: 100,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>Remove user from Admin rights</h3>
-              <button onClick={closeRemoveModal} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                ✖
-              </button>
+          <div className="modal-overlay" onClick={closeRemoveModal} />
+          <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Remove Admin User</h3>
+              <button onClick={closeRemoveModal} className="modal-close">✖</button>
             </div>
 
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
-              Select an existing member to remove their admin rights.
+            <div className="modal-subtitle">
+              Select a user to remove their admin rights from the Helpdesk_Admin group.
             </div>
 
-            <div style={{ maxHeight: 300, overflow: 'auto', marginBottom: 8 }}>
-              {membersLoading && <div style={{ color: '#6b7280' }}>Loading members…</div>}
-              {!membersLoading && groupMembers.length === 0 && <div style={{ color: '#6b7280' }}>No members found.</div>}
+            <div className="user-list">
+              {membersLoading && <div style={{ textAlign: 'center', color: '#94a3b8' }}>Loading members...</div>}
+              {!membersLoading && groupMembers.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#94a3b8' }}>No members found.</div>
+              )}
               {groupMembers.map(m => (
                 <div
                   key={m.id}
                   onClick={() => setSelectedMember(m)}
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    marginBottom: 8,
-                    background: selectedMember?.id === m.id ? '#fff1f2' : '#fff',
-                    border: '1px solid rgba(15,23,42,0.04)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
+                  className={`user-item ${selectedMember?.id === m.id ? 'danger-selected' : ''}`}
                 >
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{m.displayName}</div>
-                    <div style={{ fontSize: 13, color: '#6b7280' }}>{m.mail || m.userPrincipalName}</div>
-                  </div>
+                  <div className="user-name">{m.displayName}</div>
+                  <div className="user-email">{m.mail || m.userPrincipalName}</div>
                 </div>
               ))}
             </div>
 
-            {removeMessage && <div style={{ padding: 10, background: '#ecfdf5', color: '#065f46', borderRadius: 8 }}>{removeMessage}</div>}
-            {removeError && <div style={{ padding: 10, background: '#fff1f2', color: '#9f1239', borderRadius: 8 }}>{removeError}</div>}
+            {removeMessage && <div className="message message-success">✓ {removeMessage}</div>}
+            {removeError && <div className="message message-error">✕ {removeError}</div>}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-              <button onClick={closeRemoveModal} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
-                Cancel
-              </button>
+            <div className="modal-footer">
+              <button onClick={closeRemoveModal} className="btn btn-secondary">Cancel</button>
               <button
                 onClick={confirmRemoveUser}
                 disabled={removeLoading || !selectedMember}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: removeLoading ? '#f7a6a6' : '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  cursor: removeLoading ? 'default' : 'pointer',
-                  fontWeight: 700,
-                }}
+                className="btn btn-danger"
               >
-                {removeLoading ? 'Removing…' : 'Remove admin'}
+                {removeLoading ? 'Removing...' : 'Remove Admin'}
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* Add Field Modal - same as before */}
+      {/* Add Field Modal */}
       {addFieldOpen && (
         <>
-          <div
-            onClick={() => setAddFieldOpen(false)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.4)',
-              zIndex: 90,
-            }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'white',
-              borderRadius: '10px',
-              padding: '24px',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              width: '800px',
-              maxWidth: '90vw',
-              zIndex: 100,
-              maxHeight: '85vh',
-              overflow: 'auto'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Add Category / Field</h3>
-              <button 
-                onClick={() => setAddFieldOpen(false)} 
-                style={{ 
-                  background: 'transparent', 
-                  border: 'none', 
-                  cursor: 'pointer',
-                  fontSize: '1.2rem',
-                  color: '#6b7280'
-                }}
-              >
-                ✖
-              </button>
+          <div className="modal-overlay" onClick={() => setAddFieldOpen(false)} />
+          <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Add Category / Field</h3>
+              <button onClick={() => setAddFieldOpen(false)} className="modal-close">✖</button>
             </div>
 
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
-              Define a new category and required fields. Users in Category Heads and CCs will be notified for ticket actions.
+            <div className="modal-subtitle">
+              Define a new category with custom fields. Users in Category Heads and CCs will be notified for ticket actions.
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               
-              <div style={{ width: '100%' }}>
-                <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                  Category Name <span style={{ color: '#ef4444' }}>*</span>
-                </label>
+              <div className="form-group">
+                <label className="form-label">Category Name <span style={{ color: '#ef4444' }}>*</span></label>
                 <input 
                   value={categoryName} 
                   onChange={(e) => setCategoryName(e.target.value)} 
-                  placeholder="Enter category name (e.g., HR, IT Support, Finance)" 
-                  style={{ 
-                    width: '100%', 
-                    padding: '10px 12px', 
-                    borderRadius: 8, 
-                    border: '1px solid #e6e9ee',
-                    fontSize: 14,
-                    boxSizing: 'border-box'
-                  }} 
+                  placeholder="e.g., HR, IT Support, Finance" 
+                  className="form-input"
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 
                 <div>
-                  <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                    Category Heads <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                  <label className="form-label">Category Heads <span style={{ color: '#ef4444' }}>*</span></label>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                     Start typing to search and select users
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1829,56 +1854,54 @@ function Header({ logout }) {
                         ref={el => categoryHeadsRefs.current[idx] = el}
                         style={{ position: 'relative' }}
                       >
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
-                        <input
-                          value={h.searchQuery}
-                          onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
-                          placeholder="Type name or email..."
-                          style={{ 
-                            flex: 1, 
-                            padding: '8px 10px', 
-                            borderRadius: 6, 
-                            border: h.email ? '1px solid #10b981' : '1px solid #e6e9ee',
-                            fontSize: 13,
-                            background: h.email ? '#ecfdf5' : 'white'
-                          }}
-                        />
-                        
-                        {/* ✅ FIXED: Show + for all items */}
-                        <button 
-                          type="button" 
-                          onClick={addCategoryHead} 
-                          style={{ 
-                            padding: '8px 12px', 
-                            borderRadius: 6, 
-                            background: '#eef2ff', 
-                            border: '1px solid #c7d2fe',
-                            cursor: 'pointer',
-                            fontSize: 16,
-                            fontWeight: 600
-                          }}
-                        >
-                          ＋
-                        </button>
-                        
-                        {/* ✅ FIXED: Show × for all items except when it's the only one */}
-                        {categoryHeads.length > 1 && (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input
+                            value={h.searchQuery}
+                            onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
+                            placeholder="Type name or email..."
+                            style={{ 
+                              flex: 1, 
+                              padding: '8px 10px', 
+                              borderRadius: 6, 
+                              border: h.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                              background: h.email ? '#ecfdf5' : 'white',
+                              fontSize: 13
+                            }}
+                          />
+                          
                           <button 
                             type="button" 
-                            onClick={() => removeCategoryHead(idx)} 
+                            onClick={addCategoryHead} 
                             style={{ 
                               padding: '8px 12px', 
                               borderRadius: 6, 
-                              background: '#fff1f2', 
-                              border: '1px solid #fecaca',
+                              background: '#eff6ff', 
+                              border: '2px solid #dbeafe',
                               cursor: 'pointer',
-                              fontSize: 14
+                              fontSize: 16,
+                              fontWeight: 600
                             }}
                           >
-                            ✖
+                            ＋
                           </button>
-                        )}
-                      </div>
+                          
+                          {categoryHeads.length > 1 && (
+                            <button 
+                              type="button" 
+                              onClick={() => removeCategoryHead(idx)} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#fee2e2', 
+                                border: '2px solid #fecaca',
+                                cursor: 'pointer',
+                                fontSize: 14
+                              }}
+                            >
+                              ✖
+                            </button>
+                          )}
+                        </div>
 
                         {h.showDropdown && h.searchResults.length > 0 && (
                           <div style={{
@@ -1887,12 +1910,12 @@ function Header({ logout }) {
                             left: 0,
                             right: 0,
                             background: 'white',
-                            border: '1px solid #e6e9ee',
-                            borderRadius: 6,
+                            border: '2px solid #e2e8f0',
+                            borderRadius: 8,
                             marginTop: 4,
                             maxHeight: 200,
                             overflowY: 'auto',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                             zIndex: 110
                           }}>
                             {h.searchResults.map((user, userIdx) => (
@@ -1900,31 +1923,31 @@ function Header({ logout }) {
                                 key={userIdx}
                                 onClick={() => selectCategoryHead(idx, user)}
                                 style={{
-                                  padding: '8px 12px',
+                                  padding: '10px 12px',
                                   cursor: 'pointer',
                                   borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
                                   background: 'white',
                                   transition: 'background 0.15s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                 onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                               >
-                                <div style={{ fontWeight: 600, fontSize: 13 }}>{user.displayName}</div>
-                                <div style={{ fontSize: 11, color: '#6b7280' }}>{user.mail}</div>
+                                <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
+                                <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                               </div>
                             ))}
                           </div>
                         )}
 
                         {h.email && (
-                          <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span>✓</span>
                             <span>{h.name} ({h.email})</span>
                           </div>
                         )}
 
                         {h.searching && (
-                          <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
                             Searching...
                           </div>
                         )}
@@ -1934,10 +1957,8 @@ function Header({ logout }) {
                 </div>
 
                 <div>
-                  <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                    CC Emails (Optional)
-                  </label>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                  <label className="form-label">CC Emails (Optional)</label>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                     Start typing to search and select users
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1947,7 +1968,7 @@ function Header({ logout }) {
                         ref={el => ccEmailsRefs.current[idx] = el}
                         style={{ position: 'relative' }}
                       >
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
                           <input
                             value={c.searchQuery}
                             onChange={(e) => updateCcEmailQuery(idx, e.target.value)}
@@ -1956,21 +1977,20 @@ function Header({ logout }) {
                               flex: 1, 
                               padding: '8px 10px', 
                               borderRadius: 6, 
-                              border: c.email ? '1px solid #10b981' : '1px solid #e6e9ee',
-                              fontSize: 13,
-                              background: c.email ? '#ecfdf5' : 'white'
+                              border: c.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                              background: c.email ? '#ecfdf5' : 'white',
+                              fontSize: 13
                             }}
                           />
                           
-                          {/* ✅ FIXED: Show + for all items */}
                           <button 
                             type="button" 
                             onClick={addCcEmail} 
                             style={{ 
                               padding: '8px 12px', 
                               borderRadius: 6, 
-                              background: '#eef2ff', 
-                              border: '1px solid #c7d2fe',
+                              background: '#eff6ff', 
+                              border: '2px solid #dbeafe',
                               cursor: 'pointer',
                               fontSize: 16,
                               fontWeight: 600
@@ -1979,15 +1999,14 @@ function Header({ logout }) {
                             ＋
                           </button>
                           
-                          {/* ✅ FIXED: Show × for all items (CC is optional, so we can remove all) */}
                           <button 
                             type="button" 
                             onClick={() => removeCcEmail(idx)} 
                             style={{ 
                               padding: '8px 12px', 
                               borderRadius: 6, 
-                              background: '#fff1f2', 
-                              border: '1px solid #fecaca',
+                              background: '#fee2e2', 
+                              border: '2px solid #fecaca',
                               cursor: 'pointer',
                               fontSize: 14
                             }}
@@ -2003,12 +2022,12 @@ function Header({ logout }) {
                             left: 0,
                             right: 0,
                             background: 'white',
-                            border: '1px solid #e6e9ee',
-                            borderRadius: 6,
+                            border: '2px solid #e2e8f0',
+                            borderRadius: 8,
                             marginTop: 4,
                             maxHeight: 200,
                             overflowY: 'auto',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                             zIndex: 110
                           }}>
                             {c.searchResults.map((user, userIdx) => (
@@ -2016,31 +2035,31 @@ function Header({ logout }) {
                                 key={userIdx}
                                 onClick={() => selectCcEmail(idx, user)}
                                 style={{
-                                  padding: '8px 12px',
+                                  padding: '10px 12px',
                                   cursor: 'pointer',
                                   borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
                                   background: 'white',
                                   transition: 'background 0.15s'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                 onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                               >
-                                <div style={{ fontWeight: 600, fontSize: 13 }}>{user.displayName}</div>
-                                <div style={{ fontSize: 11, color: '#6b7280' }}>{user.mail}</div>
+                                <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
+                                <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                               </div>
                             ))}
                           </div>
                         )}
 
                         {c.email && (
-                          <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span>✓</span>
                             <span>{c.name} ({c.email})</span>
                           </div>
                         )}
 
                         {c.searching && (
-                          <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
                             Searching...
                           </div>
                         )}
@@ -2051,12 +2070,12 @@ function Header({ logout }) {
 
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 
                 <div style={{ 
                   padding: 16, 
-                  border: '1px solid #e6e9ee', 
-                  borderRadius: 8,
+                  border: '2px solid #e2e8f0', 
+                  borderRadius: 12,
                   background: enableOnBehalf ? '#f0f9ff' : '#fafafa'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2065,21 +2084,17 @@ function Header({ logout }) {
                       type="checkbox" 
                       checked={enableOnBehalf} 
                       onChange={(e) => setEnableOnBehalf(e.target.checked)}
-                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
                     />
                   </div>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                     Allow users to submit tickets for themselves or others
                   </div>
 
                   {enableOnBehalf && (
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                        Options
-                      </div>
-                      <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>
-                        • Self<br />
-                        • Other
+                        Options: Self, Other
                       </div>
                       <div style={{ marginTop: 10 }}>
                         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2087,7 +2102,7 @@ function Header({ logout }) {
                             type="checkbox"
                             checked={requireOnBehalf}
                             onChange={(e) => setRequireOnBehalf(e.target.checked)}
-                            style={{ width: 14, height: 14 }}
+                            style={{ width: 16, height: 16 }}
                           />
                           <span>Required field</span>
                         </label>
@@ -2099,8 +2114,8 @@ function Header({ logout }) {
                 <div
                   style={{
                     padding: 16,
-                    border: '1px solid #e6e9ee',
-                    borderRadius: 8,
+                    border: '2px solid #e2e8f0',
+                    borderRadius: 12,
                     background: enableSubCategory ? '#f0fdf4' : '#fafafa'
                   }}
                 >
@@ -2110,20 +2125,16 @@ function Header({ logout }) {
                       type="checkbox"
                       checked={enableSubCategory}
                       onChange={(e) => setEnableSubCategory(e.target.checked)}
-                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
                     />
                   </div>
 
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                    Add multiple subcategories for users to choose from
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                    Add subcategories for users to choose from
                   </div>
 
                   {enableSubCategory && (
                     <div style={{ marginTop: 12 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                        Subcategories:
-                      </div>
-
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {subCategories.length === 0 && (
                           <button
@@ -2131,8 +2142,8 @@ function Header({ logout }) {
                             onClick={addSubCategory}
                             style={{
                               alignSelf: 'flex-start',
-                              background: '#eef2ff',
-                              border: '1px solid #c7d2fe',
+                              background: '#eff6ff',
+                              border: '2px solid #dbeafe',
                               borderRadius: 6,
                               padding: '4px 10px',
                               cursor: 'pointer',
@@ -2153,8 +2164,8 @@ function Header({ logout }) {
                               style={{
                                 flex: 1,
                                 padding: '6px 8px',
-                                borderRadius: 4,
-                                border: '1px solid #e6e9ee',
+                                borderRadius: 6,
+                                border: '2px solid #e2e8f0',
                                 fontSize: 12
                               }}
                             />
@@ -2181,14 +2192,14 @@ function Header({ logout }) {
                         <div
                           style={{
                             padding: '6px 8px',
-                            borderRadius: 4,
-                            border: '1px dashed #cbd5e1',
+                            borderRadius: 6,
+                            border: '2px dashed #cbd5e1',
                             fontSize: 12,
                             color: '#475569',
                             background: '#f8fafc'
                           }}
                         >
-                          Other
+                          Other (fixed)
                         </div>
                       </div>
 
@@ -2198,7 +2209,7 @@ function Header({ logout }) {
                             type="checkbox"
                             checked={requireSubCategory}
                             onChange={(e) => setRequireSubCategory(e.target.checked)}
-                            style={{ width: 14, height: 14 }}
+                            style={{ width: 16, height: 16 }}
                           />
                           <span>Required field</span>
                         </label>
@@ -2209,8 +2220,8 @@ function Header({ logout }) {
 
                 <div style={{ 
                   padding: 16, 
-                  border: '1px solid #e6e9ee', 
-                  borderRadius: 8,
+                  border: '2px solid #e2e8f0', 
+                  borderRadius: 12,
                   background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2219,11 +2230,11 @@ function Header({ logout }) {
                       type="checkbox" 
                       checked={enableAttachmentsForCategory} 
                       onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)}
-                      style={{ width: 18, height: 18, cursor: 'pointer' }}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
                     />
                   </div>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                    Allow file attachments on tickets in this category
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                    Allow file attachments on tickets
                   </div>
 
                   {enableAttachmentsForCategory && (
@@ -2233,7 +2244,7 @@ function Header({ logout }) {
                           type="checkbox" 
                           checked={requireAttachmentsForCategory} 
                           onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)}
-                          style={{ width: 14, height: 14 }}
+                          style={{ width: 16, height: 16 }}
                         /> 
                         <span>Required field</span>
                       </label>
@@ -2242,178 +2253,85 @@ function Header({ logout }) {
                 </div>
 
               </div>
-            </div>
-            <div
-              style={{
-                padding: 16,
-                border: '1px solid #e6e9ee',
-                borderRadius: 8,
-                background: requireApproval ? '#fff7ed' : '#fafafa'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <label style={{ fontWeight: 700, fontSize: 14 }}>
-                  Approval Required
-                </label>
-                <input
-                  type="checkbox"
-                  checked={requireApproval}
-                  onChange={(e) => setRequireApproval(e.target.checked)}
-                  style={{ width: 18, height: 18, cursor: 'pointer' }}
-                />
-              </div>
 
-              <div style={{ fontSize: 12, color: '#6b7280' }}>
-                Tickets in this category must be approved by category head or CC head
-              </div>
-            </div>
-
-
-            {categorySuccess && (
-              <div style={{ 
-                marginTop: 16, 
-                padding: '12px 16px', 
-                background: '#ecfdf5', 
-                color: '#065f46', 
-                borderRadius: 8,
-                border: '1px solid #a7f3d0',
-                fontSize: 14,
-                fontWeight: 600
-              }}>
-                ✓ {categorySuccess}
-              </div>
-            )}
-            
-            {categoryError && (
-              <div style={{ 
-                marginTop: 16, 
-                padding: '12px 16px', 
-                background: '#fff1f2', 
-                color: '#9f1239', 
-                borderRadius: 8,
-                border: '1px solid #fecaca',
-                fontSize: 14,
-                fontWeight: 600
-              }}>
-                ✕ {categoryError}
-              </div>
-            )}
-
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'flex-end', 
-              gap: 12, 
-              marginTop: 20,
-              paddingTop: 20,
-              borderTop: '1px solid #e6e9ee'
-            }}>
-              <button 
-                onClick={() => { resetCategoryForm(); setAddFieldOpen(false); }} 
-                style={{ 
-                  background: 'transparent', 
-                  border: '1px solid #e6e9ee', 
-                  color: '#6b7280', 
-                  cursor: 'pointer',
-                  padding: '10px 20px',
-                  borderRadius: 8,
-                  fontWeight: 600,
-                  fontSize: 14
+              <div
+                style={{
+                  padding: 16,
+                  border: '2px solid #e2e8f0',
+                  borderRadius: 12,
+                  background: requireApproval ? '#fff7ed' : '#fafafa'
                 }}
               >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <label style={{ fontWeight: 700, fontSize: 14 }}>
+                    Approval Required
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={requireApproval}
+                    onChange={(e) => setRequireApproval(e.target.checked)}
+                    style={{ width: 20, height: 20, cursor: 'pointer' }}
+                  />
+                </div>
+
+                <div style={{ fontSize: 12, color: '#64748b' }}>
+                  Tickets must be approved by category head or CC
+                </div>
+              </div>
+            </div>
+
+            {categorySuccess && <div className="message message-success">✓ {categorySuccess}</div>}
+            {categoryError && <div className="message message-error">✕ {categoryError}</div>}
+
+            <div className="modal-footer">
+              <button onClick={() => { resetCategoryForm(); setAddFieldOpen(false); }} className="btn btn-secondary">
                 Cancel
               </button>
               <button 
                 onClick={createCategory} 
                 disabled={categoryLoading || !categoryName.trim()} 
-                style={{ 
-                  padding: '10px 24px', 
-                  borderRadius: 8, 
-                  background: categoryLoading || !categoryName.trim() ? '#9ec7df' : '#0b79bf', 
-                  color: 'white', 
-                  border: 'none', 
-                  cursor: categoryLoading || !categoryName.trim() ? 'not-allowed' : 'pointer', 
-                  fontWeight: 700,
-                  fontSize: 14
-                }}
+                className="btn btn-primary"
               >
-                {categoryLoading ? 'Creating Category…' : 'Create Category'}
+                {categoryLoading ? 'Creating...' : 'Create Category'}
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* NEW: Edit Field Modal */}
+      {/* Edit Field Modal */}
       {editFieldOpen && (
         <>
-          <div
-            onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.4)',
-              zIndex: 90,
-            }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'white',
-              borderRadius: '10px',
-              padding: '24px',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              width: editingCategory ? '800px' : '600px',
-              maxWidth: '90vw',
-              zIndex: 100,
-              maxHeight: '85vh',
-              overflow: 'auto'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
+          <div className="modal-overlay" onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }} />
+          <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">
                 {editingCategory ? 'Edit Category' : 'Edit Field'}
               </h3>
-              <button 
-                onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }} 
-                style={{ 
-                  background: 'transparent', 
-                  border: 'none', 
-                  cursor: 'pointer',
-                  fontSize: '1.2rem',
-                  color: '#6b7280'
-                }}
-              >
-                ✖
-              </button>
+              <button onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }} className="modal-close">✖</button>
             </div>
 
-            {!editingCategory && (
+            {!editingCategory ? (
               <>
-                <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
+                <div className="modal-subtitle">
                   Select a category to edit its configuration.
                 </div>
 
                 <div style={{ maxHeight: 400, overflow: 'auto', marginBottom: 16 }}>
-                  {editCategoriesLoading && <div style={{ color: '#6b7280' }}>Loading categories…</div>}
+                  {editCategoriesLoading && <div style={{ textAlign: 'center', color: '#94a3b8' }}>Loading categories...</div>}
                   {!editCategoriesLoading && categoriesForEdit.length === 0 && (
-                    <div style={{ color: '#6b7280' }}>No categories found.</div>
-		   )}
+                    <div style={{ textAlign: 'center', color: '#94a3b8' }}>No categories found.</div>
+                  )}
                   {categoriesForEdit.map(c => (
                     <div
                       key={c.id}
                       onClick={() => selectCategoryForEdit(c)}
                       style={{
                         padding: 16,
-                        borderRadius: 8,
+                        borderRadius: 12,
                         marginBottom: 12,
                         background: '#fff',
-                        border: '2px solid #e6e9ee',
+                        border: '2px solid #e2e8f0',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
                       }}
@@ -2422,7 +2340,7 @@ function Header({ logout }) {
                         e.currentTarget.style.background = '#faf5ff';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '#e6e9ee';
+                        e.currentTarget.style.borderColor = '#e2e8f0';
                         e.currentTarget.style.background = '#fff';
                       }}
                     >
@@ -2430,13 +2348,12 @@ function Header({ logout }) {
                         {c.name || c.categoryName}
                       </div>
                       
-                      {/* Show feature badges */}
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                         {c.features?.onBehalf?.enabled && (
                           <span style={{ 
                             fontSize: 11, 
-                            padding: '2px 8px', 
-                            borderRadius: 4, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
                             background: '#dbeafe', 
                             color: '#1e40af',
                             fontWeight: 600
@@ -2447,8 +2364,8 @@ function Header({ logout }) {
                         {c.features?.subCategories?.enabled && (
                           <span style={{ 
                             fontSize: 11, 
-                            padding: '2px 8px', 
-                            borderRadius: 4, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
                             background: '#dcfce7', 
                             color: '#166534',
                             fontWeight: 600
@@ -2459,8 +2376,8 @@ function Header({ logout }) {
                         {c.features?.attachments?.enabled && (
                           <span style={{ 
                             fontSize: 11, 
-                            padding: '2px 8px', 
-                            borderRadius: 4, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
                             background: '#fee2e2', 
                             color: '#991b1b',
                             fontWeight: 600
@@ -2470,29 +2387,24 @@ function Header({ logout }) {
                         )}
                       </div>
 
-                      {/* Show category heads count */}
-                      <div style={{ fontSize: 12, color: '#6b7280' }}>
-                        <span style={{ fontWeight: 600 }}>Category Heads:</span> {c.categoryHeads?.length || 0}
-                        {' '} | {' '}
-                        <span style={{ fontWeight: 600 }}>CC Emails:</span> {c.cc?.length || 0}
+                      <div style={{ fontSize: 12, color: '#64748b' }}>
+                        <span style={{ fontWeight: 600 }}>Heads:</span> {c.categoryHeads?.length || 0} | 
+                        <span style={{ fontWeight: 600, marginLeft: 8 }}>CCs:</span> {c.cc?.length || 0}
                       </div>
                     </div>
                   ))}
                 </div>
               </>
-            )}
-
-            {/* Show edit form when category is selected */}
-            {editingCategory && (
+            ) : (
               <>
                 <div style={{ 
                   fontSize: 13, 
-                  color: '#6b7280', 
+                  color: '#64748b', 
                   marginBottom: 20,
                   padding: 12,
                   background: '#f0fdf4',
-                  borderRadius: 8,
-                  border: '1px solid #bbf7d0'
+                  borderRadius: 10,
+                  border: '2px solid #bbf7d0'
                 }}>
                   Editing: <strong>{editingCategory.name || editingCategory.categoryName}</strong>
                   <button
@@ -2504,9 +2416,9 @@ function Header({ logout }) {
                       marginLeft: 12,
                       fontSize: 11,
                       padding: '4px 10px',
-                      borderRadius: 4,
+                      borderRadius: 6,
                       background: '#fff',
-                      border: '1px solid #e6e9ee',
+                      border: '2px solid #e2e8f0',
                       cursor: 'pointer',
                       fontWeight: 600
                     }}
@@ -2517,36 +2429,22 @@ function Header({ logout }) {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   
-                  {/* Category Name */}
-                  <div style={{ width: '100%' }}>
-                    <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                      Category Name <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
+                  <div className="form-group">
+                    <label className="form-label">Category Name <span style={{ color: '#ef4444' }}>*</span></label>
                     <input 
                       value={categoryName} 
                       onChange={(e) => setCategoryName(e.target.value)} 
                       placeholder="Enter category name" 
-                      style={{ 
-                        width: '100%', 
-                        padding: '10px 12px', 
-                        borderRadius: 8, 
-                        border: '1px solid #e6e9ee',
-                        fontSize: 14,
-                        boxSizing: 'border-box'
-                      }} 
+                      className="form-input"
                     />
                   </div>
 
-                  {/* Two Column Layout for Category Heads and CC Emails */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                     
-                    {/* Category Heads with Real-time Search */}
                     <div>
-                      <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                        Category Heads <span style={{ color: '#ef4444' }}>*</span>
-                      </label>
-                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                        Start typing to search and select users
+                      <label className="form-label">Category Heads <span style={{ color: '#ef4444' }}>*</span></label>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Start typing to search
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {categoryHeads.map((h, idx) => (
@@ -2555,7 +2453,7 @@ function Header({ logout }) {
                             ref={el => categoryHeadsRefs.current[idx] = el}
                             style={{ position: 'relative' }}
                           >
-                            <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
                               <input
                                 value={h.searchQuery}
                                 onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
@@ -2564,9 +2462,9 @@ function Header({ logout }) {
                                   flex: 1, 
                                   padding: '8px 10px', 
                                   borderRadius: 6, 
-                                  border: h.email ? '1px solid #10b981' : '1px solid #e6e9ee',
-                                  fontSize: 13,
-                                  background: h.email ? '#ecfdf5' : 'white'
+                                  border: h.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                  background: h.email ? '#ecfdf5' : 'white',
+                                  fontSize: 13
                                 }}
                               />
                               {idx === categoryHeads.length - 1 ? (
@@ -2576,8 +2474,8 @@ function Header({ logout }) {
                                   style={{ 
                                     padding: '8px 12px', 
                                     borderRadius: 6, 
-                                    background: '#eef2ff', 
-                                    border: '1px solid #c7d2fe',
+                                    background: '#eff6ff', 
+                                    border: '2px solid #dbeafe',
                                     cursor: 'pointer',
                                     fontSize: 16,
                                     fontWeight: 600
@@ -2592,8 +2490,8 @@ function Header({ logout }) {
                                   style={{ 
                                     padding: '8px 12px', 
                                     borderRadius: 6, 
-                                    background: '#fff1f2', 
-                                    border: '1px solid #fecaca',
+                                    background: '#fee2e2', 
+                                    border: '2px solid #fecaca',
                                     cursor: 'pointer',
                                     fontSize: 14
                                   }}
@@ -2603,7 +2501,6 @@ function Header({ logout }) {
                               )}
                             </div>
 
-                            {/* Dropdown for search results */}
                             {h.showDropdown && h.searchResults.length > 0 && (
                               <div style={{
                                 position: 'absolute',
@@ -2611,12 +2508,12 @@ function Header({ logout }) {
                                 left: 0,
                                 right: 0,
                                 background: 'white',
-                                border: '1px solid #e6e9ee',
-                                borderRadius: 6,
+                                border: '2px solid #e2e8f0',
+                                borderRadius: 8,
                                 marginTop: 4,
                                 maxHeight: 200,
                                 overflowY: 'auto',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                                 zIndex: 110
                               }}>
                                 {h.searchResults.map((user, userIdx) => (
@@ -2624,33 +2521,31 @@ function Header({ logout }) {
                                     key={userIdx}
                                     onClick={() => selectCategoryHead(idx, user)}
                                     style={{
-                                      padding: '8px 12px',
+                                      padding: '10px 12px',
                                       cursor: 'pointer',
                                       borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
                                       background: 'white',
                                       transition: 'background 0.15s'
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                                   >
-                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{user.displayName}</div>
-                                    <div style={{ fontSize: 11, color: '#6b7280' }}>{user.mail}</div>
+                                    <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
+                                    <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                                   </div>
                                 ))}
                               </div>
                             )}
 
-                            {/* Show selected user */}
                             {h.email && (
-                              <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span>✓</span>
                                 <span>{h.name} ({h.email})</span>
                               </div>
                             )}
 
-                            {/* Loading indicator */}
                             {h.searching && (
-                              <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
                                 Searching...
                               </div>
                             )}
@@ -2659,13 +2554,10 @@ function Header({ logout }) {
                       </div>
                     </div>
 
-                    {/* CC Emails with Real-time Search */}
                     <div>
-                      <label style={{ fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                        CC Emails (Optional)
-                      </label>
-                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                        Start typing to search and select users
+                      <label className="form-label">CC Emails (Optional)</label>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Start typing to search
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {ccEmails.map((c, idx) => (
@@ -2674,7 +2566,7 @@ function Header({ logout }) {
                             ref={el => ccEmailsRefs.current[idx] = el}
                             style={{ position: 'relative' }}
                           >
-                            <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
                               <input
                                 value={c.searchQuery}
                                 onChange={(e) => updateCcEmailQuery(idx, e.target.value)}
@@ -2683,9 +2575,9 @@ function Header({ logout }) {
                                   flex: 1, 
                                   padding: '8px 10px', 
                                   borderRadius: 6, 
-                                  border: c.email ? '1px solid #10b981' : '1px solid #e6e9ee',
-                                  fontSize: 13,
-                                  background: c.email ? '#ecfdf5' : 'white'
+                                  border: c.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                  background: c.email ? '#ecfdf5' : 'white',
+                                  fontSize: 13
                                 }}
                               />
                               {idx === ccEmails.length - 1 ? (
@@ -2695,8 +2587,8 @@ function Header({ logout }) {
                                   style={{ 
                                     padding: '8px 12px', 
                                     borderRadius: 6, 
-                                    background: '#eef2ff', 
-                                    border: '1px solid #c7d2fe',
+                                    background: '#eff6ff', 
+                                    border: '2px solid #dbeafe',
                                     cursor: 'pointer',
                                     fontSize: 16,
                                     fontWeight: 600
@@ -2711,8 +2603,8 @@ function Header({ logout }) {
                                   style={{ 
                                     padding: '8px 12px', 
                                     borderRadius: 6, 
-                                    background: '#fff1f2', 
-                                    border: '1px solid #fecaca',
+                                    background: '#fee2e2', 
+                                    border: '2px solid #fecaca',
                                     cursor: 'pointer',
                                     fontSize: 14
                                   }}
@@ -2722,7 +2614,6 @@ function Header({ logout }) {
                               )}
                             </div>
 
-                            {/* Dropdown for search results */}
                             {c.showDropdown && c.searchResults.length > 0 && (
                               <div style={{
                                 position: 'absolute',
@@ -2730,12 +2621,12 @@ function Header({ logout }) {
                                 left: 0,
                                 right: 0,
                                 background: 'white',
-                                border: '1px solid #e6e9ee',
-                                borderRadius: 6,
+                                border: '2px solid #e2e8f0',
+                                borderRadius: 8,
                                 marginTop: 4,
                                 maxHeight: 200,
                                 overflowY: 'auto',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                                 zIndex: 110
                               }}>
                                 {c.searchResults.map((user, userIdx) => (
@@ -2743,33 +2634,31 @@ function Header({ logout }) {
                                     key={userIdx}
                                     onClick={() => selectCcEmail(idx, user)}
                                     style={{
-                                      padding: '8px 12px',
+                                      padding: '10px 12px',
                                       cursor: 'pointer',
                                       borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
                                       background: 'white',
                                       transition: 'background 0.15s'
                                     }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                                   >
-                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{user.displayName}</div>
-                                    <div style={{ fontSize: 11, color: '#6b7280' }}>{user.mail}</div>
+                                    <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
+                                    <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                                   </div>
                                 ))}
                               </div>
                             )}
 
-                            {/* Show selected user */}
                             {c.email && (
-                              <div style={{ marginTop: 4, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span>✓</span>
                                 <span>{c.name} ({c.email})</span>
                               </div>
                             )}
 
-                            {/* Loading indicator */}
                             {c.searching && (
-                              <div style={{ marginTop: 4, fontSize: 11, color: '#6b7280' }}>
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
                                 Searching...
                               </div>
                             )}
@@ -2780,14 +2669,12 @@ function Header({ logout }) {
 
                   </div>
 
-                  {/* Feature Toggles - Three Columns */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                     
-                    {/* On Behalf Feature */}
                     <div style={{ 
                       padding: 16, 
-                      border: '1px solid #e6e9ee', 
-                      borderRadius: 8,
+                      border: '2px solid #e2e8f0', 
+                      borderRadius: 12,
                       background: enableOnBehalf ? '#f0f9ff' : '#fafafa'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2796,43 +2683,33 @@ function Header({ logout }) {
                           type="checkbox" 
                           checked={enableOnBehalf} 
                           onChange={(e) => setEnableOnBehalf(e.target.checked)}
-                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
                         />
                       </div>
-                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                        Allow users to submit tickets for themselves or others
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Submit tickets for self or others
                       </div>
 
                       {enableOnBehalf && (
                         <div style={{ marginTop: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                            Options
-                          </div>
-                          <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>
-                            • Self<br />
-                            • Other
-                          </div>
-                          <div style={{ marginTop: 10 }}>
-                            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <input
-                                type="checkbox"
-                                checked={requireOnBehalf}
-                                onChange={(e) => setRequireOnBehalf(e.target.checked)}
-                                style={{ width: 14, height: 14 }}
-                              />
-                              <span>Required field</span>
-                            </label>
-                          </div>
+                          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input
+                              type="checkbox"
+                              checked={requireOnBehalf}
+                              onChange={(e) => setRequireOnBehalf(e.target.checked)}
+                              style={{ width: 16, height: 16 }}
+                            />
+                            <span>Required field</span>
+                          </label>
                         </div>
                       )}
                     </div>
 
-                    {/* Sub-Category Feature */}
                     <div
                       style={{
                         padding: 16,
-                        border: '1px solid #e6e9ee',
-                        borderRadius: 8,
+                        border: '2px solid #e2e8f0',
+                        borderRadius: 12,
                         background: enableSubCategory ? '#f0fdf4' : '#fafafa'
                       }}
                     >
@@ -2842,20 +2719,16 @@ function Header({ logout }) {
                           type="checkbox"
                           checked={enableSubCategory}
                           onChange={(e) => setEnableSubCategory(e.target.checked)}
-                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
                         />
                       </div>
 
-                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                        Add multiple subcategories for users to choose from
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Add subcategories
                       </div>
 
                       {enableSubCategory && (
                         <div style={{ marginTop: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                            Subcategories:
-                          </div>
-
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {subCategories.length === 0 && (
                               <button
@@ -2863,8 +2736,8 @@ function Header({ logout }) {
                                 onClick={addSubCategory}
                                 style={{
                                   alignSelf: 'flex-start',
-                                  background: '#eef2ff',
-                                  border: '1px solid #c7d2fe',
+                                  background: '#eff6ff',
+                                  border: '2px solid #dbeafe',
                                   borderRadius: 6,
                                   padding: '4px 10px',
                                   cursor: 'pointer',
@@ -2872,7 +2745,7 @@ function Header({ logout }) {
                                   fontWeight: 600
                                 }}
                               >
-                                + Add sub-category
+                                + Add
                               </button>
                             )}
 
@@ -2881,12 +2754,12 @@ function Header({ logout }) {
                                 <input
                                   value={s}
                                   onChange={(e) => updateSubCategory(idx, e.target.value)}
-                                  placeholder="e.g., Salary, Benefits"
+                                  placeholder="e.g., Salary"
                                   style={{
                                     flex: 1,
                                     padding: '6px 8px',
-                                    borderRadius: 4,
-                                    border: '1px solid #e6e9ee',
+                                    borderRadius: 6,
+                                    border: '2px solid #e2e8f0',
                                     fontSize: 12
                                   }}
                                 />
@@ -2913,8 +2786,8 @@ function Header({ logout }) {
                             <div
                               style={{
                                 padding: '6px 8px',
-                                borderRadius: 4,
-                                border: '1px dashed #cbd5e1',
+                                borderRadius: 6,
+                                border: '2px dashed #cbd5e1',
                                 fontSize: 12,
                                 color: '#475569',
                                 background: '#f8fafc'
@@ -2930,7 +2803,7 @@ function Header({ logout }) {
                                 type="checkbox"
                                 checked={requireSubCategory}
                                 onChange={(e) => setRequireSubCategory(e.target.checked)}
-                                style={{ width: 14, height: 14 }}
+                                style={{ width: 16, height: 16 }}
                               />
                               <span>Required field</span>
                             </label>
@@ -2939,11 +2812,10 @@ function Header({ logout }) {
                       )}
                     </div>
 
-                    {/* Attachments Feature */}
                     <div style={{ 
                       padding: 16, 
-                      border: '1px solid #e6e9ee', 
-                      borderRadius: 8,
+                      border: '2px solid #e2e8f0', 
+                      borderRadius: 12,
                       background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2952,11 +2824,11 @@ function Header({ logout }) {
                           type="checkbox" 
                           checked={enableAttachmentsForCategory} 
                           onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)}
-                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
                         />
                       </div>
-                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                        Allow file attachments on tickets in this category
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Allow file attachments
                       </div>
 
                       {enableAttachmentsForCategory && (
@@ -2966,7 +2838,7 @@ function Header({ logout }) {
                               type="checkbox" 
                               checked={requireAttachmentsForCategory} 
                               onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)}
-                              style={{ width: 14, height: 14 }}
+                              style={{ width: 16, height: 16 }}
                             /> 
                             <span>Required field</span>
                           </label>
@@ -2975,81 +2847,52 @@ function Header({ logout }) {
                     </div>
 
                   </div>
+
+                  <div
+                    style={{
+                      padding: 16,
+                      border: '2px solid #e2e8f0',
+                      borderRadius: 12,
+                      background: requireApproval ? '#fff7ed' : '#fafafa'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <label style={{ fontWeight: 700, fontSize: 14 }}>
+                        Approval Required
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={requireApproval}
+                        onChange={(e) => setRequireApproval(e.target.checked)}
+                        style={{ width: 20, height: 20, cursor: 'pointer' }}
+                      />
+                    </div>
+
+                    <div style={{ fontSize: 12, color: '#64748b' }}>
+                      Requires approval by head or CC
+                    </div>
+                  </div>
                 </div>
 
-                {/* Success/Error Messages */}
-                {categorySuccess && (
-                  <div style={{ 
-                    marginTop: 16, 
-                    padding: '12px 16px', 
-                    background: '#ecfdf5', 
-                    color: '#065f46', 
-                    borderRadius: 8,
-                    border: '1px solid #a7f3d0',
-                    fontSize: 14,
-                    fontWeight: 600
-                  }}>
-                    ✓ {categorySuccess}
-                  </div>
-                )}
-                
-                {categoryError && (
-                  <div style={{ 
-                    marginTop: 16, 
-                    padding: '12px 16px', 
-                    background: '#fff1f2', 
-                    color: '#9f1239', 
-                    borderRadius: 8,
-                    border: '1px solid #fecaca',
-                    fontSize: 14,
-                    fontWeight: 600
-                  }}>
-                    ✕ {categoryError}
-                  </div>
-                )}
+                {categorySuccess && <div className="message message-success">✓ {categorySuccess}</div>}
+                {categoryError && <div className="message message-error">✕ {categoryError}</div>}
 
-                {/* Action Buttons for Edit */}
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'flex-end', 
-                  gap: 12, 
-                  marginTop: 20,
-                  paddingTop: 20,
-                  borderTop: '1px solid #e6e9ee'
-                }}>
+                <div className="modal-footer">
                   <button 
                     onClick={() => { 
                       setEditingCategory(null); 
                       resetCategoryForm(); 
                     }} 
-                    style={{ 
-                      background: 'transparent', 
-                      border: '1px solid #e6e9ee', 
-                      color: '#6b7280', 
-                      cursor: 'pointer',
-                      padding: '10px 20px',
-                      borderRadius: 8,
-                      fontWeight: 600,
-                      fontSize: 14
-                    }}
+                    className="btn btn-secondary"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={updateCategory} 
                     disabled={categoryLoading || !categoryName.trim()} 
-                    style={{ 
-                      padding: '10px 24px', 
-                      borderRadius: 8, 
-                      background: categoryLoading || !categoryName.trim() ? '#c4b5fd' : '#8b5cf6', 
-                      color: 'white', 
-                      border: 'none', 
-                      cursor: categoryLoading || !categoryName.trim() ? 'not-allowed' : 'pointer', 
-                      fontWeight: 700,
-                      fontSize: 14
-                    }}
+                    className="btn btn-success"
                   >
-                    {categoryLoading ? 'Updating Category…' : 'Update Category'}
+                    {categoryLoading ? 'Updating...' : 'Update Category'}
                   </button>
                 </div>
               </>
@@ -3058,257 +2901,117 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* Remove Field Modal (unchanged) */}
+      {/* Remove Field Modal */}
       {removeFieldOpen && (
         <>
-          <div
-            onClick={() => setRemoveFieldOpen(false)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.4)',
-              zIndex: 90,
-            }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'white',
-              borderRadius: '10px',
-              padding: '18px',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              width: '560px',
-              zIndex: 100,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>Remove Category</h3>
-              <button onClick={() => setRemoveFieldOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                ✖
-              </button>
+          <div className="modal-overlay" onClick={() => setRemoveFieldOpen(false)} />
+          <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Remove Category</h3>
+              <button onClick={() => setRemoveFieldOpen(false)} className="modal-close">✖</button>
             </div>
 
-            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
-              Select a category to remove. This operation is destructive and may impact existing tickets — confirm with your team.
+            <div className="modal-subtitle">
+              Select a category to remove. This action may impact existing tickets.
             </div>
 
-            <div style={{ maxHeight: 300, overflow: 'auto', marginBottom: 8 }}>
-              {categoriesLoading && <div style={{ color: '#6b7280' }}>Loading categories…</div>}
-              {!categoriesLoading && availableCategories.length === 0 && <div style={{ color: '#6b7280' }}>No categories found.</div>}
+            <div className="user-list">
+              {categoriesLoading && <div style={{ textAlign: 'center', color: '#94a3b8' }}>Loading categories...</div>}
+              {!categoriesLoading && availableCategories.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#94a3b8' }}>No categories found.</div>
+              )}
               {availableCategories.map(c => (
                 <div
                   key={c.id}
                   onClick={() => setSelectedCategoryToRemove(c)}
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    marginBottom: 8,
-                    background: selectedCategoryToRemove?.id === c.id ? '#fff1f2' : '#fff',
-                    border: '1px solid rgba(15,23,42,0.04)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
+                  className={`user-item ${selectedCategoryToRemove?.id === c.id ? 'danger-selected' : ''}`}
                 >
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{c.name || c.categoryName}</div>
-                    <div style={{ fontSize: 13, color: '#6b7280' }}>{c.description || ''}</div>
-                  </div>
+                  <div className="user-name">{c.name || c.categoryName}</div>
+                  <div className="user-email">{c.description || 'No description'}</div>
                 </div>
               ))}
             </div>
 
-            {removeCategorySuccess && <div style={{ padding: 10, background: '#ecfdf5', color: '#065f46', borderRadius: 8 }}>{removeCategorySuccess}</div>}
-            {removeCategoryError && <div style={{ padding: 10, background: '#fff1f2', color: '#9f1239', borderRadius: 8 }}>{removeCategoryError}</div>}
+            {removeCategorySuccess && <div className="message message-success">✓ {removeCategorySuccess}</div>}
+            {removeCategoryError && <div className="message message-error">✕ {removeCategoryError}</div>}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-              <button onClick={() => setRemoveFieldOpen(false)} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer' }}>
-                Cancel
-              </button>
+            <div className="modal-footer">
+              <button onClick={() => setRemoveFieldOpen(false)} className="btn btn-secondary">Cancel</button>
               <button
                 onClick={confirmRemoveCategory}
                 disabled={removeCategoryLoading || !selectedCategoryToRemove}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  background: removeCategoryLoading ? '#f7a6a6' : '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  cursor: removeCategoryLoading ? 'default' : 'pointer',
-                  fontWeight: 700,
-                }}
+                className="btn btn-danger"
               >
-                {removeCategoryLoading ? 'Removing…' : 'Remove Category'}
+                {removeCategoryLoading ? 'Removing...' : 'Remove Category'}
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* FULL PROFILE MODAL (unchanged) */}
+      {/* Full Profile Modal */}
       {fullProfileOpen && (
         <>
-          <div
-            onClick={closeFullProfile}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.4)',
-              zIndex: 50,
-            }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'white',
-              borderRadius: '10px',
-              padding: '20px',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
-              width: '420px',
-              zIndex: 60,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '12px',
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Full Profile</h3>
-              <button
-                onClick={closeFullProfile}
-                aria-label="Close profile"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: '1.1rem',
-                  cursor: 'pointer',
-                }}
-              >
-                ✖
-              </button>
+          <div className="modal-overlay" onClick={closeFullProfile} />
+          <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Full Profile</h3>
+              <button onClick={closeFullProfile} className="modal-close">✖</button>
             </div>
 
-            {/* Photo */}
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-              <div
-                style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 12,
-                  background: '#eef2ff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                  color: '#3730a3',
-                  overflow: 'hidden',
-                }}
-              >
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 20, padding: 16, background: '#f8fafc', borderRadius: 12 }}>
+              <div style={{
+                width: 68,
+                height: 68,
+                borderRadius: 12,
+                background: '#eef2ff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                color: '#002060',
+                overflow: 'hidden'
+              }}>
                 {profilePhoto ? (
-                  <img
-                    src={profilePhoto}
-                    alt="profile"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
+                  <img src={profilePhoto} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <span style={{ fontSize: 20 }}>{initials}</span>
+                  <span style={{ fontSize: 22 }}>{initials}</span>
                 )}
               </div>
 
               <div>
-                <div style={{ fontWeight: 800, color: '#0f172a' }}>
-                  {accounts?.[0]?.name || ''}
-                </div>
-                <div style={{ color: '#6b7280', fontSize: 13 }}>
-                  {accounts?.[0]?.username || ''}
-                </div>
+                <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>{accounts?.[0]?.name || ''}</div>
+                <div style={{ color: '#64748b', fontSize: 14 }}>{accounts?.[0]?.username || ''}</div>
               </div>
             </div>
 
-            {loadingProfile && <p>Loading profile…</p>}
+            {loadingProfile && <p style={{ textAlign: 'center', color: '#64748b' }}>Loading profile...</p>}
 
             {profileError && (
-              <div style={{ color: 'crimson', marginBottom: '8px' }}>
-                <p style={{ margin: 0 }}>Error loading profile:</p>
-                <small>{profileError}</small>
+              <div className="message message-error">
+                Error loading profile: {profileError}
               </div>
             )}
 
             {profileData && (
-              <div style={{ display: 'grid', gap: '10px' }}>
-              
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Name</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.name || '—'}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Email</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.email || '—'}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Department</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.department || '—'}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Reporting Manager</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.manager || '—'}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Job Title</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.jobTitle || '—'}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Employee ID</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.employeeId || '—'}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Mobile</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.mobilePhone || '—'}</div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Street Address</div>
-                  <div style={{ fontWeight: 600 }}>{profileData.streetAddress || '—'}</div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '16px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>State</div>
-                    <div style={{ fontWeight: 600 }}>{profileData.state || '—'}</div>
+              <div style={{ display: 'grid', gap: 16 }}>
+                {Object.entries({
+                  'Name': profileData.name,
+                  'Email': profileData.email,
+                  'Department': profileData.department,
+                  'Job Title': profileData.jobTitle,
+                  'Reporting Manager': profileData.manager,
+                  'Employee ID': profileData.employeeId,
+                  'Mobile': profileData.mobilePhone,
+                  'Address': profileData.streetAddress,
+                  'State': profileData.state,
+                  'Pincode': profileData.postalCode
+                }).map(([label, value]) => value && (
+                  <div key={label}>
+                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>{label}</div>
+                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{value}</div>
                   </div>
-                  <div style={{ width: '120px' }}>
-                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Pincode</div>
-                    <div style={{ fontWeight: 600 }}>{profileData.postalCode || '—'}</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!loadingProfile && !profileData && !profileError && (
-              <div style={{ textAlign: 'center' }}>
-                <small>No profile data available.</small>
+                ))}
               </div>
             )}
           </div>
@@ -3357,19 +3060,9 @@ function AppContent() {
 
 function App() {
   return (
-    <>
-      <style>{`
-        @keyframes floatGlow {
-          0% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
-          50% { transform: translateX(-50%) translateY(-3px); opacity: 1; }
-          100% { transform: translateX(-50%) translateY(0); opacity: 0.95; }
-        }
-      `}</style>
-
-      <MsalProvider instance={pca}>
-        <AppContent />
-      </MsalProvider>
-    </>
+    <MsalProvider instance={pca}>
+      <AppContent />
+    </MsalProvider>
   );
 }
 
