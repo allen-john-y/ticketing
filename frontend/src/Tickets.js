@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 function Tickets() {
   const { accounts, instance } = useMsal();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [tickets, setTickets] = useState([]);
   const [authority, setAuthority] = useState('basic');
@@ -122,23 +123,47 @@ function Tickets() {
     fetchData();
   }, [accounts, instance, refreshKey]);
 
+  // Improved dropdown positioning and click outside handling
   useEffect(() => {
-    const onDocClick = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target) &&
-          !categoryBtnRef.current?.contains(e.target) &&
-          !userBtnRef.current?.contains(e.target)) {
-        setDropdownOpen(null);
+    const handleClickOutside = (event) => {
+      if (dropdownOpen) {
+        const isClickOnButton = 
+          (categoryBtnRef.current && categoryBtnRef.current.contains(event.target)) ||
+          (userBtnRef.current && userBtnRef.current.contains(event.target));
+        
+        const isClickInDropdown = dropdownRef.current && dropdownRef.current.contains(event.target);
+        
+        if (!isClickOnButton && !isClickInDropdown) {
+          setDropdownOpen(null);
+        }
       }
     };
-    window.addEventListener('mousedown', onDocClick);
-    window.addEventListener('scroll', () => setDropdownOpen(null), true);
-    window.addEventListener('resize', () => setDropdownOpen(null));
-    return () => {
-      window.removeEventListener('mousedown', onDocClick);
-      window.removeEventListener('scroll', () => setDropdownOpen(null), true);
-      window.removeEventListener('resize', () => setDropdownOpen(null));
+
+    const handleScroll = () => {
+      if (dropdownOpen) {
+        // Update dropdown position on scroll
+        const ref = dropdownOpen === 'category' ? categoryBtnRef.current : userBtnRef.current;
+        if (ref) {
+          const rect = ref.getBoundingClientRect();
+          setDropdownPos({
+            top: rect.bottom + window.scrollY + 8,
+            left: rect.left + window.scrollX,
+            width: Math.max(260, rect.width)
+          });
+        }
+      }
     };
-  }, []);
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [dropdownOpen]);
 
   // FILTERING LOGIC
   const baseFilteredTickets = authority === 'admin' && showMyTickets
@@ -205,15 +230,24 @@ function Tickets() {
   };
 
   const openDropdown = (type) => {
-    setDropdownOpen(prev => prev === type ? null : type);
-    const ref = type === 'category' ? categoryBtnRef.current : userBtnRef.current;
-    if (ref) {
-      const rect = ref.getBoundingClientRect();
-      setDropdownPos({
-        top: rect.bottom + window.scrollY + 8,
-        left: rect.left + window.scrollX,
-        width: Math.max(260, rect.width)
-      });
+    // Close if same type is clicked, otherwise open new
+    if (dropdownOpen === type) {
+      setDropdownOpen(null);
+    } else {
+      setDropdownOpen(type);
+      
+      // Use setTimeout to ensure refs are available after state update
+      setTimeout(() => {
+        const ref = type === 'category' ? categoryBtnRef.current : userBtnRef.current;
+        if (ref) {
+          const rect = ref.getBoundingClientRect();
+          setDropdownPos({
+            top: rect.bottom + window.scrollY + 8,
+            left: rect.left + window.scrollX,
+            width: Math.max(260, rect.width)
+          });
+        }
+      }, 10);
     }
   };
 
@@ -227,6 +261,12 @@ function Tickets() {
   };
 
   const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+
+  // Calculate stats for the header
+  const totalTickets = tickets.length;
+  const openCount = tickets.filter(t => t.status === 'Open' || t.status === 'Pending').length;
+  const progressCount = tickets.filter(t => t.status === 'Waiting for approval').length;
+  const closedCount = tickets.filter(t => t.status === 'Closed').length;
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -352,46 +392,59 @@ function Tickets() {
           margin-bottom: 2rem;
         }
 
-        .status-tabs {
-          display: flex;
-          gap: 0.5rem;
-          background: white;
-          padding: 0.5rem;
-          border-radius: 12px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        /* Quick Stats Bar */
+        .stats-bar {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
           margin-bottom: 2rem;
         }
-
-        .status-tab {
-          flex: 1;
-          padding: 12px 20px;
-          border: none;
-          background: transparent;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 600;
-          color: #64748b;
+        
+        .stat-pill {
+          background: white;
+          padding: 1.2rem;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          border-left: 4px solid;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           transition: all 0.2s;
+          cursor: pointer;
         }
-
-        .status-tab.active {
-          background: #002060;
-          color: white;
+        
+        .stat-pill:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
-
-        .status-tab:hover:not(.active) {
-          background: #f8fafc;
+        
+        .stat-pill.orange { border-left-color: #e98404; }
+        .stat-pill.blue { border-left-color: #002060; }
+        .stat-pill.green { border-left-color: #10b981; }
+        .stat-pill.purple { border-left-color: #8b5cf6; }
+        
+        .stat-pill-label {
+          font-size: 14px;
+          color: #64748b;
+          font-weight: 600;
+        }
+        
+        .stat-pill-value {
+          font-size: 24px;
+          font-weight: 800;
+          color: #0f172a;
         }
 
         .my-tickets-toggle {
           background: white;
-          padding: 1rem;
+          padding: 1rem 1.5rem;
           border-radius: 10px;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-          margin-bottom: 1.5rem;
-          display: flex;
+          margin-bottom: 2rem;
+          display: inline-flex;
           align-items: center;
           gap: 0.75rem;
+          border: 1px solid #e2e8f0;
         }
 
         .my-tickets-toggle input[type="checkbox"] {
@@ -413,6 +466,7 @@ function Tickets() {
           border-radius: 12px;
           box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
           margin-bottom: 2rem;
+          border: 1px solid #e2e8f0;
         }
         
         .search-box {
@@ -448,6 +502,7 @@ function Tickets() {
           gap: 1rem;
           flex-wrap: wrap;
           align-items: center;
+          position: relative;
         }
         
         .filter-btn {
@@ -459,6 +514,8 @@ function Tickets() {
           font-weight: 600;
           color: #475569;
           transition: all 0.2s;
+          position: relative;
+          z-index: 5;
         }
         
         .filter-btn:hover {
@@ -472,7 +529,7 @@ function Tickets() {
           border: 1px solid #e2e8f0;
           border-radius: 10px;
           box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-          z-index: 9999;
+          z-index: 10000;
           padding: 1rem;
           max-height: 400px;
           overflow-y: auto;
@@ -546,6 +603,15 @@ function Tickets() {
           color: #0f172a;
         }
         
+        .ticket-count {
+          font-size: 16px;
+          font-weight: 600;
+          color: #64748b;
+          background: #f1f5f9;
+          padding: 6px 12px;
+          border-radius: 20px;
+        }
+        
         .ticket-card {
           background: white;
           padding: 1.5rem;
@@ -557,11 +623,13 @@ function Tickets() {
           text-decoration: none;
           display: block;
           color: inherit;
+          border: 1px solid #e2e8f0;
         }
         
         .ticket-card:hover {
           transform: translateX(4px);
           box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+          border-color: #002060;
         }
         
         .ticket-header {
@@ -586,7 +654,7 @@ function Tickets() {
         }
         
         .status-open, .status-pending { background: #fef3c7; color: #92400e; }
-        .status-progress, .status-waiting { background: #dbeafe; color: #1e3a8a; }
+        .status-waitingforapproval { background: #dbeafe; color: #1e3a8a; }
         .status-closed { background: #d1fae5; color: #065f46; }
         
         .ticket-description {
@@ -646,8 +714,8 @@ function Tickets() {
             flex: 1;
           }
 
-          .status-tabs {
-            flex-direction: column;
+          .stats-bar {
+            grid-template-columns: 1fr 1fr;
           }
         }
       `}</style>
@@ -681,8 +749,24 @@ function Tickets() {
 
       {/* Main Content */}
       <div className="main-container">
-        <div className="page-subtitle">
-          View and manage all your support tickets
+        {/* Quick Stats Bar */}
+        <div className="stats-bar">
+          <div className="stat-pill orange" onClick={() => setStatusFilter('open')}>
+            <span className="stat-pill-label">Open</span>
+            <span className="stat-pill-value">{openCount}</span>
+          </div>
+          <div className="stat-pill blue" onClick={() => setStatusFilter('progress')}>
+            <span className="stat-pill-label">In Progress</span>
+            <span className="stat-pill-value">{progressCount}</span>
+          </div>
+          <div className="stat-pill green" onClick={() => setStatusFilter('closed')}>
+            <span className="stat-pill-label">Closed</span>
+            <span className="stat-pill-value">{closedCount}</span>
+          </div>
+          <div className="stat-pill purple" onClick={() => setStatusFilter('all')}>
+            <span className="stat-pill-label">Total</span>
+            <span className="stat-pill-value">{totalTickets}</span>
+          </div>
         </div>
 
         {/* Admin: Show only my tickets toggle */}
@@ -699,34 +783,6 @@ function Tickets() {
             </label>
           </div>
         )}
-
-        {/* Status Filter Tabs */}
-        <div className="status-tabs">
-          <button
-            className={`status-tab ${statusFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('all')}
-          >
-            🎯 All Tickets
-          </button>
-          <button
-            className={`status-tab ${statusFilter === 'open' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('open')}
-          >
-            📝 Open
-          </button>
-          <button
-            className={`status-tab ${statusFilter === 'progress' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('progress')}
-          >
-            ⚙️ Waiting for approval
-          </button>
-          <button
-            className={`status-tab ${statusFilter === 'closed' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('closed')}
-          >
-            ✅ Closed
-          </button>
-        </div>
 
         {/* Search & Filters */}
         <div className="controls-section">
@@ -791,15 +847,15 @@ function Tickets() {
           )}
         </div>
 
-        {/* Dropdown */}
+        {/* Dropdown - Fixed positioning */}
         {dropdownOpen && (
           <div
             ref={dropdownRef}
             className="filter-dropdown"
             style={{
-              top: dropdownPos.top,
-              left: dropdownPos.left,
-              minWidth: dropdownPos.width,
+              top: `${dropdownPos.top}px`,
+              left: `${dropdownPos.left}px`,
+              minWidth: `${dropdownPos.width}px`,
             }}
           >
             {(dropdownOpen === 'category' ? categories : users).map(item => (
@@ -827,15 +883,18 @@ function Tickets() {
         {/* Tickets List */}
         <div className="tickets-header">
           <h2 className="section-title">
-            {statusFilter === 'open' && `Open Tickets (${statusFiltered.length})`}
-            {statusFilter === 'progress' && `Waiting for approval Tickets (${statusFiltered.length})`}
-            {statusFilter === 'closed' && `Closed Tickets (${statusFiltered.length})`}
+            {statusFilter === 'open' && `Open Tickets`}
+            {statusFilter === 'progress' && `Waiting for Approval`}
+            {statusFilter === 'closed' && `Closed Tickets`}
             {statusFilter === 'all' && (authority === 'admin'
               ? showMyTickets
-                ? `My Tickets (${statusFiltered.length})`
-                : `All Tickets (${statusFiltered.length})`
-              : `Your Tickets (${statusFiltered.length})`)}
+                ? `My Tickets`
+                : `All Tickets`
+              : `Your Tickets`)}
           </h2>
+          <div className="ticket-count">
+            {statusFiltered.length} {statusFiltered.length === 1 ? 'ticket' : 'tickets'}
+          </div>
         </div>
 
         {loading ? (
@@ -856,7 +915,7 @@ function Tickets() {
               <Link key={ticket._id} to={`/ticket/${ticket._id}`} className="ticket-card" style={{ borderLeftColor: categoryColor(ticket.category) }}>
                 <div className="ticket-header">
                   <h3 className="ticket-number">#{ticket.ticketNumber} - {ticket.category}</h3>
-                  <span className={`ticket-status status-${ticket.status?.toLowerCase().replace(' ', '').replace('waitingfor', 'waiting')}`}>
+                  <span className={`ticket-status status-${ticket.status?.toLowerCase().replace(' ', '').replace('for', '')}`}>
                     {ticket.status}
                   </span>
                 </div>
@@ -864,9 +923,17 @@ function Tickets() {
                 <p className="ticket-description">{ticket.description}</p>
                 
                 {authority === 'admin' && (
-                  <div style={{ marginTop: '0.75rem', fontSize: '14px', color: '#64748b' }}>
-                    <div><strong>Created by:</strong> {ticket.userName || '—'}</div>
-                    <div><strong>Email:</strong> {ticket.userEmail || '—'}</div>
+                  <div style={{ 
+                    marginTop: '0.75rem', 
+                    padding: '0.75rem',
+                    background: '#f8fafc',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '14px', 
+                    color: '#475569'
+                  }}>
+                    <div><strong style={{ color: '#0f172a' }}>Created by:</strong> {ticket.userName || '—'}</div>
+                    <div><strong style={{ color: '#0f172a' }}>Email:</strong> {ticket.userEmail || '—'}</div>
                   </div>
                 )}
                 

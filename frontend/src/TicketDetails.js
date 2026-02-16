@@ -669,7 +669,7 @@ function TicketDetails() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: '40px' }}>
       <style>{`
         * { box-sizing: border-box; }
         
