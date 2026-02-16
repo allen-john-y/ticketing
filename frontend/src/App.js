@@ -1101,17 +1101,13 @@ function Header({ logout }) {
           height: 100vh;
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
-          width: 70px;
+          width: 260px;
           transition: width 0.3s ease;
           overflow: hidden;
           box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
           z-index: 1000;
         }
-        
-        .vertical-sidebar:hover {
-          width: 260px;
-        }
-        
+                
         .sidebar-content {
           padding: 1.5rem 0;
           height: 100%;
@@ -1151,14 +1147,11 @@ function Header({ logout }) {
         }
         
         .sidebar-user-details {
-          opacity: 0;
+          opacity: 1;
           transition: opacity 0.2s ease 0.15s;
           white-space: nowrap;
         }
         
-        .vertical-sidebar:hover .sidebar-user-details {
-          opacity: 1;
-        }
         
         .sidebar-user-name {
           font-size: 15px;
@@ -1220,7 +1213,7 @@ function Header({ logout }) {
         }
         
         .sidebar-nav-label {
-          opacity: 0;
+          opacity: 1;
           transition: opacity 0.2s ease 0.15s;
         }
         
@@ -1243,9 +1236,9 @@ function Header({ logout }) {
         
         /* App Header */
         .app-header {
-          background: white;
+          background: linear-gradient(135deg, #002060 0%, #003380 100%); /* Changed from white to match sidebar */
           padding: 1rem 2rem;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Lighter border */
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -1274,11 +1267,11 @@ function Header({ logout }) {
           margin: 0;
           font-size: 1.1rem;
           font-weight: 700;
-          color: #0f172a;
+          color: #ffffff;
         }
         
         .company-subtitle {
-          color: #64748b;
+          color: rgba(255, 255, 255, 0.8);
           font-size: 11px;
           margin-top: 2px;
           font-weight: 500;
@@ -1787,13 +1780,6 @@ function Header({ logout }) {
                   <span className="sidebar-nav-icon">🎫</span>
                   <span className="sidebar-nav-label">View Tickets</span>
                 </Link>
-
-                {isAdmin && (
-                  <Link to="/dashboard" className="sidebar-nav-item">
-                    <span className="sidebar-nav-icon">📊</span>
-                    <span className="sidebar-nav-label">Analytics</span>
-                  </Link>
-                )}
               </div>
           </div>
         </div>
