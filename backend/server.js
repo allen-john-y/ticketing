@@ -2444,7 +2444,6 @@ app.put("/tickets/:id/close", async (req, res) => {
   }
 });
 
-// Revive Ticket (keep existing)
 app.put("/tickets/:id/revive", async (req, res) => {
   try {
     const { revivedBy, reviveReason } = req.body;
@@ -2454,6 +2453,7 @@ app.put("/tickets/:id/revive", async (req, res) => {
     }
 
     const ticket = await Ticket.findById(req.params.id);
+
     if (!ticket) {
       return res.status(404).json({ message: "Ticket not found" });
     }
@@ -2471,12 +2471,42 @@ app.put("/tickets/:id/revive", async (req, res) => {
       reason: reviveReason.trim(),
     });
 
-    ticket.status = "Open";
+    /* =====================================================
+       ✅ GET CATEGORY CONFIG FIRST
+    ===================================================== */
+
+    const catCfg = await CategoryConfig.findOne({
+      name: {
+        $regex: new RegExp(
+          "^" + ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$",
+          "i"
+        )
+      }
+    });
+
+    /* =====================================================
+       ✅ SET STATUS BASED ON APPROVAL REQUIREMENT
+    ===================================================== */
+
+    if (
+      catCfg?.type === "PASSWORD_RESET" ||
+      catCfg?.type === "ADMIN_ACCESS" ||
+      catCfg?.features?.approvalRequired === true
+    ) {
+      ticket.status = "Waiting for approval";
+    } else {
+      ticket.status = "Open";
+    }
+
     ticket.reopenedBy = revivedBy?.trim() || "Unknown User";
     ticket.reopenedAt = now;
     ticket.reviveReason = reviveReason.trim();
 
     await ticket.save();
+
+    /* =====================================================
+       EMAIL SECTION (same as yours)
+    ===================================================== */
 
     const nowIST = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
@@ -2488,7 +2518,6 @@ app.put("/tickets/:id/revive", async (req, res) => {
       second: "2-digit",
     });
 
-    
     const itHead = process.env.IT_HEAD_EMAIL;
 
     const emailHtml = buildHtmlEmail({
@@ -2508,15 +2537,11 @@ app.put("/tickets/:id/revive", async (req, res) => {
       actionText: "View Ticket"
     });
 
-    await sendEmail(ticket.userEmail, `[TICKET #${ticket.ticketNumber}] Revived`, emailHtml, itHead);
-    const catCfg = await CategoryConfig.findOne({
-      name: {
-        $regex: new RegExp(
-          "^" + ticket.category.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$",
-          "i"
-        )
-      }
-    });
+    await sendEmail(ticket.userEmail,
+      `[TICKET #${ticket.ticketNumber}] Revived`,
+      emailHtml,
+      itHead
+    );
 
     const deptTo = (catCfg?.categoryHeads || [])
       .map(h => h.email)
@@ -2541,15 +2566,9 @@ app.put("/tickets/:id/revive", async (req, res) => {
 
     res.json({
       message: "Ticket revived successfully",
-      ticket: {
-        _id: ticket._id,
-        status: "Open",
-        reopenedBy: ticket.reopenedBy,
-        reviveReason: ticket.reviveReason,
-        reopenedAt: ticket.reopenedAt,
-        history: ticket.history,
-      },
+      ticket
     });
+
   } catch (err) {
     console.error("Revive ticket error:", err.message);
     res.status(500).json({ message: "Server error" });
