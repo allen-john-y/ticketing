@@ -113,7 +113,7 @@ function CreateTicket() {
 
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
-  //const [profilePhoto, setProfilePhoto] = useState(null);
+  const [setProfilePhoto] = useState(null);
 
   const [verifyStatus, setVerifyStatus] = useState('idle');
   const [verifiedName, setVerifiedName] = useState('');

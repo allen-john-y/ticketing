@@ -1772,29 +1772,29 @@ function Header({ logout }) {
             </div>
 
             {/* Navigation Items */}
-            <div className="sidebar-nav">
-              <Link to="/" className="sidebar-nav-item" onClick={() => setSidebarExpanded(false)}>
-                <span className="sidebar-nav-icon">🏠</span>
-                <span className="sidebar-nav-label">Dashboard</span>
-              </Link>
-              
-              <Link to="/create" className="sidebar-nav-item" onClick={() => setSidebarExpanded(false)}>
-                <span className="sidebar-nav-icon">+</span>
-                <span className="sidebar-nav-label">Create Ticket</span>
-              </Link>
-              
-              <Link to="/tickets" className="sidebar-nav-item" onClick={() => setSidebarExpanded(false)}>
-                <span className="sidebar-nav-icon">🎫</span>
-                <span className="sidebar-nav-label">View Tickets</span>
-              </Link>
-
-              {isAdmin && (
-                <Link to="/dashboard" className="sidebar-nav-item" onClick={() => setSidebarExpanded(false)}>
-                  <span className="sidebar-nav-icon">📊</span>
-                  <span className="sidebar-nav-label">Analytics</span>
+              <div className="sidebar-nav">
+                <Link to="/" className="sidebar-nav-item">
+                  <span className="sidebar-nav-icon">🏠</span>
+                  <span className="sidebar-nav-label">Dashboard</span>
                 </Link>
-              )}
-            </div>
+                
+                <Link to="/create" className="sidebar-nav-item">
+                  <span className="sidebar-nav-icon">+</span>
+                  <span className="sidebar-nav-label">Create Ticket</span>
+                </Link>
+                
+                <Link to="/tickets" className="sidebar-nav-item">
+                  <span className="sidebar-nav-icon">🎫</span>
+                  <span className="sidebar-nav-label">View Tickets</span>
+                </Link>
+
+                {isAdmin && (
+                  <Link to="/dashboard" className="sidebar-nav-item">
+                    <span className="sidebar-nav-icon">📊</span>
+                    <span className="sidebar-nav-label">Analytics</span>
+                  </Link>
+                )}
+              </div>
           </div>
         </div>
 

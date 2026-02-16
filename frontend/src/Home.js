@@ -13,7 +13,7 @@ function Home() {
   const [userName, setUserName] = useState('User');
   const [refreshKey, setRefreshKey] = useState(0);
   const [showMyTickets, setShowMyTickets] = useState(false);
- // const [profilePhoto, setProfilePhoto] = useState(null);
+  const [setProfilePhoto] = useState(null);
 
   useEffect(() => {
     if (location.state?.refresh) {
