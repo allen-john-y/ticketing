@@ -127,10 +127,10 @@ function Dashboard() {
         * { box-sizing: border-box; }
         
         .header-bar {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
           padding: 1.5rem 2rem;
-          box-shadow: 0 4px 16px rgba(16, 185, 129, 0.15);
+          box-shadow: 0 4px 16px rgba(0, 32, 96, 0.15);
         }
         
         .header-content {
@@ -157,7 +157,7 @@ function Dashboard() {
           align-items: center;
           justify-content: center;
           font-weight: 700;
-          color: #10b981;
+          color: #002060;
           font-size: 18px;
           overflow: hidden;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -173,6 +173,18 @@ function Dashboard() {
           margin: 0;
           font-size: 24px;
           font-weight: 700;
+        }
+        
+        .user-role {
+          display: inline-block;
+          background: rgba(233, 132, 4, 0.2);
+          color: #e98404;
+          padding: 4px 12px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 700;
+          margin-top: 4px;
+          border: 1px solid rgba(233, 132, 4, 0.3);
         }
         
         .subtitle {
@@ -201,7 +213,7 @@ function Dashboard() {
         
         .btn-back {
           background: white;
-          color: #10b981;
+          color: #002060;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
         
@@ -210,15 +222,16 @@ function Dashboard() {
           transform: translateY(-2px);
         }
         
-        .btn-create {
+        .btn-primary {
           background: #e98404;
           color: white;
           box-shadow: 0 4px 12px rgba(233, 132, 4, 0.3);
         }
         
-        .btn-create:hover {
+        .btn-primary:hover {
           background: #d17703;
           transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(233, 132, 4, 0.4);
         }
         
         .main-container {
@@ -240,10 +253,16 @@ function Dashboard() {
           border-radius: 12px;
           box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
           border-left: 4px solid;
+          transition: all 0.2s;
         }
         
-        .stat-card.green { border-left-color: #10b981; }
+        .stat-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+        
         .stat-card.blue { border-left-color: #002060; }
+        .stat-card.green { border-left-color: #10b981; }
         .stat-card.orange { border-left-color: #e98404; }
         .stat-card.purple { border-left-color: #8b5cf6; }
         
@@ -251,6 +270,7 @@ function Dashboard() {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
+          margin-bottom: 1rem;
         }
         
         .stat-icon {
@@ -263,22 +283,23 @@ function Dashboard() {
           font-size: 24px;
         }
         
-        .stat-icon.green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
         .stat-icon.blue { background: rgba(0, 32, 96, 0.1); color: #002060; }
+        .stat-icon.green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
         .stat-icon.orange { background: rgba(233, 132, 4, 0.1); color: #e98404; }
         .stat-icon.purple { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
         
         .stat-value {
-          font-size: 32px;
+          font-size: 36px;
           font-weight: 800;
           color: #0f172a;
-          margin: 0.5rem 0 0 0;
+          margin: 0;
         }
         
         .stat-label {
           font-size: 14px;
           color: #64748b;
           font-weight: 600;
+          margin-top: 4px;
         }
         
         .controls-section {
@@ -305,8 +326,8 @@ function Dashboard() {
         
         .search-input:focus {
           outline: none;
-          border-color: #10b981;
-          box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+          border-color: #002060;
+          box-shadow: 0 0 0 3px rgba(0, 32, 96, 0.1);
         }
         
         .search-icon {
@@ -317,10 +338,21 @@ function Dashboard() {
           color: #94a3b8;
         }
         
+        .filters-row {
+          display: flex;
+          gap: 1rem;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        
         .my-tickets-toggle {
           display: flex;
           align-items: center;
           gap: 0.75rem;
+          background: #f8fafc;
+          padding: 10px 16px;
+          border-radius: 8px;
+          border: 2px solid #e2e8f0;
         }
         
         .my-tickets-toggle input[type="checkbox"] {
@@ -353,6 +385,9 @@ function Dashboard() {
           font-size: 16px;
           font-weight: 600;
           color: #64748b;
+          background: #f1f5f9;
+          padding: 6px 12px;
+          border-radius: 20px;
         }
         
         .ticket-card {
@@ -466,7 +501,7 @@ function Dashboard() {
         }
       `}</style>
 
-      {/* Header */}
+      {/* Header - Matching Home.js style */}
       <div className="header-bar">
         <div className="header-content">
           <div className="header-left">
@@ -479,6 +514,7 @@ function Dashboard() {
             </div>
             <div className="user-info">
               <h1>Closed Tickets Archive</h1>
+              <span className="user-role">{authority === 'admin' ? 'ADMINISTRATOR' : 'USER'}</span>
               <div className="subtitle">Review and manage resolved tickets</div>
             </div>
           </div>
@@ -486,7 +522,7 @@ function Dashboard() {
             <button onClick={() => navigate('/')} className="btn-header btn-back">
               ← Back to Home
             </button>
-            <Link to="/create" className="btn-header btn-create">
+            <Link to="/create" className="btn-header btn-primary">
               + New Ticket
             </Link>
           </div>
@@ -497,24 +533,24 @@ function Dashboard() {
       <div className="main-container">
         {/* Stats Grid */}
         <div className="stats-grid">
-          <div className="stat-card green">
+          <div className="stat-card blue">
             <div className="stat-header">
               <div>
                 <div className="stat-label">Total Closed</div>
                 <div className="stat-value">{totalClosed}</div>
               </div>
-              <div className="stat-icon green">✅</div>
+              <div className="stat-icon blue">📋</div>
             </div>
           </div>
 
           {authority === 'admin' && (
-            <div className="stat-card blue">
+            <div className="stat-card green">
               <div className="stat-header">
                 <div>
                   <div className="stat-label">My Closed Tickets</div>
                   <div className="stat-value">{myClosed}</div>
                 </div>
-                <div className="stat-icon blue">👤</div>
+                <div className="stat-icon green">👤</div>
               </div>
             </div>
           )}
@@ -557,16 +593,18 @@ function Dashboard() {
           </div>
 
           {authority === 'admin' && (
-            <div className="my-tickets-toggle">
-              <input
-                type="checkbox"
-                id="showOnlyMineToggle"
-                checked={showOnlyMine}
-                onChange={handleCheckboxChange}
-              />
-              <label htmlFor="showOnlyMineToggle">
-                Show only my closed tickets
-              </label>
+            <div className="filters-row">
+              <div className="my-tickets-toggle">
+                <input
+                  type="checkbox"
+                  id="showOnlyMineToggle"
+                  checked={showOnlyMine}
+                  onChange={handleCheckboxChange}
+                />
+                <label htmlFor="showOnlyMineToggle">
+                  Show only my closed tickets
+                </label>
+              </div>
             </div>
           )}
         </div>
@@ -606,9 +644,17 @@ function Dashboard() {
                 <p className="ticket-description">{ticket.description}</p>
                 
                 {authority === 'admin' && (
-                  <div style={{ marginTop: '0.75rem', fontSize: '14px', color: '#64748b' }}>
-                    <div><strong>Created by:</strong> {ticket.userName || '—'}</div>
-                    <div><strong>Email:</strong> {ticket.userEmail || '—'}</div>
+                  <div style={{ 
+                    marginTop: '0.75rem', 
+                    padding: '0.75rem',
+                    background: '#f8fafc',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '14px', 
+                    color: '#475569'
+                  }}>
+                    <div><strong style={{ color: '#0f172a' }}>Created by:</strong> {ticket.userName || '—'}</div>
+                    <div><strong style={{ color: '#0f172a' }}>Email:</strong> {ticket.userEmail || '—'}</div>
                   </div>
                 )}
                 
@@ -629,6 +675,11 @@ function Dashboard() {
                   {ticket.resolvedBy && (
                     <div className="meta-item">
                       ✓ Resolved by: {ticket.resolvedBy}
+                    </div>
+                  )}
+                  {ticket.closeReason && (
+                    <div className="meta-item" style={{ width: '100%', marginTop: '0.5rem' }}>
+                      <span style={{ fontWeight: 600 }}>Close reason:</span> {ticket.closeReason}
                     </div>
                   )}
                 </div>
