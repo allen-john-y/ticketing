@@ -124,8 +124,10 @@ function CreateTicket() {
 
   const fileInputRef = useRef(null);
 
-  // Adjust this value to match your App.js header height (same as Home.js)
-  const headerHeight = 70;
+  // App.js header height - adjust this to match your actual header height
+  const headerHeight = 70; // Height of App.js header
+  // Sidebar height - reduced to leave space for header
+  const sidebarHeight = 80; // Height of sidebar in vh units (80% of viewport height)
 
   // Fetch categories configuration
   useEffect(() => {
@@ -799,12 +801,13 @@ function CreateTicket() {
       <style>{`
         * { box-sizing: border-box; }
         
-        /* Vertical Sidebar - Matching Home.js */
+        /* Vertical Sidebar - Reduced height and positioned under header */
         .vertical-sidebar {
           position: fixed;
           left: 0;
           top: ${headerHeight}px;
-          height: calc(100vh - ${headerHeight}px);
+          height: ${sidebarHeight}vh; /* Using vh for responsive height */
+          max-height: calc(100vh - ${headerHeight}px - 40px); /* Leave some space at bottom */
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
           width: 70px;
@@ -812,6 +815,7 @@ function CreateTicket() {
           overflow: hidden;
           box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
           z-index: 999;
+          border-bottom-right-radius: 12px; /* Optional: rounded corners */
         }
         
         .vertical-sidebar:hover {
@@ -1559,7 +1563,7 @@ function CreateTicket() {
         }
       `}</style>
 
-      {/* Vertical Sidebar - Matching Home.js */}
+      {/* Vertical Sidebar - Positioned under header with reduced height */}
       <div className="vertical-sidebar">
         <div className="sidebar-content">
           {/* User Info */}
@@ -1744,7 +1748,7 @@ function CreateTicket() {
                       {dynamicOnBehalfSelectedUser && (
                         <div className="selected-user-box">
                           <div style={{ fontSize: '12px', fontWeight: '600', color: '#065f46', marginBottom: '4px' }}>
-                             Selected User:
+                            ✅ Selected User:
                           </div>
                           <div style={{ fontWeight: '700', color: '#0f172a' }}>
                             {dynamicOnBehalfSelectedUser.displayName}
@@ -1857,9 +1861,9 @@ function CreateTicket() {
                         <div className={`verify-status ${verifyStatus}`}>
                           {verifyStatus === 'idle' && 'Click Verify to confirm user exists'}
                           {verifyStatus === 'verifying' && '🔍 Verifying user...'}
-                          {verifyStatus === 'verified' && `Verified: ${verifiedName}`}
-                          {verifyStatus === 'notfound' && 'User not found'}
-                          {verifyStatus === 'error' && `Error: ${verifyError}`}
+                          {verifyStatus === 'verified' && `✅ Verified: ${verifiedName}`}
+                          {verifyStatus === 'notfound' && '❌ User not found'}
+                          {verifyStatus === 'error' && `❌ ${verifyError}`}
                         </div>
                       </div>
                     )}
