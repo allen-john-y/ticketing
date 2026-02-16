@@ -160,7 +160,7 @@ function Home() {
   if (statusFilter === 'open') {
     statusFiltered = searchFiltered.filter(t => t.status === 'Open' || t.status === 'Pending');
   } else if (statusFilter === 'progress') {
-    statusFiltered = searchFiltered.filter(t => t.status === 'Waiting for Approval');
+    statusFiltered = searchFiltered.filter(t => t.status === 'Waiting for approval');
   } else if (statusFilter === 'closed') {
     statusFiltered = searchFiltered.filter(t => t.status === 'Closed');
   }
@@ -172,7 +172,7 @@ function Home() {
 
   const openTickets = allFilteredForStats.filter(t => t.status === 'Open' || t.status === 'Pending');
   const closedTickets = allFilteredForStats.filter(t => t.status === 'Closed');
-  const inProgressTickets = allFilteredForStats.filter(t => t.status === 'Waiting for Approval');
+  const inProgressTickets = allFilteredForStats.filter(t => t.status === 'Waiting for approval');
 
   // Priority breakdown (open tickets only)
   const highPriority = allFilteredForStats.filter(t => t.priority === 'High' && t.status !== 'Closed');
@@ -283,7 +283,7 @@ function Home() {
 
   const statusData = [
     { label: 'Open/Pending', value: openTickets.length },
-    { label: 'Waiting for Approval', value: inProgressTickets.length },
+    { label: 'Waiting for approval', value: inProgressTickets.length },
     { label: 'Closed', value: closedTickets.length }
   ];
 
@@ -986,7 +986,7 @@ function Home() {
                 <div className="stat-header">
                   <div>
                     <div className="stat-value">{inProgressTickets.length}</div>
-                    <div className="stat-label">Waiting for Approval</div>
+                    <div className="stat-label">Waiting for approval</div>
                   </div>
                   <div className="stat-icon blue">⚙️</div>
                 </div>
@@ -1182,7 +1182,7 @@ function Home() {
         <div className="tickets-header">
           <h2 className="section-title">
             {statusFilter === 'open' && `Open Tickets (${statusFiltered.length})`}
-            {statusFilter === 'progress' && `Waiting for Approval Tickets (${statusFiltered.length})`}
+            {statusFilter === 'progress' && `Waiting for approval Tickets (${statusFiltered.length})`}
             {statusFilter === 'closed' && `Closed Tickets (${statusFiltered.length})`}
             {statusFilter === 'all' && (authority === 'admin'
               ? showMyTickets
