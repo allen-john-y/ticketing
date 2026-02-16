@@ -106,7 +106,7 @@ function Header({ logout }) {
   const ccEmailsRefs = useRef([]);
 
   // Sidebar state
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  //const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (e) => {

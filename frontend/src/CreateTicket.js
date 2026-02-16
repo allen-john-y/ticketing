@@ -113,7 +113,7 @@ function CreateTicket() {
 
   const [displayName, setDisplayName] = useState(accounts?.[0]?.name || '');
   const [displayEmail, setDisplayEmail] = useState(accounts?.[0]?.username || '');
-  const [profilePhoto, setProfilePhoto] = useState(null);
+  //const [profilePhoto, setProfilePhoto] = useState(null);
 
   const [verifyStatus, setVerifyStatus] = useState('idle');
   const [verifiedName, setVerifiedName] = useState('');
@@ -657,12 +657,12 @@ function CreateTicket() {
     else navigate('/', { state: { refresh: true } });
   };
 
-  const initials = (displayName || displayEmail || 'U')
-    .split(' ')
-    .map(s => s[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  // const initials = (displayName || displayEmail || 'U')
+  //   .split(' ')
+  //   .map(s => s[0])
+  //   .slice(0, 2)
+  //   .join('')
+  //   .toUpperCase();
 
   const disableCreateBecauseDeviceAdmin = formData.category === 'Admin Access' && isDeviceAdmin;
 
