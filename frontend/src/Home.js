@@ -235,165 +235,41 @@ function Home() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <style>{`
         * { box-sizing: border-box; }
         
-        /* Vertical Sidebar Navigation */
-        .sidebar {
-          position: fixed;
-          left: 0;
-          top: 0;
-          height: 100vh;
-          width: 80px;
-          background: linear-gradient(180deg, #002060 0%, #003380 100%);
-          box-shadow: 4px 0 16px rgba(0, 32, 96, 0.15);
-          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          z-index: 1000;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .sidebar:hover {
-          width: 260px;
-        }
-
-        .sidebar-header {
-          padding: 1.5rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          min-height: 100px;
-        }
-
-        .avatar {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          background: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          color: #002060;
-          font-size: 16px;
-          overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-          flex-shrink: 0;
-        }
-        
-        .avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .user-info {
-          opacity: 0;
-          transition: opacity 0.3s ease;
-          white-space: nowrap;
-          overflow: hidden;
-          color: white;
-        }
-
-        .sidebar:hover .user-info {
-          opacity: 1;
-        }
-
-        .user-info h1 {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 600;
-          color: white;
-        }
-
-        .user-role {
-          display: inline-block;
-          background: rgba(255, 255, 255, 0.15);
-          color: rgba(255, 255, 255, 0.95);
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          margin-top: 4px;
-          letter-spacing: 0.5px;
-          text-transform: uppercase;
-        }
-
-        .sidebar-nav {
-          flex: 1;
-          padding: 1rem 0;
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .nav-item {
-          display: flex;
-          align-items: center;
-          padding: 1rem 1.5rem;
-          color: rgba(255, 255, 255, 0.9);
-          text-decoration: none;
-          transition: all 0.2s ease;
-          position: relative;
-          cursor: pointer;
-        }
-
-        .nav-item:hover {
-          background: rgba(255, 255, 255, 0.1);
-        }
-
-        .nav-item::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 0;
-          height: 100%;
-          width: 4px;
-          background: #e98404;
-          transform: scaleY(0);
-          transition: transform 0.2s ease;
-        }
-
-        .nav-item:hover::before {
-          transform: scaleY(1);
-        }
-
-        .nav-icon {
-          width: 48px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 24px;
-          flex-shrink: 0;
-        }
-
-        .nav-text {
-          opacity: 0;
-          transition: opacity 0.3s ease;
-          white-space: nowrap;
-          font-weight: 600;
-          font-size: 14px;
-        }
-
-        .sidebar:hover .nav-text {
-          opacity: 1;
-        }
-
-        /* Main Content Area */
+        /* Main Content Area - No sidebar margin needed anymore */
         .main-content {
-          margin-left: 80px;
           flex: 1;
-          transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          width: calc(100% - 80px);
+          width: 100%;
         }
 
         .content-wrapper {
           max-width: 1400px;
           margin: 0 auto;
           padding: 2rem;
+        }
+
+        /* Page Header */
+        .page-header {
+          background: white;
+          padding: 1.5rem 2rem;
+          border-bottom: 1px solid #e2e8f0;
+          margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+          margin: 0;
+          color: #0f172a;
+          font-size: 24px;
+          font-weight: 700;
+        }
+
+        .page-header p {
+          margin: 0.5rem 0 0 0;
+          color: #64748b;
+          font-size: 14px;
         }
 
         .my-tickets-toggle {
@@ -544,18 +420,91 @@ function Home() {
           color: #0f172a;
         }
         
+        /* Welcome Banner */
+        .welcome-banner {
+          background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+          border-radius: 16px;
+          padding: 2rem;
+          margin-bottom: 2rem;
+          border: 1px solid #e2e8f0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .welcome-text h2 {
+          margin: 0 0 0.5rem 0;
+          color: #0f172a;
+          font-size: 28px;
+          font-weight: 800;
+        }
+
+        .welcome-text p {
+          margin: 0;
+          color: #64748b;
+          font-size: 16px;
+        }
+
+        .quick-actions {
+          display: flex;
+          gap: 1rem;
+        }
+
+        .quick-action-btn {
+          padding: 12px 24px;
+          border-radius: 10px;
+          font-weight: 600;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .btn-create {
+          background: #e98404;
+          color: white;
+          box-shadow: 0 4px 12px rgba(233, 132, 4, 0.3);
+        }
+
+        .btn-create:hover {
+          background: #d17703;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(233, 132, 4, 0.4);
+        }
+
+        .btn-view {
+          background: white;
+          color: #002060;
+          border: 2px solid #002060;
+        }
+
+        .btn-view:hover {
+          background: #f8fafc;
+          transform: translateY(-2px);
+        }
+        
         @media (max-width: 768px) {
-          .sidebar {
-            width: 60px;
+          .content-wrapper {
+            padding: 1rem;
           }
 
-          .sidebar:hover {
-            width: 220px;
+          .welcome-banner {
+            flex-direction: column;
+            text-align: center;
+            gap: 1rem;
           }
 
-          .main-content {
-            margin-left: 60px;
-            width: calc(100% - 60px);
+          .quick-actions {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .quick-action-btn {
+            width: 100%;
+            justify-content: center;
           }
           
           .stats-grid {
@@ -572,44 +521,24 @@ function Home() {
         }
       `}</style>
 
-      {/* Vertical Sidebar */}
-      <div className="sidebar">
-        {/* User Profile Section */}
-        <div className="sidebar-header">
-          <div className="avatar">
-            {profilePhoto ? (
-              <img src={profilePhoto} alt={`${userName} profile`} />
-            ) : (
-              initials
-            )}
+      {/* Main Content */}
+      <div className="main-content">
+        {/* Welcome Banner */}
+        <div className="welcome-banner">
+          <div className="welcome-text">
+            <h2>Welcome back, {userName}! 👋</h2>
+            <p>Track your support tickets and create new requests</p>
           </div>
-          <div className="user-info">
-            <h1>{userName}</h1>
-            <span className="user-role">{authority === 'admin' ? 'Administrator' : 'User'}</span>
+          <div className="quick-actions">
+            <Link to="/create" className="quick-action-btn btn-create">
+              <span>+</span> Create Ticket
+            </Link>
+            <Link to="/tickets" className="quick-action-btn btn-view">
+              <span>📋</span> View All Tickets
+            </Link>
           </div>
         </div>
 
-        {/* Navigation Items */}
-        <nav className="sidebar-nav">
-          <Link to="/create" className="nav-item">
-            <div className="nav-icon">+</div>
-            <div className="nav-text">Create Ticket</div>
-          </Link>
-
-          <Link to="/tickets" className="nav-item">
-            <div className="nav-icon">📋</div>
-            <div className="nav-text">View All Tickets</div>
-          </Link>
-
-          <Link to="/dashboard" className="nav-item">
-            <div className="nav-icon">✅</div>
-            <div className="nav-text">Closed Tickets</div>
-          </Link>
-        </nav>
-      </div>
-
-      {/* Main Content */}
-      <div className="main-content">
         <div className="content-wrapper">
           {/* Admin: Show only my tickets toggle */}
           {authority === 'admin' && (

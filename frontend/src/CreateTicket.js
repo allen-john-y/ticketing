@@ -124,9 +124,6 @@ function CreateTicket() {
 
   const fileInputRef = useRef(null);
 
-  // App.js header height - adjust this to match your actual header height
-  const headerHeight = 70; // Height of App.js header
-
   // Fetch categories configuration
   useEffect(() => {
     let mounted = true;
@@ -795,157 +792,14 @@ function CreateTicket() {
   }, []);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <style>{`
         * { box-sizing: border-box; }
         
-        /* Vertical Sidebar - Positioned below App.js header */
-        .vertical-sidebar {
-          position: fixed;
-          left: 0;
-          top: ${headerHeight}px; /* Starts right below the header */
-          height: calc(100vh - ${headerHeight}px); /* Takes full height minus header */
-          background: linear-gradient(135deg, #002060 0%, #003380 100%);
-          color: white;
-          width: 70px;
-          transition: width 0.3s ease;
-          overflow: hidden;
-          box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
-          z-index: 999;
-        }
-        
-        .vertical-sidebar:hover {
-          width: 260px;
-        }
-        
-        .sidebar-content {
-          padding: 1.5rem 0;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          width: 260px;
-        }
-        
-        .sidebar-user {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 0 1rem;
-          margin-bottom: 2rem;
-        }
-        
-        .avatar {
-          min-width: 42px;
-          width: 42px;
-          height: 42px;
-          border-radius: 50%;
+        /* Page Header */
+        .page-header {
           background: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          color: #002060;
-          font-size: 14px;
-          overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-        
-        .avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        
-        .user-details {
-          opacity: 0;
-          transition: opacity 0.2s ease 0.15s;
-          white-space: nowrap;
-        }
-        
-        .vertical-sidebar:hover .user-details {
-          opacity: 1;
-        }
-        
-        .user-name {
-          font-size: 15px;
-          font-weight: 600;
-          margin-bottom: 2px;
-        }
-        
-        .user-role {
-          font-size: 11px;
-          opacity: 0.8;
-          background: rgba(255, 255, 255, 0.15);
-          padding: 2px 8px;
-          border-radius: 4px;
-          display: inline-block;
-        }
-        
-        .sidebar-nav {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          padding: 0 1rem;
-        }
-        
-        .nav-item {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 0.75rem;
-          border-radius: 8px;
-          text-decoration: none;
-          color: rgba(255, 255, 255, 0.8);
-          transition: all 0.2s;
-          white-space: nowrap;
-          cursor: pointer;
-          border: none;
-          background: none;
-          width: 100%;
-          font-size: 14px;
-          font-weight: 500;
-        }
-        
-        .nav-item:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-        }
-        
-        .nav-icon {
-          font-size: 20px;
-          min-width: 24px;
-          display: flex;
-          justify-content: center;
-        }
-        
-        .nav-label {
-          opacity: 0;
-          transition: opacity 0.2s ease 0.15s;
-        }
-        
-        .vertical-sidebar:hover .nav-label {
-          opacity: 1;
-        }
-        
-        .main-content {
-          flex: 1;
-          margin-left: 70px;
-          margin-top: ${headerHeight}px; /* Account for header */
-          transition: margin-left 0.3s ease;
-          width: calc(100% - 70px);
-        }
-        
-        /* Adjust main content when sidebar expands */
-        .vertical-sidebar:hover + .main-content {
-          margin-left: 260px;
-          width: calc(100% - 260px);
-        }
-        
-        /* Header inside main content */
-        .content-header {
-          background: white;
-          padding: 1rem 2rem;
+          padding: 1.5rem 2rem;
           border-bottom: 1px solid #e2e8f0;
           margin-bottom: 2rem;
           display: flex;
@@ -953,25 +807,32 @@ function CreateTicket() {
           align-items: center;
         }
         
-        .content-header h2 {
+        .page-header h1 {
           margin: 0;
           color: #0f172a;
-          font-size: 20px;
+          font-size: 24px;
+          font-weight: 700;
         }
         
-        /* Back button in header */
+        .page-header p {
+          margin: 0.5rem 0 0 0;
+          color: #64748b;
+          font-size: 14px;
+        }
+        
         .btn-back {
-          padding: 8px 16px;
+          padding: 10px 20px;
           background: #f1f5f9;
           color: #475569;
           border: none;
-          border-radius: 6px;
+          border-radius: 8px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s;
           display: flex;
           align-items: center;
           gap: 0.5rem;
+          font-size: 14px;
         }
         
         .btn-back:hover {
@@ -1524,19 +1385,6 @@ function CreateTicket() {
         
         /* Responsive Design */
         @media (max-width: 768px) {
-          .vertical-sidebar {
-            width: 0;
-          }
-          
-          .vertical-sidebar:hover {
-            width: 260px;
-          }
-          
-          .main-content {
-            margin-left: 0;
-            width: 100%;
-          }
-          
           .main-container {
             padding: 0 1rem 2rem 1rem;
           }
@@ -1559,554 +1407,521 @@ function CreateTicket() {
         }
       `}</style>
 
-      {/* Vertical Sidebar - Positioned below App.js header */}
-      <div className="vertical-sidebar">
-        <div className="sidebar-content">
-          {/* User Info */}
-          <div className="sidebar-user">
-            <div className="avatar">
-              {profilePhoto ? (
-                <img src={profilePhoto} alt={`${displayName} profile`} />
-              ) : (
-                initials
-              )}
-            </div>
-            <div className="user-details">
-              <div className="user-name">{displayName}</div>
-              <span className="user-role">User</span>
-            </div>
-          </div>
-
-          {/* Navigation Items */}
-          <div className="sidebar-nav">
-            <button onClick={() => navigate('/')} className="nav-item">
-              <span className="nav-icon">←</span>
-              <span className="nav-label">Back to Home</span>
-            </button>
-            
-            <div className="nav-item" style={{ opacity: 0.6, cursor: 'default' }}>
-              <span className="nav-icon">+</span>
-              <span className="nav-label">Create Ticket</span>
-            </div>
-          </div>
+      {/* Page Header */}
+      <div className="page-header">
+        <div>
+          <h1>Create New Ticket</h1>
+          <p>Submit a support request</p>
         </div>
+        <button onClick={() => navigate('/')} className="btn-back">
+          ← Back to Home
+        </button>
       </div>
 
       {/* Main Content */}
-      <div className="main-content">
-        {/* Header inside main content */}
-        <div className="content-header">
-          <h2>Create New Ticket</h2>
-          <button onClick={() => navigate('/')} className="btn-back">
-            ← Back to Home
-          </button>
-        </div>
+      <div className="main-container">
+        {loadingCategories && (
+          <div className="info-box info">
+            Loading categories...
+          </div>
+        )}
 
-        {/* Main Content Area */}
-        <div className="main-container">
-          {loadingCategories && (
-            <div className="info-box info">
-              Loading categories...
+        <form onSubmit={handleSubmit}>
+          <div className="form-card">
+            <h2 className="form-title">Ticket Details</h2>
+
+            {/* Category & Priority */}
+            <div className="form-row">
+              <div className="form-field">
+                <label className="form-label">
+                  Category<span className="required">*</span>
+                </label>
+                <select
+                  className="form-select"
+                  value={formData.category}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(prev => ({
+                      ...prev,
+                      category: val,
+                      onBehalf: val === 'Password Reset' ? 'Self' : prev.onBehalf,
+                      onBehalfEmail: val === 'Password Reset' ? prev.onBehalfEmail : '',
+                      alternativeEmail: val === 'Password Reset' ? prev.alternativeEmail : '',
+                      subCategory: '',
+                      ...(val !== 'Operational & Finance'
+                        ? { subQuery: '', otherSubQueryText: '' }
+                        : {})
+                    }));
+                    setDynamicOnBehalfSelection('Self');
+                    setDynamicOnBehalfEmail('');
+                    setDynamicOnBehalfSelectedUser(null);
+                    setDynamicOnBehalfSearchResults([]);
+                    setVerifyStatus('idle');
+                    setVerifiedName('');
+                    setVerifyError('');
+                  }}
+                  required
+                >
+                  <option value="">Select Category</option>
+                  {categoriesConfig.map(cat => (
+                    <option key={cat.id || cat.name} value={cat.name}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-field">
+                <label className="form-label">
+                  Priority<span className="required">*</span>
+                </label>
+                <select
+                  className="form-select"
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  required
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
             </div>
-          )}
 
-          <form onSubmit={handleSubmit}>
-            <div className="form-card">
-              <h2 className="form-title">Ticket Details</h2>
-
-              {/* Category & Priority */}
-              <div className="form-row">
-                <div className="form-field">
-                  <label className="form-label">
-                    Category<span className="required">*</span>
+            {/* Dynamic On Behalf (non-password reset) */}
+            {selectedCategoryConfig?.features?.onBehalf?.enabled && 
+             selectedCategoryConfig?.type !== 'PASSWORD_RESET' && (
+              <div className="onbehalf-section">
+                <div className="onbehalf-header">
+                  <label className="form-label" style={{ margin: 0 }}>
+                    On Behalf Of {selectedCategoryConfig.features.onBehalf.required && <span className="required">*</span>}
                   </label>
-                  <select
-                    className="form-select"
-                    value={formData.category}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData(prev => ({
-                        ...prev,
-                        category: val,
-                        onBehalf: val === 'Password Reset' ? 'Self' : prev.onBehalf,
-                        onBehalfEmail: val === 'Password Reset' ? prev.onBehalfEmail : '',
-                        alternativeEmail: val === 'Password Reset' ? prev.alternativeEmail : '',
-                        subCategory: '',
-                        ...(val !== 'Operational & Finance'
-                          ? { subQuery: '', otherSubQueryText: '' }
-                          : {})
-                      }));
-                      setDynamicOnBehalfSelection('Self');
+                </div>
+                
+                <div className="form-hint" style={{ marginBottom: '1rem' }}>
+                  Create this ticket for yourself or on behalf of someone else
+                </div>
+
+                <select
+                  className="form-select"
+                  value={dynamicOnBehalfSelection}
+                  onChange={(e) => {
+                    setDynamicOnBehalfSelection(e.target.value);
+                    if (e.target.value === 'Self') {
                       setDynamicOnBehalfEmail('');
                       setDynamicOnBehalfSelectedUser(null);
                       setDynamicOnBehalfSearchResults([]);
-                      setVerifyStatus('idle');
-                      setVerifiedName('');
-                      setVerifyError('');
-                    }}
-                    required
-                  >
-                    <option value="">Select Category</option>
-                    {categoriesConfig.map(cat => (
-                      <option key={cat.id || cat.name} value={cat.name}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    }
+                  }}
+                  required={selectedCategoryConfig.features.onBehalf.required}
+                >
+                  <option value="Self">Self</option>
+                  <option value="Other">Other</option>
+                </select>
 
-                <div className="form-field">
-                  <label className="form-label">
-                    Priority<span className="required">*</span>
-                  </label>
-                  <select
-                    className="form-select"
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                    required
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Dynamic On Behalf (non-password reset) */}
-              {selectedCategoryConfig?.features?.onBehalf?.enabled && 
-               selectedCategoryConfig?.type !== 'PASSWORD_RESET' && (
-                <div className="onbehalf-section">
-                  <div className="onbehalf-header">
-                    <label className="form-label" style={{ margin: 0 }}>
-                      On Behalf Of {selectedCategoryConfig.features.onBehalf.required && <span className="required">*</span>}
-                    </label>
-                  </div>
-                  
-                  <div className="form-hint" style={{ marginBottom: '1rem' }}>
-                    Create this ticket for yourself or on behalf of someone else
-                  </div>
-
-                  <select
-                    className="form-select"
-                    value={dynamicOnBehalfSelection}
-                    onChange={(e) => {
-                      setDynamicOnBehalfSelection(e.target.value);
-                      if (e.target.value === 'Self') {
-                        setDynamicOnBehalfEmail('');
-                        setDynamicOnBehalfSelectedUser(null);
-                        setDynamicOnBehalfSearchResults([]);
-                      }
-                    }}
-                    required={selectedCategoryConfig.features.onBehalf.required}
-                  >
-                    <option value="Self">Self</option>
-                    <option value="Other">Other</option>
-                  </select>
-
-                  {dynamicOnBehalfSelection === 'Other' && (
-                    <div style={{ marginTop: '1rem', position: 'relative' }}>
-                      <label className="form-label">Search User</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        value={dynamicOnBehalfEmail}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setDynamicOnBehalfEmail(val);
-                          handleDynamicOnBehalfSearch(val);
-                        }}
-                        placeholder="Type email or name to search..."
-                      />
-
-                      {dynamicOnBehalfSearching && (
-                        <div className="form-hint">Searching...</div>
-                      )}
-
-                      {dynamicOnBehalfSearchResults.length > 0 && (
-                        <div className="search-results">
-                          {dynamicOnBehalfSearchResults.map((user) => (
-                            <div
-                              key={user.id}
-                              className="search-result-item"
-                              onClick={() => handleSelectDynamicOnBehalfUser(user)}
-                            >
-                              <div className="search-result-name">
-                                {user.displayName || user.mail}
-                              </div>
-                              <div className="search-result-email">
-                                {user.mail || user.userPrincipalName}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {dynamicOnBehalfSelectedUser && (
-                        <div className="selected-user-box">
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: '#065f46', marginBottom: '4px' }}>
-                            ✅ Selected User:
-                          </div>
-                          <div style={{ fontWeight: '700', color: '#0f172a' }}>
-                            {dynamicOnBehalfSelectedUser.displayName}
-                          </div>
-                          <div style={{ fontSize: '13px', color: '#64748b' }}>
-                            {dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Dynamic Sub-Category */}
-              {selectedCategoryConfig?.features?.subCategories?.enabled && (
-                <div className="form-field">
-                  <label className="form-label">
-                    Sub-Category{" "}
-                    {selectedCategoryConfig.features.subCategories.required && (
-                      <span className="required">*</span>
-                    )}
-                  </label>
-
-                  <select
-                    className="form-select"
-                    value={formData.subCategory}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData(prev => ({
-                        ...prev,
-                        subCategory: val
-                      }));
-                      if (val !== 'Other') {
-                        setOtherSubCategoryText('');
-                      }
-                    }}
-                    required={selectedCategoryConfig.features.subCategories.required}
-                  >
-                    <option value="">Select sub-category</option>
-                    {selectedCategoryConfig.features.subCategories.list?.map(sub => (
-                      <option key={sub} value={sub}>{sub}</option>
-                    ))}
-                  </select>
-
-                  {formData.subCategory === 'Other' && (
+                {dynamicOnBehalfSelection === 'Other' && (
+                  <div style={{ marginTop: '1rem', position: 'relative' }}>
+                    <label className="form-label">Search User</label>
                     <input
                       type="text"
                       className="form-input"
-                      style={{ marginTop: '0.75rem' }}
-                      value={otherSubCategoryText}
-                      onChange={(e) => setOtherSubCategoryText(e.target.value)}
-                      placeholder="Please describe the issue"
-                      required
+                      value={dynamicOnBehalfEmail}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDynamicOnBehalfEmail(val);
+                        handleDynamicOnBehalfSearch(val);
+                      }}
+                      placeholder="Type email or name to search..."
                     />
-                  )}
-                </div>
-              )}
 
-              {/* Password Reset - On Behalf */}
-              {selectedCategoryConfig?.type === 'PASSWORD_RESET' && (
-                <div className="onbehalf-section">
-                  <label className="form-label">
-                    On behalf of<span className="required">*</span>
-                  </label>
+                    {dynamicOnBehalfSearching && (
+                      <div className="form-hint">Searching...</div>
+                    )}
 
-                  <div className="form-row">
-                    <div className="form-field">
-                      <select
-                        className="form-select"
-                        value={formData.onBehalf}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormData(prev => ({
-                            ...prev,
-                            onBehalf: val,
-                            ...(val === 'Self' ? { onBehalfEmail: '' } : {})
-                          }));
-                          setVerifyStatus('idle');
-                          setVerifiedName('');
-                          setVerifyError('');
-                        }}
-                      >
-                        <option value="Self">Self</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-
-                    {formData.onBehalf === 'Other' && (
-                      <div className="form-field">
-                        <div className="verify-section">
-                          <input
-                            type="text"
-                            className="form-input"
-                            placeholder="Enter company email"
-                            value={formData.onBehalfEmail}
-                            onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
-                            required
-                          />
-                          <button
-                            type="button"
-                            className="btn-verify"
-                            onClick={handleVerifyOther}
-                            disabled={verifyStatus === 'verifying'}
+                    {dynamicOnBehalfSearchResults.length > 0 && (
+                      <div className="search-results">
+                        {dynamicOnBehalfSearchResults.map((user) => (
+                          <div
+                            key={user.id}
+                            className="search-result-item"
+                            onClick={() => handleSelectDynamicOnBehalfUser(user)}
                           >
-                            {verifyStatus === 'verifying' ? 'Verifying...' : 'Verify'}
-                          </button>
-                        </div>
-
-                        <div className={`verify-status ${verifyStatus}`}>
-                          {verifyStatus === 'idle' && 'Click Verify to confirm user exists'}
-                          {verifyStatus === 'verifying' && '🔍 Verifying user...'}
-                          {verifyStatus === 'verified' && `✅ Verified: ${verifiedName}`}
-                          {verifyStatus === 'notfound' && '❌ User not found'}
-                          {verifyStatus === 'error' && `❌ ${verifyError}`}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {((formData.onBehalf === 'Other' && verifyStatus === 'verified') || 
-                    formData.onBehalf === 'Self') && (
-                    <div className="form-field" style={{ marginTop: '1rem' }}>
-                      <label className="form-label">
-                        Alternative Email<span className="required">*</span>
-                      </label>
-                      <input
-                        type="email"
-                        className="form-input"
-                        placeholder="Email to receive reset password"
-                        value={formData.alternativeEmail}
-                        onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
-                        required
-                      />
-                      <div className="form-hint">
-                        The reset password will be sent to this email address
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Admin Access Warning */}
-              {formData.category === 'Admin Access' && (
-                <>
-                  {groupsLoading ? (
-                    <div className="info-box info">Checking access...</div>
-                  ) : isDeviceAdmin ? (
-                    <div className="info-box warning">
-                      <strong>⚠️ You already have device admin access.</strong>
-                      <div style={{ marginTop: '6px' }}>
-                        Your account already has admin access, so creating an Admin Access ticket is disabled.
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="info-box info">
-                      <strong>Need Admin Access?</strong>
-                      <div style={{ marginTop: '6px' }}>
-                        Please submit this request for approval.
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Description */}
-              <div className="form-field">
-                <label className="form-label">
-                  Description<span className="required">*</span>
-                </label>
-
-                <textarea
-                  className="form-textarea"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="Describe your issue..."
-                  required
-                />
-              </div>
-
-              {/* Attachments */}
-              {selectedCategoryConfig?.features?.attachments?.enabled && (
-                <div className="form-field" style={{ marginTop: '1.5rem' }}>
-                  <label className="form-label">
-                    Attachments
-                    {selectedCategoryConfig.features.attachments.required && (
-                      <span className="required">*</span>
-                    )}
-                  </label>
-
-                  <div
-                    className={`attachment-dropzone ${isDragging ? 'dragging' : ''}`}
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onDragLeave={() => setIsDragging(false)}
-                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                  >
-                    <div className="dropzone-icon">
-                      <img
-                        src={attachmentIcon}
-                        alt="Attachment"
-                      />
-                    </div>
-
-                    <div className="dropzone-title">
-                      Drag & drop files here or click to browse
-                    </div>
-                    <div className="dropzone-hint">
-                      Max {formatBytes(MAX_FILE_SIZE)} each. Up to {MAX_FILES} files.
-                    </div>
-
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      onChange={(e) => handleFilesSelected(e.target.files)}
-                      style={{ display: 'none' }}
-                    />
-                  </div>
-
-                  {attachments.length > 0 && (
-                    <>
-                      <div className="attachments-list">
-                        {attachments.map((att, idx) => (
-                          <div key={idx} className="attachment-item">
-                            <button
-                              type="button"
-                              className="btn-remove-attachment"
-                              onClick={() => handleRemoveAttachment(idx)}
-                            >
-                              ✖
-                            </button>
-
-                            <div className="attachment-preview">
-                              {att.preview ? (
-                                <img src={att.preview} alt={att.file.name} />
-                              ) : (
-                                <div className="file-type-icon">
-                                  {fileTypeLabel(att.file.type, att.file.name)}
-                                </div>
-                              )}
+                            <div className="search-result-name">
+                              {user.displayName || user.mail}
                             </div>
-
-                            <div className="attachment-name">
-                              {att.file.name}
+                            <div className="search-result-email">
+                              {user.mail || user.userPrincipalName}
                             </div>
-
-                            <div className="attachment-size">
-                              {formatBytes(att.file.size)}
-                            </div>
-
-                            {att.uploading && (
-                              <div className="attachment-progress">
-                                <div className="progress-bar">
-                                  <div
-                                    className="progress-fill"
-                                    style={{ width: `${att.progress}%` }}
-                                  />
-                                </div>
-                                <div className="progress-text">{att.progress}%</div>
-                              </div>
-                            )}
-
-                            {att.uploaded && (
-                              <div className="attachment-status uploaded">
-                                Uploaded
-                              </div>
-                            )}
-
-                            {att.error && (
-                              <div className="attachment-status error">
-                                {att.error}
-                              </div>
-                            )}
                           </div>
                         ))}
                       </div>
+                    )}
 
-                      <div className="attachment-actions">
+                    {dynamicOnBehalfSelectedUser && (
+                      <div className="selected-user-box">
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: '#065f46', marginBottom: '4px' }}>
+                          ✅ Selected User:
+                        </div>
+                        <div style={{ fontWeight: '700', color: '#0f172a' }}>
+                          {dynamicOnBehalfSelectedUser.displayName}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>
+                          {dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Dynamic Sub-Category */}
+            {selectedCategoryConfig?.features?.subCategories?.enabled && (
+              <div className="form-field">
+                <label className="form-label">
+                  Sub-Category{" "}
+                  {selectedCategoryConfig.features.subCategories.required && (
+                    <span className="required">*</span>
+                  )}
+                </label>
+
+                <select
+                  className="form-select"
+                  value={formData.subCategory}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(prev => ({
+                      ...prev,
+                      subCategory: val
+                    }));
+                    if (val !== 'Other') {
+                      setOtherSubCategoryText('');
+                    }
+                  }}
+                  required={selectedCategoryConfig.features.subCategories.required}
+                >
+                  <option value="">Select sub-category</option>
+                  {selectedCategoryConfig.features.subCategories.list?.map(sub => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+
+                {formData.subCategory === 'Other' && (
+                  <input
+                    type="text"
+                    className="form-input"
+                    style={{ marginTop: '0.75rem' }}
+                    value={otherSubCategoryText}
+                    onChange={(e) => setOtherSubCategoryText(e.target.value)}
+                    placeholder="Please describe the issue"
+                    required
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Password Reset - On Behalf */}
+            {selectedCategoryConfig?.type === 'PASSWORD_RESET' && (
+              <div className="onbehalf-section">
+                <label className="form-label">
+                  On behalf of<span className="required">*</span>
+                </label>
+
+                <div className="form-row">
+                  <div className="form-field">
+                    <select
+                      className="form-select"
+                      value={formData.onBehalf}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData(prev => ({
+                          ...prev,
+                          onBehalf: val,
+                          ...(val === 'Self' ? { onBehalfEmail: '' } : {})
+                        }));
+                        setVerifyStatus('idle');
+                        setVerifiedName('');
+                        setVerifyError('');
+                      }}
+                    >
+                      <option value="Self">Self</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  {formData.onBehalf === 'Other' && (
+                    <div className="form-field">
+                      <div className="verify-section">
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Enter company email"
+                          value={formData.onBehalfEmail}
+                          onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })}
+                          required
+                        />
                         <button
                           type="button"
-                          className="btn-ghost"
-                          onClick={handleClearAllAttachments}
+                          className="btn-verify"
+                          onClick={handleVerifyOther}
+                          disabled={verifyStatus === 'verifying'}
                         >
-                          Clear all
+                          {verifyStatus === 'verifying' ? 'Verifying...' : 'Verify'}
                         </button>
                       </div>
-                    </>
-                  )}
 
-                  <div className="form-hint" style={{ marginTop: '0.5rem' }}>
-                    {selectedCategoryConfig.features.attachments.required
-                      ? 'Attachments are required for this category.'
-                      : 'Attach supporting documents if needed.'}
+                      <div className={`verify-status ${verifyStatus}`}>
+                        {verifyStatus === 'idle' && 'Click Verify to confirm user exists'}
+                        {verifyStatus === 'verifying' && '🔍 Verifying user...'}
+                        {verifyStatus === 'verified' && `✅ Verified: ${verifiedName}`}
+                        {verifyStatus === 'notfound' && '❌ User not found'}
+                        {verifyStatus === 'error' && `❌ ${verifyError}`}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {((formData.onBehalf === 'Other' && verifyStatus === 'verified') || 
+                  formData.onBehalf === 'Self') && (
+                  <div className="form-field" style={{ marginTop: '1rem' }}>
+                    <label className="form-label">
+                      Alternative Email<span className="required">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="Email to receive reset password"
+                      value={formData.alternativeEmail}
+                      onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })}
+                      required
+                    />
+                    <div className="form-hint">
+                      The reset password will be sent to this email address
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* Form actions */}
-              <div className="form-actions">
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={loading || disableCreateBecauseDeviceAdmin}
-                  title={
-                    disableCreateBecauseDeviceAdmin
-                      ? 'You already have device admin access'
-                      : undefined
-                  }
-                >
-                  {loading ? 'Creating...' : 'Create Ticket'}
-                </button>
-
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => navigate('/')}
-                >
-                  Cancel
-                </button>
+                )}
               </div>
+            )}
 
+            {/* Admin Access Warning */}
+            {formData.category === 'Admin Access' && (
+              <>
+                {groupsLoading ? (
+                  <div className="info-box info">Checking access...</div>
+                ) : isDeviceAdmin ? (
+                  <div className="info-box warning">
+                    <strong>⚠️ You already have device admin access.</strong>
+                    <div style={{ marginTop: '6px' }}>
+                      Your account already has admin access, so creating an Admin Access ticket is disabled.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="info-box info">
+                    <strong>Need Admin Access?</strong>
+                    <div style={{ marginTop: '6px' }}>
+                      Please submit this request for approval.
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Description */}
+            <div className="form-field">
+              <label className="form-label">
+                Description<span className="required">*</span>
+              </label>
+
+              <textarea
+                className="form-textarea"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                placeholder="Describe your issue..."
+                required
+              />
             </div>
-          </form>
 
-          {/* Modal */}
-          {modal.open && (
-            <div className="modal-overlay">
-              <div className="modal-box">
-                <div className="modal-title">{modal.title}</div>
-                <div className="modal-message">{modal.message}</div>
-
-                <div className="modal-actions">
-                  <button
-                    className={`btn-modal ${modal.type}`}
-                    onClick={handleCloseModal}
-                  >
-                    OK
-                  </button>
-
-                  {modal.type === 'success' && createdTicketId && (
-                    <button
-                      className="btn-modal info"
-                      onClick={handleViewTicket}
-                    >
-                      View Ticket
-                    </button>
+            {/* Attachments */}
+            {selectedCategoryConfig?.features?.attachments?.enabled && (
+              <div className="form-field" style={{ marginTop: '1.5rem' }}>
+                <label className="form-label">
+                  Attachments
+                  {selectedCategoryConfig.features.attachments.required && (
+                    <span className="required">*</span>
                   )}
+                </label>
+
+                <div
+                  className={`attachment-dropzone ${isDragging ? 'dragging' : ''}`}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={() => setIsDragging(false)}
+                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                >
+                  <div className="dropzone-icon">
+                    <img
+                      src={attachmentIcon}
+                      alt="Attachment"
+                    />
+                  </div>
+
+                  <div className="dropzone-title">
+                    Drag & drop files here or click to browse
+                  </div>
+                  <div className="dropzone-hint">
+                    Max {formatBytes(MAX_FILE_SIZE)} each. Up to {MAX_FILES} files.
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={(e) => handleFilesSelected(e.target.files)}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+
+                {attachments.length > 0 && (
+                  <>
+                    <div className="attachments-list">
+                      {attachments.map((att, idx) => (
+                        <div key={idx} className="attachment-item">
+                          <button
+                            type="button"
+                            className="btn-remove-attachment"
+                            onClick={() => handleRemoveAttachment(idx)}
+                          >
+                            ✖
+                          </button>
+
+                          <div className="attachment-preview">
+                            {att.preview ? (
+                              <img src={att.preview} alt={att.file.name} />
+                            ) : (
+                              <div className="file-type-icon">
+                                {fileTypeLabel(att.file.type, att.file.name)}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="attachment-name">
+                            {att.file.name}
+                          </div>
+
+                          <div className="attachment-size">
+                            {formatBytes(att.file.size)}
+                          </div>
+
+                          {att.uploading && (
+                            <div className="attachment-progress">
+                              <div className="progress-bar">
+                                <div
+                                  className="progress-fill"
+                                  style={{ width: `${att.progress}%` }}
+                                />
+                              </div>
+                              <div className="progress-text">{att.progress}%</div>
+                            </div>
+                          )}
+
+                          {att.uploaded && (
+                            <div className="attachment-status uploaded">
+                              Uploaded
+                            </div>
+                          )}
+
+                          {att.error && (
+                            <div className="attachment-status error">
+                              {att.error}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="attachment-actions">
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={handleClearAllAttachments}
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                <div className="form-hint" style={{ marginTop: '0.5rem' }}>
+                  {selectedCategoryConfig.features.attachments.required
+                    ? 'Attachments are required for this category.'
+                    : 'Attach supporting documents if needed.'}
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {showPasswordPopup && (
-            <PasswordPopup
-              password={newPassword}
-              onClose={() => setShowPasswordPopup(false)}
-            />
-          )}
-        </div>
+            {/* Form actions */}
+            <div className="form-actions">
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={loading || disableCreateBecauseDeviceAdmin}
+                title={
+                  disableCreateBecauseDeviceAdmin
+                    ? 'You already have device admin access'
+                    : undefined
+                }
+              >
+                {loading ? 'Creating...' : 'Create Ticket'}
+              </button>
+
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => navigate('/')}
+              >
+                Cancel
+              </button>
+            </div>
+
+          </div>
+        </form>
+
+        {/* Modal */}
+        {modal.open && (
+          <div className="modal-overlay">
+            <div className="modal-box">
+              <div className="modal-title">{modal.title}</div>
+              <div className="modal-message">{modal.message}</div>
+
+              <div className="modal-actions">
+                <button
+                  className={`btn-modal ${modal.type}`}
+                  onClick={handleCloseModal}
+                >
+                  OK
+                </button>
+
+                {modal.type === 'success' && createdTicketId && (
+                  <button
+                    className="btn-modal info"
+                    onClick={handleViewTicket}
+                  >
+                    View Ticket
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showPasswordPopup && (
+          <PasswordPopup
+            password={newPassword}
+            onClose={() => setShowPasswordPopup(false)}
+          />
+        )}
       </div>
     </div>
   );

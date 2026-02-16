@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
-import { BrowserRouter as Router, Route, Routes, useNavigate  } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import Login from './Login';
 import Home from './Home';
@@ -104,6 +104,9 @@ function Header({ logout }) {
 
   const categoryHeadsRefs = useRef([]);
   const ccEmailsRefs = useRef([]);
+
+  // Sidebar state
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1084,17 +1087,169 @@ function Header({ logout }) {
       <style>{`
         * { box-sizing: border-box; }
         
-        .app-header {
+        /* App Container */
+        .app-container {
+          display: flex;
+          min-height: 100vh;
+        }
+        
+        /* Vertical Sidebar - Persistent across all pages */
+        .vertical-sidebar {
+          position: fixed;
+          left: 0;
+          top: 0;
+          height: 100vh;
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
-          padding: 1.25rem 2rem;
+          width: 70px;
+          transition: width 0.3s ease;
+          overflow: hidden;
+          box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
+          z-index: 1000;
+        }
+        
+        .vertical-sidebar:hover {
+          width: 260px;
+        }
+        
+        .sidebar-content {
+          padding: 1.5rem 0;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          width: 260px;
+        }
+        
+        .sidebar-user {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 0 1rem;
+          margin-bottom: 2rem;
+        }
+        
+        .sidebar-avatar {
+          min-width: 42px;
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          background: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          color: #002060;
+          font-size: 14px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
+        .sidebar-user-details {
+          opacity: 0;
+          transition: opacity 0.2s ease 0.15s;
+          white-space: nowrap;
+        }
+        
+        .vertical-sidebar:hover .sidebar-user-details {
+          opacity: 1;
+        }
+        
+        .sidebar-user-name {
+          font-size: 15px;
+          font-weight: 600;
+          margin-bottom: 2px;
+        }
+        
+        .sidebar-user-role {
+          font-size: 11px;
+          opacity: 0.8;
+          background: rgba(255, 255, 255, 0.15);
+          padding: 2px 8px;
+          border-radius: 4px;
+          display: inline-block;
+        }
+        
+        .sidebar-nav {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          padding: 0 1rem;
+        }
+        
+        .sidebar-nav-item {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 0.75rem;
+          border-radius: 8px;
+          text-decoration: none;
+          color: rgba(255, 255, 255, 0.8);
+          transition: all 0.2s;
+          white-space: nowrap;
+          cursor: pointer;
+          border: none;
+          background: none;
+          width: 100%;
+          font-size: 14px;
+          font-weight: 500;
+        }
+        
+        .sidebar-nav-item:hover {
+          background: rgba(255, 255, 255, 0.1);
+          color: white;
+        }
+        
+        .sidebar-nav-item.active {
+          background: rgba(255, 255, 255, 0.15);
+          color: white;
+          border-left: 3px solid #e98404;
+        }
+        
+        .sidebar-nav-icon {
+          font-size: 20px;
+          min-width: 24px;
+          display: flex;
+          justify-content: center;
+        }
+        
+        .sidebar-nav-label {
+          opacity: 0;
+          transition: opacity 0.2s ease 0.15s;
+        }
+        
+        .vertical-sidebar:hover .sidebar-nav-label {
+          opacity: 1;
+        }
+        
+        /* Main Content Area */
+        .main-wrapper {
+          flex: 1;
+          margin-left: 70px;
+          width: calc(100% - 70px);
+          transition: margin-left 0.3s ease;
+        }
+        
+        .vertical-sidebar:hover ~ .main-wrapper {
+          margin-left: 260px;
+          width: calc(100% - 260px);
+        }
+        
+        /* App Header */
+        .app-header {
+          background: white;
+          padding: 1rem 2rem;
+          border-bottom: 1px solid #e2e8f0;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          box-shadow: 0 4px 16px rgba(0, 32, 96, 0.15);
-          position: sticky;
-          top: 0;
-          z-index: 50;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         }
         
         .header-left {
@@ -1104,47 +1259,29 @@ function Header({ logout }) {
         }
         
         .logo-img {
-          width: 48px;
-          height: 48px;
-          border-radius: 10px;
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
           object-fit: cover;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+          cursor: pointer;
+        }
+        
+        .company-info {
+          cursor: pointer;
         }
         
         .company-info h1 {
           margin: 0;
-          font-size: 1.15rem;
-          font-weight: 800;
-          letter-spacing: 0.5px;
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: #0f172a;
         }
         
         .company-subtitle {
-          color: rgba(255, 255, 255, 0.85);
-          font-size: 12px;
+          color: #64748b;
+          font-size: 11px;
           margin-top: 2px;
           font-weight: 500;
-        }
-        
-        .header-center {
-          position: absolute;
-          left: 50%;
-          transform: translateX(-50%);
-          text-align: center;
-        }
-        
-        .header-title {
-          font-size: 1.25rem;
-          font-weight: 900;
-          letter-spacing: 0.5px;
-          margin: 0;
-        }
-        
-        .header-tagline {
-          font-size: 11px;
-          opacity: 0.9;
-          margin-top: 2px;
-          font-weight: 600;
-          letter-spacing: 0.3px;
         }
         
         .header-right {
@@ -1154,11 +1291,11 @@ function Header({ logout }) {
         }
         
         .settings-btn {
-          width: 42px;
-          height: 42px;
-          border-radius: 10px;
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
           border: none;
-          background: rgba(255, 255, 255, 0.15);
+          background: #f1f5f9;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -1167,7 +1304,7 @@ function Header({ logout }) {
         }
         
         .settings-btn:hover {
-          background: rgba(255, 255, 255, 0.25);
+          background: #e2e8f0;
           transform: scale(1.05);
         }
         
@@ -1226,29 +1363,29 @@ function Header({ logout }) {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 8px 14px;
-          border-radius: 999px;
+          padding: 6px 12px;
+          border-radius: 8px;
           border: none;
-          background: rgba(255, 255, 255, 0.15);
-          color: white;
+          background: #f1f5f9;
+          color: #0f172a;
           cursor: pointer;
           transition: all 0.2s;
         }
         
         .profile-btn:hover {
-          background: rgba(255, 255, 255, 0.25);
+          background: #e2e8f0;
         }
         
         .profile-avatar {
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
-          background: rgba(255, 255, 255, 0.2);
+          width: 32px;
+          height: 32px;
+          border-radius: 6px;
+          background: #e2e8f0;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-weight: 800;
-          font-size: 14px;
+          font-weight: 700;
+          font-size: 12px;
           overflow: hidden;
         }
         
@@ -1267,12 +1404,12 @@ function Header({ logout }) {
         
         .profile-name {
           font-size: 13px;
-          font-weight: 700;
+          font-weight: 600;
         }
         
         .profile-email {
           font-size: 11px;
-          opacity: 0.85;
+          color: #64748b;
         }
         
         .profile-dropdown {
@@ -1590,12 +1727,17 @@ function Header({ logout }) {
         }
         
         @media (max-width: 768px) {
-          .header-center {
-            display: none;
+          .vertical-sidebar {
+            width: 0;
           }
           
-          .app-header {
-            padding: 1rem 1.5rem;
+          .vertical-sidebar:hover {
+            width: 260px;
+          }
+          
+          .main-wrapper {
+            margin-left: 0;
+            width: 100%;
           }
           
           .modal-small,
@@ -1606,176 +1748,224 @@ function Header({ logout }) {
         }
       `}</style>
 
-      <header className="app-header">
-        <div className="header-left">
-          
-          <img
-            src={logo}
-            alt="Sandeza logo"
-            className="logo-img"
-            style={{ cursor: 'pointer' }}
-            onClick={() => navigate('/')}
-          />
-
-          <div
-            className="company-info"
-            style={{ cursor: 'pointer' }}
-            onClick={() => navigate('/')}
-          >
-            <h1>SANDEZA INC</h1>
-            <div className="company-subtitle">IT Ticket Portal</div>
-          </div>
-
-        </div>
-
-        <div
-          className="header-center"
-          style={{ cursor: 'pointer' }}
-          onClick={() => navigate('/')}
-        >
-          <h2 className="header-title">SANDEZA HELPDESK</h2>
-          <div className="header-tagline">Empowering Support • Every Step</div>
-        </div>
-
-
-        <div className="header-right">
-          {isAdmin && (
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => setSettingsOpen(s => !s)}
-                className="settings-btn"
-                aria-label="Admin settings"
-              >
-                <img src={gearIcon} alt="Settings" />
-              </button>
-
-              {settingsOpen && (
-                  <div className="settings-dropdown">
-
-                    <div className="dropdown-title">⚙️ Admin Settings</div>
-
-                    <button
-                      onClick={() => { openAddModal(); setSettingsOpen(false); }}
-                      className="dropdown-item add"
-                    >
-                      <img
-                        src={addUserIcon}
-                        alt="Add User"
-                        style={{ width: 18, height: 18, marginRight: 8 }}
-                      />
-                      Add User
-                    </button>
-
-                    <button
-                      onClick={() => { openRemoveModal(); setSettingsOpen(false); }}
-                      className="dropdown-item remove"
-                    >
-                      <img
-                        src={removeUserIcon}
-                        alt="Remove User"
-                        style={{ width: 18, height: 18, marginRight: 8 }}
-                      />
-                      Remove User
-                    </button>
-
-                    <button
-                      onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
-                      className="dropdown-item add"
-                    >
-                      <img
-                        src={addFieldIcon}
-                        alt="Add Field"
-                        style={{ width: 18, height: 18, marginRight: 8 }}
-                      />
-                      Add Field
-                    </button>
-
-                    <button
-                      onClick={() => { openEditFieldModal(); setSettingsOpen(false); }}
-                      className="dropdown-item edit"
-                    >
-                      <img
-                        src={editFieldIcon}
-                        alt="Edit Field"
-                        style={{ width: 18, height: 18, marginRight: 8 }}
-                      />
-                      Edit Field
-                    </button>
-
-                    <button
-                      onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
-                      className="dropdown-item remove"
-                    >
-                      <img
-                        src={removeFieldIcon}
-                        alt="Remove Field"
-                        style={{ width: 18, height: 18, marginRight: 8 }}
-                      />
-                      Remove Field
-                    </button>
-
-                  </div>
-                )}
-
-            </div>
-          )}
-
-          <div ref={profileRef} style={{ position: 'relative' }}>
-            <button onClick={() => setProfileOpen(prev => !prev)} className="profile-btn">
-              <div className="profile-avatar">
+      <div className="app-container">
+        {/* Persistent Vertical Sidebar */}
+        <div className="vertical-sidebar">
+          <div className="sidebar-content">
+            {/* User Info */}
+            <div className="sidebar-user">
+              <div className="sidebar-avatar">
                 {profilePhoto ? (
                   <img src={profilePhoto} alt="profile" />
                 ) : (
                   <span>{initials}</span>
                 )}
               </div>
-
-              <div className="profile-info">
-                <span className="profile-name">{accounts?.[0]?.name || accounts?.[0]?.username}</span>
-                <span className="profile-email">{accounts?.[0]?.username}</span>
+              <div className="sidebar-user-details">
+                <div className="sidebar-user-name">
+                  {accounts?.[0]?.name || accounts?.[0]?.username}
+                </div>
+                <span className="sidebar-user-role">
+                  {isAdmin ? 'Admin' : 'User'}
+                </span>
               </div>
+            </div>
 
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                <path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
+            {/* Navigation Items */}
+            <div className="sidebar-nav">
+              <Link to="/" className="sidebar-nav-item" onClick={() => setSidebarExpanded(false)}>
+                <span className="sidebar-nav-icon">🏠</span>
+                <span className="sidebar-nav-label">Dashboard</span>
+              </Link>
+              
+              <Link to="/create" className="sidebar-nav-item" onClick={() => setSidebarExpanded(false)}>
+                <span className="sidebar-nav-icon">+</span>
+                <span className="sidebar-nav-label">Create Ticket</span>
+              </Link>
+              
+              <Link to="/tickets" className="sidebar-nav-item" onClick={() => setSidebarExpanded(false)}>
+                <span className="sidebar-nav-icon">🎫</span>
+                <span className="sidebar-nav-label">View Tickets</span>
+              </Link>
 
-            {profileOpen && (
-              <div className="profile-dropdown">
-                <div className="profile-dropdown-header">
-                  <div className="profile-dropdown-avatar">
+              {isAdmin && (
+                <Link to="/dashboard" className="sidebar-nav-item" onClick={() => setSidebarExpanded(false)}>
+                  <span className="sidebar-nav-icon">📊</span>
+                  <span className="sidebar-nav-label">Analytics</span>
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="main-wrapper">
+          {/* App Header */}
+          <header className="app-header">
+            <div className="header-left">
+              <img
+                src={logo}
+                alt="Sandeza logo"
+                className="logo-img"
+                onClick={() => navigate('/')}
+              />
+
+              <div
+                className="company-info"
+                onClick={() => navigate('/')}
+              >
+                <h1>SANDEZA INC</h1>
+                <div className="company-subtitle">IT Ticket Portal</div>
+              </div>
+            </div>
+
+            <div className="header-right">
+              {isAdmin && (
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => setSettingsOpen(s => !s)}
+                    className="settings-btn"
+                    aria-label="Admin settings"
+                  >
+                    <img src={gearIcon} alt="Settings" />
+                  </button>
+
+                  {settingsOpen && (
+                      <div className="settings-dropdown">
+                        <div className="dropdown-title">⚙️ Admin Settings</div>
+
+                        <button
+                          onClick={() => { openAddModal(); setSettingsOpen(false); }}
+                          className="dropdown-item add"
+                        >
+                          <img
+                            src={addUserIcon}
+                            alt="Add User"
+                            style={{ width: 18, height: 18, marginRight: 8 }}
+                          />
+                          Add User
+                        </button>
+
+                        <button
+                          onClick={() => { openRemoveModal(); setSettingsOpen(false); }}
+                          className="dropdown-item remove"
+                        >
+                          <img
+                            src={removeUserIcon}
+                            alt="Remove User"
+                            style={{ width: 18, height: 18, marginRight: 8 }}
+                          />
+                          Remove User
+                        </button>
+
+                        <button
+                          onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
+                          className="dropdown-item add"
+                        >
+                          <img
+                            src={addFieldIcon}
+                            alt="Add Field"
+                            style={{ width: 18, height: 18, marginRight: 8 }}
+                          />
+                          Add Field
+                        </button>
+
+                        <button
+                          onClick={() => { openEditFieldModal(); setSettingsOpen(false); }}
+                          className="dropdown-item edit"
+                        >
+                          <img
+                            src={editFieldIcon}
+                            alt="Edit Field"
+                            style={{ width: 18, height: 18, marginRight: 8 }}
+                          />
+                          Edit Field
+                        </button>
+
+                        <button
+                          onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
+                          className="dropdown-item remove"
+                        >
+                          <img
+                            src={removeFieldIcon}
+                            alt="Remove Field"
+                            style={{ width: 18, height: 18, marginRight: 8 }}
+                          />
+                          Remove Field
+                        </button>
+                      </div>
+                    )}
+                </div>
+              )}
+
+              <div ref={profileRef} style={{ position: 'relative' }}>
+                <button onClick={() => setProfileOpen(prev => !prev)} className="profile-btn">
+                  <div className="profile-avatar">
                     {profilePhoto ? (
                       <img src={profilePhoto} alt="profile" />
                     ) : (
-                      <span style={{ fontSize: 18 }}>{initials}</span>
+                      <span>{initials}</span>
                     )}
                   </div>
-                  <div className="profile-dropdown-info">
-                    <div className="profile-dropdown-name">{accounts?.[0]?.name || 'Unknown'}</div>
-                    <div className="profile-dropdown-email">{accounts?.[0]?.username}</div>
+
+                  <div className="profile-info">
+                    <span className="profile-name">{accounts?.[0]?.name || accounts?.[0]?.username}</span>
+                    <span className="profile-email">{accounts?.[0]?.username}</span>
                   </div>
-                </div>
 
-                <div className="profile-actions">
-                  <button onClick={() => { openFullProfile(); setProfileOpen(false); }} className="profile-action-btn btn-view-profile">
-                    👤 View Full Profile
-                  </button>
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                    <path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
 
-                  <button onClick={logout} className="profile-action-btn btn-logout">
-                    🚪 Logout
-                  </button>
-                </div>
+                {profileOpen && (
+                  <div className="profile-dropdown">
+                    <div className="profile-dropdown-header">
+                      <div className="profile-dropdown-avatar">
+                        {profilePhoto ? (
+                          <img src={profilePhoto} alt="profile" />
+                        ) : (
+                          <span style={{ fontSize: 18 }}>{initials}</span>
+                        )}
+                      </div>
+                      <div className="profile-dropdown-info">
+                        <div className="profile-dropdown-name">{accounts?.[0]?.name || 'Unknown'}</div>
+                        <div className="profile-dropdown-email">{accounts?.[0]?.username}</div>
+                      </div>
+                    </div>
+
+                    <div className="profile-actions">
+                      <button onClick={() => { openFullProfile(); setProfileOpen(false); }} className="profile-action-btn btn-view-profile">
+                        👤 View Full Profile
+                      </button>
+
+                      <button onClick={logout} className="profile-action-btn btn-logout">
+                        🚪 Logout
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      </header>
+            </div>
+          </header>
 
-      {/* Add User Modal */}
+          {/* Page Content - Routes will render here */}
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/tickets" element={<Tickets />} />
+            <Route path="/create" element={<CreateTicket />} />
+            <Route path="/ticket/:id" element={<TicketDetails />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+          </Routes>
+        </div>
+      </div>
+
+      {/* Modals remain the same */}
       {addModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeAddModal} />
           <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            {/* Add User Modal Content - same as before */}
             <div className="modal-header">
               <h3 className="modal-title">Add Admin User</h3>
               <button onClick={closeAddModal} className="modal-close">✖</button>
@@ -3115,13 +3305,6 @@ function AppContent() {
     <Router>
       <AuthenticatedTemplate>
         <Header logout={handleLogout} />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/tickets" element={<Tickets />} />
-          <Route path="/create" element={<CreateTicket />} />
-          <Route path="/ticket/:id" element={<TicketDetails />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-        </Routes>
       </AuthenticatedTemplate>
 
       <UnauthenticatedTemplate>
