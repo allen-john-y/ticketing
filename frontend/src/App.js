@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate  } from 'react-router-dom';
 import axios from 'axios';
 import Login from './Login';
 import Home from './Home';
@@ -30,6 +30,7 @@ const pca = new PublicClientApplication({
 
 function Header({ logout }) {
   const { accounts, instance } = useMsal();
+  const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const [fullProfileOpen, setFullProfileOpen] = useState(false);
@@ -1606,17 +1607,35 @@ function Header({ logout }) {
 
       <header className="app-header">
         <div className="header-left">
-          <img src={logo} alt="Sandeza logo" className="logo-img" />
-          <div className="company-info">
+          
+          <img
+            src={logo}
+            alt="Sandeza logo"
+            className="logo-img"
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          />
+
+          <div
+            className="company-info"
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          >
             <h1>SANDEZA INC</h1>
             <div className="company-subtitle">IT Ticket Portal</div>
           </div>
+
         </div>
 
-        <div className="header-center">
+        <div
+          className="header-center"
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate('/')}
+        >
           <h2 className="header-title">SANDEZA HELPDESK</h2>
           <div className="header-tagline">Empowering Support • Every Step</div>
         </div>
+
 
         <div className="header-right">
           {isAdmin && (
