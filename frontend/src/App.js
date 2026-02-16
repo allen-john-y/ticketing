@@ -1367,24 +1367,12 @@ function Header({ logout }) {
           background: #dc2626;
         }
         
-        /* Modal Styles - Professional Redesign */
         .modal-overlay {
           position: fixed;
           inset: 0;
           background: rgba(0, 0, 0, 0.5);
-          z-index: 9999;
-          backdrop-filter: blur(4px);
-          animation: fadeIn 0.2s ease;
-        }
-        
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slideUp {
-          from { transform: translate(-50%, 20px); opacity: 0; }
-          to { transform: translate(-50%, -50%); opacity: 1; }
+          z-index: 90;
+          backdrop-filter: blur(2px);
         }
         
         .modal {
@@ -1393,159 +1381,62 @@ function Header({ logout }) {
           left: 50%;
           transform: translate(-50%, -50%);
           background: white;
-          border-radius: 20px;
-          padding: 32px;
-          box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
-          z-index: 10000;
+          border-radius: 16px;
+          padding: 28px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          z-index: 100;
           max-height: 90vh;
           overflow-y: auto;
-          animation: slideUp 0.3s ease;
         }
         
-        .modal-small { width: 560px; max-width: 95vw; }
-        .modal-large { width: 1000px; max-width: 95vw; }
+        .modal-small { width: 560px; max-width: 90vw; }
+        .modal-large { width: 840px; max-width: 95vw; }
         
         .modal-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 20px;
-          padding-bottom: 20px;
+          padding-bottom: 16px;
           border-bottom: 2px solid #e2e8f0;
         }
         
         .modal-title {
           margin: 0;
-          font-size: 1.6rem;
+          font-size: 1.4rem;
           font-weight: 800;
           color: #0f172a;
-          background: linear-gradient(135deg, #002060 0%, #003380 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
         }
         
         .modal-close {
           background: transparent;
           border: none;
-          font-size: 1.5rem;
+          font-size: 1.4rem;
           color: #94a3b8;
           cursor: pointer;
-          width: 36px;
-          height: 36px;
+          width: 32px;
+          height: 32px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 8px;
-          transition: all 0.2s;
+          border-radius: 6px;
+          transition: all 0.15s;
         }
         
         .modal-close:hover {
           background: #f1f5f9;
-          color: #475569;
+          color: #64748b;
         }
         
         .modal-subtitle {
           font-size: 14px;
           color: #64748b;
           margin-bottom: 24px;
-          line-height: 1.6;
+          line-height: 1.5;
         }
         
-        /* Profile Card in Full Profile Modal */
-        .profile-card {
-          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-          border-radius: 16px;
-          padding: 24px;
-          margin-bottom: 24px;
-          border: 2px solid #e2e8f0;
-          display: flex;
-          align-items: center;
-          gap: 20px;
-        }
-        
-        .profile-large-avatar {
-          width: 80px;
-          height: 80px;
-          border-radius: 16px;
-          background: linear-gradient(135deg, #002060 0%, #003380 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 800;
-          font-size: 28px;
-          box-shadow: 0 8px 20px rgba(0, 32, 96, 0.2);
-          overflow: hidden;
-          flex-shrink: 0;
-        }
-        
-        .profile-large-avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        
-        .profile-details {
-          flex: 1;
-        }
-        
-        .profile-fullname {
-          font-size: 1.4rem;
-          font-weight: 800;
-          color: #0f172a;
-          margin-bottom: 4px;
-        }
-        
-        .profile-email-badge {
-          display: inline-block;
-          background: rgba(233, 132, 4, 0.1);
-          color: #e98404;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 700;
-          border: 1px solid rgba(233, 132, 4, 0.3);
-        }
-        
-        /* Info Grid */
-        .info-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 20px;
-        }
-        
-        .info-item {
-          padding: 16px;
-          background: #f8fafc;
-          border-radius: 12px;
-          border: 2px solid #e2e8f0;
-        }
-        
-        .info-label {
-          font-size: 12px;
-          color: #64748b;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 8px;
-        }
-        
-        .info-value {
-          font-size: 16px;
-          font-weight: 700;
-          color: #0f172a;
-          word-break: break-word;
-        }
-        
-        .info-value.empty {
-          color: #94a3b8;
-          font-style: italic;
-        }
-        
-        /* Form Elements */
         .form-group {
-          margin-bottom: 24px;
+          margin-bottom: 20px;
         }
         
         .form-label {
@@ -1558,9 +1449,9 @@ function Header({ logout }) {
         
         .form-input {
           width: 100%;
-          padding: 12px 16px;
+          padding: 12px 14px;
           border: 2px solid #e2e8f0;
-          border-radius: 12px;
+          border-radius: 10px;
           font-size: 14px;
           transition: all 0.2s;
         }
@@ -1571,11 +1462,6 @@ function Header({ logout }) {
           box-shadow: 0 0 0 3px rgba(0, 32, 96, 0.1);
         }
         
-        .form-input::placeholder {
-          color: #94a3b8;
-        }
-        
-        /* Buttons */
         .btn {
           padding: 12px 24px;
           border-radius: 10px;
@@ -1589,7 +1475,6 @@ function Header({ logout }) {
         .btn-primary {
           background: #002060;
           color: white;
-          box-shadow: 0 4px 12px rgba(0, 32, 96, 0.2);
         }
         
         .btn-primary:hover:not(:disabled) {
@@ -1606,7 +1491,6 @@ function Header({ logout }) {
         .btn-danger {
           background: #ef4444;
           color: white;
-          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
         }
         
         .btn-danger:hover:not(:disabled) {
@@ -1628,81 +1512,56 @@ function Header({ logout }) {
         .btn-success {
           background: #10b981;
           color: white;
-          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
         }
         
         .btn-success:hover:not(:disabled) {
           background: #059669;
-          transform: translateY(-2px);
         }
         
-        .btn-outline {
-          background: transparent;
-          border: 2px solid #002060;
-          color: #002060;
-          font-weight: 600;
-        }
-        
-        .btn-outline:hover {
-          background: #f0f5ff;
-        }
-        
-        /* Messages */
         .message {
-          padding: 16px 20px;
-          border-radius: 12px;
+          padding: 14px 18px;
+          border-radius: 10px;
           font-size: 14px;
           font-weight: 600;
-          margin-top: 20px;
-          border-left: 4px solid;
+          margin-top: 16px;
         }
         
         .message-success {
           background: #d1fae5;
           color: #065f46;
-          border-left-color: #10b981;
+          border: 2px solid #a7f3d0;
         }
         
         .message-error {
           background: #fee2e2;
           color: #991b1b;
-          border-left-color: #ef4444;
+          border: 2px solid #fecaca;
         }
         
-        /* User Lists */
         .user-list {
-          max-height: 400px;
+          max-height: 320px;
           overflow-y: auto;
-          margin-bottom: 20px;
-          border: 2px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 8px;
+          margin-bottom: 16px;
         }
         
         .user-item {
-          padding: 16px;
+          padding: 14px;
           border-radius: 10px;
-          margin-bottom: 8px;
+          margin-bottom: 10px;
           background: white;
           border: 2px solid #e2e8f0;
           cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .user-item:last-child {
-          margin-bottom: 0;
+          transition: all 0.15s;
         }
         
         .user-item:hover {
           border-color: #002060;
           background: #f8fafc;
-          transform: translateX(2px);
         }
         
         .user-item.selected {
           background: #eff6ff;
           border-color: #002060;
-          box-shadow: 0 4px 12px rgba(0, 32, 96, 0.1);
         }
         
         .user-item.danger-selected {
@@ -1712,8 +1571,7 @@ function Header({ logout }) {
         
         .user-name {
           font-weight: 700;
-          font-size: 15px;
-          color: #0f172a;
+          font-size: 14px;
           margin-bottom: 4px;
         }
         
@@ -1722,115 +1580,12 @@ function Header({ logout }) {
           color: #64748b;
         }
         
-        /* Category Cards */
-        .category-card {
-          padding: 20px;
-          border-radius: 12px;
-          margin-bottom: 12px;
-          background: #fff;
-          border: 2px solid #e2e8f0;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .category-card:hover {
-          border-color: #8b5cf6;
-          background: #faf5ff;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(139, 92, 246, 0.1);
-        }
-        
-        .category-name {
-          font-weight: 800;
-          font-size: 16px;
-          color: #0f172a;
-          margin-bottom: 8px;
-        }
-        
-        .category-badge {
-          display: inline-block;
-          padding: 4px 10px;
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 700;
-          margin-right: 6px;
-          margin-bottom: 6px;
-        }
-        
-        .badge-onbehalf { background: #dbeafe; color: #1e3a8a; }
-        .badge-subcat { background: #dcfce7; color: #166534; }
-        .badge-attach { background: #fee2e2; color: #991b1b; }
-        .badge-approval { background: #fef3c7; color: #92400e; }
-        
-        /* Feature Boxes */
-        .feature-box {
-          padding: 20px;
-          border: 2px solid #e2e8f0;
-          border-radius: 16px;
-          transition: all 0.2s;
-        }
-        
-        .feature-box.enabled {
-          border-color: #002060;
-          background: #f0f5ff;
-        }
-        
-        .feature-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 12px;
-        }
-        
-        .feature-title {
-          font-weight: 800;
-          font-size: 15px;
-          color: #0f172a;
-        }
-        
-        .feature-toggle {
-          width: 44px;
-          height: 24px;
-          background: #e2e8f0;
-          border-radius: 30px;
-          position: relative;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .feature-toggle.enabled {
-          background: #002060;
-        }
-        
-        .feature-toggle::after {
-          content: '';
-          position: absolute;
-          width: 20px;
-          height: 20px;
-          background: white;
-          border-radius: 50%;
-          top: 2px;
-          left: 2px;
-          transition: all 0.2s;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .feature-toggle.enabled::after {
-          left: 22px;
-        }
-        
-        .feature-description {
-          font-size: 12px;
-          color: #64748b;
-          margin-bottom: 16px;
-        }
-        
         .modal-footer {
           display: flex;
           justify-content: flex-end;
           gap: 12px;
-          margin-top: 28px;
-          padding-top: 24px;
+          margin-top: 24px;
+          padding-top: 20px;
           border-top: 2px solid #e2e8f0;
         }
         
@@ -1843,17 +1598,10 @@ function Header({ logout }) {
             padding: 1rem 1.5rem;
           }
           
-          .modal {
-            padding: 24px;
-          }
-          
-          .info-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .profile-card {
-            flex-direction: column;
-            text-align: center;
+          .modal-small,
+          .modal-large {
+            width: 95vw;
+            padding: 20px;
           }
         }
       `}</style>
@@ -2023,161 +1771,169 @@ function Header({ logout }) {
         </div>
       </header>
 
-      {/* Full Profile Modal - Professional Redesign */}
-      {fullProfileOpen && (
+      {/* Add User Modal */}
+      {addModalOpen && (
         <>
-          <div className="modal-overlay" onClick={closeFullProfile} />
+          <div className="modal-overlay" onClick={closeAddModal} />
           <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Employee Profile</h3>
-              <button onClick={closeFullProfile} className="modal-close">✖</button>
+              <h3 className="modal-title">Add Admin User</h3>
+              <button onClick={closeAddModal} className="modal-close">✖</button>
             </div>
 
-            <div className="profile-card">
-              <div className="profile-large-avatar">
-                {profilePhoto ? (
-                  <img src={profilePhoto} alt="profile" />
-                ) : (
-                  <span>{initials}</span>
-                )}
-              </div>
-              <div className="profile-details">
-                <div className="profile-fullname">{accounts?.[0]?.name || ''}</div>
-                <span className="profile-email-badge">{accounts?.[0]?.username || ''}</span>
-              </div>
+            <div className="modal-subtitle">
+              Search for users by email to add them to the Helpdesk_Admin group.
             </div>
 
-            {loadingProfile && (
-              <div style={{ textAlign: 'center', padding: '2rem' }}>
-                <div style={{ 
-                  width: '40px', 
-                  height: '40px', 
-                  border: '3px solid #e2e8f0', 
-                  borderTopColor: '#002060', 
-                  borderRadius: '50%',
-                  margin: '0 auto 1rem',
-                  animation: 'spin 1s linear infinite'
-                }} />
-                <p style={{ color: '#64748b', fontWeight: 600 }}>Loading profile data...</p>
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by email..."
+                className="form-input"
+                onKeyDown={(e) => { if (e.key === 'Enter') performSearch(); }}
+                style={{ flex: 1 }}
+              />
+              <button onClick={performSearch} disabled={searchLoading} className="btn btn-primary">
+                {searchLoading ? '🔍 Searching...' : '🔍 Search'}
+              </button>
+            </div>
 
-            {profileError && (
-              <div className="message message-error">
-                ⚠️ {profileError}
-              </div>
-            )}
+            <div className="user-list">
+              {searchResults.length === 0 && !searchLoading && (
+                <div style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>
+                  No results yet. Search for a user above.
+                </div>
+              )}
+              {searchResults.map(u => (
+                <div
+                  key={u.id}
+                  onClick={() => setSelectedSearchUser(u)}
+                  className={`user-item ${selectedSearchUser?.id === u.id ? 'selected' : ''}`}
+                >
+                  <div className="user-name">{u.displayName}</div>
+                  <div className="user-email">{u.mail || u.userPrincipalName}</div>
+                </div>
+              ))}
+            </div>
 
-            {profileData && !loadingProfile && (
-              <div className="info-grid">
-                {profileData.name && (
-                  <div className="info-item">
-                    <div className="info-label">Full Name</div>
-                    <div className="info-value">{profileData.name}</div>
-                  </div>
-                )}
-                {profileData.email && (
-                  <div className="info-item">
-                    <div className="info-label">Email Address</div>
-                    <div className="info-value">{profileData.email}</div>
-                  </div>
-                )}
-                {profileData.department && (
-                  <div className="info-item">
-                    <div className="info-label">Department</div>
-                    <div className="info-value">{profileData.department}</div>
-                  </div>
-                )}
-                {profileData.jobTitle && (
-                  <div className="info-item">
-                    <div className="info-label">Job Title</div>
-                    <div className="info-value">{profileData.jobTitle}</div>
-                  </div>
-                )}
-                {profileData.manager && (
-                  <div className="info-item">
-                    <div className="info-label">Reporting Manager</div>
-                    <div className="info-value">{profileData.manager}</div>
-                  </div>
-                )}
-                {profileData.employeeId && (
-                  <div className="info-item">
-                    <div className="info-label">Employee ID</div>
-                    <div className="info-value">{profileData.employeeId}</div>
-                  </div>
-                )}
-                {profileData.mobilePhone && (
-                  <div className="info-item">
-                    <div className="info-label">Mobile Phone</div>
-                    <div className="info-value">{profileData.mobilePhone}</div>
-                  </div>
-                )}
-                {(profileData.streetAddress || profileData.state || profileData.postalCode) && (
-                  <div className="info-item">
-                    <div className="info-label">Address</div>
-                    <div className="info-value">
-                      {[profileData.streetAddress, profileData.state, profileData.postalCode]
-                        .filter(Boolean)
-                        .join(', ')}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {addMessage && <div className="message message-success">✓ {addMessage}</div>}
+            {addError && <div className="message message-error">✕ {addError}</div>}
+
+            <div className="modal-footer">
+              <button onClick={closeAddModal} className="btn btn-secondary">Cancel</button>
+              <button
+                onClick={confirmAddUser}
+                disabled={addLoading || !selectedSearchUser}
+                className="btn btn-primary"
+              >
+                {addLoading ? 'Adding...' : 'Add as Admin'}
+              </button>
+            </div>
           </div>
         </>
       )}
 
-      {/* Add Field Modal - Professional Redesign */}
+      {/* Remove User Modal */}
+      {removeModalOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeRemoveModal} />
+          <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Remove Admin User</h3>
+              <button onClick={closeRemoveModal} className="modal-close">✖</button>
+            </div>
+
+            <div className="modal-subtitle">
+              Select a user to remove their admin rights from the Helpdesk_Admin group.
+            </div>
+
+            <div className="user-list">
+              {membersLoading && <div style={{ textAlign: 'center', color: '#94a3b8' }}>Loading members...</div>}
+              {!membersLoading && groupMembers.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#94a3b8' }}>No members found.</div>
+              )}
+              {groupMembers.map(m => (
+                <div
+                  key={m.id}
+                  onClick={() => setSelectedMember(m)}
+                  className={`user-item ${selectedMember?.id === m.id ? 'danger-selected' : ''}`}
+                >
+                  <div className="user-name">{m.displayName}</div>
+                  <div className="user-email">{m.mail || m.userPrincipalName}</div>
+                </div>
+              ))}
+            </div>
+
+            {removeMessage && <div className="message message-success">✓ {removeMessage}</div>}
+            {removeError && <div className="message message-error">✕ {removeError}</div>}
+
+            <div className="modal-footer">
+              <button onClick={closeRemoveModal} className="btn btn-secondary">Cancel</button>
+              <button
+                onClick={confirmRemoveUser}
+                disabled={removeLoading || !selectedMember}
+                className="btn btn-danger"
+              >
+                {removeLoading ? 'Removing...' : 'Remove Admin'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Add Field Modal */}
       {addFieldOpen && (
         <>
           <div className="modal-overlay" onClick={() => setAddFieldOpen(false)} />
           <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Create New Category</h3>
+              <h3 className="modal-title">Add Category / Field</h3>
               <button onClick={() => setAddFieldOpen(false)} className="modal-close">✖</button>
             </div>
 
             <div className="modal-subtitle">
-              Define a new category with custom fields. Category heads will be notified for ticket actions requiring approval.
+              Define a new category with custom fields. Users in Category Heads and CCs will be notified for ticket actions.
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               
               <div className="form-group">
                 <label className="form-label">Category Name <span style={{ color: '#ef4444' }}>*</span></label>
                 <input 
                   value={categoryName} 
                   onChange={(e) => setCategoryName(e.target.value)} 
-                  placeholder="e.g., HR Support, IT Infrastructure, Finance" 
+                  placeholder="e.g., HR, IT Support, Finance" 
                   className="form-input"
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 
                 <div>
                   <label className="form-label">Category Heads <span style={{ color: '#ef4444' }}>*</span></label>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
-                    Search and select users who will manage this category
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                    Start typing to search and select users
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {categoryHeads.map((h, idx) => (
                       <div 
                         key={idx} 
                         ref={el => categoryHeadsRefs.current[idx] = el}
                         style={{ position: 'relative' }}
                       >
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
                           <input
                             value={h.searchQuery}
                             onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
                             placeholder="Type name or email..."
-                            className="form-input"
                             style={{ 
-                              flex: 1,
-                              borderColor: h.email ? '#10b981' : '#e2e8f0',
-                              background: h.email ? '#f0fdf4' : 'white',
+                              flex: 1, 
+                              padding: '8px 10px', 
+                              borderRadius: 6, 
+                              border: h.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                              background: h.email ? '#ecfdf5' : 'white',
+                              fontSize: 13
                             }}
                           />
                           
@@ -2185,21 +1941,35 @@ function Header({ logout }) {
                             <button
                               type="button"
                               onClick={addCategoryHead}
-                              className="btn-outline"
-                              style={{ padding: '0 16px', whiteSpace: 'nowrap' }}
+                              style={{
+                                padding: '8px 12px',
+                                borderRadius: 6,
+                                background: '#eff6ff',
+                                border: '2px solid #dbeafe',
+                                cursor: 'pointer',
+                                fontSize: 16,
+                                fontWeight: 600
+                              }}
                             >
-                              ＋ Add
+                              ＋
                             </button>
                           ) : (
                             <button
                               type="button"
                               onClick={() => removeCategoryHead(idx)}
-                              className="btn-danger"
-                              style={{ padding: '0 16px' }}
+                              style={{
+                                padding: '8px 12px',
+                                borderRadius: 6,
+                                background: '#fee2e2',
+                                border: '2px solid #fecaca',
+                                cursor: 'pointer',
+                                fontSize: 14
+                              }}
                             >
-                              ✕
+                              ✖
                             </button>
                           )}
+
                         </div>
 
                         {h.showDropdown && h.searchResults.length > 0 && (
@@ -2210,9 +1980,9 @@ function Header({ logout }) {
                             right: 0,
                             background: 'white',
                             border: '2px solid #e2e8f0',
-                            borderRadius: '12px',
-                            marginTop: '4px',
-                            maxHeight: '200px',
+                            borderRadius: 8,
+                            marginTop: 4,
+                            maxHeight: 200,
                             overflowY: 'auto',
                             boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                             zIndex: 110
@@ -2222,32 +1992,32 @@ function Header({ logout }) {
                                 key={userIdx}
                                 onClick={() => selectCategoryHead(idx, user)}
                                 style={{
-                                  padding: '12px',
+                                  padding: '10px 12px',
                                   cursor: 'pointer',
-                                  borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                  borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                  background: 'white',
                                   transition: 'background 0.15s'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                 onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                               >
-                                <div style={{ fontWeight: 700, fontSize: '14px' }}>{user.displayName}</div>
-                                <div style={{ fontSize: '12px', color: '#64748b' }}>{user.mail}</div>
+                                <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
+                                <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                               </div>
                             ))}
                           </div>
                         )}
 
                         {h.email && (
-                          <div style={{ 
-                            marginTop: '6px', 
-                            fontSize: '12px', 
-                            color: '#059669',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span>✓</span>
                             <span>{h.name} ({h.email})</span>
+                          </div>
+                        )}
+
+                        {h.searching && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                            Searching...
                           </div>
                         )}
                       </div>
@@ -2256,49 +2026,65 @@ function Header({ logout }) {
                 </div>
 
                 <div>
-                  <label className="form-label">CC Recipients (Optional)</label>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
-                    Additional users to receive notifications
+                  <label className="form-label">CC Emails (Optional)</label>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                    Start typing to search and select users
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {ccEmails.map((c, idx) => (
                       <div 
                         key={idx}
                         ref={el => ccEmailsRefs.current[idx] = el}
                         style={{ position: 'relative' }}
                       >
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
                           <input
                             value={c.searchQuery}
                             onChange={(e) => updateCcEmailQuery(idx, e.target.value)}
                             placeholder="Type name or email..."
-                            className="form-input"
                             style={{ 
-                              flex: 1,
-                              borderColor: c.email ? '#10b981' : '#e2e8f0',
-                              background: c.email ? '#f0fdf4' : 'white',
+                              flex: 1, 
+                              padding: '8px 10px', 
+                              borderRadius: 6, 
+                              border: c.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                              background: c.email ? '#ecfdf5' : 'white',
+                              fontSize: 13
                             }}
                           />
                           
                           {idx === ccEmails.length - 1 ? (
-                            <button
-                              type="button"
-                              onClick={addCcEmail}
-                              className="btn-outline"
-                              style={{ padding: '0 16px', whiteSpace: 'nowrap' }}
+                            <button 
+                              type="button" 
+                              onClick={addCcEmail} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#eff6ff', 
+                                border: '2px solid #dbeafe',
+                                cursor: 'pointer',
+                                fontSize: 16,
+                                fontWeight: 600
+                              }}
                             >
-                              ＋ Add
+                              ＋
                             </button>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => removeCcEmail(idx)}
-                              className="btn-danger"
-                              style={{ padding: '0 16px' }}
+                            <button 
+                              type="button" 
+                              onClick={() => removeCcEmail(idx)} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#fee2e2', 
+                                border: '2px solid #fecaca',
+                                cursor: 'pointer',
+                                fontSize: 14
+                              }}
                             >
-                              ✕
+                              ✖
                             </button>
                           )}
+
                         </div>
 
                         {c.showDropdown && c.searchResults.length > 0 && (
@@ -2309,9 +2095,9 @@ function Header({ logout }) {
                             right: 0,
                             background: 'white',
                             border: '2px solid #e2e8f0',
-                            borderRadius: '12px',
-                            marginTop: '4px',
-                            maxHeight: '200px',
+                            borderRadius: 8,
+                            marginTop: 4,
+                            maxHeight: 200,
                             overflowY: 'auto',
                             boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                             zIndex: 110
@@ -2321,186 +2107,253 @@ function Header({ logout }) {
                                 key={userIdx}
                                 onClick={() => selectCcEmail(idx, user)}
                                 style={{
-                                  padding: '12px',
+                                  padding: '10px 12px',
                                   cursor: 'pointer',
-                                  borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                  borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                  background: 'white',
                                   transition: 'background 0.15s'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                 onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                               >
-                                <div style={{ fontWeight: 700, fontSize: '14px' }}>{user.displayName}</div>
-                                <div style={{ fontSize: '12px', color: '#64748b' }}>{user.mail}</div>
+                                <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
+                                <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                               </div>
                             ))}
                           </div>
                         )}
 
                         {c.email && (
-                          <div style={{ 
-                            marginTop: '6px', 
-                            fontSize: '12px', 
-                            color: '#059669',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span>✓</span>
                             <span>{c.name} ({c.email})</span>
+                          </div>
+                        )}
+
+                        {c.searching && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                            Searching...
                           </div>
                         )}
                       </div>
                     ))}
                   </div>
                 </div>
+
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 
-                <div className={`feature-box ${enableOnBehalf ? 'enabled' : ''}`}>
-                  <div className="feature-header">
-                    <span className="feature-title">On Behalf</span>
-                    <div 
-                      className={`feature-toggle ${enableOnBehalf ? 'enabled' : ''}`}
-                      onClick={() => setEnableOnBehalf(!enableOnBehalf)}
+                <div style={{ 
+                  padding: 16, 
+                  border: '2px solid #e2e8f0', 
+                  borderRadius: 12,
+                  background: enableOnBehalf ? '#f0f9ff' : '#fafafa'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontWeight: 700, fontSize: 14 }}>On Behalf</label>
+                    <input 
+                      type="checkbox" 
+                      checked={enableOnBehalf} 
+                      onChange={(e) => setEnableOnBehalf(e.target.checked)}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
                     />
                   </div>
-                  <div className="feature-description">
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                     Allow users to submit tickets for themselves or others
                   </div>
+
                   {enableOnBehalf && (
-                    <div style={{ marginTop: '12px' }}>
-                      <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                          type="checkbox"
-                          checked={requireOnBehalf}
-                          onChange={(e) => setRequireOnBehalf(e.target.checked)}
-                          style={{ width: '16px', height: '16px' }}
-                        />
-                        <span>Required field</span>
-                      </label>
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                        Options: Self, Other
+                      </div>
+                      <div style={{ marginTop: 10 }}>
+                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={requireOnBehalf}
+                            onChange={(e) => setRequireOnBehalf(e.target.checked)}
+                            style={{ width: 16, height: 16 }}
+                          />
+                          <span>Required field</span>
+                        </label>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <div className={`feature-box ${enableSubCategory ? 'enabled' : ''}`}>
-                  <div className="feature-header">
-                    <span className="feature-title">Sub-Category</span>
-                    <div 
-                      className={`feature-toggle ${enableSubCategory ? 'enabled' : ''}`}
-                      onClick={() => setEnableSubCategory(!enableSubCategory)}
+                <div
+                  style={{
+                    padding: 16,
+                    border: '2px solid #e2e8f0',
+                    borderRadius: 12,
+                    background: enableSubCategory ? '#f0fdf4' : '#fafafa'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
+                    <input
+                      type="checkbox"
+                      checked={enableSubCategory}
+                      onChange={(e) => setEnableSubCategory(e.target.checked)}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
                     />
                   </div>
-                  <div className="feature-description">
+
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                     Add subcategories for users to choose from
                   </div>
+
                   {enableSubCategory && (
-                    <div style={{ marginTop: '12px' }}>
-                      {subCategories.map((s, idx) => (
-                        <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-                          <input
-                            value={s}
-                            onChange={(e) => updateSubCategory(idx, e.target.value)}
-                            placeholder="e.g., Hardware, Software"
-                            className="form-input"
-                            style={{ padding: '6px 10px', fontSize: '12px' }}
-                          />
-                          {idx === subCategories.length - 1 ? (
-                            <button
-                              type="button"
-                              onClick={addSubCategory}
-                              className="btn-outline"
-                              style={{ padding: '6px 12px', fontSize: '12px' }}
-                            >
-                              ＋
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => removeSubCategory(idx)}
-                              className="btn-danger"
-                              style={{ padding: '6px 12px', fontSize: '12px' }}
-                            >
-                              ✕
-                            </button>
-                          )}
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {subCategories.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={addSubCategory}
+                            style={{
+                              alignSelf: 'flex-start',
+                              background: '#eff6ff',
+                              border: '2px solid #dbeafe',
+                              borderRadius: 6,
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 600
+                            }}
+                          >
+                            + Add sub-category
+                          </button>
+                        )}
+
+                        {subCategories.map((s, idx) => (
+                          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input
+                              value={s}
+                              onChange={(e) => updateSubCategory(idx, e.target.value)}
+                              placeholder="e.g., Salary, Benefits"
+                              style={{
+                                flex: 1,
+                                padding: '6px 8px',
+                                borderRadius: 6,
+                                border: '2px solid #e2e8f0',
+                                fontSize: 12
+                              }}
+                            />
+                            {idx === subCategories.length - 1 ? (
+                              <button
+                                type="button"
+                                onClick={addSubCategory}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}
+                              >
+                                ＋
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => removeSubCategory(idx)}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}
+                              >
+                                ✖
+                              </button>
+                            )}
+                          </div>
+                        ))}
+
+                        <div
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 6,
+                            border: '2px dashed #cbd5e1',
+                            fontSize: 12,
+                            color: '#475569',
+                            background: '#f8fafc'
+                          }}
+                        >
+                          Other (fixed)
                         </div>
-                      ))}
-                      <div style={{
-                        padding: '8px 12px',
-                        borderRadius: '8px',
-                        border: '2px dashed #cbd5e1',
-                        fontSize: '12px',
-                        color: '#475569',
-                        background: '#f8fafc',
-                        marginTop: '6px'
-                      }}>
-                        Other (fixed option)
                       </div>
-                      <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
-                        <input
-                          type="checkbox"
-                          checked={requireSubCategory}
-                          onChange={(e) => setRequireSubCategory(e.target.checked)}
-                          style={{ width: '16px', height: '16px' }}
-                        />
-                        <span>Required field</span>
-                      </label>
+
+                      <div style={{ marginTop: 10 }}>
+                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={requireSubCategory}
+                            onChange={(e) => setRequireSubCategory(e.target.checked)}
+                            style={{ width: 16, height: 16 }}
+                          />
+                          <span>Required field</span>
+                        </label>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <div className={`feature-box ${enableAttachmentsForCategory ? 'enabled' : ''}`}>
-                  <div className="feature-header">
-                    <span className="feature-title">Attachments</span>
-                    <div 
-                      className={`feature-toggle ${enableAttachmentsForCategory ? 'enabled' : ''}`}
-                      onClick={() => setEnableAttachmentsForCategory(!enableAttachmentsForCategory)}
+                <div style={{ 
+                  padding: 16, 
+                  border: '2px solid #e2e8f0', 
+                  borderRadius: 12,
+                  background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontWeight: 700, fontSize: 14 }}>Attachments</label>
+                    <input 
+                      type="checkbox" 
+                      checked={enableAttachmentsForCategory} 
+                      onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
                     />
                   </div>
-                  <div className="feature-description">
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                     Allow file attachments on tickets
                   </div>
+
                   {enableAttachmentsForCategory && (
-                    <div style={{ marginTop: '12px' }}>
-                      <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                          type="checkbox"
-                          checked={requireAttachmentsForCategory}
+                    <div style={{ marginTop: 12 }}>
+                      <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input 
+                          type="checkbox" 
+                          checked={requireAttachmentsForCategory} 
                           onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)}
-                          style={{ width: '16px', height: '16px' }}
-                        />
+                          style={{ width: 16, height: 16 }}
+                        /> 
                         <span>Required field</span>
                       </label>
                     </div>
                   )}
                 </div>
+
               </div>
 
-              <div className={`feature-box ${requireApproval ? 'enabled' : ''}`}>
-                <div className="feature-header">
-                  <span className="feature-title">Approval Required</span>
-                  <div 
-                    className={`feature-toggle ${requireApproval ? 'enabled' : ''}`}
-                    onClick={() => setRequireApproval(!requireApproval)}
+              <div
+                style={{
+                  padding: 16,
+                  border: '2px solid #e2e8f0',
+                  borderRadius: 12,
+                  background: requireApproval ? '#fff7ed' : '#fafafa'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <label style={{ fontWeight: 700, fontSize: 14 }}>
+                    Approval Required
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={requireApproval}
+                    onChange={(e) => setRequireApproval(e.target.checked)}
+                    style={{ width: 20, height: 20, cursor: 'pointer' }}
                   />
                 </div>
-                <div className="feature-description">
-                  Tickets must be approved by category heads or CC recipients
+
+                <div style={{ fontSize: 12, color: '#64748b' }}>
+                  Tickets must be approved by category head or CC
                 </div>
               </div>
             </div>
 
-            {categorySuccess && (
-              <div className="message message-success">
-                ✓ {categorySuccess}
-              </div>
-            )}
-            {categoryError && (
-              <div className="message message-error">
-                ⚠️ {categoryError}
-              </div>
-            )}
+            {categorySuccess && <div className="message message-success">✓ {categorySuccess}</div>}
+            {categoryError && <div className="message message-error">✕ {categoryError}</div>}
 
             <div className="modal-footer">
               <button onClick={() => { resetCategoryForm(); setAddFieldOpen(false); }} className="btn btn-secondary">
@@ -2518,14 +2371,14 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* Edit Field Modal - Professional Redesign */}
+      {/* Edit Field Modal */}
       {editFieldOpen && (
         <>
           <div className="modal-overlay" onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }} />
           <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">
-                {editingCategory ? 'Edit Category' : 'Select Category to Edit'}
+                {editingCategory ? 'Edit Category' : 'Edit Field'}
               </h3>
               <button onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }} className="modal-close">✖</button>
             </div>
@@ -2533,63 +2386,82 @@ function Header({ logout }) {
             {!editingCategory ? (
               <>
                 <div className="modal-subtitle">
-                  Choose a category to modify its configuration.
+                  Select a category to edit its configuration.
                 </div>
 
-                <div style={{ maxHeight: '400px', overflow: 'auto', marginBottom: '16px' }}>
-                  {editCategoriesLoading && (
-                    <div style={{ textAlign: 'center', padding: '2rem' }}>
-                      <div style={{ 
-                        width: '40px', 
-                        height: '40px', 
-                        border: '3px solid #e2e8f0', 
-                        borderTopColor: '#002060', 
-                        borderRadius: '50%',
-                        margin: '0 auto 1rem',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                      <p style={{ color: '#64748b' }}>Loading categories...</p>
-                    </div>
-                  )}
+                <div style={{ maxHeight: 400, overflow: 'auto', marginBottom: 16 }}>
+                  {editCategoriesLoading && <div style={{ textAlign: 'center', color: '#94a3b8' }}>Loading categories...</div>}
                   {!editCategoriesLoading && categoriesForEdit.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
-                      No categories found.
-                    </div>
+                    <div style={{ textAlign: 'center', color: '#94a3b8' }}>No categories found.</div>
                   )}
                   {categoriesForEdit.map(c => (
                     <div
                       key={c.id}
                       onClick={() => selectCategoryForEdit(c)}
-                      className="category-card"
+                      style={{
+                        padding: 16,
+                        borderRadius: 12,
+                        marginBottom: 12,
+                        background: '#fff',
+                        border: '2px solid #e2e8f0',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#8b5cf6';
+                        e.currentTarget.style.background = '#faf5ff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#e2e8f0';
+                        e.currentTarget.style.background = '#fff';
+                      }}
                     >
-                      <div className="category-name">{c.name || c.categoryName}</div>
+                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8, color: '#0f172a' }}>
+                        {c.name || c.categoryName}
+                      </div>
                       
-                      <div style={{ marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                         {c.features?.onBehalf?.enabled && (
-                          <span className="category-badge badge-onbehalf">
-                            On Behalf {c.features.onBehalf.required ? '(Req)' : ''}
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
+                            background: '#dbeafe', 
+                            color: '#1e40af',
+                            fontWeight: 600
+                          }}>
+                            On Behalf {c.features.onBehalf.required ? '(Required)' : ''}
                           </span>
                         )}
                         {c.features?.subCategories?.enabled && (
-                          <span className="category-badge badge-subcat">
-                            Sub-Category {c.features.subCategories.required ? '(Req)' : ''}
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
+                            background: '#dcfce7', 
+                            color: '#166534',
+                            fontWeight: 600
+                          }}>
+                            Sub-Category {c.features.subCategories.required ? '(Required)' : ''}
                           </span>
                         )}
                         {c.features?.attachments?.enabled && (
-                          <span className="category-badge badge-attach">
-                            Attachments {c.features.attachments.required ? '(Req)' : ''}
-                          </span>
-                        )}
-                        {c.features?.approvalRequired && (
-                          <span className="category-badge badge-approval">
-                            Approval Required
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
+                            background: '#fee2e2', 
+                            color: '#991b1b',
+                            fontWeight: 600
+                          }}>
+                            Attachments {c.features.attachments.required ? '(Required)' : ''}
                           </span>
                         )}
                       </div>
 
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        <span style={{ fontWeight: 600 }}>Heads:</span> {c.categoryHeads?.length || 0} • 
-                        <span style={{ fontWeight: 600, marginLeft: '4px' }}>CCs:</span> {c.cc?.length || 0}
+                      <div style={{ fontSize: 12, color: '#64748b' }}>
+                        <span style={{ fontWeight: 600 }}>Heads:</span> {c.categoryHeads?.length || 0} | 
+                        <span style={{ fontWeight: 600, marginLeft: 8 }}>CCs:</span> {c.cc?.length || 0}
                       </div>
                     </div>
                   ))}
@@ -2598,87 +2470,105 @@ function Header({ logout }) {
             ) : (
               <>
                 <div style={{ 
+                  fontSize: 13, 
+                  color: '#64748b', 
+                  marginBottom: 20,
+                  padding: 12,
                   background: '#f0fdf4',
-                  padding: '16px 20px',
-                  borderRadius: '12px',
-                  border: '2px solid #bbf7d0',
-                  marginBottom: '24px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
+                  borderRadius: 10,
+                  border: '2px solid #bbf7d0'
                 }}>
-                  <div>
-                    <span style={{ fontSize: '13px', color: '#166534', fontWeight: 600 }}>Editing:</span>
-                    <span style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', marginLeft: '8px' }}>
-                      {editingCategory.name || editingCategory.categoryName}
-                    </span>
-                  </div>
+                  Editing: <strong>{editingCategory.name || editingCategory.categoryName}</strong>
                   <button
                     onClick={() => {
                       setEditingCategory(null);
                       resetCategoryForm();
                     }}
-                    className="btn-outline"
-                    style={{ padding: '8px 16px', fontSize: '13px' }}
+                    style={{
+                      marginLeft: 12,
+                      fontSize: 11,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      background: '#fff',
+                      border: '2px solid #e2e8f0',
+                      cursor: 'pointer',
+                      fontWeight: 600
+                    }}
                   >
-                    ← Back to List
+                    ← Back to list
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   
                   <div className="form-group">
                     <label className="form-label">Category Name <span style={{ color: '#ef4444' }}>*</span></label>
                     <input 
                       value={categoryName} 
                       onChange={(e) => setCategoryName(e.target.value)} 
+                      placeholder="Enter category name" 
                       className="form-input"
                     />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                     
                     <div>
                       <label className="form-label">Category Heads <span style={{ color: '#ef4444' }}>*</span></label>
-                      <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
-                        Search and select users
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Start typing to search
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {categoryHeads.map((h, idx) => (
                           <div 
                             key={idx} 
                             ref={el => categoryHeadsRefs.current[idx] = el}
                             style={{ position: 'relative' }}
                           >
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
                               <input
                                 value={h.searchQuery}
                                 onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
                                 placeholder="Type name or email..."
-                                className="form-input"
                                 style={{ 
-                                  flex: 1,
-                                  borderColor: h.email ? '#10b981' : '#e2e8f0',
-                                  background: h.email ? '#f0fdf4' : 'white',
+                                  flex: 1, 
+                                  padding: '8px 10px', 
+                                  borderRadius: 6, 
+                                  border: h.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                  background: h.email ? '#ecfdf5' : 'white',
+                                  fontSize: 13
                                 }}
                               />
                               {idx === categoryHeads.length - 1 ? (
-                                <button
-                                  type="button"
-                                  onClick={addCategoryHead}
-                                  className="btn-outline"
-                                  style={{ padding: '0 16px' }}
+                                <button 
+                                  type="button" 
+                                  onClick={addCategoryHead} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#eff6ff', 
+                                    border: '2px solid #dbeafe',
+                                    cursor: 'pointer',
+                                    fontSize: 16,
+                                    fontWeight: 600
+                                  }}
                                 >
                                   ＋
                                 </button>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => removeCategoryHead(idx)}
-                                  className="btn-danger"
-                                  style={{ padding: '0 16px' }}
+                                <button 
+                                  type="button" 
+                                  onClick={() => removeCategoryHead(idx)} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#fee2e2', 
+                                    border: '2px solid #fecaca',
+                                    cursor: 'pointer',
+                                    fontSize: 14
+                                  }}
                                 >
-                                  ✕
+                                  ✖
                                 </button>
                               )}
                             </div>
@@ -2691,9 +2581,9 @@ function Header({ logout }) {
                                 right: 0,
                                 background: 'white',
                                 border: '2px solid #e2e8f0',
-                                borderRadius: '12px',
-                                marginTop: '4px',
-                                maxHeight: '200px',
+                                borderRadius: 8,
+                                marginTop: 4,
+                                maxHeight: 200,
                                 overflowY: 'auto',
                                 boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                                 zIndex: 110
@@ -2703,32 +2593,32 @@ function Header({ logout }) {
                                     key={userIdx}
                                     onClick={() => selectCategoryHead(idx, user)}
                                     style={{
-                                      padding: '12px',
+                                      padding: '10px 12px',
                                       cursor: 'pointer',
-                                      borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                      borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                      background: 'white',
                                       transition: 'background 0.15s'
                                     }}
                                     onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                                   >
-                                    <div style={{ fontWeight: 700, fontSize: '14px' }}>{user.displayName}</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{user.mail}</div>
+                                    <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
+                                    <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                                   </div>
                                 ))}
                               </div>
                             )}
 
                             {h.email && (
-                              <div style={{ 
-                                marginTop: '6px', 
-                                fontSize: '12px', 
-                                color: '#059669',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}>
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span>✓</span>
                                 <span>{h.name} ({h.email})</span>
+                              </div>
+                            )}
+
+                            {h.searching && (
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                                Searching...
                               </div>
                             )}
                           </div>
@@ -2737,46 +2627,61 @@ function Header({ logout }) {
                     </div>
 
                     <div>
-                      <label className="form-label">CC Recipients (Optional)</label>
-                      <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
-                        Additional notification recipients
+                      <label className="form-label">CC Emails (Optional)</label>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Start typing to search
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {ccEmails.map((c, idx) => (
                           <div 
                             key={idx}
                             ref={el => ccEmailsRefs.current[idx] = el}
                             style={{ position: 'relative' }}
                           >
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
                               <input
                                 value={c.searchQuery}
                                 onChange={(e) => updateCcEmailQuery(idx, e.target.value)}
                                 placeholder="Type name or email..."
-                                className="form-input"
                                 style={{ 
-                                  flex: 1,
-                                  borderColor: c.email ? '#10b981' : '#e2e8f0',
-                                  background: c.email ? '#f0fdf4' : 'white',
+                                  flex: 1, 
+                                  padding: '8px 10px', 
+                                  borderRadius: 6, 
+                                  border: c.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                  background: c.email ? '#ecfdf5' : 'white',
+                                  fontSize: 13
                                 }}
                               />
                               {idx === ccEmails.length - 1 ? (
-                                <button
-                                  type="button"
-                                  onClick={addCcEmail}
-                                  className="btn-outline"
-                                  style={{ padding: '0 16px' }}
+                                <button 
+                                  type="button" 
+                                  onClick={addCcEmail} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#eff6ff', 
+                                    border: '2px solid #dbeafe',
+                                    cursor: 'pointer',
+                                    fontSize: 16,
+                                    fontWeight: 600
+                                  }}
                                 >
                                   ＋
                                 </button>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => removeCcEmail(idx)}
-                                  className="btn-danger"
-                                  style={{ padding: '0 16px' }}
+                                <button 
+                                  type="button" 
+                                  onClick={() => removeCcEmail(idx)} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#fee2e2', 
+                                    border: '2px solid #fecaca',
+                                    cursor: 'pointer',
+                                    fontSize: 14
+                                  }}
                                 >
-                                  ✕
+                                  ✖
                                 </button>
                               )}
                             </div>
@@ -2789,9 +2694,9 @@ function Header({ logout }) {
                                 right: 0,
                                 background: 'white',
                                 border: '2px solid #e2e8f0',
-                                borderRadius: '12px',
-                                marginTop: '4px',
-                                maxHeight: '200px',
+                                borderRadius: 8,
+                                marginTop: 4,
+                                maxHeight: 200,
                                 overflowY: 'auto',
                                 boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                                 zIndex: 110
@@ -2801,61 +2706,70 @@ function Header({ logout }) {
                                     key={userIdx}
                                     onClick={() => selectCcEmail(idx, user)}
                                     style={{
-                                      padding: '12px',
+                                      padding: '10px 12px',
                                       cursor: 'pointer',
-                                      borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                      borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                      background: 'white',
                                       transition: 'background 0.15s'
                                     }}
                                     onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                     onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                                   >
-                                    <div style={{ fontWeight: 700, fontSize: '14px' }}>{user.displayName}</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{user.mail}</div>
+                                    <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
+                                    <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                                   </div>
                                 ))}
                               </div>
                             )}
 
                             {c.email && (
-                              <div style={{ 
-                                marginTop: '6px', 
-                                fontSize: '12px', 
-                                color: '#059669',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}>
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span>✓</span>
                                 <span>{c.name} ({c.email})</span>
+                              </div>
+                            )}
+
+                            {c.searching && (
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                                Searching...
                               </div>
                             )}
                           </div>
                         ))}
                       </div>
                     </div>
+
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                     
-                    <div className={`feature-box ${enableOnBehalf ? 'enabled' : ''}`}>
-                      <div className="feature-header">
-                        <span className="feature-title">On Behalf</span>
-                        <div 
-                          className={`feature-toggle ${enableOnBehalf ? 'enabled' : ''}`}
-                          onClick={() => setEnableOnBehalf(!enableOnBehalf)}
+                    <div style={{ 
+                      padding: 16, 
+                      border: '2px solid #e2e8f0', 
+                      borderRadius: 12,
+                      background: enableOnBehalf ? '#f0f9ff' : '#fafafa'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <label style={{ fontWeight: 700, fontSize: 14 }}>On Behalf</label>
+                        <input 
+                          type="checkbox" 
+                          checked={enableOnBehalf} 
+                          onChange={(e) => setEnableOnBehalf(e.target.checked)}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
                         />
                       </div>
-                      <div className="feature-description">
-                        Allow tickets on behalf of others
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Submit tickets for self or others
                       </div>
+
                       {enableOnBehalf && (
-                        <div style={{ marginTop: '12px' }}>
-                          <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ marginTop: 12 }}>
+                          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <input
                               type="checkbox"
                               checked={requireOnBehalf}
                               onChange={(e) => setRequireOnBehalf(e.target.checked)}
-                              style={{ width: '16px', height: '16px' }}
+                              style={{ width: 16, height: 16 }}
                             />
                             <span>Required field</span>
                           </label>
@@ -2863,123 +2777,177 @@ function Header({ logout }) {
                       )}
                     </div>
 
-                    <div className={`feature-box ${enableSubCategory ? 'enabled' : ''}`}>
-                      <div className="feature-header">
-                        <span className="feature-title">Sub-Category</span>
-                        <div 
-                          className={`feature-toggle ${enableSubCategory ? 'enabled' : ''}`}
-                          onClick={() => setEnableSubCategory(!enableSubCategory)}
+                    <div
+                      style={{
+                        padding: 16,
+                        border: '2px solid #e2e8f0',
+                        borderRadius: 12,
+                        background: enableSubCategory ? '#f0fdf4' : '#fafafa'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
+                        <input
+                          type="checkbox"
+                          checked={enableSubCategory}
+                          onChange={(e) => setEnableSubCategory(e.target.checked)}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
                         />
                       </div>
-                      <div className="feature-description">
+
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                         Add subcategories
                       </div>
+
                       {enableSubCategory && (
-                        <div style={{ marginTop: '12px' }}>
-                          {subCategories.map((s, idx) => (
-                            <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-                              <input
-                                value={s}
-                                onChange={(e) => updateSubCategory(idx, e.target.value)}
-                                placeholder="e.g., Hardware"
-                                className="form-input"
-                                style={{ padding: '6px 10px', fontSize: '12px' }}
-                              />
-                              {idx === subCategories.length - 1 ? (
-                                <button
-                                  type="button"
-                                  onClick={addSubCategory}
-                                  className="btn-outline"
-                                  style={{ padding: '6px 12px', fontSize: '12px' }}
-                                >
-                                  ＋
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => removeSubCategory(idx)}
-                                  className="btn-danger"
-                                  style={{ padding: '6px 12px', fontSize: '12px' }}
-                                >
-                                  ✕
-                                </button>
-                              )}
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {subCategories.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={addSubCategory}
+                                style={{
+                                  alignSelf: 'flex-start',
+                                  background: '#eff6ff',
+                                  border: '2px solid #dbeafe',
+                                  borderRadius: 6,
+                                  padding: '4px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  fontWeight: 600
+                                }}
+                              >
+                                + Add
+                              </button>
+                            )}
+
+                            {subCategories.map((s, idx) => (
+                              <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input
+                                  value={s}
+                                  onChange={(e) => updateSubCategory(idx, e.target.value)}
+                                  placeholder="e.g., Salary"
+                                  style={{
+                                    flex: 1,
+                                    padding: '6px 8px',
+                                    borderRadius: 6,
+                                    border: '2px solid #e2e8f0',
+                                    fontSize: 12
+                                  }}
+                                />
+                                {idx === subCategories.length - 1 ? (
+                                  <button
+                                    type="button"
+                                    onClick={addSubCategory}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}
+                                  >
+                                    ＋
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSubCategory(idx)}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}
+                                  >
+                                    ✖
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+
+                            <div
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 6,
+                                border: '2px dashed #cbd5e1',
+                                fontSize: 12,
+                                color: '#475569',
+                                background: '#f8fafc'
+                              }}
+                            >
+                              Other (fixed)
                             </div>
-                          ))}
-                          <div style={{
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            border: '2px dashed #cbd5e1',
-                            fontSize: '12px',
-                            background: '#f8fafc',
-                            marginTop: '6px'
-                          }}>
-                            Other (fixed)
                           </div>
-                          <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
-                            <input
-                              type="checkbox"
-                              checked={requireSubCategory}
-                              onChange={(e) => setRequireSubCategory(e.target.checked)}
-                              style={{ width: '16px', height: '16px' }}
-                            />
-                            <span>Required field</span>
-                          </label>
+
+                          <div style={{ marginTop: 10 }}>
+                            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="checkbox"
+                                checked={requireSubCategory}
+                                onChange={(e) => setRequireSubCategory(e.target.checked)}
+                                style={{ width: 16, height: 16 }}
+                              />
+                              <span>Required field</span>
+                            </label>
+                          </div>
                         </div>
                       )}
                     </div>
 
-                    <div className={`feature-box ${enableAttachmentsForCategory ? 'enabled' : ''}`}>
-                      <div className="feature-header">
-                        <span className="feature-title">Attachments</span>
-                        <div 
-                          className={`feature-toggle ${enableAttachmentsForCategory ? 'enabled' : ''}`}
-                          onClick={() => setEnableAttachmentsForCategory(!enableAttachmentsForCategory)}
+                    <div style={{ 
+                      padding: 16, 
+                      border: '2px solid #e2e8f0', 
+                      borderRadius: 12,
+                      background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <label style={{ fontWeight: 700, fontSize: 14 }}>Attachments</label>
+                        <input 
+                          type="checkbox" 
+                          checked={enableAttachmentsForCategory} 
+                          onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
                         />
                       </div>
-                      <div className="feature-description">
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
                         Allow file attachments
                       </div>
+
                       {enableAttachmentsForCategory && (
-                        <div style={{ marginTop: '12px' }}>
-                          <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <input
-                              type="checkbox"
-                              checked={requireAttachmentsForCategory}
+                        <div style={{ marginTop: 12 }}>
+                          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input 
+                              type="checkbox" 
+                              checked={requireAttachmentsForCategory} 
                               onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)}
-                              style={{ width: '16px', height: '16px' }}
-                            />
+                              style={{ width: 16, height: 16 }}
+                            /> 
                             <span>Required field</span>
                           </label>
                         </div>
                       )}
                     </div>
+
                   </div>
 
-                  <div className={`feature-box ${requireApproval ? 'enabled' : ''}`}>
-                    <div className="feature-header">
-                      <span className="feature-title">Approval Required</span>
-                      <div 
-                        className={`feature-toggle ${requireApproval ? 'enabled' : ''}`}
-                        onClick={() => setRequireApproval(!requireApproval)}
+                  <div
+                    style={{
+                      padding: 16,
+                      border: '2px solid #e2e8f0',
+                      borderRadius: 12,
+                      background: requireApproval ? '#fff7ed' : '#fafafa'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <label style={{ fontWeight: 700, fontSize: 14 }}>
+                        Approval Required
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={requireApproval}
+                        onChange={(e) => setRequireApproval(e.target.checked)}
+                        style={{ width: 20, height: 20, cursor: 'pointer' }}
                       />
                     </div>
-                    <div className="feature-description">
-                      Requires approval by heads or CCs
+
+                    <div style={{ fontSize: 12, color: '#64748b' }}>
+                      Requires approval by head or CC
                     </div>
                   </div>
                 </div>
 
-                {categorySuccess && (
-                  <div className="message message-success">
-                    ✓ {categorySuccess}
-                  </div>
-                )}
-                {categoryError && (
-                  <div className="message message-error">
-                    ⚠️ {categoryError}
-                  </div>
-                )}
+                {categorySuccess && <div className="message message-success">✓ {categorySuccess}</div>}
+                {categoryError && <div className="message message-error">✕ {categoryError}</div>}
 
                 <div className="modal-footer">
                   <button 
@@ -3000,6 +2968,123 @@ function Header({ logout }) {
                   </button>
                 </div>
               </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Remove Field Modal */}
+      {removeFieldOpen && (
+        <>
+          <div className="modal-overlay" onClick={() => setRemoveFieldOpen(false)} />
+          <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Remove Category</h3>
+              <button onClick={() => setRemoveFieldOpen(false)} className="modal-close">✖</button>
+            </div>
+
+            <div className="modal-subtitle">
+              Select a category to remove. This action may impact existing tickets.
+            </div>
+
+            <div className="user-list">
+              {categoriesLoading && <div style={{ textAlign: 'center', color: '#94a3b8' }}>Loading categories...</div>}
+              {!categoriesLoading && availableCategories.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#94a3b8' }}>No categories found.</div>
+              )}
+              {availableCategories.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => setSelectedCategoryToRemove(c)}
+                  className={`user-item ${selectedCategoryToRemove?.id === c.id ? 'danger-selected' : ''}`}
+                >
+                  <div className="user-name">{c.name || c.categoryName}</div>
+                  <div className="user-email">{c.description || 'No description'}</div>
+                </div>
+              ))}
+            </div>
+
+            {removeCategorySuccess && <div className="message message-success">✓ {removeCategorySuccess}</div>}
+            {removeCategoryError && <div className="message message-error">✕ {removeCategoryError}</div>}
+
+            <div className="modal-footer">
+              <button onClick={() => setRemoveFieldOpen(false)} className="btn btn-secondary">Cancel</button>
+              <button
+                onClick={confirmRemoveCategory}
+                disabled={removeCategoryLoading || !selectedCategoryToRemove}
+                className="btn btn-danger"
+              >
+                {removeCategoryLoading ? 'Removing...' : 'Remove Category'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Full Profile Modal */}
+      {fullProfileOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeFullProfile} />
+          <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Full Profile</h3>
+              <button onClick={closeFullProfile} className="modal-close">✖</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 20, padding: 16, background: '#f8fafc', borderRadius: 12 }}>
+              <div style={{
+                width: 68,
+                height: 68,
+                borderRadius: 12,
+                background: '#eef2ff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                color: '#002060',
+                overflow: 'hidden'
+              }}>
+                {profilePhoto ? (
+                  <img src={profilePhoto} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: 22 }}>{initials}</span>
+                )}
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>{accounts?.[0]?.name || ''}</div>
+                <div style={{ color: '#64748b', fontSize: 14 }}>{accounts?.[0]?.username || ''}</div>
+              </div>
+            </div>
+
+            {loadingProfile && <p style={{ textAlign: 'center', color: '#64748b' }}>Loading profile...</p>}
+
+            {profileError && (
+              <div className="message message-error">
+                Error loading profile: {profileError}
+              </div>
+            )}
+
+            {profileData && (
+              <div style={{ display: 'grid', gap: 16 }}>
+                {Object.entries({
+                  'Name': profileData.name,
+                  'Email': profileData.email,
+                  'Department': profileData.department,
+                  'Job Title': profileData.jobTitle,
+                  'Reporting Manager': profileData.manager,
+                  'Employee ID': profileData.employeeId,
+                  'Mobile': profileData.mobilePhone,
+                  'Address': profileData.streetAddress,
+                  'State': profileData.state,
+                  'Pincode': profileData.postalCode
+                }).map(([label, value]) => value && (
+                  <div key={label}>
+                    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, fontWeight: 600 }}>{label}</div>
+                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{value}</div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </>
