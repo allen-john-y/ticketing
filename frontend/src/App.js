@@ -1630,30 +1630,73 @@ function Header({ logout }) {
               </button>
 
               {settingsOpen && (
-                <div className="settings-dropdown">
-                  <div className="dropdown-title">⚙️ Admin Settings</div>
+                  <div className="settings-dropdown">
 
-                  <button onClick={() => { openAddModal(); setSettingsOpen(false); }} className="dropdown-item add">
-                    <img src={addUserIcon} style={{ width: 18, marginRight: 8 }} />Add User
-                  </button>
+                    <div className="dropdown-title">⚙️ Admin Settings</div>
 
-                  <button onClick={() => { openRemoveModal(); setSettingsOpen(false); }} className="dropdown-item remove">
-                    <img src={removeUserIcon} style={{ width: 18, marginRight: 8 }} /> Remove User
-                  </button>
+                    <button
+                      onClick={() => { openAddModal(); setSettingsOpen(false); }}
+                      className="dropdown-item add"
+                    >
+                      <img
+                        src={addUserIcon}
+                        alt="Add User"
+                        style={{ width: 18, height: 18, marginRight: 8 }}
+                      />
+                      Add User
+                    </button>
 
-                  <button onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }} className="dropdown-item add">
-                    <img src={addFieldIcon} style={{ width: 18, marginRight: 8 }} /> Add Field
-                  </button>
+                    <button
+                      onClick={() => { openRemoveModal(); setSettingsOpen(false); }}
+                      className="dropdown-item remove"
+                    >
+                      <img
+                        src={removeUserIcon}
+                        alt="Remove User"
+                        style={{ width: 18, height: 18, marginRight: 8 }}
+                      />
+                      Remove User
+                    </button>
 
-                  <button onClick={() => { openEditFieldModal(); setSettingsOpen(false); }} className="dropdown-item edit">
-                    <img src={editFieldIcon} style={{ width: 18, marginRight: 8 }} /> Edit Field
-                  </button>
+                    <button
+                      onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
+                      className="dropdown-item add"
+                    >
+                      <img
+                        src={addFieldIcon}
+                        alt="Add Field"
+                        style={{ width: 18, height: 18, marginRight: 8 }}
+                      />
+                      Add Field
+                    </button>
 
-                  <button onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }} className="dropdown-item remove">
-                    <img src={removeFieldIcon} style={{ width: 18, marginRight: 8 }} /> Remove Field
-                  </button>
-                </div>
-              )}
+                    <button
+                      onClick={() => { openEditFieldModal(); setSettingsOpen(false); }}
+                      className="dropdown-item edit"
+                    >
+                      <img
+                        src={editFieldIcon}
+                        alt="Edit Field"
+                        style={{ width: 18, height: 18, marginRight: 8 }}
+                      />
+                      Edit Field
+                    </button>
+
+                    <button
+                      onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
+                      className="dropdown-item remove"
+                    >
+                      <img
+                        src={removeFieldIcon}
+                        alt="Remove Field"
+                        style={{ width: 18, height: 18, marginRight: 8 }}
+                      />
+                      Remove Field
+                    </button>
+
+                  </div>
+                )}
+
             </div>
           )}
 
