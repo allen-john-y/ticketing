@@ -1744,7 +1744,7 @@ function CreateTicket() {
                       {dynamicOnBehalfSelectedUser && (
                         <div className="selected-user-box">
                           <div style={{ fontSize: '12px', fontWeight: '600', color: '#065f46', marginBottom: '4px' }}>
-                            ✅ Selected User:
+                             Selected User:
                           </div>
                           <div style={{ fontWeight: '700', color: '#0f172a' }}>
                             {dynamicOnBehalfSelectedUser.displayName}
@@ -1857,9 +1857,9 @@ function CreateTicket() {
                         <div className={`verify-status ${verifyStatus}`}>
                           {verifyStatus === 'idle' && 'Click Verify to confirm user exists'}
                           {verifyStatus === 'verifying' && '🔍 Verifying user...'}
-                          {verifyStatus === 'verified' && `✅ Verified: ${verifiedName}`}
-                          {verifyStatus === 'notfound' && '❌ User not found'}
-                          {verifyStatus === 'error' && `❌ ${verifyError}`}
+                          {verifyStatus === 'verified' && `Verified: ${verifiedName}`}
+                          {verifyStatus === 'notfound' && 'User not found'}
+                          {verifyStatus === 'error' && `Error: ${verifyError}`}
                         </div>
                       </div>
                     )}

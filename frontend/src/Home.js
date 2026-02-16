@@ -109,9 +109,40 @@ function Home() {
 
   const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
-  // Simple Pie Chart Component
+  // Animated Pie Chart Component with smooth loading
   const PieChart = ({ data, colors, size = 180 }) => {
-    const total = data.reduce((sum, d) => sum + d.value, 0);
+    const [animatedData, setAnimatedData] = useState(data.map(d => ({ ...d, value: 0 })));
+    
+    useEffect(() => {
+      // Animate from 0 to actual values
+      const duration = 1000; // 1 second animation
+      const steps = 60; // 60 frames for smooth animation
+      const stepDuration = duration / steps;
+      let currentStep = 0;
+
+      const interval = setInterval(() => {
+        currentStep++;
+        const progress = currentStep / steps;
+        
+        // Ease-out cubic function for smooth deceleration
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        setAnimatedData(data.map(d => ({
+          ...d,
+          value: d.value * easeProgress
+        })));
+
+        if (currentStep >= steps) {
+          clearInterval(interval);
+          setAnimatedData(data); // Set to exact values at the end
+        }
+      }, stepDuration);
+
+      return () => clearInterval(interval);
+    }, [data]);
+
+    const total = animatedData.reduce((sum, d) => sum + d.value, 0);
+    
     if (total === 0) return (
       <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '14px', fontWeight: '600' }}>
         No data
@@ -119,7 +150,7 @@ function Home() {
     );
 
     let currentAngle = -90;
-    const segments = data.map((d, i) => {
+    const segments = animatedData.map((d, i) => {
       const percentage = (d.value / total) * 100;
       const angle = (percentage / 100) * 360;
       const startAngle = currentAngle;
@@ -142,6 +173,7 @@ function Home() {
           fill={colors[i]}
           stroke="white"
           strokeWidth="3"
+          style={{ transition: 'all 0.3s ease' }}
         />
       );
     });
@@ -169,53 +201,71 @@ function Home() {
 
   const priorityColors = ['#ef4444', '#e98404', '#10b981'];
 
-  // Adjust this value based on your App.js header height
-  const headerHeight = 70; // Change this to match your App.js header height
+  // Animated Counter Component for smooth number animations
+  const AnimatedCounter = ({ value, duration = 1000 }) => {
+    const [count, setCount] = useState(0);
+
+    useEffect(() => {
+      const steps = 60;
+      const stepDuration = duration / steps;
+      let currentStep = 0;
+
+      const interval = setInterval(() => {
+        currentStep++;
+        const progress = currentStep / steps;
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        setCount(Math.floor(value * easeProgress));
+
+        if (currentStep >= steps) {
+          clearInterval(interval);
+          setCount(value);
+        }
+      }, stepDuration);
+
+      return () => clearInterval(interval);
+    }, [value, duration]);
+
+    return <span>{count}</span>;
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex' }}>
       <style>{`
         * { box-sizing: border-box; }
         
-        /* Vertical Sidebar */
-        .vertical-sidebar {
+        /* Vertical Sidebar Navigation */
+        .sidebar {
           position: fixed;
           left: 0;
-          top: ${headerHeight}px; /* Start below App.js header */
-          height: calc(100vh - ${headerHeight}px); /* Adjust height to account for header */
-          background: linear-gradient(135deg, #002060 0%, #003380 100%);
-          color: white;
-          width: 70px;
-          transition: width 0.3s ease;
+          top: 0;
+          height: 100vh;
+          width: 80px;
+          background: linear-gradient(180deg, #002060 0%, #003380 100%);
+          box-shadow: 4px 0 16px rgba(0, 32, 96, 0.15);
+          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          z-index: 1000;
           overflow: hidden;
-          box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
-          z-index: 999; /* Lower z-index than App.js header if needed */
-        }
-        
-        .vertical-sidebar:hover {
-          width: 260px;
-        }
-        
-        .sidebar-content {
-          padding: 1.5rem 0;
-          height: 100%;
           display: flex;
           flex-direction: column;
+        }
+
+        .sidebar:hover {
           width: 260px;
         }
-        
-        .sidebar-user {
+
+        .sidebar-header {
+          padding: 1.5rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
           display: flex;
           align-items: center;
           gap: 1rem;
-          padding: 0 1rem;
-          margin-bottom: 2rem;
+          min-height: 100px;
         }
-        
+
         .avatar {
-          min-width: 42px;
-          width: 42px;
-          height: 42px;
+          width: 48px;
+          height: 48px;
           border-radius: 50%;
           background: white;
           display: flex;
@@ -223,9 +273,10 @@ function Home() {
           justify-content: center;
           font-weight: 700;
           color: #002060;
-          font-size: 14px;
+          font-size: 16px;
           overflow: hidden;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+          flex-shrink: 0;
         }
         
         .avatar img {
@@ -233,91 +284,113 @@ function Home() {
           height: 100%;
           object-fit: cover;
         }
-        
-        .user-details {
+
+        .user-info {
           opacity: 0;
-          transition: opacity 0.2s ease 0.15s;
+          transition: opacity 0.3s ease;
           white-space: nowrap;
+          overflow: hidden;
+          color: white;
         }
-        
-        .vertical-sidebar:hover .user-details {
+
+        .sidebar:hover .user-info {
           opacity: 1;
         }
-        
-        .user-name {
-          font-size: 15px;
+
+        .user-info h1 {
+          margin: 0;
+          font-size: 16px;
           font-weight: 600;
-          margin-bottom: 2px;
+          color: white;
         }
-        
+
         .user-role {
-          font-size: 11px;
-          opacity: 0.8;
+          display: inline-block;
           background: rgba(255, 255, 255, 0.15);
+          color: rgba(255, 255, 255, 0.95);
           padding: 2px 8px;
           border-radius: 4px;
-          display: inline-block;
+          font-size: 10px;
+          font-weight: 600;
+          margin-top: 4px;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
         }
-        
+
         .sidebar-nav {
           flex: 1;
+          padding: 1rem 0;
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
-          padding: 0 1rem;
         }
-        
+
         .nav-item {
           display: flex;
           align-items: center;
-          gap: 1rem;
-          padding: 0.75rem;
-          border-radius: 8px;
+          padding: 1rem 1.5rem;
+          color: rgba(255, 255, 255, 0.9);
           text-decoration: none;
-          color: rgba(255, 255, 255, 0.8);
-          transition: all 0.2s;
-          white-space: nowrap;
+          transition: all 0.2s ease;
+          position: relative;
           cursor: pointer;
-          border: none;
-          background: none;
-          width: 100%;
-          font-size: 14px;
-          font-weight: 500;
         }
-        
+
         .nav-item:hover {
           background: rgba(255, 255, 255, 0.1);
-          color: white;
         }
-        
+
+        .nav-item::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 0;
+          height: 100%;
+          width: 4px;
+          background: #e98404;
+          transform: scaleY(0);
+          transition: transform 0.2s ease;
+        }
+
+        .nav-item:hover::before {
+          transform: scaleY(1);
+        }
+
         .nav-icon {
-          font-size: 20px;
-          min-width: 24px;
+          width: 48px;
           display: flex;
+          align-items: center;
           justify-content: center;
+          font-size: 24px;
+          flex-shrink: 0;
         }
-        
-        .nav-label {
+
+        .nav-text {
           opacity: 0;
-          transition: opacity 0.2s ease 0.15s;
+          transition: opacity 0.3s ease;
+          white-space: nowrap;
+          font-weight: 600;
+          font-size: 14px;
         }
-        
-        .vertical-sidebar:hover .nav-label {
+
+        .sidebar:hover .nav-text {
           opacity: 1;
         }
-        
+
+        /* Main Content Area */
         .main-content {
+          margin-left: 80px;
           flex: 1;
-          margin-left: 70px;
-          margin-top: ${headerHeight}px; /* Add top margin to account for header */
-          transition: margin-left 0.3s ease;
+          transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          width: calc(100% - 80px);
         }
-        
-        /* Adjust main content when sidebar expands */
-        .vertical-sidebar:hover + .main-content {
-          margin-left: 260px;
+
+        .content-wrapper {
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: 2rem;
         }
-        
+
         .my-tickets-toggle {
           background: white;
           padding: 1rem 1.5rem;
@@ -467,17 +540,17 @@ function Home() {
         }
         
         @media (max-width: 768px) {
-          .vertical-sidebar {
-            width: 0;
+          .sidebar {
+            width: 60px;
           }
-          
-          .vertical-sidebar:hover {
-            width: 260px;
+
+          .sidebar:hover {
+            width: 220px;
           }
-          
+
           .main-content {
-            margin-left: 0;
-            margin-top: ${headerHeight}px;
+            margin-left: 60px;
+            width: calc(100% - 60px);
           }
           
           .stats-grid {
@@ -494,45 +567,45 @@ function Home() {
         }
       `}</style>
 
-      {/* Vertical Sidebar - Now starts below App.js header */}
-      <div className="vertical-sidebar">
-        <div className="sidebar-content">
-          {/* User Info */}
-          <div className="sidebar-user">
-            <div className="avatar">
-              {profilePhoto ? (
-                <img src={profilePhoto} alt={`${userName} profile`} />
-              ) : (
-                initials
-              )}
-            </div>
-            <div className="user-details">
-              <div className="user-name">{userName}</div>
-              <span className="user-role">{authority === 'admin' ? 'Admin' : 'User'}</span>
-            </div>
+      {/* Vertical Sidebar */}
+      <div className="sidebar">
+        {/* User Profile Section */}
+        <div className="sidebar-header">
+          <div className="avatar">
+            {profilePhoto ? (
+              <img src={profilePhoto} alt={`${userName} profile`} />
+            ) : (
+              initials
+            )}
           </div>
-
-          {/* Navigation Items */}
-          <div className="sidebar-nav">
-            <Link to="/create" className="nav-item">
-              <span className="nav-icon">+</span>
-              <span className="nav-label">Create Ticket</span>
-            </Link>
-            
-            <Link to="/tickets" className="nav-item">
-              <span className="nav-icon">🎫</span>
-              <span className="nav-label">View All Tickets</span>
-            </Link>
+          <div className="user-info">
+            <h1>{userName}</h1>
+            <span className="user-role">{authority === 'admin' ? 'Administrator' : 'User'}</span>
           </div>
         </div>
+
+        {/* Navigation Items */}
+        <nav className="sidebar-nav">
+          <Link to="/create" className="nav-item">
+            <div className="nav-icon">+</div>
+            <div className="nav-text">Create Ticket</div>
+          </Link>
+
+          <Link to="/tickets" className="nav-item">
+            <div className="nav-icon">📋</div>
+            <div className="nav-text">View All Tickets</div>
+          </Link>
+
+          <Link to="/dashboard" className="nav-item">
+            <div className="nav-icon">✅</div>
+            <div className="nav-text">Closed Tickets</div>
+          </Link>
+        </nav>
       </div>
 
-      {/* Main Content - Now starts below App.js header */}
+      {/* Main Content */}
       <div className="main-content">
-        {/* Removed the internal header since App.js already has one */}
-        
-        {/* Main Content Area */}
-        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 2rem 2rem 2rem' }}>
+        <div className="content-wrapper">
           {/* Admin: Show only my tickets toggle */}
           {authority === 'admin' && (
             <div className="my-tickets-toggle">
@@ -556,7 +629,7 @@ function Home() {
             >
               <div className="stat-header">
                 <div>
-                  <div className="stat-value">{openTickets.length}</div>
+                  <div className="stat-value"><AnimatedCounter value={openTickets.length} /></div>
                   <div className="stat-label">Open Tickets</div>
                 </div>
                 <div className="stat-icon orange">📝</div>
@@ -569,7 +642,7 @@ function Home() {
             >
               <div className="stat-header">
                 <div>
-                  <div className="stat-value">{inProgressTickets.length}</div>
+                  <div className="stat-value"><AnimatedCounter value={inProgressTickets.length} /></div>
                   <div className="stat-label">Waiting for approval</div>
                 </div>
                 <div className="stat-icon blue">⚙️</div>
@@ -582,7 +655,7 @@ function Home() {
             >
               <div className="stat-header">
                 <div>
-                  <div className="stat-value">{closedTickets.length}</div>
+                  <div className="stat-value"><AnimatedCounter value={closedTickets.length} /></div>
                   <div className="stat-label">Closed Tickets</div>
                 </div>
                 <div className="stat-icon green">✅</div>
@@ -595,7 +668,7 @@ function Home() {
             >
               <div className="stat-header">
                 <div>
-                  <div className="stat-value">{highPriority.length}</div>
+                  <div className="stat-value"><AnimatedCounter value={highPriority.length} /></div>
                   <div className="stat-label">High Priority</div>
                 </div>
                 <div className="stat-icon red">⚠️</div>
@@ -615,7 +688,7 @@ function Home() {
                     <div key={idx} className="legend-item">
                       <div className="legend-color" style={{ background: statusColors[idx] }}></div>
                       <span className="legend-label">{item.label}</span>
-                      <span className="legend-value">{item.value}</span>
+                      <span className="legend-value"><AnimatedCounter value={item.value} /></span>
                     </div>
                   ))}
                 </div>
@@ -632,7 +705,7 @@ function Home() {
                     <div key={idx} className="legend-item">
                       <div className="legend-color" style={{ background: priorityColors[idx] }}></div>
                       <span className="legend-label">{item.label} Priority</span>
-                      <span className="legend-value">{item.value}</span>
+                      <span className="legend-value"><AnimatedCounter value={item.value} /></span>
                     </div>
                   ))}
                 </div>
