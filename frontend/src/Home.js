@@ -169,6 +169,9 @@ function Home() {
 
   const priorityColors = ['#ef4444', '#e98404', '#10b981'];
 
+  // Adjust this value based on your App.js header height
+  const headerHeight = 70; // Change this to match your App.js header height
+
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex' }}>
       <style>{`
@@ -178,15 +181,15 @@ function Home() {
         .vertical-sidebar {
           position: fixed;
           left: 0;
-          top: 0;
-          height: 100vh;
+          top: ${headerHeight}px; /* Start below App.js header */
+          height: calc(100vh - ${headerHeight}px); /* Adjust height to account for header */
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
           width: 70px;
           transition: width 0.3s ease;
           overflow: hidden;
           box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
-          z-index: 1000;
+          z-index: 999; /* Lower z-index than App.js header if needed */
         }
         
         .vertical-sidebar:hover {
@@ -306,6 +309,7 @@ function Home() {
         .main-content {
           flex: 1;
           margin-left: 70px;
+          margin-top: ${headerHeight}px; /* Add top margin to account for header */
           transition: margin-left 0.3s ease;
         }
         
@@ -473,6 +477,7 @@ function Home() {
           
           .main-content {
             margin-left: 0;
+            margin-top: ${headerHeight}px;
           }
           
           .stats-grid {
@@ -489,7 +494,7 @@ function Home() {
         }
       `}</style>
 
-      {/* Vertical Sidebar */}
+      {/* Vertical Sidebar - Now starts below App.js header */}
       <div className="vertical-sidebar">
         <div className="sidebar-content">
           {/* User Info */}
@@ -522,18 +527,10 @@ function Home() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - Now starts below App.js header */}
       <div className="main-content">
-        {/* Header (simplified) */}
-        <div style={{ 
-          background: 'white', 
-          padding: '1rem 2rem', 
-          borderBottom: '1px solid #e2e8f0',
-          marginBottom: '2rem'
-        }}>
-          <h2 style={{ margin: 0, color: '#0f172a', fontSize: '20px' }}>Dashboard</h2>
-        </div>
-
+        {/* Removed the internal header since App.js already has one */}
+        
         {/* Main Content Area */}
         <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 2rem 2rem 2rem' }}>
           {/* Admin: Show only my tickets toggle */}
