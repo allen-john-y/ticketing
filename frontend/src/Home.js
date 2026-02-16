@@ -174,11 +174,12 @@ function Home() {
       <style>{`
         * { box-sizing: border-box; }
         
+        /* Professional Header */
         .header-bar {
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
-          padding: 1.5rem 2rem;
-          box-shadow: 0 4px 16px rgba(0, 32, 96, 0.15);
+          padding: 1.25rem 2rem;
+          box-shadow: 0 2px 12px rgba(0, 32, 96, 0.12);
         }
         
         .header-content {
@@ -193,12 +194,12 @@ function Home() {
         .header-left {
           display: flex;
           align-items: center;
-          gap: 1.5rem;
+          gap: 1rem;
         }
         
         .avatar {
-          width: 56px;
-          height: 56px;
+          width: 48px;
+          height: 48px;
           border-radius: 50%;
           background: white;
           display: flex;
@@ -206,9 +207,10 @@ function Home() {
           justify-content: center;
           font-weight: 700;
           color: #002060;
-          font-size: 18px;
+          font-size: 16px;
           overflow: hidden;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+          flex-shrink: 0;
         }
         
         .avatar img {
@@ -219,25 +221,28 @@ function Home() {
         
         .user-info h1 {
           margin: 0;
-          font-size: 24px;
-          font-weight: 700;
+          font-size: 20px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
         }
         
         .user-role {
           display: inline-block;
-          background: rgba(233, 132, 4, 0.2);
-          color: #e98404;
-          padding: 4px 12px;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: 700;
+          background: rgba(255, 255, 255, 0.15);
+          color: rgba(255, 255, 255, 0.95);
+          padding: 3px 10px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
           margin-top: 4px;
-          border: 1px solid rgba(233, 132, 4, 0.3);
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
         }
         
         .header-actions {
           display: flex;
-          gap: 1rem;
+          gap: 0.75rem;
+          align-items: center;
         }
         
         .btn-header {
@@ -245,82 +250,44 @@ function Home() {
           border: none;
           border-radius: 8px;
           font-weight: 600;
+          font-size: 14px;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.2s ease;
           text-decoration: none;
-          display: inline-block;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
         }
         
         .btn-primary {
           background: #e98404;
           color: white;
-          box-shadow: 0 4px 12px rgba(233, 132, 4, 0.3);
+          box-shadow: 0 2px 8px rgba(233, 132, 4, 0.25);
         }
         
         .btn-primary:hover {
           background: #d17703;
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(233, 132, 4, 0.4);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(233, 132, 4, 0.35);
         }
         
         .btn-secondary {
-          background: white;
+          background: rgba(255, 255, 255, 0.95);
           color: #002060;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
         }
         
         .btn-secondary:hover {
-          background: #f1f5f9;
-          transform: translateY(-2px);
-        }
-
-        .action-bar {
-          max-width: 1400px;
-          margin: -1rem auto 2rem auto;
-          padding: 0 2rem;
-          display: flex;
-          justify-content: flex-end;
-          gap: 1rem;
-        }
-
-        .action-btn {
-          padding: 12px 24px;
-          border-radius: 10px;
-          font-weight: 600;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        .action-btn.create {
-          background: #e98404;
-          color: white;
-        }
-
-        .action-btn.create:hover {
-          background: #d17703;
-          transform: translateY(-2px);
-        }
-
-        .action-btn.view {
           background: white;
-          color: #002060;
-          border: 2px solid #e2e8f0;
-        }
-
-        .action-btn.view:hover {
-          background: #f8fafc;
-          border-color: #002060;
-          transform: translateY(-2px);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
         }
         
         .main-container {
           max-width: 1400px;
           margin: 0 auto;
-          padding: 0 2rem;
+          padding: 2rem;
         }
 
         .my-tickets-toggle {
@@ -339,6 +306,7 @@ function Home() {
           width: 18px;
           height: 18px;
           cursor: pointer;
+          accent-color: #002060;
         }
 
         .my-tickets-toggle label {
@@ -346,6 +314,7 @@ function Home() {
           color: #0f172a;
           cursor: pointer;
           user-select: none;
+          font-size: 14px;
         }
         
         .stats-grid {
@@ -402,13 +371,14 @@ function Home() {
           font-weight: 800;
           color: #0f172a;
           margin: 0;
+          line-height: 1;
         }
         
         .stat-label {
           font-size: 14px;
           color: #64748b;
           font-weight: 600;
-          margin-top: 4px;
+          margin-top: 6px;
         }
         
         .charts-section {
@@ -472,23 +442,16 @@ function Home() {
           .header-content {
             flex-direction: column;
             align-items: flex-start;
+            gap: 1rem;
           }
           
           .header-actions {
             width: 100%;
+            flex-direction: column;
           }
           
           .btn-header {
-            flex: 1;
-          }
-
-          .action-bar {
-            flex-direction: column;
-            align-items: stretch;
-            padding: 0 1rem;
-          }
-
-          .action-btn {
+            width: 100%;
             justify-content: center;
           }
           
@@ -506,7 +469,7 @@ function Home() {
         }
       `}</style>
 
-      {/* Header */}
+      {/* Professional Header */}
       <div className="header-bar">
         <div className="header-content">
           <div className="header-left">
@@ -518,21 +481,19 @@ function Home() {
               )}
             </div>
             <div className="user-info">
-              <h1>Welcome, {userName}</h1>
-              <span className="user-role">{authority === 'admin' ? 'ADMINISTRATOR' : 'USER'}</span>
+              <h1>{userName}</h1>
+              <span className="user-role">{authority === 'admin' ? 'Administrator' : 'User'}</span>
             </div>
           </div>
+          <div className="header-actions">
+            <Link to="/create" className="btn-header btn-primary">
+              <span>+</span> Create Ticket
+            </Link>
+            <Link to="/tickets" className="btn-header btn-secondary">
+              View All Tickets
+            </Link>
+          </div>
         </div>
-      </div>
-
-      {/* Action Bar - Professional placement */}
-      <div className="action-bar">
-        <Link to="/create" className="action-btn create">
-          <span style={{ fontSize: '20px' }}>+</span> Create New Ticket
-        </Link>
-        <Link to="/tickets" className="action-btn view">
-          <span style={{ fontSize: '20px' }}>📋</span> View All Tickets
-        </Link>
       </div>
 
       {/* Main Content */}
@@ -552,7 +513,7 @@ function Home() {
           </div>
         )}
 
-        {/* Stats Grid - All stats now redirect */}
+        {/* Stats Grid */}
         <div className="stats-grid">
           <div 
             className="stat-card orange"
@@ -582,7 +543,7 @@ function Home() {
 
           <div 
             className="stat-card green"
-            onClick={() => navigate('/dashboard', { state: { filter: 'closed' } })}
+            onClick={() => navigate('/dashboard')}
           >
             <div className="stat-header">
               <div>
