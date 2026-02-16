@@ -13,7 +13,7 @@ function Home() {
   const [userName, setUserName] = useState('User');
   const [refreshKey, setRefreshKey] = useState(0);
   const [showMyTickets, setShowMyTickets] = useState(false);
-  const [setProfilePhoto] = useState(null);
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -90,7 +90,7 @@ function Home() {
     };
 
     fetchData();
-  }, [accounts, instance, refreshKey]);
+  }, [accounts, instance, refreshKey, setProfilePhoto]);
 
   // Filter tickets based on "my tickets" toggle
   const filteredTickets = authority === 'admin' && showMyTickets
@@ -107,7 +107,7 @@ function Home() {
   const mediumPriority = filteredTickets.filter(t => t.priority === 'Medium' && t.status !== 'Closed');
   const lowPriority = filteredTickets.filter(t => t.priority === 'Low' && t.status !== 'Closed');
 
-  //const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+  const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
   // Animated Pie Chart Component with smooth loading
   const PieChart = ({ data, colors, size = 180 }) => {
