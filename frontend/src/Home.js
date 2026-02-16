@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -113,6 +113,9 @@ function Home() {
   const PieChart = ({ data, colors, size = 180 }) => {
     const [animatedData, setAnimatedData] = useState(data.map(d => ({ ...d, value: 0 })));
     
+    // Memoize data string for dependency tracking
+    const dataString = useMemo(() => JSON.stringify(data), [data]);
+    
     useEffect(() => {
       // Reset to 0 first
       setAnimatedData(data.map(d => ({ ...d, value: 0 })));
@@ -142,7 +145,7 @@ function Home() {
       }, stepDuration);
 
       return () => clearInterval(interval);
-    }, [JSON.stringify(data)]); // Use JSON.stringify to detect actual data changes
+    }, [dataString, data]); // Include both dataString and data
 
     const total = animatedData.reduce((sum, d) => sum + d.value, 0);
     
