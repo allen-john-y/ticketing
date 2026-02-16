@@ -1,4 +1,4 @@
-// TicketDetails.js — Professional Business UI with Orange/Blue color scheme
+// TicketDetails.js — Professional Business UI matching Home.js style
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -340,7 +340,20 @@ function TicketDetails() {
     setreopenError('');
   };
 
-  if (!ticket) return <p style={{ textAlign: 'center', padding: '2rem' }}>Loading ticket...</p>;
+  if (!ticket) return (
+    <div style={{ 
+      minHeight: '100vh', 
+      background: '#f8fafc', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      fontSize: '18px',
+      color: '#64748b',
+      fontWeight: 600
+    }}>
+      Loading ticket...
+    </div>
+  );
 
   const statusColorStyles = {
     background:
@@ -453,8 +466,8 @@ function TicketDetails() {
     const url = event.attachment.fileUrl;
     const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
     return (
-      <div style={{ marginTop: 8, fontSize: 13 }}>
-        <strong>Attachment:</strong>{' '}
+      <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 600, fontSize: '14px', color: '#475569' }}>📎 Attachment:</span>
         <button
           onClick={() => {
             if (isPdfType(typeLabel, url)) {
@@ -464,20 +477,32 @@ function TicketDetails() {
             }
           }}
           style={{ 
-            marginLeft: 8, 
             background: '#002060', 
             color: 'white', 
             border: 'none', 
-            padding: '6px 10px', 
-            borderRadius: 8, 
+            padding: '8px 16px', 
+            borderRadius: '8px', 
             cursor: 'pointer', 
-            fontWeight: 700 
+            fontWeight: 600,
+            fontSize: '13px',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 12px rgba(0, 32, 96, 0.15)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#001a4d';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 32, 96, 0.25)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#002060';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 32, 96, 0.15)';
           }}
         >
           {isPdfType(typeLabel, url) ? 'Download PDF' : 'View attachment'}
         </button>
         {typeLabel && (
-          <span style={{ marginLeft: 6, fontSize: 12, color: '#6b7280' }}>
+          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
             ({typeLabel})
           </span>
         )}
@@ -492,9 +517,17 @@ function TicketDetails() {
       const a = attachmentList[0];
       const isPdf = isPdfType(a.fileType, a.fileUrl);
       return (
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <strong style={{ minWidth: 90 }}>{isPdf ? 'PDF:' : 'Attachment:'}</strong>
-
+        <div style={{ 
+          marginTop: '20px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '12px',
+          padding: '16px',
+          background: '#f8fafc',
+          borderRadius: '10px',
+          border: '2px solid #e2e8f0'
+        }}>
+          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>📎 Attachment:</span>
           <button
             onClick={() => {
               if (isPdf) {
@@ -504,90 +537,125 @@ function TicketDetails() {
               }
             }}
             style={{ 
-              marginLeft: 0, 
               background: '#002060', 
               color: 'white', 
               border: 'none', 
-              padding: '8px 12px', 
-              borderRadius: 8, 
+              padding: '8px 16px', 
+              borderRadius: '8px', 
               cursor: 'pointer', 
-              fontWeight: 800 
+              fontWeight: 600,
+              fontSize: '13px',
+              transition: 'all 0.2s',
+              boxShadow: '0 4px 12px rgba(0, 32, 96, 0.15)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#001a4d';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#002060';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             {isPdf ? 'Download PDF' : 'View attachment'}
           </button>
-
           {!isPdf && (
             <button
               onClick={() => downloadAttachment(a)}
-              title="Download"
               style={{ 
-                marginLeft: 6, 
                 display: 'inline-flex', 
                 alignItems: 'center', 
-                gap: 8, 
-                padding: '8px 10px', 
-                borderRadius: 8, 
+                justifyContent: 'center',
+                padding: '8px 12px', 
+                borderRadius: '8px', 
                 border: '2px solid #e2e8f0', 
                 background: '#fff', 
-                cursor: 'pointer' 
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f8fafc';
+                e.currentTarget.style.borderColor = '#002060';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#fff';
+                e.currentTarget.style.borderColor = '#e2e8f0';
               }}
             >
-              <img src={DownloadIcon} alt="Download" style={{ width: 18, height: 18 }} />
+              <img src={DownloadIcon} alt="Download" style={{ width: '18px', height: '18px' }} />
             </button>
           )}
+          <span style={{ fontSize: '13px', color: '#64748b' }}>{a.fileName}</span>
         </div>
       );
     }
 
     return (
-      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <strong style={{ minWidth: 90 }}>Attachments:</strong>
-        <button
-          onClick={() => {
-            if (attachmentList.length) {
-              setActiveAttachment(attachmentList[0]);
-              setAttachmentModalOpen(true);
-            }
-          }}
-          style={{ 
-            marginLeft: 0, 
-            background: '#002060', 
-            color: 'white', 
-            border: 'none', 
-            padding: '8px 12px', 
-            borderRadius: 8, 
-            cursor: 'pointer', 
-            fontWeight: 800 
-          }}
-        >
-          Attachments uploaded ({attachmentList.length})
-        </button>
-
-        <button
-          onClick={downloadAllAttachments}
-          title="Download all attachments (zip)"
-          style={{ 
-            marginLeft: 6, 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: 8, 
-            padding: '8px 12px', 
-            borderRadius: 8, 
-            border: '2px solid #e2e8f0', 
-            background: '#fff', 
-            cursor: 'pointer' 
-          }}
-        >
-          <img src={DownloadIcon} alt="Download all" style={{ width: 18, height: 18 }} />
-          <span style={{ fontWeight: 700, color: '#0f172a' }}>Download all</span>
-        </button>
+      <div style={{ 
+        marginTop: '20px', 
+        padding: '16px',
+        background: '#f8fafc',
+        borderRadius: '10px',
+        border: '2px solid #e2e8f0'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>📎 Attachments ({attachmentList.length}):</span>
+          <button
+            onClick={() => {
+              if (attachmentList.length) {
+                setActiveAttachment(attachmentList[0]);
+                setAttachmentModalOpen(true);
+              }
+            }}
+            style={{ 
+              background: '#002060', 
+              color: 'white', 
+              border: 'none', 
+              padding: '8px 16px', 
+              borderRadius: '8px', 
+              cursor: 'pointer', 
+              fontWeight: 600,
+              fontSize: '13px',
+              transition: 'all 0.2s'
+            }}
+          >
+            View all attachments
+          </button>
+          <button
+            onClick={downloadAllAttachments}
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              padding: '8px 16px', 
+              borderRadius: '8px', 
+              border: '2px solid #e2e8f0', 
+              background: '#fff', 
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '13px',
+              color: '#0f172a',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f8fafc';
+              e.currentTarget.style.borderColor = '#002060';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#fff';
+              e.currentTarget.style.borderColor = '#e2e8f0';
+            }}
+          >
+            <img src={DownloadIcon} alt="Download all" style={{ width: '18px', height: '18px' }} />
+            Download all (ZIP)
+          </button>
+        </div>
       </div>
     );
   };
 
   return (
-    <>
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <style>{`
         * { box-sizing: border-box; }
         
@@ -700,7 +768,7 @@ function TicketDetails() {
           background:#f8fafc; 
           border-radius:12px; 
           padding:16px; 
-          flex-direction:column;
+          flex-direction:column; 
           border: 2px solid #e2e8f0;
         }
         
@@ -872,226 +940,280 @@ function TicketDetails() {
         }
       `}</style>
 
-      {/* BACK BUTTON */}
-      <div style={{ padding: "1.5rem", maxWidth: 800, margin: "0 auto" }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: 10, 
-            padding: '12px 20px',
-            borderRadius: 12, 
-            border: '2px solid #e2e8f0', 
-            background: 'linear-gradient(180deg, #ffffff, #f8fafc)', 
-            cursor: 'pointer',
-            fontWeight: 700, 
-            boxShadow: '0 4px 12px rgba(0,0,0,0.06)', 
-            fontSize: '15px',
-            color: '#0f172a',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateX(-4px)';
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateX(0)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)';
-          }}
-        >
-          ← Back to Tickets
-        </button>
+      {/* Header Bar - Matching Home.js style */}
+      <div style={{
+        background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
+        color: 'white',
+        padding: '1.5rem 2rem',
+        boxShadow: '0 4px 16px rgba(0, 32, 96, 0.15)'
+      }}>
+        <div style={{
+          maxWidth: '1400px',
+          margin: '0 auto',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '2rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <button
+              onClick={() => navigate('/')}
+              style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: 'none',
+                color: 'white',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                fontSize: '15px'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+            >
+              ← Back to Tickets
+            </button>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Ticket Details</h1>
+          </div>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <Link to="/create" className="btn-header btn-primary" style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              textDecoration: 'none',
+              display: 'inline-block',
+              background: '#e98404',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(233, 132, 4, 0.3)'
+            }}>
+              + Create Ticket
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* MAIN CARD */}
       <div style={{
-        padding: '2.5rem',
         maxWidth: '800px',
-        margin: '0 auto 2rem',
-        background: '#ffffff',
-        borderRadius: '16px',
-        borderLeft: `6px solid ${ticket.status === "Closed" ? "#ef4444" : ticket.status === "Approved" ? "#10b981" : "#e98404"}`,
-        boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 20,
-        position: 'relative'
+        margin: '2rem auto',
+        padding: '0 1.5rem'
       }}>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1, minWidth: 300 }}>
-            <div style={{
-              width: 72,
-              height: 72,
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: '20px',
-              boxShadow: '0 8px 24px rgba(0, 32, 96, 0.2)'
-            }}>
-              {ticket.userName ? ticket.userName.split(' ').map(n => n[0]).slice(0,2).join('') : 'U'}
-            </div>
-
-            <div style={{ flex: 1 }}>
-              <h1 style={{ margin: 0, fontSize: '1.75rem', color: '#0f172a', fontWeight: 800 }}>
-                {ticket.category}
-              </h1>
-
-              <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{
-                  padding: '12px 16px',
-                  borderRadius: 12,
-                  background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                  color: '#002060',
-                  fontWeight: 800,
-                  fontSize: 13,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  boxShadow: '0 4px 12px rgba(0, 32, 96, 0.08)'
-                }}>
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>Ticket #</span>
-                  <span style={{ fontSize: 20, marginTop: 2, letterSpacing: '0.5px' }}>{ticket.ticketNumber}</span>
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{
-                    padding: '8px 12px',
-                    borderRadius: 999,
-                    background: ticket.priority === 'High' ? '#fee2e2' : ticket.priority === 'Medium' ? '#fff7ed' : '#d1fae5',
-                    color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#065f46',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    border: `2px solid ${ticket.priority === 'High' ? '#fecaca' : ticket.priority === 'Medium' ? '#fed7aa' : '#a7f3d0'}`
-                  }}>{ticket.priority}</span>
-
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 12px',
-                    borderRadius: 999,
-                    fontWeight: 700,
-                    fontSize: 13,
-                    border: '2px solid',
-                    ...statusColorStyles,
-                    borderColor: ticket.status === 'Closed' ? '#fecaca' : (ticket.status === 'Approved' ? '#a7f3d0' : (ticket.status === 'Waiting for approval' ? '#fcd34d' : '#bae6fd'))
-                  }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : (ticket.status === 'Approved' ? '#10b981' : (ticket.status === 'Waiting for approval' ? '#e98404' : '#0284c7')) }} />
-                    {ticket.status}
-                  </span>
-                </div>
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          borderLeft: `6px solid ${ticket.status === "Closed" ? "#ef4444" : ticket.status === "Approved" ? "#10b981" : "#e98404"}`,
+          boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
+          padding: '2.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px'
+        }}>
+          <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flex: 1, minWidth: '300px' }}>
+              <div style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: '20px',
+                boxShadow: '0 8px 24px rgba(0, 32, 96, 0.2)',
+                flexShrink: 0
+              }}>
+                {ticket.userName ? ticket.userName.split(' ').map(n => n[0]).slice(0,2).join('') : 'U'}
               </div>
 
-              {ticket.category === 'Operational & Finance' && ticket.subQuery && (
-                <div style={{ marginTop: 10, fontSize: 13, color: '#64748b' }}>
-                  <strong>Sub Category:</strong> {ticket.subQuery}
-                  {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
-                    <div style={{ marginTop: 4 }}>
-                      <strong>Details:</strong> {ticket.otherSubQueryText}
-                    </div>
-                  )}
+              <div style={{ flex: 1 }}>
+                <h1 style={{ margin: '0 0 8px 0', fontSize: '1.75rem', color: '#0f172a', fontWeight: 800 }}>
+                  {ticket.category}
+                </h1>
+
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{
+                    padding: '8px 16px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                    color: '#002060',
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    boxShadow: '0 4px 12px rgba(0, 32, 96, 0.08)'
+                  }}>
+                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700 }}>Ticket #</span>
+                    <span style={{ fontSize: '20px', marginTop: '2px', letterSpacing: '0.5px' }}>{ticket.ticketNumber}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{
+                      padding: '8px 12px',
+                      borderRadius: '999px',
+                      background: ticket.priority === 'High' ? '#fee2e2' : ticket.priority === 'Medium' ? '#fff7ed' : '#d1fae5',
+                      color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#065f46',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      border: `2px solid ${ticket.priority === 'High' ? '#fecaca' : ticket.priority === 'Medium' ? '#fed7aa' : '#a7f3d0'}`
+                    }}>{ticket.priority} Priority</span>
+
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      borderRadius: '999px',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      border: '2px solid',
+                      ...statusColorStyles,
+                      borderColor: ticket.status === 'Closed' ? '#fecaca' : (ticket.status === 'Approved' ? '#a7f3d0' : (ticket.status === 'Waiting for approval' ? '#fcd34d' : '#bae6fd'))
+                    }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : (ticket.status === 'Approved' ? '#10b981' : (ticket.status === 'Waiting for approval' ? '#e98404' : '#0284c7')) }} />
+                      {ticket.status}
+                    </span>
+                  </div>
                 </div>
-              )}
+
+                {ticket.category === 'Operational & Finance' && ticket.subQuery && (
+                  <div style={{ marginTop: '12px', fontSize: '14px', color: '#475569' }}>
+                    <span style={{ fontWeight: 700 }}>Sub Category:</span> {ticket.subQuery}
+                    {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
+                      <div style={{ marginTop: '4px' }}>
+                        <span style={{ fontWeight: 700 }}>Details:</span> {ticket.otherSubQueryText}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-end' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>Created by</div>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '15px' }}>{ticket.userName}</div>
+                <a href={`mailto:${ticket.userEmail}`} style={{ color: '#002060', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}>
+                  {ticket.userEmail}
+                </a>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '10px' }}>
+                {authority === 'admin' && ticket.status !== 'Closed' && (
+                  <button
+                    onClick={() => setShowReasonInput(true)}
+                    className="btn-danger"
+                    style={{ width: '100%', fontSize: '15px' }}
+                  >
+                    Close Ticket
+                  </button>
+                )}
+
+                {ticket.status === 'Closed' && (
+                  <button
+                    onClick={() => setShowreopenReasonInput(true)}
+                    className="btn-success"
+                    style={{ width: '100%', fontSize: '15px' }}
+                  >
+                    Reopen Ticket
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          <div style={{ width: 280, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>Created by</div>
-              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 15 }}>{ticket.userName}</div>
-              <a href={`mailto:${ticket.userEmail}`} style={{ color: '#002060', fontSize: 13, textDecoration: 'none', fontWeight: 600 }}>
-                {ticket.userEmail}
-              </a>
+          {needsApprovalBanner && (
+            <div style={{
+              background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
+              border: "2px solid #fcd34d",
+              padding: "20px",
+              borderRadius: "14px",
+              textAlign: "center",
+              boxShadow: "0 6px 18px rgba(252, 211, 77, 0.15)"
+            }}>
+              <h3 style={{ margin: 0, color: "#92400e", fontWeight: 800, fontSize: '1.2rem' }}>
+                ⚠️ Waiting for Your Approval
+              </h3>
+              <p style={{ color: "#92400e", marginTop: '8px', marginBottom: '12px' }}>
+                This ticket requires action from <strong>you ({ticket.category})</strong>.
+              </p>
+
+              <button
+                onClick={() => setShowApprovalModal(true)}
+                style={{
+                  marginTop: '10px',
+                  background: "#e98404",
+                  color: "white",
+                  borderRadius: "12px",
+                  padding: "12px 24px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  boxShadow: "0 6px 18px rgba(233, 132, 4, 0.2)",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#d97706";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#e98404";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+              >
+                Review & Take Action
+              </button>
             </div>
+          )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 10 }}>
-              {authority === 'admin' && ticket.status !== 'Closed' && (
-                <button
-                  onClick={() => setShowReasonInput(true)}
-                  className="btn-danger"
-                  style={{ width: '100%', fontSize: '15px' }}
-                >
-                  Close Ticket
-                </button>
-              )}
-
-              {ticket.status === 'Closed' && (
-                <button
-                  onClick={() => setShowreopenReasonInput(true)}
-                  className="btn-success"
-                  style={{ width: '100%', fontSize: '15px' }}
-                >
-                  Reopen Ticket
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {needsApprovalBanner && (
           <div style={{
-            background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
-            border: "2px solid #fcd34d",
-            padding: "20px",
-            borderRadius: 14,
-            marginBottom: 20,
-            textAlign: "center",
-            boxShadow: "0 6px 18px rgba(252, 211, 77, 0.15)"
+            marginTop: '4px',
+            background: '#f8fafc',
+            padding: '24px',
+            borderRadius: '14px',
+            border: '2px solid #e2e8f0',
+            color: '#334155',
+            lineHeight: 1.7,
+            fontSize: '15px'
           }}>
-            <h3 style={{ margin: 0, color: "#92400e", fontWeight: 800, fontSize: '1.2rem' }}>
-              ⚠️ Waiting for Your Approval
-            </h3>
-            <p style={{ color: "#92400e", marginTop: 8, marginBottom: 12 }}>
-              This ticket requires action from <strong>you ({ticket.category})</strong>.
-            </p>
-
-            <button
-              onClick={() => setShowApprovalModal(true)}
-              style={{
-                marginTop: 10,
-                background: "#e98404",
-                color: "white",
-                borderRadius: 12,
-                padding: "12px 24px",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-                boxShadow: "0 6px 18px rgba(233, 132, 4, 0.2)",
-                transition: "all 0.2s"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#d97706";
-                e.currentTarget.style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#e98404";
-                e.currentTarget.style.transform = "translateY(0)";
-              }}
-            >
-              Review & Take Action
-            </button>
+            <strong style={{ display: 'block', marginBottom: '12px', fontSize: '16px', color: '#0f172a' }}>Description</strong>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
+            {renderAttachmentSummary()}
           </div>
-        )}
 
-        <div style={{
-          marginTop: 4,
-          background: '#f8fafc',
-          padding: 24,
-          borderRadius: 14,
-          display: 'block',
-          border: '2px solid #e2e8f0',
-          color: '#334155',
-          lineHeight: 1.7,
-          fontSize: 15
-        }}>
-          <strong style={{ display: 'block', marginBottom: 12, fontSize: 16, color: '#0f172a' }}>Description</strong>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
-          {renderAttachmentSummary()}
+          {/* Metadata Section */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginTop: '8px'
+          }}>
+            <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
+              <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Created Date</div>
+              <div style={{ fontWeight: 700, color: '#0f172a' }}>{formatDate(ticket.createdAt)}</div>
+            </div>
+            {ticket.closedAt && (
+              <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
+                <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Closed Date</div>
+                <div style={{ fontWeight: 700, color: '#0f172a' }}>{formatDate(ticket.closedAt)}</div>
+              </div>
+            )}
+            {ticket.assignedTo && (
+              <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
+                <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Assigned To</div>
+                <div style={{ fontWeight: 700, color: '#0f172a' }}>{ticket.assignedTo}</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1121,26 +1243,26 @@ function TicketDetails() {
               <div
                 key={index}
                 style={{
-                  marginBottom: 20,
-                  padding: 24,
+                  marginBottom: '20px',
+                  padding: '24px',
                   background:
                     event.action === 'closed'
                       ? '#fee2e2'
                       : event.action === 'created'
                       ? '#fef3c7'
                       : '#f1f5f9',
-                  borderRadius: 14,
+                  borderRadius: '14px',
                   borderLeft: event.action === 'created' ? '4px solid #e98404' : event.action === 'closed' ? '4px solid #ef4444' : '4px solid #10b981',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
                 }}
               >
-                <strong style={{ display: 'block', marginBottom: 10, textTransform: 'capitalize', fontSize: '1.15rem', color: '#0f172a' }}>
+                <strong style={{ display: 'block', marginBottom: '10px', textTransform: 'capitalize', fontSize: '1.15rem', color: '#0f172a' }}>
                   {event.action === 'created' ? '✨ Ticket Created' :
                    event.action === 'closed' ? '🔒 Ticket Closed' :
                    event.action === 'reopend' ? '🔄 Ticket Reopened' : event.action}
                 </strong>
 
-                <small style={{ color: '#475569', fontWeight: 600, display: 'block', marginBottom: 12 }}>
+                <small style={{ color: '#475569', fontWeight: 600, display: 'block', marginBottom: '12px' }}>
                   {formatDate(event.at)} by <strong>{event.by || "Unknown"}</strong>
                   {showOnBehalf && (
                     <>
@@ -1154,23 +1276,30 @@ function TicketDetails() {
                 </small>
 
                 {isOpsFin && (event.subQuery || event.otherSubQueryText) && (
-                  <div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: '#64748b' }}>
                     {event.subQuery && (
                       <div>
-                        <strong>Sub Category:</strong> {event.subQuery}
+                        <span style={{ fontWeight: 700 }}>Sub Category:</span> {event.subQuery}
                       </div>
                     )}
                     {event.subQuery === 'Other' && event.otherSubQueryText && (
-                      <div style={{ marginTop: 2 }}>
-                        <strong>Details:</strong> {event.otherSubQueryText}
+                      <div style={{ marginTop: '2px' }}>
+                        <span style={{ fontWeight: 700 }}>Details:</span> {event.otherSubQueryText}
                       </div>
                     )}
                   </div>
                 )}
 
                 {event.reason && (
-                  <div style={{ marginTop: 14, padding: 14, background: '#e2e8f0', borderRadius: 10, border: '2px solid #cbd5e1' }}>
-                    <strong>Reason:</strong> {event.reason}
+                  <div style={{ 
+                    marginTop: '14px', 
+                    padding: '14px', 
+                    background: '#ffffff', 
+                    borderRadius: '10px', 
+                    border: '2px solid #e2e8f0',
+                    fontSize: '14px'
+                  }}>
+                    <span style={{ fontWeight: 700 }}>Reason:</span> {event.reason}
                   </div>
                 )}
 
@@ -1180,14 +1309,15 @@ function TicketDetails() {
           })}
 
           <div style={{ 
-            marginTop: 16, 
-            padding: 24, 
+            marginTop: '24px', 
+            padding: '24px', 
             background: ticket.status === "Closed" ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)' : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', 
-            borderRadius: 14,
+            borderRadius: '14px',
             border: `2px solid ${ticket.status === "Closed" ? "#fecaca" : "#a7f3d0"}`,
-            boxShadow: '0 6px 18px rgba(0,0,0,0.06)'
+            boxShadow: '0 6px 18px rgba(0,0,0,0.06)',
+            textAlign: 'center'
           }}>
-            <strong style={{ fontSize: '1.3rem', color: ticket.status === "Closed" ? '#991b1b' : '#065f46', display: 'block', textAlign: 'center' }}>
+            <strong style={{ fontSize: '1.3rem', color: ticket.status === "Closed" ? '#991b1b' : '#065f46', display: 'block' }}>
               Current Status: {ticket.status}
             </strong>
           </div>
@@ -1198,58 +1328,61 @@ function TicketDetails() {
       {showApprovalModal && isCategoryHead && (
         <div className="overlay">
           <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
-            <h2 style={{ marginBottom: 12, fontWeight: 800, color: '#0f172a', fontSize: '1.75rem' }}>
+            <h2 style={{ marginBottom: '12px', fontWeight: 800, color: '#0f172a', fontSize: '1.75rem' }}>
               Approval Required
             </h2>
-            <p style={{ color: "#64748b", marginBottom: 24, fontSize: '15px' }}>
+            <p style={{ color: "#64748b", marginBottom: '24px', fontSize: '15px' }}>
               You are the <strong style={{ color: '#002060' }}>Category Head</strong> for <strong>{ticket.category}</strong>.<br />
               Review the ticket details below before taking action.
             </p>
 
             <div style={{
               background: "#f8fafc",
-              padding: 24,
-              borderRadius: 14,
+              padding: "24px",
+              borderRadius: "14px",
               textAlign: "left",
-              marginBottom: 20,
+              marginBottom: "20px",
               border: "2px solid #e2e8f0"
             }}>
-              <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
+              <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
                 📋 Ticket Summary
               </h3>
-              <p style={{ margin: '8px 0' }}><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
-              <p style={{ margin: '8px 0' }}><strong>Created By:</strong> {ticket.userName} ({ticket.userEmail})</p>
-              <p style={{ margin: '8px 0' }}><strong>Category:</strong> {ticket.category}</p>
-              <p style={{ margin: '8px 0' }}><strong>Priority:</strong> {ticket.priority}</p>
-              <p style={{ margin: '8px 0' }}><strong>On Behalf:</strong> {ticket.onBehalf || "Self"}</p>
-              {ticket.onBehalfEmail && <p style={{ margin: '8px 0' }}><strong>On Behalf Email:</strong> {ticket.onBehalfEmail}</p>}
-              {ticket.deliveryEmail && <p style={{ margin: '8px 0' }}><strong>Delivery Email:</strong> {ticket.deliveryEmail}</p>}
-              <p style={{ margin: '8px 0' }}><strong>Created On:</strong> {formatDate(ticket.createdAt)}</p>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Ticket #:</span> {ticket.ticketNumber}</p>
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Created By:</span> {ticket.userName} ({ticket.userEmail})</p>
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Category:</span> {ticket.category}</p>
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Priority:</span> {ticket.priority}</p>
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>On Behalf:</span> {ticket.onBehalf || "Self"}</p>
+                {ticket.onBehalfEmail && <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>On Behalf Email:</span> {ticket.onBehalfEmail}</p>}
+                {ticket.deliveryEmail && <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Delivery Email:</span> {ticket.deliveryEmail}</p>}
+                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Created On:</span> {formatDate(ticket.createdAt)}</p>
 
-              {ticket.category === 'Operational & Finance' && ticket.subQuery && (
-                <>
-                  <p style={{ margin: '8px 0' }}><strong>Sub Category:</strong> {ticket.subQuery}</p>
-                  {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
-                    <p style={{ margin: '8px 0' }}><strong>Sub Details:</strong> {ticket.otherSubQueryText}</p>
-                  )}
-                </>
-              )}
+                {ticket.category === 'Operational & Finance' && ticket.subQuery && (
+                  <>
+                    <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Sub Category:</span> {ticket.subQuery}</p>
+                    {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
+                      <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Sub Details:</span> {ticket.otherSubQueryText}</p>
+                    )}
+                  </>
+                )}
+              </div>
 
               {hasAttachment && (
-                <div style={{ marginTop: 12 }}>
+                <div style={{ marginTop: '16px' }}>
                   {renderAttachmentSummary()}
                 </div>
               )}
 
-              <div style={{ marginTop: 16 }}>
-                <strong>Description:</strong>
+              <div style={{ marginTop: '20px' }}>
+                <span style={{ fontWeight: 700, color: '#475569', display: 'block', marginBottom: '8px' }}>Description:</span>
                 <div style={{
                   background: "#ffffff",
-                  padding: 14,
-                  borderRadius: 10,
-                  marginTop: 8,
+                  padding: "16px",
+                  borderRadius: "10px",
                   whiteSpace: "pre-wrap",
-                  border: '2px solid #e2e8f0'
+                  border: '2px solid #e2e8f0',
+                  fontSize: '14px',
+                  lineHeight: 1.6
                 }}>
                   {ticket.description}
                 </div>
@@ -1262,15 +1395,15 @@ function TicketDetails() {
               value={adminNote}
               onChange={(e) => setAdminNote(e.target.value)}
               rows={4}
-              style={{ width: "100%", marginBottom: 12 }}
+              style={{ width: "100%", marginBottom: "16px" }}
             />
 
-            <div style={{ display: "flex", gap: 14, marginTop: 12, justifyContent: "center", flexWrap: 'wrap' }}>
+            <div style={{ display: "flex", gap: "14px", marginTop: "12px", justifyContent: "center", flexWrap: 'wrap' }}>
               <button
                 onClick={handleApprove}
                 disabled={approveLoading}
                 className="btn-success"
-                style={{ minWidth: 140, fontSize: '15px' }}
+                style={{ minWidth: "140px", fontSize: '15px' }}
               >
                 {approveLoading ? "Approving..." : "✓ Approve"}
               </button>
@@ -1278,7 +1411,7 @@ function TicketDetails() {
                 onClick={handleReject}
                 disabled={rejectLoading}
                 className="btn-danger"
-                style={{ minWidth: 140, fontSize: '15px' }}
+                style={{ minWidth: "140px", fontSize: '15px' }}
               >
                 {rejectLoading ? "Rejecting..." : "✕ Reject"}
               </button>
@@ -1297,32 +1430,33 @@ function TicketDetails() {
       {/* PASSWORD POPUP */}
       {showPasswordPopup && (
         <div className="overlay">
-          <div className="modal-box" style={{ maxWidth: 600 }}>
-            <h2 style={{ color: '#10b981', fontWeight: 800, fontSize: '1.75rem' }}>
+          <div className="modal-box" style={{ maxWidth: "600px" }}>
+            <h2 style={{ color: '#10b981', fontWeight: 800, fontSize: '1.75rem', marginBottom: '16px' }}>
               ✓ Password Reset Successful
             </h2>
-            <p style={{ color: '#64748b' }}>
+            <p style={{ color: '#64748b', marginBottom: '24px' }}>
               The new temporary password generated for the target account is shown below. Please copy it and share as needed.
             </p>
             <div style={{
-              padding: "16px",
+              padding: "20px",
               background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
-              borderRadius: 12,
+              borderRadius: "12px",
               fontFamily: "monospace",
-              fontSize: 20,
-              marginTop: 16,
+              fontSize: "20px",
               fontWeight: 700,
               color: '#002060',
-              border: '2px solid #bae6fd'
+              border: '2px solid #bae6fd',
+              marginBottom: '24px',
+              wordBreak: 'break-all'
             }}>
               {returnedPassword}
             </div>
-            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 24 }}>
+            <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
               <button
                 onClick={() => copyToClipboard(returnedPassword)}
                 className="btn-primary"
               >
-                📋 Copy
+                📋 Copy to Clipboard
               </button>
               <button
                 onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }}
@@ -1342,7 +1476,7 @@ function TicketDetails() {
             <h3 style={{ margin: '0 0 20px', color: '#0f172a', fontSize: '1.6rem', fontWeight: 800 }}>
               Close Ticket #{ticket.ticketNumber}
             </h3>
-            <p style={{ color: '#64748b', marginBottom: 24 }}>Please provide a reason for closing this ticket.</p>
+            <p style={{ color: '#64748b', marginBottom: '24px' }}>Please provide a reason for closing this ticket.</p>
             <textarea
               className="reason-input"
               rows="6"
@@ -1352,7 +1486,7 @@ function TicketDetails() {
               autoFocus
             />
             {closeError && <div className="error-text">{closeError}</div>}
-            <div style={{ marginTop: 28, display: 'flex', gap: 16, justifyContent: 'center' }}>
+            <div style={{ marginTop: '28px', display: 'flex', gap: '16px', justifyContent: 'center' }}>
               <button onClick={handleSubmitReason} className="btn-danger" style={{ padding: '14px 32px' }}>
                 Continue to Close
               </button>
@@ -1370,8 +1504,8 @@ function TicketDetails() {
             <h3 style={{ margin: '0 0 20px', color: '#ef4444', fontSize: '1.75rem', fontWeight: 800 }}>
               ⚠️ Permanently Close Ticket?
             </h3>
-            <p style={{ color: '#64748b', marginBottom: 32, fontSize: '15px' }}>Are you sure you want to close this ticket?</p>
-            <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+            <p style={{ color: '#64748b', marginBottom: '32px', fontSize: '15px' }}>Are you sure you want to close this ticket?</p>
+            <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
               <button onClick={confirmCloseTicket} disabled={loading} className="btn-danger" style={{ padding: '16px 40px' }}>
                 {loading ? 'Closing...' : 'Yes, Close It'}
               </button>
@@ -1390,7 +1524,7 @@ function TicketDetails() {
             <h3 style={{ margin: '0 0 20px', color: '#0f172a', fontSize: '1.6rem', fontWeight: 800 }}>
               Reopen Ticket #{ticket.ticketNumber}
             </h3>
-            <p style={{ color: '#64748b', marginBottom: 24 }}>Please explain why this ticket needs to be reopened.</p>
+            <p style={{ color: '#64748b', marginBottom: '24px' }}>Please explain why this ticket needs to be reopened.</p>
             <textarea
               className="reason-input"
               rows="6"
@@ -1400,7 +1534,7 @@ function TicketDetails() {
               autoFocus
             />
             {reopenError && <div className="error-text">{reopenError}</div>}
-            <div style={{ marginTop: 28, display: 'flex', gap: 16, justifyContent: 'center' }}>
+            <div style={{ marginTop: '28px', display: 'flex', gap: '16px', justifyContent: 'center' }}>
               <button onClick={handleSubmitreopenReason} className="btn-success" style={{ padding: '14px 32px' }}>
                 Continue to Reopen
               </button>
@@ -1418,8 +1552,8 @@ function TicketDetails() {
             <h3 style={{ margin: '0 0 20px', color: '#10b981', fontSize: '1.75rem', fontWeight: 800 }}>
               🔄 Reopen This Ticket?
             </h3>
-            <p style={{ color: '#64748b', marginBottom: 32, fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
-            <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+            <p style={{ color: '#64748b', marginBottom: '32px', fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
+            <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
               <button onClick={confirmreopenTicket} disabled={loading} className="btn-success" style={{ padding: '16px 40px' }}>
                 {loading ? 'Reopening...' : 'Yes, Reopen It'}
               </button>
@@ -1434,13 +1568,13 @@ function TicketDetails() {
       {/* ATTACHMENT VIEWER MODAL */}
       {attachmentModalOpen && activeAttachment && (
         <div className="overlay" onClick={() => setAttachmentModalOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1100px' }}>
             <div className="att-viewer">
               <div className="att-toolbar">
                 <div className="att-title">📎 {activeAttachment.fileName || 'Attachment'}</div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   {attachmentList && attachmentList.length > 1 && (
-                    <div style={{ fontSize: 13, color: '#64748b', marginRight: 8, fontWeight: 600 }}>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginRight: '8px', fontWeight: 600 }}>
                       {attachmentList.length} attachments
                     </div>
                   )}
@@ -1470,7 +1604,7 @@ function TicketDetails() {
                   </>
                 ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
                   <div style={{ textAlign: 'center' }}>
-                    <p style={{ marginBottom: 16, color: '#64748b' }}>PDF will be downloaded when you click the button.</p>
+                    <p style={{ marginBottom: '16px', color: '#64748b' }}>PDF will be downloaded when you click the button.</p>
                     <button
                       className="att-btn"
                       onClick={() => downloadAttachment(activeAttachment)}
@@ -1481,7 +1615,7 @@ function TicketDetails() {
                   </div>
                 ) : (
                   <div style={{ textAlign: 'center' }}>
-                    <p style={{ marginBottom: 16, color: '#64748b' }}>This file type cannot be previewed inline.</p>
+                    <p style={{ marginBottom: '16px', color: '#64748b' }}>This file type cannot be previewed inline.</p>
                     <a
                       href={activeAttachment.fileUrl}
                       target="_blank"
@@ -1496,7 +1630,7 @@ function TicketDetails() {
               </div>
 
               {attachmentList && attachmentList.length > 1 && (
-                <div className="att-list" style={{ marginTop: 12 }}>
+                <div className="att-list" style={{ marginTop: '12px' }}>
                   {attachmentList.map((a, idx) => {
                     const previewIsImage = isImageType(a.fileType);
                     return (
@@ -1504,7 +1638,7 @@ function TicketDetails() {
                         {previewIsImage ? (
                           <img src={a.fileUrl} alt={a.fileName} />
                         ) : (
-                          <div style={{ width:60, height:60, display:'flex', alignItems:'center', justifyContent:'center', background:'#f3f4f6', borderRadius:8, fontSize:12, padding:6, fontWeight: 700, color: '#002060' }}>
+                          <div style={{ width: '60px', height: '60px', display:'flex', alignItems:'center', justifyContent:'center', background:'#f3f4f6', borderRadius:'8px', fontSize:'12px', padding:'6px', fontWeight: 700, color: '#002060' }}>
                             {a.fileName?.split('.').pop()?.toUpperCase() || 'FILE'}
                           </div>
                         )}
@@ -1521,7 +1655,7 @@ function TicketDetails() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
