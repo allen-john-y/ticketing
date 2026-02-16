@@ -31,7 +31,7 @@ function Tickets() {
   const categoryBtnRef = useRef(null);
   const userBtnRef = useRef(null);
 
-  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [, setProfilePhoto] = useState(null);
 
   // Handle location state for filters from Home page
   useEffect(() => {
@@ -120,7 +120,7 @@ function Tickets() {
     };
 
     fetchData();
-  }, [accounts, instance, refreshKey]);
+  }, [accounts, instance, refreshKey, setProfilePhoto]);
 
   // Improved dropdown positioning and click outside handling
   useEffect(() => {
@@ -265,6 +265,12 @@ function Tickets() {
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <style>{`
         * { box-sizing: border-box; }
+        
+        /* Main Content Area - Adjust for permanent sidebar */
+        .main-content {
+          margin-left: 260px;
+          width: calc(100% - 260px);
+        }
         
         .header-bar {
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
@@ -651,6 +657,11 @@ function Tickets() {
         }
         
         @media (max-width: 768px) {
+          .main-content {
+            margin-left: 0;
+            width: 100%;
+          }
+          
           .header-content {
             flex-direction: column;
             align-items: flex-start;
@@ -666,222 +677,224 @@ function Tickets() {
         }
       `}</style>
 
-      {/* Header */}
-      <div className="header-bar">
-        <div className="header-content">
-          <div className="header-left">
-            <div className="avatar">
-              {profilePhoto ? (
-                <img src={profilePhoto} alt={`${userName} profile`} />
-              ) : (
-                initials
-              )}
+      <div className="main-content">
+        {/* Header */}
+        <div className="header-bar">
+          <div className="header-content">
+            <div className="header-left">
+              <div className="avatar">
+                {profilePhoto ? (
+                  <img src={profilePhoto} alt={`${userName} profile`} />
+                ) : (
+                  initials
+                )}
+              </div>
+              <div className="user-info">
+                <h1>All Tickets</h1>
+                <span className="user-role">{authority === 'admin' ? 'ADMINISTRATOR' : 'USER'}</span>
+              </div>
             </div>
-            <div className="user-info">
-              <h1>All Tickets</h1>
-              <span className="user-role">{authority === 'admin' ? 'ADMINISTRATOR' : 'USER'}</span>
+            <div className="header-actions">
+              <Link to="/create" className="btn-header btn-primary">
+                + Create Ticket
+              </Link>
+              <Link to="/" className="btn-header btn-secondary">
+                ← Back to Dashboard
+              </Link>
             </div>
-          </div>
-          <div className="header-actions">
-            <Link to="/create" className="btn-header btn-primary">
-              + Create Ticket
-            </Link>
-            <Link to="/" className="btn-header btn-secondary">
-              ← Back to Dashboard
-            </Link>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="main-container">
-        {/* Admin: Show only my tickets toggle */}
-        {authority === 'admin' && (
-          <div className="my-tickets-toggle">
-            <input
-              type="checkbox"
-              id="myTicketsToggle"
-              checked={showMyTickets}
-              onChange={() => setShowMyTickets(prev => !prev)}
-            />
-            <label htmlFor="myTicketsToggle">
-              Show only my tickets
-            </label>
-          </div>
-        )}
+        {/* Main Content */}
+        <div className="main-container">
+          {/* Admin: Show only my tickets toggle */}
+          {authority === 'admin' && (
+            <div className="my-tickets-toggle">
+              <input
+                type="checkbox"
+                id="myTicketsToggle"
+                checked={showMyTickets}
+                onChange={() => setShowMyTickets(prev => !prev)}
+              />
+              <label htmlFor="myTicketsToggle">
+                Show only my tickets
+              </label>
+            </div>
+          )}
 
-        {/* Search & Filters */}
-        <div className="controls-section">
-          <div className="search-box">
-            <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <circle cx="11" cy="11" r="8" strokeWidth="2" />
-              <path d="m21 21-4.35-4.35" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <input
-              className="search-input"
-              type="text"
-              placeholder="Search by ticket number, category, or description..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+          {/* Search & Filters */}
+          <div className="controls-section">
+            <div className="search-box">
+              <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="11" cy="11" r="8" strokeWidth="2" />
+                <path d="m21 21-4.35-4.35" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <input
+                className="search-input"
+                type="text"
+                placeholder="Search by ticket number, category, or description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
 
-          <div className="filters-row">
-            <button
-              ref={categoryBtnRef}
-              onClick={() => openDropdown('category')}
-              className="filter-btn"
-            >
-              🏷️ Category {selectedCategories.length > 0 && `(${selectedCategories.length})`} ▾
-            </button>
-
-            {authority === 'admin' && (
+            <div className="filters-row">
               <button
-                ref={userBtnRef}
-                onClick={() => openDropdown('user')}
+                ref={categoryBtnRef}
+                onClick={() => openDropdown('category')}
                 className="filter-btn"
               >
-                👤 User {selectedUsers.length > 0 && `(${selectedUsers.length})`} ▾
+                🏷️ Category {selectedCategories.length > 0 && `(${selectedCategories.length})`} ▾
               </button>
-            )}
 
-            {(appliedCategories.length > 0 || appliedUsers.length > 0 || statusFilter !== 'all') && (
-              <button
-                onClick={clearAllFilters}
-                style={{ marginLeft: 'auto', padding: '10px 16px', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
-              >
-                Clear All Filters
-              </button>
+              {authority === 'admin' && (
+                <button
+                  ref={userBtnRef}
+                  onClick={() => openDropdown('user')}
+                  className="filter-btn"
+                >
+                  👤 User {selectedUsers.length > 0 && `(${selectedUsers.length})`} ▾
+                </button>
+              )}
+
+              {(appliedCategories.length > 0 || appliedUsers.length > 0 || statusFilter !== 'all') && (
+                <button
+                  onClick={clearAllFilters}
+                  style={{ marginLeft: 'auto', padding: '10px 16px', background: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Clear All Filters
+                </button>
+              )}
+            </div>
+
+            {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
+              <div className="applied-filters">
+                {appliedCategories.map(cat => (
+                  <div key={cat} className="filter-chip">
+                    {cat}
+                    <button className="chip-remove" onClick={() => removeFilter('category', cat)}>×</button>
+                  </div>
+                ))}
+                {appliedUsers.map(user => (
+                  <div key={user} className="filter-chip">
+                    {user}
+                    <button className="chip-remove" onClick={() => removeFilter('user', user)}>×</button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
-            <div className="applied-filters">
-              {appliedCategories.map(cat => (
-                <div key={cat} className="filter-chip">
-                  {cat}
-                  <button className="chip-remove" onClick={() => removeFilter('category', cat)}>×</button>
-                </div>
+          {/* Dropdown - Fixed positioning */}
+          {dropdownOpen && (
+            <div
+              ref={dropdownRef}
+              className="filter-dropdown"
+              style={{
+                top: `${dropdownPos.top}px`,
+                left: `${dropdownPos.left}px`,
+                minWidth: `${dropdownPos.width}px`,
+              }}
+            >
+              {(dropdownOpen === 'category' ? categories : users).map(item => (
+                <label key={item} className="filter-item">
+                  <input
+                    type="checkbox"
+                    checked={dropdownOpen === 'category' ? selectedCategories.includes(item) : selectedUsers.includes(item)}
+                    onChange={() => handleSelect(dropdownOpen, item)}
+                  />
+                  <span style={{ fontWeight: 600 }}>{item}</span>
+                </label>
               ))}
-              {appliedUsers.map(user => (
-                <div key={user} className="filter-chip">
-                  {user}
-                  <button className="chip-remove" onClick={() => removeFilter('user', user)}>×</button>
-                </div>
+
+              <div className="filter-actions">
+                <button onClick={applyFilters} style={{ flex: 1, padding: '8px', background: '#002060', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' }}>
+                  Apply
+                </button>
+                <button onClick={() => setDropdownOpen(null)} style={{ flex: 1, padding: '8px', background: '#f1f5f9', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' }}>
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Tickets List */}
+          <div className="tickets-header">
+            <h2 className="section-title">
+              {statusFilter === 'open' && `Open Tickets`}
+              {statusFilter === 'progress' && `Waiting for Approval`}
+              {statusFilter === 'closed' && `Closed Tickets`}
+              {statusFilter === 'all' && (authority === 'admin'
+                ? showMyTickets
+                  ? `My Tickets`
+                  : `All Tickets`
+                : `Your Tickets`)}
+            </h2>
+            <div className="ticket-count">
+              {statusFiltered.length} {statusFiltered.length === 1 ? 'ticket' : 'tickets'}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="empty-state">
+              <div className="empty-icon">⏳</div>
+              <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>Loading tickets...</h3>
+              <p style={{ color: '#94a3b8' }}>Please wait while we fetch your tickets</p>
+            </div>
+          ) : statusFiltered.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📭</div>
+              <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>No tickets found</h3>
+              <p style={{ color: '#94a3b8' }}>Try adjusting your filters or search terms</p>
+            </div>
+          ) : (
+            <div>
+              {statusFiltered.map(ticket => (
+                <Link key={ticket._id} to={`/ticket/${ticket._id}`} className="ticket-card" style={{ borderLeftColor: categoryColor(ticket.category) }}>
+                  <div className="ticket-header">
+                    <h3 className="ticket-number">#{ticket.ticketNumber} - {ticket.category}</h3>
+                    <span className={`ticket-status status-${ticket.status?.toLowerCase().replace(' ', '').replace('for', '')}`}>
+                      {ticket.status}
+                    </span>
+                  </div>
+                  
+                  <p className="ticket-description">{ticket.description}</p>
+                  
+                  {authority === 'admin' && (
+                    <div style={{ 
+                      marginTop: '0.75rem', 
+                      padding: '0.75rem',
+                      background: '#f8fafc',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      fontSize: '14px', 
+                      color: '#475569'
+                    }}>
+                      <div><strong style={{ color: '#0f172a' }}>Created by:</strong> {ticket.userName || '—'}</div>
+                      <div><strong style={{ color: '#0f172a' }}>Email:</strong> {ticket.userEmail || '—'}</div>
+                    </div>
+                  )}
+                  
+                  <div className="ticket-meta">
+                    <div className="meta-item">
+                      <span className={`priority-badge priority-${ticket.priority?.toLowerCase()}`}>
+                        {ticket.priority} Priority
+                      </span>
+                    </div>
+                    <div className="meta-item">
+                      📅 {new Date(ticket.createdAt).toLocaleDateString()}
+                    </div>
+                    {ticket.assignedTo && (
+                      <div className="meta-item">
+                        👤 {ticket.assignedTo}
+                      </div>
+                    )}
+                  </div>
+                </Link>
               ))}
             </div>
           )}
         </div>
-
-        {/* Dropdown - Fixed positioning */}
-        {dropdownOpen && (
-          <div
-            ref={dropdownRef}
-            className="filter-dropdown"
-            style={{
-              top: `${dropdownPos.top}px`,
-              left: `${dropdownPos.left}px`,
-              minWidth: `${dropdownPos.width}px`,
-            }}
-          >
-            {(dropdownOpen === 'category' ? categories : users).map(item => (
-              <label key={item} className="filter-item">
-                <input
-                  type="checkbox"
-                  checked={dropdownOpen === 'category' ? selectedCategories.includes(item) : selectedUsers.includes(item)}
-                  onChange={() => handleSelect(dropdownOpen, item)}
-                />
-                <span style={{ fontWeight: 600 }}>{item}</span>
-              </label>
-            ))}
-
-            <div className="filter-actions">
-              <button onClick={applyFilters} style={{ flex: 1, padding: '8px', background: '#002060', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' }}>
-                Apply
-              </button>
-              <button onClick={() => setDropdownOpen(null)} style={{ flex: 1, padding: '8px', background: '#f1f5f9', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' }}>
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Tickets List */}
-        <div className="tickets-header">
-          <h2 className="section-title">
-            {statusFilter === 'open' && `Open Tickets`}
-            {statusFilter === 'progress' && `Waiting for Approval`}
-            {statusFilter === 'closed' && `Closed Tickets`}
-            {statusFilter === 'all' && (authority === 'admin'
-              ? showMyTickets
-                ? `My Tickets`
-                : `All Tickets`
-              : `Your Tickets`)}
-          </h2>
-          <div className="ticket-count">
-            {statusFiltered.length} {statusFiltered.length === 1 ? 'ticket' : 'tickets'}
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="empty-state">
-            <div className="empty-icon">⏳</div>
-            <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>Loading tickets...</h3>
-            <p style={{ color: '#94a3b8' }}>Please wait while we fetch your tickets</p>
-          </div>
-        ) : statusFiltered.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">📭</div>
-            <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>No tickets found</h3>
-            <p style={{ color: '#94a3b8' }}>Try adjusting your filters or search terms</p>
-          </div>
-        ) : (
-          <div>
-            {statusFiltered.map(ticket => (
-              <Link key={ticket._id} to={`/ticket/${ticket._id}`} className="ticket-card" style={{ borderLeftColor: categoryColor(ticket.category) }}>
-                <div className="ticket-header">
-                  <h3 className="ticket-number">#{ticket.ticketNumber} - {ticket.category}</h3>
-                  <span className={`ticket-status status-${ticket.status?.toLowerCase().replace(' ', '').replace('for', '')}`}>
-                    {ticket.status}
-                  </span>
-                </div>
-                
-                <p className="ticket-description">{ticket.description}</p>
-                
-                {authority === 'admin' && (
-                  <div style={{ 
-                    marginTop: '0.75rem', 
-                    padding: '0.75rem',
-                    background: '#f8fafc',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                    fontSize: '14px', 
-                    color: '#475569'
-                  }}>
-                    <div><strong style={{ color: '#0f172a' }}>Created by:</strong> {ticket.userName || '—'}</div>
-                    <div><strong style={{ color: '#0f172a' }}>Email:</strong> {ticket.userEmail || '—'}</div>
-                  </div>
-                )}
-                
-                <div className="ticket-meta">
-                  <div className="meta-item">
-                    <span className={`priority-badge priority-${ticket.priority?.toLowerCase()}`}>
-                      {ticket.priority} Priority
-                    </span>
-                  </div>
-                  <div className="meta-item">
-                    📅 {new Date(ticket.createdAt).toLocaleDateString()}
-                  </div>
-                  {ticket.assignedTo && (
-                    <div className="meta-item">
-                      👤 {ticket.assignedTo}
-                    </div>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
