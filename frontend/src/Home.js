@@ -174,147 +174,148 @@ function Home() {
       <style>{`
         * { box-sizing: border-box; }
         
-        .header-bar {
-          background: linear-gradient(135deg, #002060 0%, #003380 100%);
-          color: white;
-          padding: 1.5rem 2rem;
-          box-shadow: 0 4px 16px rgba(0, 32, 96, 0.15);
+        /* Professional Header Redesign */
+        .app-header {
+          background: white;
+          border-bottom: 1px solid #e2e8f0;
+          padding: 0.75rem 2rem;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         }
         
-        .header-content {
+        .header-container {
           max-width: 1400px;
           margin: 0 auto;
           display: flex;
           justify-content: space-between;
           align-items: center;
+        }
+        
+        .brand-section {
+          display: flex;
+          align-items: center;
           gap: 2rem;
         }
         
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 1.5rem;
+        .logo {
+          font-size: 1.5rem;
+          font-weight: 800;
+          background: linear-gradient(135deg, #002060 0%, #003380 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          letter-spacing: -0.5px;
         }
         
-        .avatar {
-          width: 56px;
-          height: 56px;
+        .user-profile {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 0.5rem 1rem;
+          background: #f8fafc;
+          border-radius: 40px;
+          border: 1px solid #e2e8f0;
+        }
+        
+        .profile-avatar {
+          width: 40px;
+          height: 40px;
           border-radius: 50%;
-          background: white;
+          background: linear-gradient(135deg, #002060 0%, #003380 100%);
           display: flex;
           align-items: center;
           justify-content: center;
+          color: white;
           font-weight: 700;
-          color: #002060;
-          font-size: 18px;
+          font-size: 16px;
           overflow: hidden;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         
-        .avatar img {
+        .profile-avatar img {
           width: 100%;
           height: 100%;
           object-fit: cover;
         }
         
-        .user-info h1 {
-          margin: 0;
-          font-size: 24px;
-          font-weight: 700;
-        }
-        
-        .user-role {
-          display: inline-block;
-          background: rgba(233, 132, 4, 0.2);
-          color: #e98404;
-          padding: 4px 12px;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: 700;
-          margin-top: 4px;
-          border: 1px solid rgba(233, 132, 4, 0.3);
-        }
-        
-        .header-actions {
+        .profile-info {
           display: flex;
-          gap: 1rem;
+          flex-direction: column;
         }
         
-        .btn-header {
-          padding: 10px 20px;
-          border: none;
+        .profile-name {
+          font-weight: 700;
+          color: #0f172a;
+          font-size: 14px;
+          line-height: 1.4;
+        }
+        
+        .profile-role {
+          font-size: 12px;
+          color: #e98404;
+          font-weight: 600;
+          background: rgba(233, 132, 4, 0.1);
+          padding: 2px 8px;
+          border-radius: 12px;
+          display: inline-block;
+          width: fit-content;
+        }
+        
+        .action-buttons {
+          display: flex;
+          gap: 0.75rem;
+        }
+        
+        .header-btn {
+          padding: 0.6rem 1.2rem;
           border-radius: 8px;
           font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
+          font-size: 14px;
           text-decoration: none;
-          display: inline-block;
+          transition: all 0.2s;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
         }
         
-        .btn-primary {
+        .header-btn.primary {
           background: #e98404;
           color: white;
+          box-shadow: 0 2px 8px rgba(233, 132, 4, 0.2);
+        }
+        
+        .header-btn.primary:hover {
+          background: #d17703;
+          transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(233, 132, 4, 0.3);
         }
         
-        .btn-primary:hover {
-          background: #d17703;
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(233, 132, 4, 0.4);
-        }
-        
-        .btn-secondary {
+        .header-btn.secondary {
           background: white;
           color: #002060;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          border: 1px solid #e2e8f0;
         }
         
-        .btn-secondary:hover {
-          background: #f1f5f9;
-          transform: translateY(-2px);
-        }
-
-        .action-bar {
-          max-width: 1400px;
-          margin: -1rem auto 2rem auto;
-          padding: 0 2rem;
-          display: flex;
-          justify-content: flex-end;
-          gap: 1rem;
-        }
-
-        .action-btn {
-          padding: 12px 24px;
-          border-radius: 10px;
-          font-weight: 600;
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        .action-btn.create {
-          background: #e98404;
-          color: white;
-        }
-
-        .action-btn.create:hover {
-          background: #d17703;
-          transform: translateY(-2px);
-        }
-
-        .action-btn.view {
-          background: white;
-          color: #002060;
-          border: 2px solid #e2e8f0;
-        }
-
-        .action-btn.view:hover {
+        .header-btn.secondary:hover {
           background: #f8fafc;
           border-color: #002060;
-          transform: translateY(-2px);
+          transform: translateY(-1px);
+        }
+        
+        .welcome-banner {
+          max-width: 1400px;
+          margin: 2rem auto 1.5rem;
+          padding: 0 2rem;
+        }
+        
+        .welcome-title {
+          font-size: 1.75rem;
+          font-weight: 700;
+          color: #0f172a;
+          margin: 0 0 0.25rem 0;
+        }
+        
+        .welcome-subtitle {
+          color: #64748b;
+          font-size: 0.95rem;
         }
         
         .main-container {
@@ -469,26 +470,22 @@ function Home() {
         }
         
         @media (max-width: 768px) {
-          .header-content {
+          .header-container {
             flex-direction: column;
-            align-items: flex-start;
+            gap: 1rem;
           }
           
-          .header-actions {
+          .brand-section {
+            width: 100%;
+            justify-content: space-between;
+          }
+          
+          .action-buttons {
             width: 100%;
           }
           
-          .btn-header {
+          .header-btn {
             flex: 1;
-          }
-
-          .action-bar {
-            flex-direction: column;
-            align-items: stretch;
-            padding: 0 1rem;
-          }
-
-          .action-btn {
             justify-content: center;
           }
           
@@ -506,33 +503,40 @@ function Home() {
         }
       `}</style>
 
-      {/* Header */}
-      <div className="header-bar">
-        <div className="header-content">
-          <div className="header-left">
-            <div className="avatar">
-              {profilePhoto ? (
-                <img src={profilePhoto} alt={`${userName} profile`} />
-              ) : (
-                initials
-              )}
-            </div>
-            <div className="user-info">
-              <h1>Welcome, {userName}</h1>
-              <span className="user-role">{authority === 'admin' ? 'ADMINISTRATOR' : 'USER'}</span>
+      {/* Professional Header Redesign */}
+      <header className="app-header">
+        <div className="header-container">
+          <div className="brand-section">
+            <div className="logo">HelpDesk</div>
+            <div className="user-profile">
+              <div className="profile-avatar">
+                {profilePhoto ? (
+                  <img src={profilePhoto} alt={`${userName} profile`} />
+                ) : (
+                  initials
+                )}
+              </div>
+              <div className="profile-info">
+                <span className="profile-name">{userName}</span>
+                <span className="profile-role">{authority === 'admin' ? 'Administrator' : 'User'}</span>
+              </div>
             </div>
           </div>
+          <div className="action-buttons">
+            <Link to="/create" className="header-btn primary">
+              <span>+</span> New Ticket
+            </Link>
+            <Link to="/tickets" className="header-btn secondary">
+              <span>📋</span> All Tickets
+            </Link>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Action Bar - Professional placement */}
-      <div className="action-bar">
-        <Link to="/create" className="action-btn create">
-          <span style={{ fontSize: '20px' }}>+</span> Create New Ticket
-        </Link>
-        <Link to="/tickets" className="action-btn view">
-          <span style={{ fontSize: '20px' }}>📋</span> View All Tickets
-        </Link>
+      {/* Welcome Banner */}
+      <div className="welcome-banner">
+        <h1 className="welcome-title">Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}, {userName}!</h1>
+        <p className="welcome-subtitle">Here's what's happening with your tickets today.</p>
       </div>
 
       {/* Main Content */}
