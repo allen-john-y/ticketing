@@ -10,6 +10,11 @@ import TicketDetails from './TicketDetails';
 import Dashboard from './Dashboard';
 import logo from './sandeza.jpg';
 import gearIcon from './GearIcon.jpg';
+import addUserIcon from './add-user.jpg';
+import removeUserIcon from './remove-user.jpg';
+import addFieldIcon from './add-field.jpg';
+import editFieldIcon from './edit-field.jpg';
+import removeFieldIcon from './remove-field.jpg';
 
 const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
 const backendBase = 'https://ticketing-hn59.onrender.com';
@@ -1629,23 +1634,23 @@ function Header({ logout }) {
                   <div className="dropdown-title">⚙️ Admin Settings</div>
 
                   <button onClick={() => { openAddModal(); setSettingsOpen(false); }} className="dropdown-item add">
-                    ➕ Add User
+                    <img src={addUserIcon} style={{ width: 18, marginRight: 8 }} />Add User
                   </button>
 
                   <button onClick={() => { openRemoveModal(); setSettingsOpen(false); }} className="dropdown-item remove">
-                    ➖ Remove User
+                    <img src={removeUserIcon} style={{ width: 18, marginRight: 8 }} /> Remove User
                   </button>
 
                   <button onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }} className="dropdown-item add">
-                    📝 Add Field
+                    <img src={addFieldIcon} style={{ width: 18, marginRight: 8 }} /> Add Field
                   </button>
 
                   <button onClick={() => { openEditFieldModal(); setSettingsOpen(false); }} className="dropdown-item edit">
-                    ✏️ Edit Field
+                    <img src={editFieldIcon} style={{ width: 18, marginRight: 8 }} /> Edit Field
                   </button>
 
                   <button onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }} className="dropdown-item remove">
-                    🗑️ Remove Field
+                    <img src={removeFieldIcon} style={{ width: 18, marginRight: 8 }} /> Remove Field
                   </button>
                 </div>
               )}
