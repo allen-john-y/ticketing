@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate  } from 'react-router-dom';
 import axios from 'axios';
 
 function Tickets() {
   const { accounts, instance } = useMsal();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [tickets, setTickets] = useState([]);
   const [authority, setAuthority] = useState('basic');
