@@ -971,7 +971,7 @@ function TicketDetails() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/tickets')}
               style={{
                 background: 'rgba(255, 255, 255, 0.1)',
                 border: 'none',
