@@ -31,7 +31,7 @@ function Tickets() {
   const categoryBtnRef = useRef(null);
   const userBtnRef = useRef(null);
 
-  const [, setProfilePhoto] = useState(null);
+ const [profilePhoto, setProfilePhoto] = useState(null);
 
   // Handle location state for filters from Home page
   useEffect(() => {

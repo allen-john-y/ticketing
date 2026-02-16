@@ -12,7 +12,7 @@ function Dashboard() {
   const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [userName, setUserName] = useState('User');
-  const [, setProfilePhoto] = useState(null);
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
