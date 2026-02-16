@@ -114,6 +114,9 @@ function Home() {
     const [animatedData, setAnimatedData] = useState(data.map(d => ({ ...d, value: 0 })));
     
     useEffect(() => {
+      // Reset to 0 first
+      setAnimatedData(data.map(d => ({ ...d, value: 0 })));
+      
       // Animate from 0 to actual values
       const duration = 1000; // 1 second animation
       const steps = 60; // 60 frames for smooth animation
@@ -139,13 +142,13 @@ function Home() {
       }, stepDuration);
 
       return () => clearInterval(interval);
-    }, [data]);
+    }, [JSON.stringify(data)]); // Use JSON.stringify to detect actual data changes
 
     const total = animatedData.reduce((sum, d) => sum + d.value, 0);
     
     if (total === 0) return (
       <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '14px', fontWeight: '600' }}>
-        No data
+        Loading...
       </div>
     );
 
@@ -173,7 +176,6 @@ function Home() {
           fill={colors[i]}
           stroke="white"
           strokeWidth="3"
-          style={{ transition: 'all 0.3s ease' }}
         />
       );
     });
