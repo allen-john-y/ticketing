@@ -6,7 +6,6 @@ import axios from 'axios';
 function Tickets() {
   const { accounts, instance } = useMsal();
   const location = useLocation();
-  //const navigate = useNavigate();
 
   const [tickets, setTickets] = useState([]);
   const [authority, setAuthority] = useState('basic');
@@ -262,12 +261,6 @@ function Tickets() {
 
   const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
-  // Calculate stats for the header
-  const totalTickets = tickets.length;
-  const openCount = tickets.filter(t => t.status === 'Open' || t.status === 'Pending').length;
-  const progressCount = tickets.filter(t => t.status === 'Waiting for approval').length;
-  const closedCount = tickets.filter(t => t.status === 'Closed').length;
-
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <style>{`
@@ -390,49 +383,6 @@ function Tickets() {
           color: #64748b;
           font-size: 16px;
           margin-bottom: 2rem;
-        }
-
-        /* Quick Stats Bar */
-        .stats-bar {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 1rem;
-          margin-bottom: 2rem;
-        }
-        
-        .stat-pill {
-          background: white;
-          padding: 1.2rem;
-          border-radius: 12px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-          border-left: 4px solid;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          transition: all 0.2s;
-          cursor: pointer;
-        }
-        
-        .stat-pill:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-        
-        .stat-pill.orange { border-left-color: #e98404; }
-        .stat-pill.blue { border-left-color: #002060; }
-        .stat-pill.green { border-left-color: #10b981; }
-        .stat-pill.purple { border-left-color: #8b5cf6; }
-        
-        .stat-pill-label {
-          font-size: 14px;
-          color: #64748b;
-          font-weight: 600;
-        }
-        
-        .stat-pill-value {
-          font-size: 24px;
-          font-weight: 800;
-          color: #0f172a;
         }
 
         .my-tickets-toggle {
@@ -713,10 +663,6 @@ function Tickets() {
           .btn-header {
             flex: 1;
           }
-
-          .stats-bar {
-            grid-template-columns: 1fr 1fr;
-          }
         }
       `}</style>
 
@@ -749,26 +695,6 @@ function Tickets() {
 
       {/* Main Content */}
       <div className="main-container">
-        {/* Quick Stats Bar */}
-        <div className="stats-bar">
-          <div className="stat-pill orange" onClick={() => setStatusFilter('open')}>
-            <span className="stat-pill-label">Open</span>
-            <span className="stat-pill-value">{openCount}</span>
-          </div>
-          <div className="stat-pill blue" onClick={() => setStatusFilter('progress')}>
-            <span className="stat-pill-label">In Progress</span>
-            <span className="stat-pill-value">{progressCount}</span>
-          </div>
-          <div className="stat-pill green" onClick={() => setStatusFilter('closed')}>
-            <span className="stat-pill-label">Closed</span>
-            <span className="stat-pill-value">{closedCount}</span>
-          </div>
-          <div className="stat-pill purple" onClick={() => setStatusFilter('all')}>
-            <span className="stat-pill-label">Total</span>
-            <span className="stat-pill-value">{totalTickets}</span>
-          </div>
-        </div>
-
         {/* Admin: Show only my tickets toggle */}
         {authority === 'admin' && (
           <div className="my-tickets-toggle">
