@@ -127,7 +127,7 @@ function CreateTicket() {
   // App.js header height - adjust this to match your actual header height
   const headerHeight = 64; // Height of App.js header
   // Sidebar height - reduced to leave space for header
-  const sidebarHeight = 80; // Height of sidebar in vh units (80% of viewport height)
+ // const sidebarHeight = 80; // Height of sidebar in vh units (80% of viewport height)
 
   // Fetch categories configuration
   useEffect(() => {
