@@ -125,9 +125,7 @@ function CreateTicket() {
   const fileInputRef = useRef(null);
 
   // App.js header height - adjust this to match your actual header height
-  const headerHeight = 64; // Height of App.js header
-  // Sidebar height - reduced to leave space for header
- // const sidebarHeight = 80; // Height of sidebar in vh units (80% of viewport height)
+  const headerHeight = 70; // Height of App.js header
 
   // Fetch categories configuration
   useEffect(() => {
@@ -801,21 +799,20 @@ function CreateTicket() {
       <style>{`
         * { box-sizing: border-box; }
         
-        /* Vertical Sidebar - Reduced height and positioned under header */
+        /* Vertical Sidebar - Positioned below App.js header */
         .vertical-sidebar {
           position: fixed;
           left: 0;
-          top: ${headerHeight}px;
-          bottom: 0;
-          width: 70px;
+          top: ${headerHeight}px; /* Starts right below the header */
+          height: calc(100vh - ${headerHeight}px); /* Takes full height minus header */
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
+          width: 70px;
           transition: width 0.3s ease;
           overflow: hidden;
           box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
-          z-index: 900;
+          z-index: 999;
         }
-
         
         .vertical-sidebar:hover {
           width: 260px;
@@ -934,14 +931,13 @@ function CreateTicket() {
         .main-content {
           flex: 1;
           margin-left: 70px;
-          margin-top: ${headerHeight}px;
-          padding-top: ${headerHeight}px;
+          margin-top: ${headerHeight}px; /* Account for header */
           transition: margin-left 0.3s ease;
           width: calc(100% - 70px);
         }
         
         /* Adjust main content when sidebar expands */
-        .vertical-sidebar:hover ~ .main-content {
+        .vertical-sidebar:hover + .main-content {
           margin-left: 260px;
           width: calc(100% - 260px);
         }
@@ -1563,7 +1559,7 @@ function CreateTicket() {
         }
       `}</style>
 
-      {/* Vertical Sidebar - Positioned under header with reduced height */}
+      {/* Vertical Sidebar - Positioned below App.js header */}
       <div className="vertical-sidebar">
         <div className="sidebar-content">
           {/* User Info */}
