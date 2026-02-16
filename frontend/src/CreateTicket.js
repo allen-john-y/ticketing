@@ -125,7 +125,7 @@ function CreateTicket() {
   const fileInputRef = useRef(null);
 
   // App.js header height - adjust this to match your actual header height
-  const headerHeight = 70; // Height of App.js header
+  const headerHeight = 64; // Height of App.js header
   // Sidebar height - reduced to leave space for header
   const sidebarHeight = 80; // Height of sidebar in vh units (80% of viewport height)
 
@@ -806,17 +806,16 @@ function CreateTicket() {
           position: fixed;
           left: 0;
           top: ${headerHeight}px;
-          height: ${sidebarHeight}vh; /* Using vh for responsive height */
-          max-height: calc(100vh - ${headerHeight}px - 40px); /* Leave some space at bottom */
+          bottom: 0;
+          width: 70px;
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
-          width: 70px;
           transition: width 0.3s ease;
           overflow: hidden;
           box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
-          z-index: 999;
-          border-bottom-right-radius: 12px; /* Optional: rounded corners */
+          z-index: 900;
         }
+
         
         .vertical-sidebar:hover {
           width: 260px;
@@ -936,12 +935,13 @@ function CreateTicket() {
           flex: 1;
           margin-left: 70px;
           margin-top: ${headerHeight}px;
+          padding-top: ${headerHeight}px;
           transition: margin-left 0.3s ease;
           width: calc(100% - 70px);
         }
         
         /* Adjust main content when sidebar expands */
-        .vertical-sidebar:hover + .main-content {
+        .vertical-sidebar:hover ~ .main-content {
           margin-left: 260px;
           width: calc(100% - 260px);
         }
