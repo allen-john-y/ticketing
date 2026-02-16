@@ -1,6 +1,6 @@
 // TicketDetails.js — Professional Business UI matching Home.js style
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 import DownloadIcon from './Download.png';
