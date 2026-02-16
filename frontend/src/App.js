@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Route, Routes, useNavigate  } from 'react-rout
 import axios from 'axios';
 import Login from './Login';
 import Home from './Home';
+import Tickets from './Tickets';
 import CreateTicket from './CreateTicket';
 import TicketDetails from './TicketDetails';
 import Dashboard from './Dashboard';
@@ -3116,6 +3117,7 @@ function AppContent() {
         <Header logout={handleLogout} />
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/tickets" element={<Tickets />} />
           <Route path="/create" element={<CreateTicket />} />
           <Route path="/ticket/:id" element={<TicketDetails />} />
           <Route path="/dashboard" element={<Dashboard />} />

@@ -24,13 +24,12 @@ function Tickets() {
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 260 });
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  
   const dropdownRef = useRef(null);
   const categoryBtnRef = useRef(null);
   const userBtnRef = useRef(null);
 
   const [profilePhoto, setProfilePhoto] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'open', 'progress', 'closed'
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -130,7 +129,7 @@ function Tickets() {
     };
   }, []);
 
-  // FILTERING LOGIC
+  // Filtering logic
   const baseFilteredTickets = authority === 'admin' && showMyTickets
     ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
     : tickets;
@@ -218,11 +217,18 @@ function Tickets() {
 
   const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
+  // Calculate stats for the header
+  const totalTickets = tickets.length;
+  const openCount = tickets.filter(t => t.status === 'Open' || t.status === 'Pending').length;
+  const progressCount = tickets.filter(t => t.status === 'Waiting for approval').length;
+  const closedCount = tickets.filter(t => t.status === 'Closed').length;
+
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <style>{`
         * { box-sizing: border-box; }
         
+        /* Header */
         .header-bar {
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
@@ -323,80 +329,61 @@ function Tickets() {
           transform: translateY(-2px);
         }
         
+        .btn-back {
+          background: white;
+          color: #002060;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-back:hover {
+          background: #f1f5f9;
+          transform: translateY(-2px);
+        }
+        
+        /* Main Container */
         .main-container {
           max-width: 1400px;
           margin: 0 auto;
           padding: 2rem;
         }
         
-        .page-title {
-          font-size: 32px;
-          font-weight: 800;
-          color: #0f172a;
-          margin-bottom: 1rem;
+        /* Stats Bar */
+        .stats-bar {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 1rem;
+          margin-bottom: 2rem;
         }
         
-        .page-subtitle {
-          color: #64748b;
-          font-size: 16px;
-          margin-bottom: 2rem;
-        }
-
-        .status-tabs {
-          display: flex;
-          gap: 0.5rem;
-          background: white;
-          padding: 0.5rem;
-          border-radius: 12px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-          margin-bottom: 2rem;
-        }
-
-        .status-tab {
-          flex: 1;
-          padding: 12px 20px;
-          border: none;
-          background: transparent;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 600;
-          color: #64748b;
-          transition: all 0.2s;
-        }
-
-        .status-tab.active {
-          background: #002060;
-          color: white;
-        }
-
-        .status-tab:hover:not(.active) {
-          background: #f8fafc;
-        }
-
-        .my-tickets-toggle {
+        .stat-pill {
           background: white;
           padding: 1rem;
           border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-          margin-bottom: 1.5rem;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          border-left: 4px solid;
           display: flex;
+          justify-content: space-between;
           align-items: center;
-          gap: 0.75rem;
-        }
-
-        .my-tickets-toggle input[type="checkbox"] {
-          width: 18px;
-          height: 18px;
-          cursor: pointer;
-        }
-
-        .my-tickets-toggle label {
-          font-weight: 600;
-          color: #0f172a;
-          cursor: pointer;
-          user-select: none;
         }
         
+        .stat-pill.orange { border-left-color: #e98404; }
+        .stat-pill.blue { border-left-color: #002060; }
+        .stat-pill.green { border-left-color: #10b981; }
+        .stat-pill.purple { border-left-color: #8b5cf6; }
+        
+        .stat-pill-label {
+          font-size: 13px;
+          color: #64748b;
+          font-weight: 600;
+        }
+        
+        .stat-pill-value {
+          font-size: 20px;
+          font-weight: 800;
+          color: #0f172a;
+        }
+        
+        /* Search & Filters */
         .controls-section {
           background: white;
           padding: 1.5rem;
@@ -454,6 +441,12 @@ function Tickets() {
         .filter-btn:hover {
           border-color: #002060;
           background: #f1f5f9;
+        }
+        
+        .filter-btn.active {
+          background: #002060;
+          color: white;
+          border-color: #002060;
         }
         
         .filter-dropdown {
@@ -523,6 +516,7 @@ function Tickets() {
           justify-content: center;
         }
         
+        /* Tickets List */
         .tickets-header {
           display: flex;
           justify-content: space-between;
@@ -534,6 +528,15 @@ function Tickets() {
           font-size: 22px;
           font-weight: 700;
           color: #0f172a;
+        }
+        
+        .ticket-count {
+          font-size: 16px;
+          font-weight: 600;
+          color: #64748b;
+          background: #f1f5f9;
+          padding: 6px 12px;
+          border-radius: 20px;
         }
         
         .ticket-card {
@@ -576,7 +579,7 @@ function Tickets() {
         }
         
         .status-open, .status-pending { background: #fef3c7; color: #92400e; }
-        .status-progress, .status-waiting { background: #dbeafe; color: #1e3a8a; }
+        .status-waitingforapproval { background: #dbeafe; color: #1e3a8a; }
         .status-closed { background: #d1fae5; color: #065f46; }
         
         .ticket-description {
@@ -621,6 +624,29 @@ function Tickets() {
           font-size: 64px;
           margin-bottom: 1rem;
         }
+
+        .my-tickets-toggle {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          background: #f8fafc;
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: 2px solid #e2e8f0;
+        }
+
+        .my-tickets-toggle input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          cursor: pointer;
+        }
+
+        .my-tickets-toggle label {
+          font-weight: 600;
+          color: #0f172a;
+          cursor: pointer;
+          user-select: none;
+        }
         
         @media (max-width: 768px) {
           .header-content {
@@ -634,10 +660,17 @@ function Tickets() {
           
           .btn-header {
             flex: 1;
+            text-align: center;
           }
-
-          .status-tabs {
+          
+          .stats-bar {
+            grid-template-columns: 1fr 1fr;
+          }
+          
+          .tickets-header {
             flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
           }
         }
       `}</style>
@@ -659,11 +692,14 @@ function Tickets() {
             </div>
           </div>
           <div className="header-actions">
-            <Link to="/create" className="btn-header btn-primary">
-              + Create Ticket
-            </Link>
-            <Link to="/" className="btn-header btn-secondary">
+            <button onClick={() => navigate('/')} className="btn-header btn-back">
               ← Back to Dashboard
+            </button>
+            <Link to="/create" className="btn-header btn-primary">
+              + New Ticket
+            </Link>
+            <Link to="/dashboard" className="btn-header btn-secondary">
+              Closed Archive
             </Link>
           </div>
         </div>
@@ -671,50 +707,68 @@ function Tickets() {
 
       {/* Main Content */}
       <div className="main-container">
-        <div className="page-subtitle">
-          View and manage all your support tickets
+        {/* Stats Bar - Quick overview */}
+        <div className="stats-bar">
+          <div className="stat-pill orange">
+            <span className="stat-pill-label">Open</span>
+            <span className="stat-pill-value">{openCount}</span>
+          </div>
+          <div className="stat-pill blue">
+            <span className="stat-pill-label">In Progress</span>
+            <span className="stat-pill-value">{progressCount}</span>
+          </div>
+          <div className="stat-pill green">
+            <span className="stat-pill-label">Closed</span>
+            <span className="stat-pill-value">{closedCount}</span>
+          </div>
+          <div className="stat-pill purple">
+            <span className="stat-pill-label">Total</span>
+            <span className="stat-pill-value">{totalTickets}</span>
+          </div>
         </div>
 
         {/* Admin: Show only my tickets toggle */}
         {authority === 'admin' && (
-          <div className="my-tickets-toggle">
-            <input
-              type="checkbox"
-              id="myTicketsToggle"
-              checked={showMyTickets}
-              onChange={() => setShowMyTickets(prev => !prev)}
-            />
-            <label htmlFor="myTicketsToggle">
-              Show only my tickets
-            </label>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div className="my-tickets-toggle">
+              <input
+                type="checkbox"
+                id="myTicketsToggle"
+                checked={showMyTickets}
+                onChange={() => setShowMyTickets(prev => !prev)}
+              />
+              <label htmlFor="myTicketsToggle">
+                Show only my tickets
+              </label>
+            </div>
           </div>
         )}
 
-        {/* Status Filter Tabs */}
-        <div className="status-tabs">
-          <button
-            className={`status-tab ${statusFilter === 'all' ? 'active' : ''}`}
+        {/* Status Filter Buttons */}
+        <div className="filters-row" style={{ marginBottom: '1rem' }}>
+          <button 
+            className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
             onClick={() => setStatusFilter('all')}
           >
-            🎯 All Tickets
+            All
           </button>
-          <button
-            className={`status-tab ${statusFilter === 'open' ? 'active' : ''}`}
+          <button 
+            className={`filter-btn ${statusFilter === 'open' ? 'active' : ''}`}
             onClick={() => setStatusFilter('open')}
           >
-            📝 Open
+            Open
           </button>
-          <button
-            className={`status-tab ${statusFilter === 'progress' ? 'active' : ''}`}
+          <button 
+            className={`filter-btn ${statusFilter === 'progress' ? 'active' : ''}`}
             onClick={() => setStatusFilter('progress')}
           >
-            ⚙️ Waiting for approval
+            Waiting for approval
           </button>
-          <button
-            className={`status-tab ${statusFilter === 'closed' ? 'active' : ''}`}
+          <button 
+            className={`filter-btn ${statusFilter === 'closed' ? 'active' : ''}`}
             onClick={() => setStatusFilter('closed')}
           >
-            ✅ Closed
+            Closed
           </button>
         </div>
 
@@ -817,15 +871,18 @@ function Tickets() {
         {/* Tickets List */}
         <div className="tickets-header">
           <h2 className="section-title">
-            {statusFilter === 'open' && `Open Tickets (${statusFiltered.length})`}
-            {statusFilter === 'progress' && `Waiting for approval Tickets (${statusFiltered.length})`}
-            {statusFilter === 'closed' && `Closed Tickets (${statusFiltered.length})`}
+            {statusFilter === 'open' && 'Open Tickets'}
+            {statusFilter === 'progress' && 'Waiting for Approval'}
+            {statusFilter === 'closed' && 'Closed Tickets'}
             {statusFilter === 'all' && (authority === 'admin'
               ? showMyTickets
-                ? `My Tickets (${statusFiltered.length})`
-                : `All Tickets (${statusFiltered.length})`
-              : `Your Tickets (${statusFiltered.length})`)}
+                ? 'My Tickets'
+                : 'All Tickets'
+              : 'Your Tickets')}
           </h2>
+          <div className="ticket-count">
+            {statusFiltered.length} {statusFiltered.length === 1 ? 'ticket' : 'tickets'}
+          </div>
         </div>
 
         {statusFiltered.length === 0 ? (
@@ -840,7 +897,7 @@ function Tickets() {
               <Link key={ticket._id} to={`/ticket/${ticket._id}`} className="ticket-card" style={{ borderLeftColor: categoryColor(ticket.category) }}>
                 <div className="ticket-header">
                   <h3 className="ticket-number">#{ticket.ticketNumber} - {ticket.category}</h3>
-                  <span className={`ticket-status status-${ticket.status?.toLowerCase().replace(' ', '').replace('waitingfor', 'waiting')}`}>
+                  <span className={`ticket-status status-${ticket.status?.toLowerCase().replace(' ', '').replace('for', '')}`}>
                     {ticket.status}
                   </span>
                 </div>
@@ -848,9 +905,17 @@ function Tickets() {
                 <p className="ticket-description">{ticket.description}</p>
                 
                 {authority === 'admin' && (
-                  <div style={{ marginTop: '0.75rem', fontSize: '14px', color: '#64748b' }}>
-                    <div><strong>Created by:</strong> {ticket.userName || '—'}</div>
-                    <div><strong>Email:</strong> {ticket.userEmail || '—'}</div>
+                  <div style={{ 
+                    marginTop: '0.75rem', 
+                    padding: '0.75rem',
+                    background: '#f8fafc',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '14px', 
+                    color: '#475569'
+                  }}>
+                    <div><strong style={{ color: '#0f172a' }}>Created by:</strong> {ticket.userName || '—'}</div>
+                    <div><strong style={{ color: '#0f172a' }}>Email:</strong> {ticket.userEmail || '—'}</div>
                   </div>
                 )}
                 

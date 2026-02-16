@@ -82,8 +82,7 @@ function Home() {
           : `${backendBase}/tickets?userId=${accounts[0].localAccountId}`;
 
         const ticketsRes = await axios.get(endpoint);
-        const allTickets = ticketsRes.data.reverse();
-        setTickets(allTickets);
+        setTickets(ticketsRes.data);
       } catch (err) {
         console.error('Error fetching tickets:', err);
       }
@@ -92,20 +91,18 @@ function Home() {
     fetchData();
   }, [accounts, instance, refreshKey]);
 
-  // Filter tickets based on "my tickets" toggle
-  const filteredTickets = authority === 'admin' && showMyTickets
+  // Calculate stats based on filtered tickets
+  const statsTickets = authority === 'admin' && showMyTickets
     ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
     : tickets;
 
-  // Calculate stats
-  const openTickets = filteredTickets.filter(t => t.status === 'Open' || t.status === 'Pending');
-  const closedTickets = filteredTickets.filter(t => t.status === 'Closed');
-  const inProgressTickets = filteredTickets.filter(t => t.status === 'Waiting for approval');
+  const openTickets = statsTickets.filter(t => t.status === 'Open' || t.status === 'Pending');
+  const closedTickets = statsTickets.filter(t => t.status === 'Closed');
+  const inProgressTickets = statsTickets.filter(t => t.status === 'Waiting for approval');
 
-  // Priority breakdown (open tickets only)
-  const highPriority = filteredTickets.filter(t => t.priority === 'High' && t.status !== 'Closed');
-  const mediumPriority = filteredTickets.filter(t => t.priority === 'Medium' && t.status !== 'Closed');
-  const lowPriority = filteredTickets.filter(t => t.priority === 'Low' && t.status !== 'Closed');
+  const highPriority = statsTickets.filter(t => t.priority === 'High' && t.status !== 'Closed');
+  const mediumPriority = statsTickets.filter(t => t.priority === 'Medium' && t.status !== 'Closed');
+  const lowPriority = statsTickets.filter(t => t.priority === 'Low' && t.status !== 'Closed');
 
   const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
@@ -174,6 +171,7 @@ function Home() {
       <style>{`
         * { box-sizing: border-box; }
         
+        /* Header */
         .header-bar {
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
           color: white;
@@ -274,36 +272,48 @@ function Home() {
           transform: translateY(-2px);
         }
         
+        .btn-view {
+          background: #10b981;
+          color: white;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-view:hover {
+          background: #059669;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+        
+        /* Main Container */
         .main-container {
           max-width: 1400px;
           margin: 0 auto;
           padding: 2rem;
         }
-
-        .my-tickets-toggle {
-          background: white;
-          padding: 1rem;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        
+        /* Welcome Banner */
+        .welcome-banner {
+          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+          padding: 2rem;
+          border-radius: 16px;
           margin-bottom: 2rem;
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .my-tickets-toggle input[type="checkbox"] {
-          width: 18px;
-          height: 18px;
-          cursor: pointer;
-        }
-
-        .my-tickets-toggle label {
-          font-weight: 600;
-          color: #0f172a;
-          cursor: pointer;
-          user-select: none;
+          border: 2px solid #e2e8f0;
+          text-align: center;
         }
         
+        .welcome-title {
+          font-size: 2rem;
+          font-weight: 800;
+          color: #0f172a;
+          margin-bottom: 0.5rem;
+        }
+        
+        .welcome-subtitle {
+          font-size: 1.1rem;
+          color: #475569;
+        }
+        
+        /* Dashboard Stats Grid */
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -367,6 +377,7 @@ function Home() {
           margin-top: 4px;
         }
         
+        /* Charts Section */
         .charts-section {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -424,52 +435,82 @@ function Home() {
           color: #0f172a;
         }
         
+        /* Quick Actions */
         .quick-actions {
           background: white;
           padding: 1.5rem;
           border-radius: 12px;
           box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-          margin-bottom: 2rem;
         }
         
         .quick-actions h3 {
           font-size: 18px;
           font-weight: 700;
           color: #0f172a;
-          margin: 0 0 1.25rem 0;
+          margin: 0 0 1.5rem 0;
         }
         
         .quick-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
           gap: 1rem;
         }
         
         .quick-btn {
-          padding: 1.25rem;
-          border-radius: 10px;
+          padding: 1.5rem;
+          border-radius: 12px;
           color: white;
           text-align: center;
           cursor: pointer;
-          transition: transform 0.2s;
+          transition: all 0.2s;
           text-decoration: none;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 0.75rem;
+          gap: 1rem;
         }
         
         .quick-btn:hover {
-          transform: translateY(-3px);
+          transform: translateY(-4px);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
         }
         
         .quick-icon {
-          font-size: 28px;
+          font-size: 32px;
         }
         
         .quick-label {
           font-weight: 700;
-          font-size: 14px;
+          font-size: 16px;
+        }
+        
+        .quick-desc {
+          font-size: 13px;
+          opacity: 0.9;
+        }
+
+        .my-tickets-toggle {
+          background: white;
+          padding: 1rem 1.5rem;
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          margin-bottom: 2rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .my-tickets-toggle input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          cursor: pointer;
+        }
+
+        .my-tickets-toggle label {
+          font-weight: 600;
+          color: #0f172a;
+          cursor: pointer;
+          user-select: none;
         }
         
         @media (max-width: 768px) {
@@ -484,6 +525,7 @@ function Home() {
           
           .btn-header {
             flex: 1;
+            text-align: center;
           }
           
           .stats-grid {
@@ -496,6 +538,10 @@ function Home() {
           
           .chart-content {
             flex-direction: column;
+          }
+          
+          .quick-grid {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
@@ -520,8 +566,11 @@ function Home() {
             <Link to="/create" className="btn-header btn-primary">
               + Create Ticket
             </Link>
-            <Link to="/tickets" className="btn-header btn-secondary">
-              View All Tickets
+            <Link to="/dashboard" className="btn-header btn-secondary">
+              Closed Archive
+            </Link>
+            <Link to="/tickets" className="btn-header btn-view">
+              📋 View All Tickets
             </Link>
           </div>
         </div>
@@ -529,6 +578,14 @@ function Home() {
 
       {/* Main Content */}
       <div className="main-container">
+        {/* Welcome Banner */}
+        <div className="welcome-banner">
+          <h2 className="welcome-title">Dashboard Overview</h2>
+          <p className="welcome-subtitle">
+            Get insights into your ticket activity and performance metrics
+          </p>
+        </div>
+
         {/* Admin: Show only my tickets toggle */}
         {authority === 'admin' && (
           <div className="my-tickets-toggle">
@@ -539,7 +596,7 @@ function Home() {
               onChange={() => setShowMyTickets(prev => !prev)}
             />
             <label htmlFor="myTicketsToggle">
-              Show statistics for my tickets only
+              Show stats for my tickets only
             </label>
           </div>
         )}
@@ -548,7 +605,7 @@ function Home() {
         <div className="stats-grid">
           <div 
             className="stat-card orange"
-            onClick={() => navigate('/tickets', { state: { filter: 'open' } })}
+            onClick={() => navigate('/tickets', { state: { statusFilter: 'open' } })}
           >
             <div className="stat-header">
               <div>
@@ -561,7 +618,7 @@ function Home() {
 
           <div 
             className="stat-card blue"
-            onClick={() => navigate('/tickets', { state: { filter: 'progress' } })}
+            onClick={() => navigate('/tickets', { state: { statusFilter: 'progress' } })}
           >
             <div className="stat-header">
               <div>
@@ -574,7 +631,7 @@ function Home() {
 
           <div 
             className="stat-card green"
-            onClick={() => navigate('/tickets', { state: { filter: 'closed' } })}
+            onClick={() => navigate('/tickets', { state: { statusFilter: 'closed' } })}
           >
             <div className="stat-header">
               <div>
@@ -639,17 +696,20 @@ function Home() {
           <div className="quick-grid">
             <Link to="/create" className="quick-btn" style={{ background: 'linear-gradient(135deg, #e98404 0%, #f59e0b 100%)' }}>
               <div className="quick-icon">➕</div>
-              <div className="quick-label">New Ticket</div>
+              <div className="quick-label">Create New Ticket</div>
+              <div className="quick-desc">Submit a new request</div>
             </Link>
 
             <Link to="/tickets" className="quick-btn" style={{ background: 'linear-gradient(135deg, #002060 0%, #0039a6 100%)' }}>
               <div className="quick-icon">📋</div>
-              <div className="quick-label">All Tickets</div>
+              <div className="quick-label">View All Tickets</div>
+              <div className="quick-desc">Browse and filter tickets</div>
             </Link>
 
             <Link to="/dashboard" className="quick-btn" style={{ background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)' }}>
-              <div className="quick-icon">✅</div>
-              <div className="quick-label">Closed Tickets</div>
+              <div className="quick-icon">📊</div>
+              <div className="quick-label">Closed Archive</div>
+              <div className="quick-desc">View resolved tickets</div>
             </Link>
 
             {authority === 'admin' && (
@@ -659,7 +719,8 @@ function Home() {
                 onClick={() => setShowMyTickets(!showMyTickets)}
               >
                 <div className="quick-icon">👤</div>
-                <div className="quick-label">{showMyTickets ? 'All Stats' : 'My Stats'}</div>
+                <div className="quick-label">{showMyTickets ? 'All Tickets' : 'My Tickets'}</div>
+                <div className="quick-desc">Toggle personal view</div>
               </div>
             )}
           </div>
