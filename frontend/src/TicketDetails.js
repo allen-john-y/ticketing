@@ -1,11 +1,9 @@
-// TicketDetails.js — updated: use backend proxy URLs for attachments, include driveIds in ZIP download
+// TicketDetails.js — Professional Business UI with Orange/Blue color scheme
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
-import DownloadIcon from './Download.png'; // make sure Download.png is in the same folder
-
-
+import DownloadIcon from './Download.png';
 
 function TicketDetails() {
   const { id } = useParams();
@@ -15,13 +13,10 @@ function TicketDetails() {
   const [authority, setAuthority] = useState('basic');
   const [loading, setLoading] = useState(false);
 
-  // Close states
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [closeReason, setCloseReason] = useState('');
   const [closeError, setCloseError] = useState('');
-  
 
-  // reopen useEffect
   const [showreopenReasonInput, setShowreopenReasonInput] = useState(false);
   const [reopenReason, setreopenReason] = useState('');
   const [reopenError, setreopenError] = useState('');
@@ -32,7 +27,6 @@ function TicketDetails() {
 
   const backendBase = "https://ticketing-hn59.onrender.com";
 
-  // Category head / approval states
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [isCategoryHead, setIsCategoryHead] = useState(false);
   const [approveLoading, setApproveLoading] = useState(false);
@@ -41,13 +35,11 @@ function TicketDetails() {
   const [returnedPassword, setReturnedPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
 
-  // Attachment modal state
   const [attachmentModalOpen, setAttachmentModalOpen] = useState(false);
-  const [activeAttachment, setActiveAttachment] = useState(null); // { fileName, fileType, fileUrl, id, driveId }
-  const [attachmentList, setAttachmentList] = useState([]); // for multi attachments view when ticket.attachments exists
+  const [activeAttachment, setActiveAttachment] = useState(null);
+  const [attachmentList, setAttachmentList] = useState([]);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
 
-  // fetch authority (admin group)
   useEffect(() => {
     const fetchAuthority = async () => {
       if (!accounts[0]) return;
@@ -70,34 +62,32 @@ function TicketDetails() {
   }, [accounts, instance]);
 
   useEffect(() => {
-  let objectUrl = null;
+    let objectUrl = null;
 
-  const loadImage = async () => {
-    if (!activeAttachment || !activeAttachment.fileUrl) {
-      setImagePreviewUrl(null);
-      return;
-    }
+    const loadImage = async () => {
+      if (!activeAttachment || !activeAttachment.fileUrl) {
+        setImagePreviewUrl(null);
+        return;
+      }
 
-    try {
-      // Fetch via backend proxy (no credentials), create object URL for inline preview
-      const res = await fetch(activeAttachment.fileUrl);
-      if (!res.ok) throw new Error('Failed to load image preview');
-      const blob = await res.blob();
-      objectUrl = URL.createObjectURL(blob);
-      setImagePreviewUrl(objectUrl);
-    } catch (e) {
-      console.error("Image load failed", e);
-      setImagePreviewUrl(null);
-    }
-  };
+      try {
+        const res = await fetch(activeAttachment.fileUrl);
+        if (!res.ok) throw new Error('Failed to load image preview');
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        setImagePreviewUrl(objectUrl);
+      } catch (e) {
+        console.error("Image load failed", e);
+        setImagePreviewUrl(null);
+      }
+    };
 
-  loadImage();
+    loadImage();
 
-  return () => {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-  };
-}, [activeAttachment]);
-
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [activeAttachment]);
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -106,24 +96,18 @@ function TicketDetails() {
         setTicket(res.data);
         try {
           const all = await axios.get(`${backendBase}/api/categories`);
-
           setCategoryMeta(
             all.data.find(
               c => c.name?.toLowerCase() === res.data.category?.toLowerCase()
             ) || null
           );
-
-
         } catch (e) {
           setCategoryMeta(null);
         }
 
-
-        // prepare attachments list if present
         const list = [];
         if (res.data.attachments && Array.isArray(res.data.attachments) && res.data.attachments.length) {
           res.data.attachments.forEach(a => {
-            // prefer drive item id and driveId if present; use backend proxy url when id present
             const driveId = a.driveId || a.parentReference?.driveId || null;
             const driveItemId = a.id || a.fileId || null;
             const proxyUrl = driveItemId ? `${backendBase}/attachments/${driveItemId}${driveId ? `?driveId=${encodeURIComponent(driveId)}` : ''}` : (a.fileUrl || a.url || a.path || null);
@@ -136,7 +120,6 @@ function TicketDetails() {
             });
           });
         } else if (res.data.attachment && (res.data.attachment.fileName || res.data.attachment.fileUrl)) {
-          // fallback to legacy single attachment
           const a = res.data.attachment;
           const driveId = a.driveId || a.parentReference?.driveId || null;
           const driveItemId = a.id || a.fileId || null;
@@ -159,43 +142,37 @@ function TicketDetails() {
   }, [id, accounts, instance, backendBase]);
 
   useEffect(() => {
+    if (!accounts[0] || !ticket || !categoryMeta) return;
 
-  if (!accounts[0] || !ticket || !categoryMeta) return;
+    const acct = accounts[0] || {};
+    const possibleEmails = [
+      acct.username,
+      acct.upn,
+      acct.preferred_username,
+      acct.email
+    ].filter(Boolean);
 
-  const acct = accounts[0] || {};
-  const possibleEmails = [
-    acct.username,
-    acct.upn,
-    acct.preferred_username,
-    acct.email
-  ].filter(Boolean);
+    const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
+      .toLowerCase()
+      .trim();
 
-  const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
-    .toLowerCase()
-    .trim();
+    const heads =
+      (categoryMeta.categoryHeads || [])
+        .map(h => (h.email || '').toLowerCase().trim())
+        .filter(Boolean);
 
-  const heads =
-    (categoryMeta.categoryHeads || [])
-      .map(h => (h.email || '').toLowerCase().trim())
-      .filter(Boolean);
+    const isHead = loggedEmail && heads.includes(loggedEmail);
 
-  const isHead = loggedEmail && heads.includes(loggedEmail);
+    setIsCategoryHead(!!isHead);
 
-  setIsCategoryHead(!!isHead);
+    const status = (ticket.status || '').toString();
 
-  const status = (ticket.status || '').toString();
-
-  if (
-      isHead &&
-      status === "Waiting for approval"
-    ) {
+    if (isHead && status === "Waiting for approval") {
       setShowApprovalModal(true);
     } else {
       setShowApprovalModal(false);
     }
-
-
-}, [accounts, ticket, categoryMeta]);
+  }, [accounts, ticket, categoryMeta]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
@@ -209,14 +186,11 @@ function TicketDetails() {
     });
   };
 
-  // Derived: show inline "Waiting for Approval" banner
   const needsApprovalBanner =
-        isCategoryHead &&
-        ticket &&
-        ticket.status === 'Waiting for approval' &&
-        !showApprovalModal;
-
-
+    isCategoryHead &&
+    ticket &&
+    ticket.status === 'Waiting for approval' &&
+    !showApprovalModal;
 
   const copyToClipboard = (text) => {
     try {
@@ -231,12 +205,10 @@ function TicketDetails() {
     setApproveLoading(true);
     try {
       if (!ticket || ticket.status !== "Waiting for approval") {
-      alert("Approval is not allowed for this ticket.");
-      setApproveLoading(false);
-      return;
-    }
-
-
+        alert("Approval is not allowed for this ticket.");
+        setApproveLoading(false);
+        return;
+      }
 
       const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
         approvedBy: accounts[0]?.name || accounts[0]?.username,
@@ -245,12 +217,10 @@ function TicketDetails() {
 
       setShowApprovalModal(false);
 
-      // Password Reset: backend returns newPassword
       if (res.data?.newPassword) {
         setReturnedPassword(res.data.newPassword);
         setShowPasswordPopup(true);
       } else {
-        // Admin Access: no password, just go back
         setTimeout(() => {
           navigate("/", { state: { refresh: true } });
         }, 200);
@@ -393,7 +363,6 @@ function TicketDetails() {
         ...(ticket.reopenedAt ? [{ action: "reopend", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reopenReason }] : [])
       ];
 
-  // Helpers for attachment display (main ticket)
   const hasAttachment = (attachmentList && attachmentList.length > 0);
 
   const isImageType = (type) => type && type.startsWith && type.startsWith('image/');
@@ -406,25 +375,20 @@ function TicketDetails() {
   const openAttachmentViewer = (attachment) => {
     if (!attachment) return;
 
-    // If file has id, backend proxy URL should already be set in attachment.fileUrl
     const fileUrl = attachment.fileUrl;
-
     const viewableImage = isImageType(attachment.fileType);
     const viewablePdf = isPdfType(attachment.fileType, fileUrl);
 
     if (viewablePdf) {
-      // For PDFs, download directly (server sets attachment)
       downloadAttachment(attachment);
       return;
     }
 
     if (!viewableImage) {
-      // For non-previewable files, open in new tab (server will trigger download)
       window.open(fileUrl, '_blank', 'noopener');
       return;
     }
 
-    // For images: open modal with backend URL
     setActiveAttachment({
       ...attachment,
       fileUrl
@@ -433,8 +397,6 @@ function TicketDetails() {
     setAttachmentModalOpen(true);
   };
 
-
-  // download helper: fetch blob and force download (better cross-origin reliability)
   const downloadAttachment = async (attachment) => {
     if (!attachment || !attachment.fileUrl) return;
     try {
@@ -451,49 +413,39 @@ function TicketDetails() {
       a.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      // fallback: open in new tab
       console.warn('Download fallback, opening in new tab', err);
       window.open(attachment.fileUrl, '_blank', 'noopener');
     }
   };
 
-  // replace existing downloadAllAttachments with this
-// download-all helper: use backend zip endpoint and include driveIds aligned with ids
-const downloadAllAttachments = async () => {
-  if (!attachmentList || attachmentList.length === 0) return;
+  const downloadAllAttachments = async () => {
+    if (!attachmentList || attachmentList.length === 0) return;
 
-  // Keep only attachments that have a drive item id (server can fetch these)
-  const downloadable = attachmentList.filter(a => a && a.id);
-  if (downloadable.length === 0) {
-    alert('No downloadable attachments available (missing internal ids).');
-    return;
-  }
+    const downloadable = attachmentList.filter(a => a && a.id);
+    if (downloadable.length === 0) {
+      alert('No downloadable attachments available (missing internal ids).');
+      return;
+    }
 
-  // Build aligned ids and driveIds
-  const ids = downloadable.map(a => a.id).join(',');
-  const driveIds = downloadable.map(a => a.driveId || '').join(',');
+    const ids = downloadable.map(a => a.id).join(',');
+    const driveIds = downloadable.map(a => a.driveId || '').join(',');
 
-  // If some attachments exist but weren't downloadable, inform the user
-  if (downloadable.length < attachmentList.length) {
-    alert(`Only ${downloadable.length} of ${attachmentList.length} attachments can be included in the ZIP. The downloadable ones will be downloaded.`);
-    // proceed anyway
-  }
+    if (downloadable.length < attachmentList.length) {
+      alert(`Only ${downloadable.length} of ${attachmentList.length} attachments can be included in the ZIP. The downloadable ones will be downloaded.`);
+    }
 
-  // Build URL (include driveIds param only if any driveIds exist)
-  const encodedIds = encodeURIComponent(ids);
-  const encodedDriveIds = driveIds ? `&driveIds=${encodeURIComponent(driveIds)}` : '';
-  const url = `${backendBase}/attachments/zip?ids=${encodedIds}${encodedDriveIds}`;
+    const encodedIds = encodeURIComponent(ids);
+    const encodedDriveIds = driveIds ? `&driveIds=${encodeURIComponent(driveIds)}` : '';
+    const url = `${backendBase}/attachments/zip?ids=${encodedIds}${encodedDriveIds}`;
 
-  // Trigger download
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `attachments-${ticket.ticketNumber || id}.zip`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-};
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `attachments-${ticket.ticketNumber || id}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
-  // Helper for attachment in each history event
   const renderHistoryAttachment = (event) => {
     if (!event.attachment || (!event.attachment.fileName && !event.attachment.fileUrl)) return null;
     const label = event.attachment.fileName || 'Attachment';
@@ -505,14 +457,22 @@ const downloadAllAttachments = async () => {
         <strong>Attachment:</strong>{' '}
         <button
           onClick={() => {
-            // For history attachments, if PDF then download, else open viewer
             if (isPdfType(typeLabel, url)) {
               downloadAttachment(att);
             } else {
               openAttachmentViewer(att);
             }
           }}
-          style={{ marginLeft: 8, background: '#2563eb', color: 'white', border: 'none', padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}
+          style={{ 
+            marginLeft: 8, 
+            background: '#002060', 
+            color: 'white', 
+            border: 'none', 
+            padding: '6px 10px', 
+            borderRadius: 8, 
+            cursor: 'pointer', 
+            fontWeight: 700 
+          }}
         >
           {isPdfType(typeLabel, url) ? 'Download PDF' : 'View attachment'}
         </button>
@@ -525,7 +485,6 @@ const downloadAllAttachments = async () => {
     );
   };
 
-  // Render attachment summary in ticket details & approval modal
   const renderAttachmentSummary = () => {
     if (!hasAttachment) return null;
 
@@ -544,17 +503,35 @@ const downloadAllAttachments = async () => {
                 openAttachmentViewer(a);
               }
             }}
-            style={{ marginLeft: 0, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
+            style={{ 
+              marginLeft: 0, 
+              background: '#002060', 
+              color: 'white', 
+              border: 'none', 
+              padding: '8px 12px', 
+              borderRadius: 8, 
+              cursor: 'pointer', 
+              fontWeight: 800 
+            }}
           >
             {isPdf ? 'Download PDF' : 'View attachment'}
           </button>
 
-          {/* Download icon (single file) to the right */}
           {!isPdf && (
             <button
               onClick={() => downloadAttachment(a)}
               title="Download"
-              style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
+              style={{ 
+                marginLeft: 6, 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: 8, 
+                padding: '8px 10px', 
+                borderRadius: 8, 
+                border: '2px solid #e2e8f0', 
+                background: '#fff', 
+                cursor: 'pointer' 
+              }}
             >
               <img src={DownloadIcon} alt="Download" style={{ width: 18, height: 18 }} />
             </button>
@@ -563,7 +540,6 @@ const downloadAllAttachments = async () => {
       );
     }
 
-    // multiple attachments: show view button + download-all (zip) button to right
     return (
       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
         <strong style={{ minWidth: 90 }}>Attachments:</strong>
@@ -574,16 +550,34 @@ const downloadAllAttachments = async () => {
               setAttachmentModalOpen(true);
             }
           }}
-          style={{ marginLeft: 0, background: '#2563eb', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}
+          style={{ 
+            marginLeft: 0, 
+            background: '#002060', 
+            color: 'white', 
+            border: 'none', 
+            padding: '8px 12px', 
+            borderRadius: 8, 
+            cursor: 'pointer', 
+            fontWeight: 800 
+          }}
         >
           Attachments uploaded ({attachmentList.length})
         </button>
 
-        {/* Download-all (zip) button to the right of view */}
         <button
           onClick={downloadAllAttachments}
           title="Download all attachments (zip)"
-          style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #e6edf8', background: '#fff', cursor: 'pointer' }}
+          style={{ 
+            marginLeft: 6, 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: 8, 
+            padding: '8px 12px', 
+            borderRadius: 8, 
+            border: '2px solid #e2e8f0', 
+            background: '#fff', 
+            cursor: 'pointer' 
+          }}
         >
           <img src={DownloadIcon} alt="Download all" style={{ width: 18, height: 18 }} />
           <span style={{ fontWeight: 700, color: '#0f172a' }}>Download all</span>
@@ -595,131 +589,406 @@ const downloadAllAttachments = async () => {
   return (
     <>
       <style>{`
+        * { box-sizing: border-box; }
+        
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes zoomIn { from { transform: scale(0.8); } to { transform: scale(1); } }
-        .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.18s; }
-        .modal-box { background: white; padding: 30px; border-radius: 12px; width: 92%; max-width: 980px; text-align: center; box-shadow: 0 15px 50px rgba(0,0,0,0.25); animation: zoomIn 0.18s; position: relative; }
-        .reason-input { width: 80%; padding: 12px; margin: 12px 0; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; }
-        .error-text { color: #dc2626; font-size: 14px; margin-top: 8px; font-weight: 500; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .overlay { 
+          position: fixed; 
+          top: 0; 
+          left: 0; 
+          width: 100vw; 
+          height: 100vh; 
+          background: rgba(0,0,0,0.65); 
+          display: flex; 
+          justify-content: center; 
+          align-items: center; 
+          z-index: 9999; 
+          animation: fadeIn 0.2s; 
+          backdrop-filter: blur(4px);
+        }
+        
+        .modal-box { 
+          background: white; 
+          padding: 32px; 
+          border-radius: 16px; 
+          width: 92%; 
+          max-width: 980px; 
+          text-align: center; 
+          box-shadow: 0 20px 60px rgba(0,0,0,0.3); 
+          animation: slideUp 0.3s; 
+          position: relative; 
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+        
+        .reason-input { 
+          width: 100%; 
+          padding: 14px; 
+          margin: 12px 0; 
+          border: 2px solid #e2e8f0; 
+          border-radius: 12px; 
+          font-size: 15px;
+          font-family: inherit;
+          transition: all 0.2s;
+        }
+        
+        .reason-input:focus {
+          outline: none;
+          border-color: #002060;
+          box-shadow: 0 0 0 3px rgba(0, 32, 96, 0.1);
+        }
+        
+        .error-text { 
+          color: #dc2626; 
+          font-size: 14px; 
+          margin-top: 8px; 
+          font-weight: 600; 
+        }
 
-        /* Attachment viewer styles */
-        .att-viewer { display:flex; flex-direction:column; gap:12px; align-items:stretch; }
-        .att-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; }
-        .att-title { font-weight:800; font-size:16px; color:#0f172a; }
-        .att-close { background:transparent; border:none; font-size:20px; cursor:pointer; color:#475569; }
-        .att-content { width:100%; min-height: 240px; max-height: 80vh; display:flex; justify-content:center; align-items:center; overflow:auto; background:#f8fafc; border-radius:10px; padding:12px; flex-direction:column; }
-        .att-img { max-width:100%; max-height:78vh; object-fit:contain; border-radius:8px; box-shadow:0 6px 18px rgba(2,6,23,0.08); }
-        .att-iframe { width:100%; height:78vh; border: none; border-radius:8px; }
-        .att-list { display:flex; gap:8px; overflow:auto; padding-top:8px; }
-        .att-thumb { padding:6px; background:#fff; border-radius:8px; border:1px solid #e6e9ee; cursor:pointer; min-width:120px; display:flex; gap:8px; align-items:center; }
-        .att-thumb img { width:56px; height:56px; object-fit:cover; border-radius:6px; }
-        .att-thumb .meta { display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
-        .att-thumb .meta .name { font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .att-thumb .meta .type { font-size:12px; color:#6b7280; }
+        .att-viewer { 
+          display:flex; 
+          flex-direction:column; 
+          gap:16px; 
+          align-items:stretch; 
+        }
+        
+        .att-toolbar { 
+          display:flex; 
+          justify-content:space-between; 
+          align-items:center; 
+          gap:12px; 
+          padding-bottom: 16px;
+          border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .att-title { 
+          font-weight:800; 
+          font-size:18px; 
+          color:#0f172a; 
+        }
+        
+        .att-close { 
+          background:transparent; 
+          border:none; 
+          font-size:24px; 
+          cursor:pointer; 
+          color:#64748b;
+          width: 36px;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          transition: all 0.2s;
+        }
+        
+        .att-close:hover {
+          background: #f1f5f9;
+          color: #475569;
+        }
+        
+        .att-content { 
+          width:100%; 
+          min-height: 240px; 
+          max-height: 70vh; 
+          display:flex; 
+          justify-content:center; 
+          align-items:center; 
+          overflow:auto; 
+          background:#f8fafc; 
+          border-radius:12px; 
+          padding:16px; 
+          flex-direction:column;
+          border: 2px solid #e2e8f0;
+        }
+        
+        .att-img { 
+          max-width:100%; 
+          max-height:68vh; 
+          object-fit:contain; 
+          border-radius:10px; 
+          box-shadow:0 8px 24px rgba(0,0,0,0.12); 
+        }
+        
+        .att-list { 
+          display:flex; 
+          gap:10px; 
+          overflow:auto; 
+          padding-top:12px; 
+        }
+        
+        .att-thumb { 
+          padding:10px; 
+          background:#fff; 
+          border-radius:10px; 
+          border:2px solid #e2e8f0; 
+          cursor:pointer; 
+          min-width:140px; 
+          display:flex; 
+          gap:10px; 
+          align-items:center;
+          transition: all 0.2s;
+        }
+        
+        .att-thumb:hover {
+          border-color: #002060;
+          box-shadow: 0 4px 12px rgba(0, 32, 96, 0.1);
+        }
+        
+        .att-thumb img { 
+          width:60px; 
+          height:60px; 
+          object-fit:cover; 
+          border-radius:8px; 
+        }
+        
+        .att-thumb .meta { 
+          display:flex; 
+          flex-direction:column; 
+          align-items:flex-start; 
+          min-width:0; 
+        }
+        
+        .att-thumb .meta .name { 
+          font-weight:700; 
+          font-size:13px; 
+          white-space:nowrap; 
+          overflow:hidden; 
+          text-overflow:ellipsis; 
+        }
+        
+        .att-thumb .meta .type { 
+          font-size:12px; 
+          color:#64748b; 
+        }
 
-        .att-actions { display:flex; gap:8px; margin-top:12px; }
-        .att-btn { padding:10px 16px; background:#2563eb; color:#fff; border-radius:8px; text-decoration:none; font-weight:700; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
-        .att-btn img { width:18px; height:18px; }
+        .att-actions { 
+          display:flex; 
+          gap:10px; 
+          margin-top:16px; 
+        }
+        
+        .att-btn { 
+          padding:12px 20px; 
+          background:#002060; 
+          color:#fff; 
+          border-radius:10px; 
+          text-decoration:none; 
+          font-weight:700; 
+          border:none; 
+          cursor:pointer; 
+          display:inline-flex; 
+          align-items:center; 
+          gap:8px;
+          transition: all 0.2s;
+        }
+        
+        .att-btn:hover {
+          background: #001a4d;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(0, 32, 96, 0.3);
+        }
+        
+        .att-btn img { 
+          width:18px; 
+          height:18px; 
+        }
+        
+        .btn-primary {
+          background: linear-gradient(135deg, #002060 0%, #003380 100%);
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 6px 18px rgba(0, 32, 96, 0.15);
+        }
+        
+        .btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(0, 32, 96, 0.25);
+        }
+        
+        .btn-danger {
+          background: #ef4444;
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 6px 18px rgba(239, 68, 68, 0.15);
+        }
+        
+        .btn-danger:hover {
+          background: #dc2626;
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(239, 68, 68, 0.25);
+        }
+        
+        .btn-success {
+          background: #10b981;
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 6px 18px rgba(16, 185, 129, 0.15);
+        }
+        
+        .btn-success:hover {
+          background: #059669;
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);
+        }
+        
+        .btn-secondary {
+          background: #64748b;
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .btn-secondary:hover {
+          background: #475569;
+        }
+        
+        @media (max-width: 768px) {
+          .modal-box {
+            padding: 24px;
+            width: 95%;
+          }
+        }
       `}</style>
 
       {/* BACK BUTTON */}
-      <div style={{ padding: "1rem", maxWidth: 720, margin: "0 auto" }}>
+      <div style={{ padding: "1.5rem", maxWidth: 800, margin: "0 auto" }}>
         <button
           onClick={() => navigate('/')}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px',
-            borderRadius: 12, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer',
-            fontWeight: 600, boxShadow: '0 2px 10px rgba(0,0,0,0.06)', fontSize: '15px'
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: 10, 
+            padding: '12px 20px',
+            borderRadius: 12, 
+            border: '2px solid #e2e8f0', 
+            background: 'linear-gradient(180deg, #ffffff, #f8fafc)', 
+            cursor: 'pointer',
+            fontWeight: 700, 
+            boxShadow: '0 4px 12px rgba(0,0,0,0.06)', 
+            fontSize: '15px',
+            color: '#0f172a',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateX(-4px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateX(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)';
           }}
         >
-          Back to Tickets
+          ← Back to Tickets
         </button>
       </div>
 
       {/* MAIN CARD */}
       <div style={{
         padding: '2.5rem',
-        maxWidth: '720px',
-        margin: '0 auto',
+        maxWidth: '800px',
+        margin: '0 auto 2rem',
         background: '#ffffff',
         borderRadius: '16px',
-        borderLeft: `8px solid ${ticket.status === "Closed" ? "#dc2626" : "#16a34a"}`,
-        boxShadow: '0 12px 40px rgba(2,6,23,0.08)',
+        borderLeft: `6px solid ${ticket.status === "Closed" ? "#ef4444" : ticket.status === "Approved" ? "#10b981" : "#e98404"}`,
+        boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 18,
+        gap: 20,
         position: 'relative'
       }}>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1 }}>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1, minWidth: 300 }}>
             <div style={{
               width: 72,
               height: 72,
               borderRadius: 12,
-              background: 'linear-gradient(135deg,#4f46e5 0%, #06b6d4 100%)',
+              background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
               color: '#fff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontWeight: 800,
               fontSize: '20px',
-              boxShadow: '0 8px 30px rgba(79,70,229,0.12)'
+              boxShadow: '0 8px 24px rgba(0, 32, 96, 0.2)'
             }}>
               {ticket.userName ? ticket.userName.split(' ').map(n => n[0]).slice(0,2).join('') : 'U'}
             </div>
 
             <div style={{ flex: 1 }}>
-              <h1 style={{ margin: 0, fontSize: '1.65rem', color: '#0f172a', fontWeight: 800 }}>
+              <h1 style={{ margin: 0, fontSize: '1.75rem', color: '#0f172a', fontWeight: 800 }}>
                 {ticket.category}
               </h1>
 
-              <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{
-                  padding: '10px 14px',
-                  borderRadius: 14,
-                  background: 'linear-gradient(90deg, #eef2ff 0%, #f0f9ff 100%)',
-                  color: '#3730a3',
+                  padding: '12px 16px',
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                  color: '#002060',
                   fontWeight: 800,
                   fontSize: 13,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'flex-start',
-                  boxShadow: '0 6px 18px rgba(99,102,241,0.08)'
+                  boxShadow: '0 4px 12px rgba(0, 32, 96, 0.08)'
                 }}>
-                  <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 700 }}>Ticket #</span>
-                  <span style={{ fontSize: 20, marginTop: 4, letterSpacing: '0.6px' }}>{ticket.ticketNumber}</span>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>Ticket #</span>
+                  <span style={{ fontSize: 20, marginTop: 2, letterSpacing: '0.5px' }}>{ticket.ticketNumber}</span>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{
-                    padding: '6px 10px',
+                    padding: '8px 12px',
                     borderRadius: 999,
-                    background: ticket.priority === 'High' ? '#fff1f2' : ticket.priority === 'Medium' ? '#fff7ed' : '#f0fdf4',
-                    color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#166534',
+                    background: ticket.priority === 'High' ? '#fee2e2' : ticket.priority === 'Medium' ? '#fff7ed' : '#d1fae5',
+                    color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#065f46',
                     fontWeight: 700,
                     fontSize: 13,
-                    boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.02)'
+                    border: `2px solid ${ticket.priority === 'High' ? '#fecaca' : ticket.priority === 'Medium' ? '#fed7aa' : '#a7f3d0'}`
                   }}>{ticket.priority}</span>
 
                   <span style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 8,
-                    padding: '6px 10px',
+                    padding: '8px 12px',
                     borderRadius: 999,
                     fontWeight: 700,
                     fontSize: 13,
-                    ...statusColorStyles
+                    border: '2px solid',
+                    ...statusColorStyles,
+                    borderColor: ticket.status === 'Closed' ? '#fecaca' : (ticket.status === 'Approved' ? '#a7f3d0' : (ticket.status === 'Waiting for approval' ? '#fcd34d' : '#bae6fd'))
                   }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : (ticket.status === 'Approved' ? '#16a34a' : (ticket.status === 'Waiting for approval' ? '#f59e0b' : '#06b6d4')) }} />
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : (ticket.status === 'Approved' ? '#10b981' : (ticket.status === 'Waiting for approval' ? '#e98404' : '#0284c7')) }} />
                     {ticket.status}
                   </span>
                 </div>
               </div>
 
-              {/* Operational & Finance sub info under title */}
               {ticket.category === 'Operational & Finance' && ticket.subQuery && (
-                <div style={{ marginTop: 8, fontSize: 13, color: '#4b5563' }}>
+                <div style={{ marginTop: 10, fontSize: 13, color: '#64748b' }}>
                   <strong>Sub Category:</strong> {ticket.subQuery}
                   {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
                     <div style={{ marginTop: 4 }}>
@@ -728,29 +997,24 @@ const downloadAllAttachments = async () => {
                   )}
                 </div>
               )}
-
-              {/* NOTE: Removed duplicate small hint attachment shown above the Description box */}
             </div>
           </div>
 
-          <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
+          <div style={{ width: 280, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ color: '#64748b', fontSize: 13 }}>Created by</div>
-              <div style={{ fontWeight: 800, color: '#0f172a' }}>{ticket.userName}</div>
-              <a href={`mailto:${ticket.userEmail}`} style={{ color: '#2563eb', fontSize: 13, textDecoration: 'none' }}>
+              <div style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>Created by</div>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 15 }}>{ticket.userName}</div>
+              <a href={`mailto:${ticket.userEmail}`} style={{ color: '#002060', fontSize: 13, textDecoration: 'none', fontWeight: 600 }}>
                 {ticket.userEmail}
               </a>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 10 }}>
               {authority === 'admin' && ticket.status !== 'Closed' && (
                 <button
                   onClick={() => setShowReasonInput(true)}
-                  style={{
-                    width: '100%', background: '#dc2626', color: 'white', padding: '12px 14px',
-                    border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
-                    boxShadow: '0 8px 24px rgba(220,38,38,0.18)'
-                  }}
+                  className="btn-danger"
+                  style={{ width: '100%', fontSize: '15px' }}
                 >
                   Close Ticket
                 </button>
@@ -759,34 +1023,30 @@ const downloadAllAttachments = async () => {
               {ticket.status === 'Closed' && (
                 <button
                   onClick={() => setShowreopenReasonInput(true)}
-                  style={{
-                    width: '100%', background: '#16a34a', color: 'white', padding: '12px 14px',
-                    border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
-                    boxShadow: '0 8px 24px rgba(16,185,129,0.12)'
-                  }}
+                  className="btn-success"
+                  style={{ width: '100%', fontSize: '15px' }}
                 >
-                  reopen Ticket
+                  Reopen Ticket
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Waiting for approval banner */}
         {needsApprovalBanner && (
           <div style={{
-            background: "#fef3c7",
-            border: "1px solid #fcd34d",
-            padding: "15px",
-            borderRadius: 12,
+            background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
+            border: "2px solid #fcd34d",
+            padding: "20px",
+            borderRadius: 14,
             marginBottom: 20,
             textAlign: "center",
-            boxShadow: "0 3px 10px rgba(0,0,0,0.06)"
+            boxShadow: "0 6px 18px rgba(252, 211, 77, 0.15)"
           }}>
-            <h3 style={{ margin: 0, color: "#92400e", fontWeight: 800 }}>
-              Waiting for Your Approval
+            <h3 style={{ margin: 0, color: "#92400e", fontWeight: 800, fontSize: '1.2rem' }}>
+              ⚠️ Waiting for Your Approval
             </h3>
-            <p style={{ color: "#92400e", marginTop: 6 }}>
+            <p style={{ color: "#92400e", marginTop: 8, marginBottom: 12 }}>
               This ticket requires action from <strong>you ({ticket.category})</strong>.
             </p>
 
@@ -794,13 +1054,23 @@ const downloadAllAttachments = async () => {
               onClick={() => setShowApprovalModal(true)}
               style={{
                 marginTop: 10,
-                background: "#d97706",
+                background: "#e98404",
                 color: "white",
-                borderRadius: 10,
-                padding: "10px 22px",
+                borderRadius: 12,
+                padding: "12px 24px",
                 border: "none",
                 cursor: "pointer",
-                fontWeight: 700
+                fontWeight: 700,
+                boxShadow: "0 6px 18px rgba(233, 132, 4, 0.2)",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#d97706";
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#e98404";
+                e.currentTarget.style.transform = "translateY(0)";
               }}
             >
               Review & Take Action
@@ -808,36 +1078,43 @@ const downloadAllAttachments = async () => {
           </div>
         )}
 
-        {/* Description + attachment (detailed) */}
         <div style={{
           marginTop: 4,
           background: '#f8fafc',
-          padding: 20,
+          padding: 24,
           borderRadius: 14,
           display: 'block',
-          border: '1px solid #edf2f7',
+          border: '2px solid #e2e8f0',
           color: '#334155',
           lineHeight: 1.7,
           fontSize: 15
         }}>
-          <strong style={{ display: 'block', marginBottom: 8, fontSize: 15 }}>Description</strong>
+          <strong style={{ display: 'block', marginBottom: 12, fontSize: 16, color: '#0f172a' }}>Description</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
-          {/* Attachment detailed view - kept here (only this button will be visible) */}
           {renderAttachmentSummary()}
         </div>
       </div>
 
-      {/* FULL HISTORY TIMELINE */}
-      <div style={{ maxWidth: '720px', margin: '3rem auto', padding: '0 1rem' }}>
-        <h2 style={{ fontSize: '1.9rem', color: '#1e293b', marginBottom: '2.5rem', textAlign: 'center', fontWeight: 700 }}>
-          Ticket History
+      {/* HISTORY TIMELINE */}
+      <div style={{ maxWidth: '800px', margin: '3rem auto 4rem', padding: '0 1.5rem' }}>
+        <h2 style={{ 
+          fontSize: '2rem', 
+          color: '#0f172a', 
+          marginBottom: '2.5rem', 
+          textAlign: 'center', 
+          fontWeight: 800,
+          background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text'
+        }}>
+          📋 Ticket History
         </h2>
         <div>
           {historyEvents.map((event, index) => {
             const isCreatedEvent = event.action === 'created';
             const createdByDifferentPerson = isCreatedEvent && event.by !== ticket.userName;
             const showOnBehalf = isCreatedEvent && (ticket.onBehalf || createdByDifferentPerson);
-
             const isOpsFin = ticket.category === 'Operational & Finance';
 
             return (
@@ -845,29 +1122,30 @@ const downloadAllAttachments = async () => {
                 key={index}
                 style={{
                   marginBottom: 20,
-                  padding: 20,
+                  padding: 24,
                   background:
                     event.action === 'closed'
-                      ? '#fff1f2'
+                      ? '#fee2e2'
                       : event.action === 'created'
-                      ? '#fefce8'
+                      ? '#fef3c7'
                       : '#f1f5f9',
-                  borderRadius: 12,
-                  borderLeft: event.action === 'created' ? '4px solid #facc15' : 'none'
+                  borderRadius: 14,
+                  borderLeft: event.action === 'created' ? '4px solid #e98404' : event.action === 'closed' ? '4px solid #ef4444' : '4px solid #10b981',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
                 }}
               >
-                <strong style={{ display: 'block', marginBottom: 8, textTransform: 'capitalize', fontSize: '1.1rem' }}>
-                  {event.action === 'created' ? 'Ticket Created' :
-                   event.action === 'closed' ? 'Ticket Closed' :
-                   event.action === 'reopend' ? 'Ticket reopend' : event.action}
+                <strong style={{ display: 'block', marginBottom: 10, textTransform: 'capitalize', fontSize: '1.15rem', color: '#0f172a' }}>
+                  {event.action === 'created' ? '✨ Ticket Created' :
+                   event.action === 'closed' ? '🔒 Ticket Closed' :
+                   event.action === 'reopend' ? '🔄 Ticket Reopened' : event.action}
                 </strong>
 
-                <small style={{ color: '#475569', fontWeight: 600, display: 'block', marginBottom: 10 }}>
+                <small style={{ color: '#475569', fontWeight: 600, display: 'block', marginBottom: 12 }}>
                   {formatDate(event.at)} by <strong>{event.by || "Unknown"}</strong>
                   {showOnBehalf && (
                     <>
                       {' '}on behalf of{' '}
-                      <strong style={{ color: '#dc2626' }}>
+                      <strong style={{ color: '#e98404' }}>
                         {ticket.onBehalf || ticket.userName}
                         {ticket.onBehalfEmail ? ` (${ticket.onBehalfEmail})` : ''}
                       </strong>
@@ -875,9 +1153,8 @@ const downloadAllAttachments = async () => {
                   )}
                 </small>
 
-                {/* Sub query info snapshot in history (if backend stored it per event) */}
                 {isOpsFin && (event.subQuery || event.otherSubQueryText) && (
-                  <div style={{ marginTop: 6, fontSize: 13, color: '#4b5563' }}>
+                  <div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
                     {event.subQuery && (
                       <div>
                         <strong>Sub Category:</strong> {event.subQuery}
@@ -891,82 +1168,88 @@ const downloadAllAttachments = async () => {
                   </div>
                 )}
 
-                {/* Reason */}
                 {event.reason && (
-                  <div style={{ marginTop: 12, padding: 12, background: '#e2e8f0', borderRadius: 8 }}>
+                  <div style={{ marginTop: 14, padding: 14, background: '#e2e8f0', borderRadius: 10, border: '2px solid #cbd5e1' }}>
                     <strong>Reason:</strong> {event.reason}
                   </div>
                 )}
 
-                {/* Attachment snapshot in history */}
                 {renderHistoryAttachment(event)}
               </div>
             );
           })}
 
-          <div style={{ marginTop: 12, padding: 20, background: ticket.status === "Closed" ? '#fee2e2' : '#f0fdf4', borderRadius: 12 }}>
-            <strong style={{ fontSize: '1.2rem', color: ticket.status === "Closed" ? '#b91c1c' : '#166534' }}>
+          <div style={{ 
+            marginTop: 16, 
+            padding: 24, 
+            background: ticket.status === "Closed" ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)' : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', 
+            borderRadius: 14,
+            border: `2px solid ${ticket.status === "Closed" ? "#fecaca" : "#a7f3d0"}`,
+            boxShadow: '0 6px 18px rgba(0,0,0,0.06)'
+          }}>
+            <strong style={{ fontSize: '1.3rem', color: ticket.status === "Closed" ? '#991b1b' : '#065f46', display: 'block', textAlign: 'center' }}>
               Current Status: {ticket.status}
             </strong>
           </div>
         </div>
       </div>
 
-      {/* APPROVAL MODAL – Password Reset + Admin Access */}
-      {showApprovalModal &&
-        isCategoryHead &&
-        (
+      {/* APPROVAL MODAL */}
+      {showApprovalModal && isCategoryHead && (
         <div className="overlay">
           <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
-            <h2 style={{ marginBottom: 10, fontWeight: 800 }}>Approval Required</h2>
-            <p style={{ color: "#475569", marginBottom: 20 }}>
-              You are the <strong>Category Head</strong> for <strong>{ticket.category}</strong>.<br />
+            <h2 style={{ marginBottom: 12, fontWeight: 800, color: '#0f172a', fontSize: '1.75rem' }}>
+              Approval Required
+            </h2>
+            <p style={{ color: "#64748b", marginBottom: 24, fontSize: '15px' }}>
+              You are the <strong style={{ color: '#002060' }}>Category Head</strong> for <strong>{ticket.category}</strong>.<br />
               Review the ticket details below before taking action.
             </p>
 
             <div style={{
               background: "#f8fafc",
-              padding: 18,
-              borderRadius: 12,
+              padding: 24,
+              borderRadius: 14,
               textAlign: "left",
-              marginBottom: 16,
-              border: "1px solid #e2e8f0"
+              marginBottom: 20,
+              border: "2px solid #e2e8f0"
             }}>
-              <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18, fontWeight: 700 }}>Ticket Summary</h3>
-              <p style={{ margin: '6px 0' }}><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
-              <p style={{ margin: '6px 0' }}><strong>Created By:</strong> {ticket.userName} ({ticket.userEmail})</p>
-              <p style={{ margin: '6px 0' }}><strong>Category:</strong> {ticket.category}</p>
-              <p style={{ margin: '6px 0' }}><strong>Priority:</strong> {ticket.priority}</p>
-              <p style={{ margin: '6px 0' }}><strong>On Behalf:</strong> {ticket.onBehalf || "Self"}</p>
-              {ticket.onBehalfEmail && <p style={{ margin: '6px 0' }}><strong>On Behalf Email:</strong> {ticket.onBehalfEmail}</p>}
-              {ticket.deliveryEmail && <p style={{ margin: '6px 0' }}><strong>Delivery Email:</strong> {ticket.deliveryEmail}</p>}
-              <p style={{ margin: '6px 0' }}><strong>Created On:</strong> {formatDate(ticket.createdAt)}</p>
+              <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
+                📋 Ticket Summary
+              </h3>
+              <p style={{ margin: '8px 0' }}><strong>Ticket #:</strong> {ticket.ticketNumber}</p>
+              <p style={{ margin: '8px 0' }}><strong>Created By:</strong> {ticket.userName} ({ticket.userEmail})</p>
+              <p style={{ margin: '8px 0' }}><strong>Category:</strong> {ticket.category}</p>
+              <p style={{ margin: '8px 0' }}><strong>Priority:</strong> {ticket.priority}</p>
+              <p style={{ margin: '8px 0' }}><strong>On Behalf:</strong> {ticket.onBehalf || "Self"}</p>
+              {ticket.onBehalfEmail && <p style={{ margin: '8px 0' }}><strong>On Behalf Email:</strong> {ticket.onBehalfEmail}</p>}
+              {ticket.deliveryEmail && <p style={{ margin: '8px 0' }}><strong>Delivery Email:</strong> {ticket.deliveryEmail}</p>}
+              <p style={{ margin: '8px 0' }}><strong>Created On:</strong> {formatDate(ticket.createdAt)}</p>
 
-              {/* subQuery summary inside approval modal */}
               {ticket.category === 'Operational & Finance' && ticket.subQuery && (
                 <>
-                  <p style={{ margin: '6px 0' }}><strong>Sub Category:</strong> {ticket.subQuery}</p>
+                  <p style={{ margin: '8px 0' }}><strong>Sub Category:</strong> {ticket.subQuery}</p>
                   {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
-                    <p style={{ margin: '6px 0' }}><strong>Sub Details:</strong> {ticket.otherSubQueryText}</p>
+                    <p style={{ margin: '8px 0' }}><strong>Sub Details:</strong> {ticket.otherSubQueryText}</p>
                   )}
                 </>
               )}
 
-              {/* attachment summary inside approval modal */}
               {hasAttachment && (
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: 12 }}>
                   {renderAttachmentSummary()}
                 </div>
               )}
 
-              <div style={{ marginTop: 12 }}>
+              <div style={{ marginTop: 16 }}>
                 <strong>Description:</strong>
                 <div style={{
-                  background: "#e2e8f0",
-                  padding: 10,
-                  borderRadius: 8,
-                  marginTop: 6,
-                  whiteSpace: "pre-wrap"
+                  background: "#ffffff",
+                  padding: 14,
+                  borderRadius: 10,
+                  marginTop: 8,
+                  whiteSpace: "pre-wrap",
+                  border: '2px solid #e2e8f0'
                 }}>
                   {ticket.description}
                 </div>
@@ -979,37 +1262,30 @@ const downloadAllAttachments = async () => {
               value={adminNote}
               onChange={(e) => setAdminNote(e.target.value)}
               rows={4}
-              style={{ width: "100%", marginBottom: 10 }}
-              required={true}
+              style={{ width: "100%", marginBottom: 12 }}
             />
 
-            <div style={{ display: "flex", gap: 12, marginTop: 10, justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 14, marginTop: 12, justifyContent: "center", flexWrap: 'wrap' }}>
               <button
                 onClick={handleApprove}
                 disabled={approveLoading}
-                style={{
-                  padding: "12px 22px", background: "#16a34a", color: "white",
-                  borderRadius: 12, fontWeight: 700, cursor: "pointer", minWidth: 120
-                }}
+                className="btn-success"
+                style={{ minWidth: 140, fontSize: '15px' }}
               >
-                {approveLoading ? "Approving..." : "Approve"}
+                {approveLoading ? "Approving..." : "✓ Approve"}
               </button>
               <button
                 onClick={handleReject}
                 disabled={rejectLoading}
-                style={{
-                  padding: "12px 22px", background: "#dc2626", color: "white",
-                  borderRadius: 12, fontWeight: 700, cursor: "pointer", minWidth: 120
-                }}
+                className="btn-danger"
+                style={{ minWidth: 140, fontSize: '15px' }}
               >
-                {rejectLoading ? "Rejecting..." : "Reject"}
+                {rejectLoading ? "Rejecting..." : "✕ Reject"}
               </button>
               <button
                 onClick={() => { setShowApprovalModal(false); setAdminNote(''); }}
-                style={{
-                  padding: "12px 22px", background: "#64748b", color: "white",
-                  borderRadius: 12, fontWeight: 700, cursor: "pointer"
-                }}
+                className="btn-secondary"
+                style={{ fontSize: '15px' }}
               >
                 Dismiss
               </button>
@@ -1018,48 +1294,55 @@ const downloadAllAttachments = async () => {
         </div>
       )}
 
-      {/* PASSWORD POPUP FOR PASSWORD RESET */}
+      {/* PASSWORD POPUP */}
       {showPasswordPopup && (
         <div className="overlay">
-          <div className="modal-box" style={{ maxWidth: 560 }}>
-            <h2>Password Reset Successful</h2>
-            <p>The new temporary password generated for the target account is shown below. Please copy it and share as needed.</p>
+          <div className="modal-box" style={{ maxWidth: 600 }}>
+            <h2 style={{ color: '#10b981', fontWeight: 800, fontSize: '1.75rem' }}>
+              ✓ Password Reset Successful
+            </h2>
+            <p style={{ color: '#64748b' }}>
+              The new temporary password generated for the target account is shown below. Please copy it and share as needed.
+            </p>
             <div style={{
-              padding: "12px",
-              background: "#f1f5f9",
-              borderRadius: 8,
+              padding: "16px",
+              background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
+              borderRadius: 12,
               fontFamily: "monospace",
-              fontSize: 18,
-              marginTop: 10
+              fontSize: 20,
+              marginTop: 16,
+              fontWeight: 700,
+              color: '#002060',
+              border: '2px solid #bae6fd'
             }}>
               {returnedPassword}
             </div>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 18 }}>
+            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 24 }}>
               <button
                 onClick={() => copyToClipboard(returnedPassword)}
-                style={{ padding: "10px 18px", background: "#2563eb", color: 'white', borderRadius: 10 }}
+                className="btn-primary"
               >
-                Copy
+                📋 Copy
               </button>
               <button
                 onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }}
-                style={{ padding: "10px 18px", background: "#10b981", color: 'white', borderRadius: 10 }}
+                className="btn-success"
               >
-                Done
+                ✓ Done
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* CLOSE / REOPEN modals... (unchanged) */}
+      {/* CLOSE MODALS */}
       {showReasonInput && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#1e293b', fontSize: '1.5rem', fontWeight: 700 }}>
+            <h3 style={{ margin: '0 0 20px', color: '#0f172a', fontSize: '1.6rem', fontWeight: 800 }}>
               Close Ticket #{ticket.ticketNumber}
             </h3>
-            <p style={{ color: '#475569', marginBottom: 20 }}>Please provide a reason for closing this ticket.</p>
+            <p style={{ color: '#64748b', marginBottom: 24 }}>Please provide a reason for closing this ticket.</p>
             <textarea
               className="reason-input"
               rows="6"
@@ -1069,17 +1352,11 @@ const downloadAllAttachments = async () => {
               autoFocus
             />
             {closeError && <div className="error-text">{closeError}</div>}
-            <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
-              <button
-                onClick={handleSubmitReason}
-                style={{ padding: '14px 28px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
-              >
+            <div style={{ marginTop: 28, display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <button onClick={handleSubmitReason} className="btn-danger" style={{ padding: '14px 32px' }}>
                 Continue to Close
               </button>
-              <button
-                onClick={cancelClose}
-                style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
-              >
+              <button onClick={cancelClose} className="btn-secondary" style={{ padding: '14px 32px' }}>
                 Cancel
               </button>
             </div>
@@ -1090,20 +1367,15 @@ const downloadAllAttachments = async () => {
       {confirmModal && (
         <div className="overlay" onClick={cancelClose}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#dc2626', fontSize: '1.6rem', fontWeight: 700 }}>Permanently Close Ticket?</h3>
-            <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>Are you sure?</p>
+            <h3 style={{ margin: '0 0 20px', color: '#ef4444', fontSize: '1.75rem', fontWeight: 800 }}>
+              ⚠️ Permanently Close Ticket?
+            </h3>
+            <p style={{ color: '#64748b', marginBottom: 32, fontSize: '15px' }}>Are you sure you want to close this ticket?</p>
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-              <button
-                onClick={confirmCloseTicket}
-                disabled={loading}
-                style={{ padding: '16px 36px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
-              >
+              <button onClick={confirmCloseTicket} disabled={loading} className="btn-danger" style={{ padding: '16px 40px' }}>
                 {loading ? 'Closing...' : 'Yes, Close It'}
               </button>
-              <button
-                onClick={cancelClose}
-                style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
-              >
+              <button onClick={cancelClose} className="btn-secondary" style={{ padding: '16px 40px' }}>
                 Cancel
               </button>
             </div>
@@ -1111,33 +1383,28 @@ const downloadAllAttachments = async () => {
         </div>
       )}
 
+      {/* REOPEN MODALS */}
       {showreopenReasonInput && (
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#1e293b', fontSize: '1.5rem', fontWeight: 700 }}>
-              reopen Ticket #{ticket.ticketNumber}
+            <h3 style={{ margin: '0 0 20px', color: '#0f172a', fontSize: '1.6rem', fontWeight: 800 }}>
+              Reopen Ticket #{ticket.ticketNumber}
             </h3>
-            <p style={{ color: '#475569', marginBottom: 20 }}>Please explain why this ticket needs to be reopened.</p>
+            <p style={{ color: '#64748b', marginBottom: 24 }}>Please explain why this ticket needs to be reopened.</p>
             <textarea
               className="reason-input"
               rows="6"
-              placeholder="Why is this ticket being reopend?"
+              placeholder="Why is this ticket being reopened?"
               value={reopenReason}
               onChange={(e) => setreopenReason(e.target.value)}
               autoFocus
             />
             {reopenError && <div className="error-text">{reopenError}</div>}
-            <div style={{ marginTop: 24, display: 'flex', gap: 16, justifyContent: 'center' }}>
-              <button
-                onClick={handleSubmitreopenReason}
-                style={{ padding: '14px 28px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
-              >
-                Continue to reopen
+            <div style={{ marginTop: 28, display: 'flex', gap: 16, justifyContent: 'center' }}>
+              <button onClick={handleSubmitreopenReason} className="btn-success" style={{ padding: '14px 32px' }}>
+                Continue to Reopen
               </button>
-              <button
-                onClick={cancelreopen}
-                style={{ padding: '14px 28px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
-              >
+              <button onClick={cancelreopen} className="btn-secondary" style={{ padding: '14px 32px' }}>
                 Cancel
               </button>
             </div>
@@ -1148,20 +1415,15 @@ const downloadAllAttachments = async () => {
       {confirmreopenModal && (
         <div className="overlay" onClick={cancelreopen}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#16a34a', fontSize: '1.6rem', fontWeight: 700 }}>reopen This Ticket?</h3>
-            <p style={{ color: '#475569', marginBottom: 30, fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
+            <h3 style={{ margin: '0 0 20px', color: '#10b981', fontSize: '1.75rem', fontWeight: 800 }}>
+              🔄 Reopen This Ticket?
+            </h3>
+            <p style={{ color: '#64748b', marginBottom: 32, fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-              <button
-                onClick={confirmreopenTicket}
-                disabled={loading}
-                style={{ padding: '16px 36px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}
-              >
-                {loading ? 'Reviving...' : 'Yes, reopen It'}
+              <button onClick={confirmreopenTicket} disabled={loading} className="btn-success" style={{ padding: '16px 40px' }}>
+                {loading ? 'Reopening...' : 'Yes, Reopen It'}
               </button>
-              <button
-                onClick={cancelreopen}
-                style={{ padding: '16px 36px', background: '#64748b', color: 'white', border: 'none', borderRadius: 12, cursor: 'pointer', fontWeight: 600 }}
-              >
+              <button onClick={cancelreopen} className="btn-secondary" style={{ padding: '16px 40px' }}>
                 Cancel
               </button>
             </div>
@@ -1169,16 +1431,16 @@ const downloadAllAttachments = async () => {
         </div>
       )}
 
-      {/* Attachment Viewer Modal */}
+      {/* ATTACHMENT VIEWER MODAL */}
       {attachmentModalOpen && activeAttachment && (
         <div className="overlay" onClick={() => setAttachmentModalOpen(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
             <div className="att-viewer">
               <div className="att-toolbar">
-                <div className="att-title">{activeAttachment.fileName || 'Attachment'}</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="att-title">📎 {activeAttachment.fileName || 'Attachment'}</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   {attachmentList && attachmentList.length > 1 && (
-                    <div style={{ fontSize: 13, color: '#6b7280', marginRight: 8 }}>
+                    <div style={{ fontSize: 13, color: '#64748b', marginRight: 8, fontWeight: 600 }}>
                       {attachmentList.length} attachments
                     </div>
                   )}
@@ -1190,13 +1452,12 @@ const downloadAllAttachments = async () => {
                 {isImageType(activeAttachment.fileType) ? (
                   <>
                     <img
-                    src={imagePreviewUrl}
-                    alt={activeAttachment.fileName}
-                    className="att-img"
-                  />
+                      src={imagePreviewUrl}
+                      alt={activeAttachment.fileName}
+                      className="att-img"
+                    />
 
                     <div className="att-actions">
-                      {/* Download button for images (only control) */}
                       <button
                         className="att-btn"
                         onClick={() => downloadAttachment(activeAttachment)}
@@ -1209,7 +1470,7 @@ const downloadAllAttachments = async () => {
                   </>
                 ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
                   <div style={{ textAlign: 'center' }}>
-                    <p style={{ marginBottom: 12 }}>PDF will be downloaded when you click the button.</p>
+                    <p style={{ marginBottom: 16, color: '#64748b' }}>PDF will be downloaded when you click the button.</p>
                     <button
                       className="att-btn"
                       onClick={() => downloadAttachment(activeAttachment)}
@@ -1220,20 +1481,13 @@ const downloadAllAttachments = async () => {
                   </div>
                 ) : (
                   <div style={{ textAlign: 'center' }}>
-                    <p style={{ marginBottom: 12 }}>This file type cannot be previewed inline.</p>
+                    <p style={{ marginBottom: 16, color: '#64748b' }}>This file type cannot be previewed inline.</p>
                     <a
                       href={activeAttachment.fileUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{
-                        display: 'inline-block',
-                        padding: '8px 14px',
-                        background: '#2563eb',
-                        color: '#fff',
-                        borderRadius: 8,
-                        textDecoration: 'none',
-                        fontWeight: 700
-                      }}
+                      className="att-btn"
+                      style={{ textDecoration: 'none' }}
                     >
                       Open attachment
                     </a>
@@ -1241,9 +1495,8 @@ const downloadAllAttachments = async () => {
                 )}
               </div>
 
-              {/* If multiple attachments exist, show thumbnails / list below */}
               {attachmentList && attachmentList.length > 1 && (
-                <div className="att-list" style={{ marginTop: 8 }}>
+                <div className="att-list" style={{ marginTop: 12 }}>
                   {attachmentList.map((a, idx) => {
                     const previewIsImage = isImageType(a.fileType);
                     return (
@@ -1251,7 +1504,7 @@ const downloadAllAttachments = async () => {
                         {previewIsImage ? (
                           <img src={a.fileUrl} alt={a.fileName} />
                         ) : (
-                          <div style={{ width:56, height:56, display:'flex', alignItems:'center', justifyContent:'center', background:'#f3f4f6', borderRadius:6, fontSize:12, padding:6 }}>
+                          <div style={{ width:60, height:60, display:'flex', alignItems:'center', justifyContent:'center', background:'#f3f4f6', borderRadius:8, fontSize:12, padding:6, fontWeight: 700, color: '#002060' }}>
                             {a.fileName?.split('.').pop()?.toUpperCase() || 'FILE'}
                           </div>
                         )}
