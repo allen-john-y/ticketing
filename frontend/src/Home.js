@@ -273,22 +273,66 @@ function Home() {
           background: #f1f5f9;
           transform: translateY(-2px);
         }
+
+        .action-bar {
+          max-width: 1400px;
+          margin: -1rem auto 2rem auto;
+          padding: 0 2rem;
+          display: flex;
+          justify-content: flex-end;
+          gap: 1rem;
+        }
+
+        .action-btn {
+          padding: 12px 24px;
+          border-radius: 10px;
+          font-weight: 600;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .action-btn.create {
+          background: #e98404;
+          color: white;
+        }
+
+        .action-btn.create:hover {
+          background: #d17703;
+          transform: translateY(-2px);
+        }
+
+        .action-btn.view {
+          background: white;
+          color: #002060;
+          border: 2px solid #e2e8f0;
+        }
+
+        .action-btn.view:hover {
+          background: #f8fafc;
+          border-color: #002060;
+          transform: translateY(-2px);
+        }
         
         .main-container {
           max-width: 1400px;
           margin: 0 auto;
-          padding: 2rem;
+          padding: 0 2rem;
         }
 
         .my-tickets-toggle {
           background: white;
-          padding: 1rem;
+          padding: 1rem 1.5rem;
           border-radius: 10px;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
           margin-bottom: 2rem;
-          display: flex;
+          display: inline-flex;
           align-items: center;
           gap: 0.75rem;
+          border: 1px solid #e2e8f0;
         }
 
         .my-tickets-toggle input[type="checkbox"] {
@@ -424,54 +468,6 @@ function Home() {
           color: #0f172a;
         }
         
-        .quick-actions {
-          background: white;
-          padding: 1.5rem;
-          border-radius: 12px;
-          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-          margin-bottom: 2rem;
-        }
-        
-        .quick-actions h3 {
-          font-size: 18px;
-          font-weight: 700;
-          color: #0f172a;
-          margin: 0 0 1.25rem 0;
-        }
-        
-        .quick-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-          gap: 1rem;
-        }
-        
-        .quick-btn {
-          padding: 1.25rem;
-          border-radius: 10px;
-          color: white;
-          text-align: center;
-          cursor: pointer;
-          transition: transform 0.2s;
-          text-decoration: none;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        
-        .quick-btn:hover {
-          transform: translateY(-3px);
-        }
-        
-        .quick-icon {
-          font-size: 28px;
-        }
-        
-        .quick-label {
-          font-weight: 700;
-          font-size: 14px;
-        }
-        
         @media (max-width: 768px) {
           .header-content {
             flex-direction: column;
@@ -484,6 +480,16 @@ function Home() {
           
           .btn-header {
             flex: 1;
+          }
+
+          .action-bar {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 0 1rem;
+          }
+
+          .action-btn {
+            justify-content: center;
           }
           
           .stats-grid {
@@ -516,15 +522,17 @@ function Home() {
               <span className="user-role">{authority === 'admin' ? 'ADMINISTRATOR' : 'USER'}</span>
             </div>
           </div>
-          <div className="header-actions">
-            <Link to="/create" className="btn-header btn-primary">
-              + Create Ticket
-            </Link>
-            <Link to="/tickets" className="btn-header btn-secondary">
-              View All Tickets
-            </Link>
-          </div>
         </div>
+      </div>
+
+      {/* Action Bar - Professional placement */}
+      <div className="action-bar">
+        <Link to="/create" className="action-btn create">
+          <span style={{ fontSize: '20px' }}>+</span> Create New Ticket
+        </Link>
+        <Link to="/tickets" className="action-btn view">
+          <span style={{ fontSize: '20px' }}>📋</span> View All Tickets
+        </Link>
       </div>
 
       {/* Main Content */}
@@ -544,7 +552,7 @@ function Home() {
           </div>
         )}
 
-        {/* Stats Grid */}
+        {/* Stats Grid - All stats now redirect */}
         <div className="stats-grid">
           <div 
             className="stat-card orange"
@@ -574,7 +582,7 @@ function Home() {
 
           <div 
             className="stat-card green"
-            onClick={() => navigate('/tickets', { state: { filter: 'closed' } })}
+            onClick={() => navigate('/dashboard', { state: { filter: 'closed' } })}
           >
             <div className="stat-header">
               <div>
@@ -585,7 +593,10 @@ function Home() {
             </div>
           </div>
 
-          <div className="stat-card red">
+          <div 
+            className="stat-card red"
+            onClick={() => navigate('/tickets', { state: { filter: 'high' } })}
+          >
             <div className="stat-header">
               <div>
                 <div className="stat-value">{highPriority.length}</div>
@@ -630,38 +641,6 @@ function Home() {
                 ))}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="quick-actions">
-          <h3>Quick Actions</h3>
-          <div className="quick-grid">
-            <Link to="/create" className="quick-btn" style={{ background: 'linear-gradient(135deg, #e98404 0%, #f59e0b 100%)' }}>
-              <div className="quick-icon">➕</div>
-              <div className="quick-label">New Ticket</div>
-            </Link>
-
-            <Link to="/tickets" className="quick-btn" style={{ background: 'linear-gradient(135deg, #002060 0%, #0039a6 100%)' }}>
-              <div className="quick-icon">📋</div>
-              <div className="quick-label">All Tickets</div>
-            </Link>
-
-            <Link to="/dashboard" className="quick-btn" style={{ background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)' }}>
-              <div className="quick-icon">✅</div>
-              <div className="quick-label">Closed Tickets</div>
-            </Link>
-
-            {authority === 'admin' && (
-              <div 
-                className="quick-btn" 
-                style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)' }}
-                onClick={() => setShowMyTickets(!showMyTickets)}
-              >
-                <div className="quick-icon">👤</div>
-                <div className="quick-label">{showMyTickets ? 'All Stats' : 'My Stats'}</div>
-              </div>
-            )}
           </div>
         </div>
       </div>
