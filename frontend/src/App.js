@@ -20,11 +20,6 @@ import removeFieldIcon from './remove-field.jpg';
 const HELP_DESK_GROUP_ID = process.env.REACT_APP_HELP_DESK_GROUP_ID;
 const backendBase = process.env.REACT_APP_BACKEND_URL;
 
-console.log("CLIENT_ID:", process.env.REACT_APP_CLIENT_ID);
-console.log("TENANT_ID:", process.env.REACT_APP_TENANT_ID);
-console.log("BACKEND:", process.env.REACT_APP_BACKEND_URL);
-console.log("GROUP:", process.env.REACT_APP_HELP_DESK_GROUP_ID);
-
 const pca = new PublicClientApplication({
   auth: {
     clientId: process.env.REACT_APP_CLIENT_ID,

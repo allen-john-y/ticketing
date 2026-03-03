@@ -58,7 +58,7 @@ function Dashboard() {
         const isAdmin = groups.includes('Helpdesk_Admin');
         setAuthority(isAdmin ? 'admin' : 'basic');
 
-        const backendUrl = 'process.env.REACT_APP_BACKEND_URL';
+        const backendUrl = process.env.REACT_APP_BACKEND_URL;
 
         const endpoint = isAdmin
           ? `${backendUrl}/tickets`

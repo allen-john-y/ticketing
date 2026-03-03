@@ -27,7 +27,7 @@ function TicketDetails() {
   const [confirmreopenModal, setConfirmreopenModal] = useState(false);
   const [categoryMeta, setCategoryMeta] = useState(null);
 
-  const backendBase = "process.env.REACT_APP_BACKEND_URL";
+  const backendBase = process.env.REACT_APP_BACKEND_URL;
 
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [isCategoryHead, setIsCategoryHead] = useState(false);
