@@ -6,8 +6,8 @@ import App from './App';
 
 const pca = new PublicClientApplication({
   auth: {
-    clientId: '6541d73a-dbbd-4f74-9465-38a0eb03ec6b',
-    authority: 'https://login.microsoftonline.com/11909ab3-5ecc-48e0-b898-acf7203a1ad7',
+    clientId: process.env.REACT_APP_CLIENT_ID,
+    authority: 'https://login.microsoftonline.com/' + process.env.REACT_APP_TENANT_ID,
     redirectUri: process.env.REACT_APP_FRONTEND_URL,
   },
   cache: { cacheLocation: 'localStorage' },

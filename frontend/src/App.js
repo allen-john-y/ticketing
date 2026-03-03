@@ -17,13 +17,13 @@ import addFieldIcon from './add-field.jpg';
 import editFieldIcon from './edit-field.jpg';
 import removeFieldIcon from './remove-field.jpg';
 
-const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
-const backendBase = 'process.env.REACT_APP_BACKEND_URL';
+const HELP_DESK_GROUP_ID = process.env.REACT_APP_HELP_DESK_GROUP_ID;
+const backendBase = process.env.REACT_APP_BACKEND_URL;
 
 const pca = new PublicClientApplication({
   auth: {
-    clientId: '6541d73a-dbbd-4f74-9465-38a0eb03ec6b',
-    authority: 'https://login.microsoftonline.com/11909ab3-5ecc-48e0-b898-acf7203a1ad7',
+    clientId: process.env.REACT_APP_CLIENT_ID,
+    authority: 'https://login.microsoftonline.com/' + process.env.REACT_APP_TENANT_ID,
     redirectUri: process.env.REACT_APP_FRONTEND_URL,
   },
   cache: { cacheLocation: 'localStorage' },
