@@ -18,13 +18,13 @@ import editFieldIcon from './edit-field.jpg';
 import removeFieldIcon from './remove-field.jpg';
 
 const HELP_DESK_GROUP_ID = '15c0ecc6-c32a-4b38-9f21-6f394d01d70a';
-const backendBase = 'https://ticketing-hn59.onrender.com';
+const backendBase = 'process.env.REACT_APP_BACKEND_URL';
 
 const pca = new PublicClientApplication({
   auth: {
     clientId: '6541d73a-dbbd-4f74-9465-38a0eb03ec6b',
     authority: 'https://login.microsoftonline.com/11909ab3-5ecc-48e0-b898-acf7203a1ad7',
-    redirectUri: 'https://ticketing-psi-tawny.vercel.app/',
+    redirectUri: process.env.REACT_APP_FRONTEND_URL,
   },
   cache: { cacheLocation: 'localStorage' },
 });
