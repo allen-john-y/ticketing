@@ -24,7 +24,7 @@ const pca = new PublicClientApplication({
   auth: {
     clientId: process.env.REACT_APP_CLIENT_ID,
     authority: 'https://login.microsoftonline.com/' + process.env.REACT_APP_TENANT_ID,
-    redirectUri: process.env.REACT_APP_FRONTEND_URL,
+    redirectUri: window.location.origin,
   },
   cache: { cacheLocation: 'localStorage' },
 });
