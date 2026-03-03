@@ -222,7 +222,7 @@ function CreateTicket() {
         });
         const groups = (res.data?.value || []).map(g => (g.displayName || '').toString());
         const hasDeviceAdmin = groups.some(
-          name => name === 'GS_DeviceAdministrator' || name === 'GS_DeviceAdmin_Managed'
+          name => name === process.env.REACT_APP_DEVICE_ADMIN_GROUP1_NAME || name === process.env.REACT_APP_DEVICE_ADMIN_GROUP2_NAME
         );
         setIsDeviceAdmin(hasDeviceAdmin);
       } catch (err) {
