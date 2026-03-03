@@ -201,7 +201,7 @@ function Header({ logout }) {
         }
       } catch (err) {
         if (err instanceof InteractionRequiredAuthError) {
-          instance.acquireTokenRedirect({
+          instance.acquireTokenPopup({
             scopes: ['GroupMember.Read.All'],
             account: accounts[0],
           });
@@ -226,7 +226,7 @@ function Header({ logout }) {
       return resp.accessToken;
     } catch (err) {
       if (err instanceof InteractionRequiredAuthError) {
-        await instance.acquireTokenRedirect({
+        await instance.acquireTokenPopup({
           scopes: ['Group.ReadWrite.All', 'User.Read.All'],
           account: accounts[0],
         });
@@ -1052,7 +1052,7 @@ function Header({ logout }) {
 
     } catch (err) {
       if (err instanceof InteractionRequiredAuthError) {
-        instance.acquireTokenRedirect({
+        instance.acquireTokenPopup({
           scopes: ['User.Read', 'User.ReadBasic.All', 'User.Read.All'],
           account: accounts[0],
         });
@@ -3280,12 +3280,12 @@ function AppContent() {
   const { instance } = useMsal();
 
   const handleLogout = () => {
-    instance.logoutRedirect({ postLogoutRedirectUri: '/' });
+    instance.logoutPopup({ postLogoutRedirectUri: '/' });
   };
 
   const handleLogin = async () => {
     try {
-      await instance.loginRedirect({
+      await instance.loginPopup({
         scopes: ['User.Read', 'User.ReadBasic.All', 'GroupMember.Read.All'],
         prompt: 'select_account',
       });
