@@ -1061,7 +1061,7 @@ function Header({ logout }) {
         setProfileError(err.message);
       }
     } finally {
-      setProfileLoading(false);
+      setLoadingProfile(false);
     }
   };
 
