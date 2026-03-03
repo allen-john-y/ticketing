@@ -105,8 +105,8 @@ function Header({ logout }) {
   const categoryHeadsRefs = useRef([]);
   const ccEmailsRefs = useRef([]);
 
-  // Sidebar state
-  //const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  // Fixed sidebar width - no more hover expansion
+  const SIDEBAR_WIDTH = 260; // Fixed expanded width
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1093,7 +1093,7 @@ function Header({ logout }) {
     min-height: 100vh;
   }
   
-  /* Vertical Sidebar - Dynamic on hover */
+  /* Vertical Sidebar - Fixed width, no hover expansion */
   .vertical-sidebar {
     position: fixed;
     left: 0;
@@ -1101,15 +1101,10 @@ function Header({ logout }) {
     height: 100vh;
     background: linear-gradient(135deg, #002060 0%, #003380 100%);
     color: white;
-    width: 70px; /* Collapsed width */
-    transition: width 0.3s ease;
+    width: ${SIDEBAR_WIDTH}px; /* Fixed width - no more hover expansion */
     overflow: hidden;
     box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
     z-index: 1000;
-  }
-  
-  .vertical-sidebar:hover {
-    width: 260px; /* Expanded width on hover */
   }
   
   .sidebar-content {
@@ -1117,7 +1112,7 @@ function Header({ logout }) {
     height: 100%;
     display: flex;
     flex-direction: column;
-    width: 260px; /* Fixed width for content */
+    width: ${SIDEBAR_WIDTH}px; /* Fixed width */
   }
   
   .sidebar-user {
@@ -1151,13 +1146,8 @@ function Header({ logout }) {
   }
   
   .sidebar-user-details {
-    opacity: 0; /* Hide when collapsed */
-    transition: opacity 0.2s ease 0.15s;
+    opacity: 1; /* Always visible */
     white-space: nowrap;
-  }
-  
-  .vertical-sidebar:hover .sidebar-user-details {
-    opacity: 1; /* Show when expanded */
   }
   
   .sidebar-user-name {
@@ -1220,25 +1210,16 @@ function Header({ logout }) {
   }
   
   .sidebar-nav-label {
-    opacity: 0; /* Hide when collapsed */
-    transition: opacity 0.2s ease 0.15s;
+    opacity: 1; /* Always visible */
   }
   
-  .vertical-sidebar:hover .sidebar-nav-label {
-    opacity: 1; /* Show when expanded */
-  }
-  
-  /* Main Content Area - Adjusts with sidebar */
+  /* Main Content Area - Fixed margin to match sidebar */
   .main-wrapper {
     flex: 1;
-    margin-left: 70px; /* Match collapsed sidebar */
-    width: calc(100% - 70px);
-    transition: margin-left 0.3s ease;
-  }
-  
-  .vertical-sidebar:hover ~ .main-wrapper {
-    margin-left: 260px; /* Match expanded sidebar */
-    width: calc(100% - 260px);
+    margin-left: ${SIDEBAR_WIDTH}px; /* Fixed margin to match sidebar */
+    width: calc(100% - ${SIDEBAR_WIDTH}px);
+    min-height: 100vh;
+    background: #f8fafc;
   }
   
   /* App Header */
@@ -1726,13 +1707,16 @@ function Header({ logout }) {
     border-top: 2px solid #e2e8f0;
   }
   
+  /* Page content area */
+  .page-content {
+    padding: 24px;
+    min-height: calc(100vh - 73px); /* Subtract header height */
+  }
+  
   @media (max-width: 768px) {
     .vertical-sidebar {
       width: 0;
-    }
-    
-    .vertical-sidebar:hover {
-      width: 260px;
+      display: none; /* Hide on mobile */
     }
     
     .main-wrapper {
@@ -1749,7 +1733,7 @@ function Header({ logout }) {
 `}</style>
 
       <div className="app-container">
-        {/* Persistent Vertical Sidebar */}
+        {/* Persistent Vertical Sidebar - Fixed, no hover expansion */}
         <div className="vertical-sidebar">
           <div className="sidebar-content">
             {/* User Info */}
@@ -1772,22 +1756,22 @@ function Header({ logout }) {
             </div>
 
             {/* Navigation Items */}
-              <div className="sidebar-nav">
-                <Link to="/" className="sidebar-nav-item">
-                  <span className="sidebar-nav-icon">🏠</span>
-                  <span className="sidebar-nav-label">Dashboard</span>
-                </Link>
-                
-                <Link to="/create" className="sidebar-nav-item">
-                  <span className="sidebar-nav-icon">+</span>
-                  <span className="sidebar-nav-label">Create Ticket</span>
-                </Link>
-                
-                <Link to="/tickets" className="sidebar-nav-item">
-                  <span className="sidebar-nav-icon">🎫</span>
-                  <span className="sidebar-nav-label">View Tickets</span>
-                </Link>
-              </div>
+            <div className="sidebar-nav">
+              <Link to="/" className="sidebar-nav-item">
+                <span className="sidebar-nav-icon">🏠</span>
+                <span className="sidebar-nav-label">Dashboard</span>
+              </Link>
+              
+              <Link to="/create" className="sidebar-nav-item">
+                <span className="sidebar-nav-icon">+</span>
+                <span className="sidebar-nav-label">Create Ticket</span>
+              </Link>
+              
+              <Link to="/tickets" className="sidebar-nav-item">
+                <span className="sidebar-nav-icon">🎫</span>
+                <span className="sidebar-nav-label">View Tickets</span>
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -1824,70 +1808,70 @@ function Header({ logout }) {
                   </button>
 
                   {settingsOpen && (
-                      <div className="settings-dropdown">
-                        <div className="dropdown-title">⚙️ Admin Settings</div>
+                    <div className="settings-dropdown">
+                      <div className="dropdown-title">⚙️ Admin Settings</div>
 
-                        <button
-                          onClick={() => { openAddModal(); setSettingsOpen(false); }}
-                          className="dropdown-item add"
-                        >
-                          <img
-                            src={addUserIcon}
-                            alt="Add User"
-                            style={{ width: 18, height: 18, marginRight: 8 }}
-                          />
-                          Add User
-                        </button>
+                      <button
+                        onClick={() => { openAddModal(); setSettingsOpen(false); }}
+                        className="dropdown-item add"
+                      >
+                        <img
+                          src={addUserIcon}
+                          alt="Add User"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
+                        Add User
+                      </button>
 
-                        <button
-                          onClick={() => { openRemoveModal(); setSettingsOpen(false); }}
-                          className="dropdown-item remove"
-                        >
-                          <img
-                            src={removeUserIcon}
-                            alt="Remove User"
-                            style={{ width: 18, height: 18, marginRight: 8 }}
-                          />
-                          Remove User
-                        </button>
+                      <button
+                        onClick={() => { openRemoveModal(); setSettingsOpen(false); }}
+                        className="dropdown-item remove"
+                      >
+                        <img
+                          src={removeUserIcon}
+                          alt="Remove User"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
+                        Remove User
+                      </button>
 
-                        <button
-                          onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
-                          className="dropdown-item add"
-                        >
-                          <img
-                            src={addFieldIcon}
-                            alt="Add Field"
-                            style={{ width: 18, height: 18, marginRight: 8 }}
-                          />
-                          Add Field
-                        </button>
+                      <button
+                        onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
+                        className="dropdown-item add"
+                      >
+                        <img
+                          src={addFieldIcon}
+                          alt="Add Field"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
+                        Add Field
+                      </button>
 
-                        <button
-                          onClick={() => { openEditFieldModal(); setSettingsOpen(false); }}
-                          className="dropdown-item edit"
-                        >
-                          <img
-                            src={editFieldIcon}
-                            alt="Edit Field"
-                            style={{ width: 18, height: 18, marginRight: 8 }}
-                          />
-                          Edit Field
-                        </button>
+                      <button
+                        onClick={() => { openEditFieldModal(); setSettingsOpen(false); }}
+                        className="dropdown-item edit"
+                      >
+                        <img
+                          src={editFieldIcon}
+                          alt="Edit Field"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
+                        Edit Field
+                      </button>
 
-                        <button
-                          onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
-                          className="dropdown-item remove"
-                        >
-                          <img
-                            src={removeFieldIcon}
-                            alt="Remove Field"
-                            style={{ width: 18, height: 18, marginRight: 8 }}
-                          />
-                          Remove Field
-                        </button>
-                      </div>
-                    )}
+                      <button
+                        onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
+                        className="dropdown-item remove"
+                      >
+                        <img
+                          src={removeFieldIcon}
+                          alt="Remove Field"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
+                        Remove Field
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1943,17 +1927,19 @@ function Header({ logout }) {
           </header>
 
           {/* Page Content - Routes will render here */}
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/tickets" element={<Tickets />} />
-            <Route path="/create" element={<CreateTicket />} />
-            <Route path="/ticket/:id" element={<TicketDetails />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-          </Routes>
+          <div className="page-content">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/tickets" element={<Tickets />} />
+              <Route path="/create" element={<CreateTicket />} />
+              <Route path="/ticket/:id" element={<TicketDetails />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+            </Routes>
+          </div>
         </div>
       </div>
 
-      {/* Modals remain the same */}
+      {/* Modals remain the same - all your modal code unchanged */}
       {addModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeAddModal} />
