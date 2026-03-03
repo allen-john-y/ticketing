@@ -81,11 +81,11 @@ function Header({ logout }) {
   const [enableAttachmentsForCategory, setEnableAttachmentsForCategory] = useState(false);
   const [requireAttachmentsForCategory, setRequireAttachmentsForCategory] = useState(false);
 
-  const [categoryHeads, setCategoryHeads] = useState([{
+  const [categoryHeads, setCategoryHeads] = useState([{ 
     email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false
   }]);
 
-  const [ccEmails, setCcEmails] = useState([{
+  const [ccEmails, setCcEmails] = useState([{ 
     email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false
   }]);
 
@@ -104,6 +104,9 @@ function Header({ logout }) {
 
   const categoryHeadsRefs = useRef([]);
   const ccEmailsRefs = useRef([]);
+
+  // Fixed sidebar width - no more hover expansion
+  const SIDEBAR_WIDTH = 260; // Fixed expanded width
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -510,20 +513,20 @@ function Header({ logout }) {
 
   const handleCategoryHeadSearch = async (idx, searchText) => {
     if (!searchText || searchText.trim().length < 2) {
-      setCategoryHeads(prev => prev.map((h, i) =>
+      setCategoryHeads(prev => prev.map((h, i) => 
         i === idx ? { ...h, searchResults: [], showDropdown: false } : h
       ));
       return;
     }
 
-    setCategoryHeads(prev => prev.map((h, i) =>
+    setCategoryHeads(prev => prev.map((h, i) => 
       i === idx ? { ...h, searching: true, showDropdown: true } : h
     ));
 
     try {
-      const token = await instance.acquireTokenSilent({
-        scopes: ['User.Read.All'],
-        account: accounts[0]
+      const token = await instance.acquireTokenSilent({ 
+        scopes: ['User.Read.All'], 
+        account: accounts[0] 
       });
 
       const response = await axios.get(
@@ -540,41 +543,41 @@ function Header({ logout }) {
         userPrincipalName: u.userPrincipalName || ''
       }));
 
-      setCategoryHeads(prev => prev.map((h, i) =>
+      setCategoryHeads(prev => prev.map((h, i) => 
         i === idx ? { ...h, searchResults: results, searching: false } : h
       ));
     } catch (err) {
       console.error('Error searching category heads:', err);
-      setCategoryHeads(prev => prev.map((h, i) =>
+      setCategoryHeads(prev => prev.map((h, i) => 
         i === idx ? { ...h, searchResults: [], searching: false } : h
       ));
     }
   };
 
   const selectCategoryHead = (idx, user) => {
-    setCategoryHeads(prev => prev.map((h, i) =>
-      i === idx
-        ? {
-            email: user.mail,
-            name: user.displayName,
+    setCategoryHeads(prev => prev.map((h, i) => 
+      i === idx 
+        ? { 
+            email: user.mail, 
+            name: user.displayName, 
             searchQuery: user.displayName,
             searchResults: [],
             searching: false,
             showDropdown: false
-          }
+          } 
         : h
     ));
   };
 
   const updateCategoryHeadQuery = (idx, query) => {
-    setCategoryHeads(prev => prev.map((h, i) =>
+    setCategoryHeads(prev => prev.map((h, i) => 
       i === idx ? { ...h, searchQuery: query, email: '', name: '' } : h
     ));
     handleCategoryHeadSearch(idx, query);
   };
 
   const addCategoryHead = () => {
-    setCategoryHeads(prev => [...prev, {
+    setCategoryHeads(prev => [...prev, { 
       email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false
     }]);
   };
@@ -586,20 +589,20 @@ function Header({ logout }) {
 
   const handleCcEmailSearch = async (idx, searchText) => {
     if (!searchText || searchText.trim().length < 2) {
-      setCcEmails(prev => prev.map((c, i) =>
+      setCcEmails(prev => prev.map((c, i) => 
         i === idx ? { ...c, searchResults: [], showDropdown: false } : c
       ));
       return;
     }
 
-    setCcEmails(prev => prev.map((c, i) =>
+    setCcEmails(prev => prev.map((c, i) => 
       i === idx ? { ...c, searching: true, showDropdown: true } : c
     ));
 
     try {
-      const token = await instance.acquireTokenSilent({
-        scopes: ['User.Read.All'],
-        account: accounts[0]
+      const token = await instance.acquireTokenSilent({ 
+        scopes: ['User.Read.All'], 
+        account: accounts[0] 
       });
 
       const response = await axios.get(
@@ -616,41 +619,41 @@ function Header({ logout }) {
         userPrincipalName: u.userPrincipalName || ''
       }));
 
-      setCcEmails(prev => prev.map((c, i) =>
+      setCcEmails(prev => prev.map((c, i) => 
         i === idx ? { ...c, searchResults: results, searching: false } : c
       ));
     } catch (err) {
       console.error('Error searching CC emails:', err);
-      setCcEmails(prev => prev.map((c, i) =>
+      setCcEmails(prev => prev.map((c, i) => 
         i === idx ? { ...c, searchResults: [], searching: false } : c
       ));
     }
   };
 
   const selectCcEmail = (idx, user) => {
-    setCcEmails(prev => prev.map((c, i) =>
-      i === idx
-        ? {
-            email: user.mail,
-            name: user.displayName,
+    setCcEmails(prev => prev.map((c, i) => 
+      i === idx 
+        ? { 
+            email: user.mail, 
+            name: user.displayName, 
             searchQuery: user.displayName,
             searchResults: [],
             searching: false,
             showDropdown: false
-          }
+          } 
         : c
     ));
   };
 
   const updateCcEmailQuery = (idx, query) => {
-    setCcEmails(prev => prev.map((c, i) =>
+    setCcEmails(prev => prev.map((c, i) => 
       i === idx ? { ...c, searchQuery: query, email: '', name: '' } : c
     ));
     handleCcEmailSearch(idx, query);
   };
 
   const addCcEmail = () => {
-    setCcEmails(prev => [...prev, {
+    setCcEmails(prev => [...prev, { 
       email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false
     }]);
   };
@@ -684,7 +687,7 @@ function Header({ logout }) {
         categoryName: categoryName.trim(),
         features: {
           approvalRequired: requireApproval,
-          onBehalf: enableOnBehalf
+          onBehalf: enableOnBehalf 
             ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
             : { enabled: false },
           subCategories: enableSubCategory
@@ -697,19 +700,19 @@ function Header({ logout }) {
                 required: !!requireSubCategory
               }
             : { enabled: false },
-          attachments: enableAttachmentsForCategory
-            ? { enabled: true, required: !!requireAttachmentsForCategory }
+          attachments: enableAttachmentsForCategory 
+            ? { enabled: true, required: !!requireAttachmentsForCategory } 
             : { enabled: false },
         },
-        categoryHeads: validHeads.map(h => ({
-          email: h.email.trim(),
-          name: h.name || h.email.trim()
+        categoryHeads: validHeads.map(h => ({ 
+          email: h.email.trim(), 
+          name: h.name || h.email.trim() 
         })),
         cc: ccEmails
           .filter(c => c.email && c.email.trim())
-          .map(c => ({
-            email: c.email.trim(),
-            name: c.name || c.email.trim()
+          .map(c => ({ 
+            email: c.email.trim(), 
+            name: c.name || c.email.trim() 
           })),
         createdBy: {
           id: accounts?.[0]?.homeAccountId || '',
@@ -730,7 +733,7 @@ function Header({ logout }) {
       }
 
       setCategorySuccess('Category created successfully');
-
+      
       try {
         await fetch(`${backendBase}/api/notify-category-added`, {
           method: 'POST',
@@ -833,12 +836,12 @@ function Header({ logout }) {
 
   const selectCategoryForEdit = (category) => {
     setEditingCategory(category);
-
+    
     setCategoryName(category.name || category.categoryName || '');
     setRequireApproval(!!category.features?.approvalRequired);
-
+    
     const features = category.features || {};
-
+    
     if (features.onBehalf && features.onBehalf.enabled) {
       setEnableOnBehalf(true);
       setRequireOnBehalf(!!features.onBehalf.required);
@@ -846,7 +849,7 @@ function Header({ logout }) {
       setEnableOnBehalf(false);
       setRequireOnBehalf(false);
     }
-
+    
     if (features.subCategories && features.subCategories.enabled) {
       setEnableSubCategory(true);
       const list = features.subCategories.list || [];
@@ -858,7 +861,7 @@ function Header({ logout }) {
       setSubCategories([]);
       setRequireSubCategory(false);
     }
-
+    
     if (features.attachments && features.attachments.enabled) {
       setEnableAttachmentsForCategory(true);
       setRequireAttachmentsForCategory(!!features.attachments.required);
@@ -866,7 +869,7 @@ function Header({ logout }) {
       setEnableAttachmentsForCategory(false);
       setRequireAttachmentsForCategory(false);
     }
-
+    
     const heads = category.categoryHeads || [];
     if (heads.length > 0) {
       setCategoryHeads(heads.map(h => ({
@@ -880,7 +883,7 @@ function Header({ logout }) {
     } else {
       setCategoryHeads([{ email: '', name: '', searchQuery: '', searchResults: [], searching: false, showDropdown: false }]);
     }
-
+    
     const ccs = category.cc || [];
     if (ccs.length > 0) {
       setCcEmails(ccs.map(c => ({
@@ -925,7 +928,7 @@ function Header({ logout }) {
         categoryName: categoryName.trim(),
         features: {
           approvalRequired: requireApproval,
-          onBehalf: enableOnBehalf
+          onBehalf: enableOnBehalf 
             ? { enabled: true, options: FIXED_ONBEHALF_OPTIONS, required: !!requireOnBehalf }
             : { enabled: false },
           subCategories: enableSubCategory
@@ -938,19 +941,19 @@ function Header({ logout }) {
                 required: !!requireSubCategory
               }
             : { enabled: false },
-          attachments: enableAttachmentsForCategory
-            ? { enabled: true, required: !!requireAttachmentsForCategory }
+          attachments: enableAttachmentsForCategory 
+            ? { enabled: true, required: !!requireAttachmentsForCategory } 
             : { enabled: false },
         },
-        categoryHeads: validHeads.map(h => ({
-          email: h.email.trim(),
-          name: h.name || h.email.trim()
+        categoryHeads: validHeads.map(h => ({ 
+          email: h.email.trim(), 
+          name: h.name || h.email.trim() 
         })),
         cc: ccEmails
           .filter(c => c.email && c.email.trim())
-          .map(c => ({
-            email: c.email.trim(),
-            name: c.name || c.email.trim()
+          .map(c => ({ 
+            email: c.email.trim(), 
+            name: c.name || c.email.trim() 
           })),
         updatedBy: {
           id: accounts?.[0]?.homeAccountId || '',
@@ -971,8 +974,8 @@ function Header({ logout }) {
       }
 
       setCategorySuccess('Category updated successfully');
-
-      setCategoriesForEdit(prev => prev.map(c =>
+      
+      setCategoriesForEdit(prev => prev.map(c => 
         c.id === editingCategory.id ? { ...c, ...payload } : c
       ));
 
@@ -1000,14 +1003,14 @@ function Header({ logout }) {
       });
 
       const token = response.accessToken;
-
+      
       const graphRes = await fetch(
         'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName,department,employeeId,mobilePhone,streetAddress,state,postalCode,jobTitle,manager&$expand=manager($select=displayName)',
-        {
-          headers: {
+        { 
+          headers: { 
             Authorization: `Bearer ${token}`,
             'ConsistencyLevel': 'eventual'
-          }
+          } 
         }
       );
 
@@ -1083,16 +1086,14 @@ function Header({ logout }) {
     <>
       <style>{`
   * { box-sizing: border-box; }
-
-  /* ─── Layout ─────────────────────────────────────────────── */
+  
+  /* App Container */
   .app-container {
     display: flex;
     min-height: 100vh;
   }
-
-  /* ─── Sidebar ─────────────────────────────────────────────── */
-  /* The sidebar is position:fixed so it OVERLAYS the content.
-     It never pushes / shifts the main-wrapper. */
+  
+  /* Vertical Sidebar - Fixed width, no hover expansion */
   .vertical-sidebar {
     position: fixed;
     left: 0;
@@ -1100,25 +1101,20 @@ function Header({ logout }) {
     height: 100vh;
     background: linear-gradient(135deg, #002060 0%, #003380 100%);
     color: white;
-    width: 70px;
-    transition: width 0.3s ease;
+    width: ${SIDEBAR_WIDTH}px; /* Fixed width - no more hover expansion */
     overflow: hidden;
     box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
     z-index: 1000;
   }
-
-  .vertical-sidebar:hover {
-    width: 260px;
-  }
-
+  
   .sidebar-content {
     padding: 1.5rem 0;
     height: 100%;
     display: flex;
     flex-direction: column;
-    width: 260px; /* fixed so inner items don't reflow */
+    width: ${SIDEBAR_WIDTH}px; /* Fixed width */
   }
-
+  
   .sidebar-user {
     display: flex;
     align-items: center;
@@ -1126,7 +1122,7 @@ function Header({ logout }) {
     padding: 0 1rem;
     margin-bottom: 2rem;
   }
-
+  
   .sidebar-avatar {
     min-width: 42px;
     width: 42px;
@@ -1141,32 +1137,25 @@ function Header({ logout }) {
     font-size: 14px;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    flex-shrink: 0;
   }
-
+  
   .sidebar-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-
+  
   .sidebar-user-details {
-    opacity: 0;
-    transition: opacity 0.2s ease 0.15s;
+    opacity: 1; /* Always visible */
     white-space: nowrap;
-    overflow: hidden;
   }
-
-  .vertical-sidebar:hover .sidebar-user-details {
-    opacity: 1;
-  }
-
+  
   .sidebar-user-name {
     font-size: 15px;
     font-weight: 600;
     margin-bottom: 2px;
   }
-
+  
   .sidebar-user-role {
     font-size: 11px;
     opacity: 0.8;
@@ -1175,7 +1164,7 @@ function Header({ logout }) {
     border-radius: 4px;
     display: inline-block;
   }
-
+  
   .sidebar-nav {
     flex: 1;
     display: flex;
@@ -1183,7 +1172,7 @@ function Header({ logout }) {
     gap: 0.5rem;
     padding: 0 1rem;
   }
-
+  
   .sidebar-nav-item {
     display: flex;
     align-items: center;
@@ -1201,49 +1190,39 @@ function Header({ logout }) {
     font-size: 14px;
     font-weight: 500;
   }
-
+  
   .sidebar-nav-item:hover {
     background: rgba(255, 255, 255, 0.1);
     color: white;
   }
-
+  
   .sidebar-nav-item.active {
     background: rgba(255, 255, 255, 0.15);
     color: white;
     border-left: 3px solid #e98404;
   }
-
+  
   .sidebar-nav-icon {
     font-size: 20px;
     min-width: 24px;
     display: flex;
     justify-content: center;
-    flex-shrink: 0;
   }
-
+  
   .sidebar-nav-label {
-    opacity: 0;
-    transition: opacity 0.2s ease 0.15s;
-    overflow: hidden;
+    opacity: 1; /* Always visible */
   }
-
-  .vertical-sidebar:hover .sidebar-nav-label {
-    opacity: 1;
-  }
-
-  /* ─── Main wrapper ────────────────────────────────────────── */
-  /* Always offset by the COLLAPSED sidebar width (70px).
-     Never changes — sidebar overlays, not pushes. */
+  
+  /* Main Content Area - Fixed margin to match sidebar */
   .main-wrapper {
     flex: 1;
-    margin-left: 70px;
-    width: calc(100% - 70px);
+    margin-left: ${SIDEBAR_WIDTH}px; /* Fixed margin to match sidebar */
+    width: calc(100% - ${SIDEBAR_WIDTH}px);
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+    background: #f8fafc;
   }
-
-  /* ─── Header ──────────────────────────────────────────────── */
+  
+  /* App Header */
   .app-header {
     background: linear-gradient(135deg, #002060 0%, #003380 100%);
     padding: 1rem 2rem;
@@ -1252,17 +1231,14 @@ function Header({ logout }) {
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    position: sticky;
-    top: 0;
-    z-index: 900; /* below sidebar overlay */
   }
-
+  
   .header-left {
     display: flex;
     align-items: center;
     gap: 1.25rem;
   }
-
+  
   .logo-img {
     width: 40px;
     height: 40px;
@@ -1270,31 +1246,31 @@ function Header({ logout }) {
     object-fit: cover;
     cursor: pointer;
   }
-
+  
   .company-info {
     cursor: pointer;
   }
-
+  
   .company-info h1 {
     margin: 0;
     font-size: 1.1rem;
     font-weight: 700;
     color: #ffffff;
   }
-
+  
   .company-subtitle {
     color: rgba(255, 255, 255, 0.8);
     font-size: 11px;
     margin-top: 2px;
     font-weight: 500;
   }
-
+  
   .header-right {
     display: flex;
     align-items: center;
     gap: 1rem;
   }
-
+  
   .settings-btn {
     width: 40px;
     height: 40px;
@@ -1307,17 +1283,17 @@ function Header({ logout }) {
     justify-content: center;
     transition: all 0.2s;
   }
-
+  
   .settings-btn:hover {
     background: #e2e8f0;
     transform: scale(1.05);
   }
-
+  
   .settings-btn img {
     width: 20px;
     height: 20px;
   }
-
+  
   .settings-dropdown {
     position: absolute;
     right: 0;
@@ -1329,7 +1305,7 @@ function Header({ logout }) {
     width: 280px;
     z-index: 60;
   }
-
+  
   .dropdown-title {
     font-weight: 800;
     color: #0f172a;
@@ -1338,7 +1314,7 @@ function Header({ logout }) {
     border-bottom: 2px solid #e2e8f0;
     font-size: 15px;
   }
-
+  
   .dropdown-item {
     width: 100%;
     text-align: left;
@@ -1354,16 +1330,16 @@ function Header({ logout }) {
     align-items: center;
     gap: 10px;
   }
-
+  
   .dropdown-item:hover {
     background: #f8fafc;
     transform: translateX(2px);
   }
-
+  
   .dropdown-item.add { color: #002060; }
   .dropdown-item.remove { color: #ef4444; }
   .dropdown-item.edit { color: #8b5cf6; }
-
+  
   .profile-btn {
     display: flex;
     align-items: center;
@@ -1376,11 +1352,11 @@ function Header({ logout }) {
     cursor: pointer;
     transition: all 0.2s;
   }
-
+  
   .profile-btn:hover {
     background: #e2e8f0;
   }
-
+  
   .profile-avatar {
     width: 32px;
     height: 32px;
@@ -1392,32 +1368,31 @@ function Header({ logout }) {
     font-weight: 700;
     font-size: 12px;
     overflow: hidden;
-    flex-shrink: 0;
   }
-
+  
   .profile-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-
+  
   .profile-info {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     line-height: 1.2;
   }
-
+  
   .profile-name {
     font-size: 13px;
     font-weight: 600;
   }
-
+  
   .profile-email {
     font-size: 11px;
     color: #64748b;
   }
-
+  
   .profile-dropdown {
     position: absolute;
     right: 0;
@@ -1430,7 +1405,7 @@ function Header({ logout }) {
     z-index: 60;
     color: #0f172a;
   }
-
+  
   .profile-dropdown-header {
     display: flex;
     gap: 14px;
@@ -1439,7 +1414,7 @@ function Header({ logout }) {
     padding-bottom: 16px;
     border-bottom: 2px solid #e2e8f0;
   }
-
+  
   .profile-dropdown-avatar {
     width: 52px;
     height: 52px;
@@ -1451,36 +1426,35 @@ function Header({ logout }) {
     font-weight: 800;
     color: #002060;
     overflow: hidden;
-    flex-shrink: 0;
   }
-
+  
   .profile-dropdown-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-
+  
   .profile-dropdown-info {
     flex: 1;
   }
-
+  
   .profile-dropdown-name {
     font-weight: 800;
     font-size: 15px;
     margin-bottom: 4px;
   }
-
+  
   .profile-dropdown-email {
     font-size: 13px;
     color: #64748b;
   }
-
+  
   .profile-actions {
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
-
+  
   .profile-action-btn {
     width: 100%;
     text-align: left;
@@ -1492,26 +1466,25 @@ function Header({ logout }) {
     transition: all 0.15s;
     font-size: 14px;
   }
-
+  
   .btn-view-profile {
     background: #eff6ff;
     color: #002060;
   }
-
+  
   .btn-view-profile:hover {
     background: #dbeafe;
   }
-
+  
   .btn-logout {
     background: #ef4444;
     color: white;
   }
-
+  
   .btn-logout:hover {
     background: #dc2626;
   }
-
-  /* ─── Modals ──────────────────────────────────────────────── */
+  
   .modal-overlay {
     position: fixed;
     inset: 0;
@@ -1519,7 +1492,7 @@ function Header({ logout }) {
     z-index: 90;
     backdrop-filter: blur(2px);
   }
-
+  
   .modal {
     position: fixed;
     top: 50%;
@@ -1533,10 +1506,10 @@ function Header({ logout }) {
     max-height: 90vh;
     overflow-y: auto;
   }
-
+  
   .modal-small { width: 560px; max-width: 90vw; }
   .modal-large { width: 840px; max-width: 95vw; }
-
+  
   .modal-header {
     display: flex;
     justify-content: space-between;
@@ -1545,14 +1518,14 @@ function Header({ logout }) {
     padding-bottom: 16px;
     border-bottom: 2px solid #e2e8f0;
   }
-
+  
   .modal-title {
     margin: 0;
     font-size: 1.4rem;
     font-weight: 800;
     color: #0f172a;
   }
-
+  
   .modal-close {
     background: transparent;
     border: none;
@@ -1567,23 +1540,23 @@ function Header({ logout }) {
     border-radius: 6px;
     transition: all 0.15s;
   }
-
+  
   .modal-close:hover {
     background: #f1f5f9;
     color: #64748b;
   }
-
+  
   .modal-subtitle {
     font-size: 14px;
     color: #64748b;
     margin-bottom: 24px;
     line-height: 1.5;
   }
-
+  
   .form-group {
     margin-bottom: 20px;
   }
-
+  
   .form-label {
     display: block;
     font-weight: 700;
@@ -1591,7 +1564,7 @@ function Header({ logout }) {
     color: #0f172a;
     margin-bottom: 8px;
   }
-
+  
   .form-input {
     width: 100%;
     padding: 12px 14px;
@@ -1600,13 +1573,13 @@ function Header({ logout }) {
     font-size: 14px;
     transition: all 0.2s;
   }
-
+  
   .form-input:focus {
     outline: none;
     border-color: #002060;
     box-shadow: 0 0 0 3px rgba(0, 32, 96, 0.1);
   }
-
+  
   .btn {
     padding: 12px 24px;
     border-radius: 10px;
@@ -1616,53 +1589,53 @@ function Header({ logout }) {
     transition: all 0.2s;
     border: none;
   }
-
+  
   .btn-primary {
     background: #002060;
     color: white;
   }
-
+  
   .btn-primary:hover:not(:disabled) {
     background: #001a4d;
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(0, 32, 96, 0.3);
   }
-
+  
   .btn-primary:disabled {
     background: #94a3b8;
     cursor: not-allowed;
   }
-
+  
   .btn-danger {
     background: #ef4444;
     color: white;
   }
-
+  
   .btn-danger:hover:not(:disabled) {
     background: #dc2626;
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
   }
-
+  
   .btn-secondary {
     background: #f1f5f9;
     color: #475569;
     border: 2px solid #e2e8f0;
   }
-
+  
   .btn-secondary:hover {
     background: #e2e8f0;
   }
-
+  
   .btn-success {
     background: #10b981;
     color: white;
   }
-
+  
   .btn-success:hover:not(:disabled) {
     background: #059669;
   }
-
+  
   .message {
     padding: 14px 18px;
     border-radius: 10px;
@@ -1670,25 +1643,25 @@ function Header({ logout }) {
     font-weight: 600;
     margin-top: 16px;
   }
-
+  
   .message-success {
     background: #d1fae5;
     color: #065f46;
     border: 2px solid #a7f3d0;
   }
-
+  
   .message-error {
     background: #fee2e2;
     color: #991b1b;
     border: 2px solid #fecaca;
   }
-
+  
   .user-list {
     max-height: 320px;
     overflow-y: auto;
     margin-bottom: 16px;
   }
-
+  
   .user-item {
     padding: 14px;
     border-radius: 10px;
@@ -1698,33 +1671,33 @@ function Header({ logout }) {
     cursor: pointer;
     transition: all 0.15s;
   }
-
+  
   .user-item:hover {
     border-color: #002060;
     background: #f8fafc;
   }
-
+  
   .user-item.selected {
     background: #eff6ff;
     border-color: #002060;
   }
-
+  
   .user-item.danger-selected {
     background: #fee2e2;
     border-color: #ef4444;
   }
-
+  
   .user-name {
     font-weight: 700;
     font-size: 14px;
     margin-bottom: 4px;
   }
-
+  
   .user-email {
     font-size: 13px;
     color: #64748b;
   }
-
+  
   .modal-footer {
     display: flex;
     justify-content: flex-end;
@@ -1733,23 +1706,24 @@ function Header({ logout }) {
     padding-top: 20px;
     border-top: 2px solid #e2e8f0;
   }
-
-  /* ─── Responsive ──────────────────────────────────────────── */
+  
+  /* Page content area */
+  .page-content {
+    padding: 24px;
+    min-height: calc(100vh - 73px); /* Subtract header height */
+  }
+  
   @media (max-width: 768px) {
     .vertical-sidebar {
       width: 0;
+      display: none; /* Hide on mobile */
     }
-
-    .vertical-sidebar:hover {
-      width: 260px;
-    }
-
-    /* On mobile the sidebar starts at 0, so no offset needed */
+    
     .main-wrapper {
       margin-left: 0;
       width: 100%;
     }
-
+    
     .modal-small,
     .modal-large {
       width: 95vw;
@@ -1759,9 +1733,10 @@ function Header({ logout }) {
 `}</style>
 
       <div className="app-container">
-        {/* Persistent Vertical Sidebar — overlays content, never pushes it */}
+        {/* Persistent Vertical Sidebar - Fixed, no hover expansion */}
         <div className="vertical-sidebar">
           <div className="sidebar-content">
+            {/* User Info */}
             <div className="sidebar-user">
               <div className="sidebar-avatar">
                 {profilePhoto ? (
@@ -1780,17 +1755,18 @@ function Header({ logout }) {
               </div>
             </div>
 
+            {/* Navigation Items */}
             <div className="sidebar-nav">
               <Link to="/" className="sidebar-nav-item">
                 <span className="sidebar-nav-icon">🏠</span>
                 <span className="sidebar-nav-label">Dashboard</span>
               </Link>
-
+              
               <Link to="/create" className="sidebar-nav-item">
                 <span className="sidebar-nav-icon">+</span>
                 <span className="sidebar-nav-label">Create Ticket</span>
               </Link>
-
+              
               <Link to="/tickets" className="sidebar-nav-item">
                 <span className="sidebar-nav-icon">🎫</span>
                 <span className="sidebar-nav-label">View Tickets</span>
@@ -1799,8 +1775,9 @@ function Header({ logout }) {
           </div>
         </div>
 
-        {/* Main content — fixed offset, never shifts */}
+        {/* Main Content Area */}
         <div className="main-wrapper">
+          {/* App Header */}
           <header className="app-header">
             <div className="header-left">
               <img
@@ -1809,7 +1786,11 @@ function Header({ logout }) {
                 className="logo-img"
                 onClick={() => navigate('/')}
               />
-              <div className="company-info" onClick={() => navigate('/')}>
+
+              <div
+                className="company-info"
+                onClick={() => navigate('/')}
+              >
                 <h1>SANDEZA INC</h1>
                 <div className="company-subtitle">IT Ticket Portal</div>
               </div>
@@ -1834,7 +1815,11 @@ function Header({ logout }) {
                         onClick={() => { openAddModal(); setSettingsOpen(false); }}
                         className="dropdown-item add"
                       >
-                        <img src={addUserIcon} alt="Add User" style={{ width: 18, height: 18, marginRight: 8 }} />
+                        <img
+                          src={addUserIcon}
+                          alt="Add User"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
                         Add User
                       </button>
 
@@ -1842,7 +1827,11 @@ function Header({ logout }) {
                         onClick={() => { openRemoveModal(); setSettingsOpen(false); }}
                         className="dropdown-item remove"
                       >
-                        <img src={removeUserIcon} alt="Remove User" style={{ width: 18, height: 18, marginRight: 8 }} />
+                        <img
+                          src={removeUserIcon}
+                          alt="Remove User"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
                         Remove User
                       </button>
 
@@ -1850,7 +1839,11 @@ function Header({ logout }) {
                         onClick={() => { resetCategoryForm(); setAddFieldOpen(true); setSettingsOpen(false); }}
                         className="dropdown-item add"
                       >
-                        <img src={addFieldIcon} alt="Add Field" style={{ width: 18, height: 18, marginRight: 8 }} />
+                        <img
+                          src={addFieldIcon}
+                          alt="Add Field"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
                         Add Field
                       </button>
 
@@ -1858,7 +1851,11 @@ function Header({ logout }) {
                         onClick={() => { openEditFieldModal(); setSettingsOpen(false); }}
                         className="dropdown-item edit"
                       >
-                        <img src={editFieldIcon} alt="Edit Field" style={{ width: 18, height: 18, marginRight: 8 }} />
+                        <img
+                          src={editFieldIcon}
+                          alt="Edit Field"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
                         Edit Field
                       </button>
 
@@ -1866,7 +1863,11 @@ function Header({ logout }) {
                         onClick={() => { openRemoveFieldModal(); setSettingsOpen(false); }}
                         className="dropdown-item remove"
                       >
-                        <img src={removeFieldIcon} alt="Remove Field" style={{ width: 18, height: 18, marginRight: 8 }} />
+                        <img
+                          src={removeFieldIcon}
+                          alt="Remove Field"
+                          style={{ width: 18, height: 18, marginRight: 8 }}
+                        />
                         Remove Field
                       </button>
                     </div>
@@ -1914,6 +1915,7 @@ function Header({ logout }) {
                       <button onClick={() => { openFullProfile(); setProfileOpen(false); }} className="profile-action-btn btn-view-profile">
                         👤 View Full Profile
                       </button>
+
                       <button onClick={logout} className="profile-action-btn btn-logout">
                         🚪 Logout
                       </button>
@@ -1924,22 +1926,25 @@ function Header({ logout }) {
             </div>
           </header>
 
-          {/* Page routes — stable, never shift */}
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/tickets" element={<Tickets />} />
-            <Route path="/create" element={<CreateTicket />} />
-            <Route path="/ticket/:id" element={<TicketDetails />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-          </Routes>
+          {/* Page Content - Routes will render here */}
+          <div className="page-content">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/tickets" element={<Tickets />} />
+              <Route path="/create" element={<CreateTicket />} />
+              <Route path="/ticket/:id" element={<TicketDetails />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+            </Routes>
+          </div>
         </div>
       </div>
 
-      {/* ── Add User Modal ─────────────────────────────────────── */}
+      {/* Modals remain the same - all your modal code unchanged */}
       {addModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeAddModal} />
           <div className="modal modal-small" onClick={(e) => e.stopPropagation()}>
+            {/* Add User Modal Content - same as before */}
             <div className="modal-header">
               <h3 className="modal-title">Add Admin User</h3>
               <button onClick={closeAddModal} className="modal-close">✖</button>
@@ -1998,7 +2003,7 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* ── Remove User Modal ──────────────────────────────────── */}
+      {/* Remove User Modal */}
       {removeModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeRemoveModal} />
@@ -2046,7 +2051,7 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* ── Add Field Modal ────────────────────────────────────── */}
+      {/* Add Field Modal */}
       {addFieldOpen && (
         <>
           <div className="modal-overlay" onClick={() => setAddFieldOpen(false)} />
@@ -2061,19 +2066,19 @@ function Header({ logout }) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
+              
               <div className="form-group">
                 <label className="form-label">Category Name <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  value={categoryName}
-                  onChange={(e) => setCategoryName(e.target.value)}
-                  placeholder="e.g., HR, IT Support, Finance"
+                <input 
+                  value={categoryName} 
+                  onChange={(e) => setCategoryName(e.target.value)} 
+                  placeholder="e.g., HR, IT Support, Finance" 
                   className="form-input"
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
+                
                 <div>
                   <label className="form-label">Category Heads <span style={{ color: '#ef4444' }}>*</span></label>
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
@@ -2081,41 +2086,90 @@ function Header({ logout }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {categoryHeads.map((h, idx) => (
-                      <div key={idx} ref={el => categoryHeadsRefs.current[idx] = el} style={{ position: 'relative' }}>
+                      <div 
+                        key={idx} 
+                        ref={el => categoryHeadsRefs.current[idx] = el}
+                        style={{ position: 'relative' }}
+                      >
                         <div style={{ display: 'flex', gap: 6 }}>
                           <input
                             value={h.searchQuery}
                             onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
                             placeholder="Type name or email..."
-                            style={{
-                              flex: 1,
-                              padding: '8px 10px',
-                              borderRadius: 6,
+                            style={{ 
+                              flex: 1, 
+                              padding: '8px 10px', 
+                              borderRadius: 6, 
                               border: h.email ? '2px solid #10b981' : '2px solid #e2e8f0',
                               background: h.email ? '#ecfdf5' : 'white',
                               fontSize: 13
                             }}
                           />
+                          
                           {idx === categoryHeads.length - 1 ? (
-                            <button type="button" onClick={addCategoryHead}
-                              style={{ padding: '8px 12px', borderRadius: 6, background: '#eff6ff', border: '2px solid #dbeafe', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}>
+                            <button
+                              type="button"
+                              onClick={addCategoryHead}
+                              style={{
+                                padding: '8px 12px',
+                                borderRadius: 6,
+                                background: '#eff6ff',
+                                border: '2px solid #dbeafe',
+                                cursor: 'pointer',
+                                fontSize: 16,
+                                fontWeight: 600
+                              }}
+                            >
                               ＋
                             </button>
                           ) : (
-                            <button type="button" onClick={() => removeCategoryHead(idx)}
-                              style={{ padding: '8px 12px', borderRadius: 6, background: '#fee2e2', border: '2px solid #fecaca', cursor: 'pointer', fontSize: 14 }}>
+                            <button
+                              type="button"
+                              onClick={() => removeCategoryHead(idx)}
+                              style={{
+                                padding: '8px 12px',
+                                borderRadius: 6,
+                                background: '#fee2e2',
+                                border: '2px solid #fecaca',
+                                cursor: 'pointer',
+                                fontSize: 14
+                              }}
+                            >
                               ✖
                             </button>
                           )}
+
                         </div>
 
                         {h.showDropdown && h.searchResults.length > 0 && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '2px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 110 }}>
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            background: 'white',
+                            border: '2px solid #e2e8f0',
+                            borderRadius: 8,
+                            marginTop: 4,
+                            maxHeight: 200,
+                            overflowY: 'auto',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                            zIndex: 110
+                          }}>
                             {h.searchResults.map((user, userIdx) => (
-                              <div key={userIdx} onClick={() => selectCategoryHead(idx, user)}
-                                style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none', background: 'white', transition: 'background 0.15s' }}
+                              <div
+                                key={userIdx}
+                                onClick={() => selectCategoryHead(idx, user)}
+                                style={{
+                                  padding: '10px 12px',
+                                  cursor: 'pointer',
+                                  borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                  background: 'white',
+                                  transition: 'background 0.15s'
+                                }}
                                 onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}>
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                              >
                                 <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
                                 <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                               </div>
@@ -2125,10 +2179,16 @@ function Header({ logout }) {
 
                         {h.email && (
                           <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span>✓</span><span>{h.name} ({h.email})</span>
+                            <span>✓</span>
+                            <span>{h.name} ({h.email})</span>
                           </div>
                         )}
-                        {h.searching && <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>Searching...</div>}
+
+                        {h.searching && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                            Searching...
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2141,41 +2201,90 @@ function Header({ logout }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {ccEmails.map((c, idx) => (
-                      <div key={idx} ref={el => ccEmailsRefs.current[idx] = el} style={{ position: 'relative' }}>
+                      <div 
+                        key={idx}
+                        ref={el => ccEmailsRefs.current[idx] = el}
+                        style={{ position: 'relative' }}
+                      >
                         <div style={{ display: 'flex', gap: 6 }}>
                           <input
                             value={c.searchQuery}
                             onChange={(e) => updateCcEmailQuery(idx, e.target.value)}
                             placeholder="Type name or email..."
-                            style={{
-                              flex: 1,
-                              padding: '8px 10px',
-                              borderRadius: 6,
+                            style={{ 
+                              flex: 1, 
+                              padding: '8px 10px', 
+                              borderRadius: 6, 
                               border: c.email ? '2px solid #10b981' : '2px solid #e2e8f0',
                               background: c.email ? '#ecfdf5' : 'white',
                               fontSize: 13
                             }}
                           />
+                          
                           {idx === ccEmails.length - 1 ? (
-                            <button type="button" onClick={addCcEmail}
-                              style={{ padding: '8px 12px', borderRadius: 6, background: '#eff6ff', border: '2px solid #dbeafe', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}>
+                            <button 
+                              type="button" 
+                              onClick={addCcEmail} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#eff6ff', 
+                                border: '2px solid #dbeafe',
+                                cursor: 'pointer',
+                                fontSize: 16,
+                                fontWeight: 600
+                              }}
+                            >
                               ＋
                             </button>
                           ) : (
-                            <button type="button" onClick={() => removeCcEmail(idx)}
-                              style={{ padding: '8px 12px', borderRadius: 6, background: '#fee2e2', border: '2px solid #fecaca', cursor: 'pointer', fontSize: 14 }}>
+                            <button 
+                              type="button" 
+                              onClick={() => removeCcEmail(idx)} 
+                              style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: 6, 
+                                background: '#fee2e2', 
+                                border: '2px solid #fecaca',
+                                cursor: 'pointer',
+                                fontSize: 14
+                              }}
+                            >
                               ✖
                             </button>
                           )}
+
                         </div>
 
                         {c.showDropdown && c.searchResults.length > 0 && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '2px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 110 }}>
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            background: 'white',
+                            border: '2px solid #e2e8f0',
+                            borderRadius: 8,
+                            marginTop: 4,
+                            maxHeight: 200,
+                            overflowY: 'auto',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                            zIndex: 110
+                          }}>
                             {c.searchResults.map((user, userIdx) => (
-                              <div key={userIdx} onClick={() => selectCcEmail(idx, user)}
-                                style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none', background: 'white', transition: 'background 0.15s' }}
+                              <div
+                                key={userIdx}
+                                onClick={() => selectCcEmail(idx, user)}
+                                style={{
+                                  padding: '10px 12px',
+                                  cursor: 'pointer',
+                                  borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                  background: 'white',
+                                  transition: 'background 0.15s'
+                                }}
                                 onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}>
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                              >
                                 <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
                                 <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                               </div>
@@ -2185,68 +2294,57 @@ function Header({ logout }) {
 
                         {c.email && (
                           <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span>✓</span><span>{c.name} ({c.email})</span>
+                            <span>✓</span>
+                            <span>{c.name} ({c.email})</span>
                           </div>
                         )}
-                        {c.searching && <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>Searching...</div>}
+
+                        {c.searching && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                            Searching...
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
+
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-
-                <div style={{ padding: 16, border: '2px solid #e2e8f0', borderRadius: 12, background: enableOnBehalf ? '#f0f9ff' : '#fafafa' }}>
+                
+                <div style={{ 
+                  padding: 16, 
+                  border: '2px solid #e2e8f0', 
+                  borderRadius: 12,
+                  background: enableOnBehalf ? '#f0f9ff' : '#fafafa'
+                }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <label style={{ fontWeight: 700, fontSize: 14 }}>On Behalf</label>
-                    <input type="checkbox" checked={enableOnBehalf} onChange={(e) => setEnableOnBehalf(e.target.checked)} style={{ width: 20, height: 20, cursor: 'pointer' }} />
+                    <input 
+                      type="checkbox" 
+                      checked={enableOnBehalf} 
+                      onChange={(e) => setEnableOnBehalf(e.target.checked)}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
+                    />
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Allow users to submit tickets for themselves or others</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                    Allow users to submit tickets for themselves or others
+                  </div>
+
                   {enableOnBehalf && (
                     <div style={{ marginTop: 12 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Options: Self, Other</div>
-                      <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <input type="checkbox" checked={requireOnBehalf} onChange={(e) => setRequireOnBehalf(e.target.checked)} style={{ width: 16, height: 16 }} />
-                        <span>Required field</span>
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ padding: 16, border: '2px solid #e2e8f0', borderRadius: 12, background: enableSubCategory ? '#f0fdf4' : '#fafafa' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
-                    <input type="checkbox" checked={enableSubCategory} onChange={(e) => setEnableSubCategory(e.target.checked)} style={{ width: 20, height: 20, cursor: 'pointer' }} />
-                  </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Add subcategories for users to choose from</div>
-                  {enableSubCategory && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {subCategories.length === 0 && (
-                          <button type="button" onClick={addSubCategory}
-                            style={{ alignSelf: 'flex-start', background: '#eff6ff', border: '2px solid #dbeafe', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                            + Add sub-category
-                          </button>
-                        )}
-                        {subCategories.map((s, idx) => (
-                          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <input value={s} onChange={(e) => updateSubCategory(idx, e.target.value)} placeholder="e.g., Salary, Benefits"
-                              style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '2px solid #e2e8f0', fontSize: 12 }} />
-                            {idx === subCategories.length - 1 ? (
-                              <button type="button" onClick={addSubCategory} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>＋</button>
-                            ) : (
-                              <button type="button" onClick={() => removeSubCategory(idx)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}>✖</button>
-                            )}
-                          </div>
-                        ))}
-                        <div style={{ padding: '6px 8px', borderRadius: 6, border: '2px dashed #cbd5e1', fontSize: 12, color: '#475569', background: '#f8fafc' }}>
-                          Other (fixed)
-                        </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                        Options: Self, Other
                       </div>
                       <div style={{ marginTop: 10 }}>
                         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <input type="checkbox" checked={requireSubCategory} onChange={(e) => setRequireSubCategory(e.target.checked)} style={{ width: 16, height: 16 }} />
+                          <input
+                            type="checkbox"
+                            checked={requireOnBehalf}
+                            onChange={(e) => setRequireOnBehalf(e.target.checked)}
+                            style={{ width: 16, height: 16 }}
+                          />
                           <span>Required field</span>
                         </label>
                       </div>
@@ -2254,28 +2352,172 @@ function Header({ logout }) {
                   )}
                 </div>
 
-                <div style={{ padding: 16, border: '2px solid #e2e8f0', borderRadius: 12, background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa' }}>
+                <div
+                  style={{
+                    padding: 16,
+                    border: '2px solid #e2e8f0',
+                    borderRadius: 12,
+                    background: enableSubCategory ? '#f0fdf4' : '#fafafa'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
+                    <input
+                      type="checkbox"
+                      checked={enableSubCategory}
+                      onChange={(e) => setEnableSubCategory(e.target.checked)}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                    Add subcategories for users to choose from
+                  </div>
+
+                  {enableSubCategory && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {subCategories.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={addSubCategory}
+                            style={{
+                              alignSelf: 'flex-start',
+                              background: '#eff6ff',
+                              border: '2px solid #dbeafe',
+                              borderRadius: 6,
+                              padding: '4px 10px',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 600
+                            }}
+                          >
+                            + Add sub-category
+                          </button>
+                        )}
+
+                        {subCategories.map((s, idx) => (
+                          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input
+                              value={s}
+                              onChange={(e) => updateSubCategory(idx, e.target.value)}
+                              placeholder="e.g., Salary, Benefits"
+                              style={{
+                                flex: 1,
+                                padding: '6px 8px',
+                                borderRadius: 6,
+                                border: '2px solid #e2e8f0',
+                                fontSize: 12
+                              }}
+                            />
+                            {idx === subCategories.length - 1 ? (
+                              <button
+                                type="button"
+                                onClick={addSubCategory}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}
+                              >
+                                ＋
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => removeSubCategory(idx)}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}
+                              >
+                                ✖
+                              </button>
+                            )}
+                          </div>
+                        ))}
+
+                        <div
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 6,
+                            border: '2px dashed #cbd5e1',
+                            fontSize: 12,
+                            color: '#475569',
+                            background: '#f8fafc'
+                          }}
+                        >
+                          Other (fixed)
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: 10 }}>
+                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="checkbox"
+                            checked={requireSubCategory}
+                            onChange={(e) => setRequireSubCategory(e.target.checked)}
+                            style={{ width: 16, height: 16 }}
+                          />
+                          <span>Required field</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ 
+                  padding: 16, 
+                  border: '2px solid #e2e8f0', 
+                  borderRadius: 12,
+                  background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa'
+                }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <label style={{ fontWeight: 700, fontSize: 14 }}>Attachments</label>
-                    <input type="checkbox" checked={enableAttachmentsForCategory} onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)} style={{ width: 20, height: 20, cursor: 'pointer' }} />
+                    <input 
+                      type="checkbox" 
+                      checked={enableAttachmentsForCategory} 
+                      onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)}
+                      style={{ width: 20, height: 20, cursor: 'pointer' }}
+                    />
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Allow file attachments on tickets</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                    Allow file attachments on tickets
+                  </div>
+
                   {enableAttachmentsForCategory && (
-                    <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginTop: 12 }}>
-                      <input type="checkbox" checked={requireAttachmentsForCategory} onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)} style={{ width: 16, height: 16 }} />
-                      <span>Required field</span>
-                    </label>
+                    <div style={{ marginTop: 12 }}>
+                      <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input 
+                          type="checkbox" 
+                          checked={requireAttachmentsForCategory} 
+                          onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)}
+                          style={{ width: 16, height: 16 }}
+                        /> 
+                        <span>Required field</span>
+                      </label>
+                    </div>
                   )}
                 </div>
 
               </div>
 
-              <div style={{ padding: 16, border: '2px solid #e2e8f0', borderRadius: 12, background: requireApproval ? '#fff7ed' : '#fafafa' }}>
+              <div
+                style={{
+                  padding: 16,
+                  border: '2px solid #e2e8f0',
+                  borderRadius: 12,
+                  background: requireApproval ? '#fff7ed' : '#fafafa'
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <label style={{ fontWeight: 700, fontSize: 14 }}>Approval Required</label>
-                  <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} style={{ width: 20, height: 20, cursor: 'pointer' }} />
+                  <label style={{ fontWeight: 700, fontSize: 14 }}>
+                    Approval Required
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={requireApproval}
+                    onChange={(e) => setRequireApproval(e.target.checked)}
+                    style={{ width: 20, height: 20, cursor: 'pointer' }}
+                  />
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>Tickets must be approved by category head or CC</div>
+
+                <div style={{ fontSize: 12, color: '#64748b' }}>
+                  Tickets must be approved by category head or CC
+                </div>
               </div>
             </div>
 
@@ -2283,8 +2525,14 @@ function Header({ logout }) {
             {categoryError && <div className="message message-error">✕ {categoryError}</div>}
 
             <div className="modal-footer">
-              <button onClick={() => { resetCategoryForm(); setAddFieldOpen(false); }} className="btn btn-secondary">Cancel</button>
-              <button onClick={createCategory} disabled={categoryLoading || !categoryName.trim()} className="btn btn-primary">
+              <button onClick={() => { resetCategoryForm(); setAddFieldOpen(false); }} className="btn btn-secondary">
+                Cancel
+              </button>
+              <button 
+                onClick={createCategory} 
+                disabled={categoryLoading || !categoryName.trim()} 
+                className="btn btn-primary"
+              >
                 {categoryLoading ? 'Creating...' : 'Create Category'}
               </button>
             </div>
@@ -2292,49 +2540,96 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* ── Edit Field Modal ───────────────────────────────────── */}
+      {/* Edit Field Modal */}
       {editFieldOpen && (
         <>
           <div className="modal-overlay" onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }} />
           <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">{editingCategory ? 'Edit Category' : 'Edit Field'}</h3>
+              <h3 className="modal-title">
+                {editingCategory ? 'Edit Category' : 'Edit Field'}
+              </h3>
               <button onClick={() => { setEditFieldOpen(false); resetCategoryForm(); }} className="modal-close">✖</button>
             </div>
 
             {!editingCategory ? (
               <>
-                <div className="modal-subtitle">Select a category to edit its configuration.</div>
+                <div className="modal-subtitle">
+                  Select a category to edit its configuration.
+                </div>
+
                 <div style={{ maxHeight: 400, overflow: 'auto', marginBottom: 16 }}>
                   {editCategoriesLoading && <div style={{ textAlign: 'center', color: '#94a3b8' }}>Loading categories...</div>}
                   {!editCategoriesLoading && categoriesForEdit.length === 0 && (
                     <div style={{ textAlign: 'center', color: '#94a3b8' }}>No categories found.</div>
                   )}
                   {categoriesForEdit.map(c => (
-                    <div key={c.id} onClick={() => selectCategoryForEdit(c)}
-                      style={{ padding: 16, borderRadius: 12, marginBottom: 12, background: '#fff', border: '2px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.2s' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#8b5cf6'; e.currentTarget.style.background = '#faf5ff'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#fff'; }}>
-                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8, color: '#0f172a' }}>{c.name || c.categoryName}</div>
+                    <div
+                      key={c.id}
+                      onClick={() => selectCategoryForEdit(c)}
+                      style={{
+                        padding: 16,
+                        borderRadius: 12,
+                        marginBottom: 12,
+                        background: '#fff',
+                        border: '2px solid #e2e8f0',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#8b5cf6';
+                        e.currentTarget.style.background = '#faf5ff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#e2e8f0';
+                        e.currentTarget.style.background = '#fff';
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8, color: '#0f172a' }}>
+                        {c.name || c.categoryName}
+                      </div>
+                      
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                         {c.features?.onBehalf?.enabled && (
-                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#dbeafe', color: '#1e40af', fontWeight: 600 }}>
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
+                            background: '#dbeafe', 
+                            color: '#1e40af',
+                            fontWeight: 600
+                          }}>
                             On Behalf {c.features.onBehalf.required ? '(Required)' : ''}
                           </span>
                         )}
                         {c.features?.subCategories?.enabled && (
-                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#dcfce7', color: '#166534', fontWeight: 600 }}>
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
+                            background: '#dcfce7', 
+                            color: '#166534',
+                            fontWeight: 600
+                          }}>
                             Sub-Category {c.features.subCategories.required ? '(Required)' : ''}
                           </span>
                         )}
                         {c.features?.attachments?.enabled && (
-                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#fee2e2', color: '#991b1b', fontWeight: 600 }}>
+                          <span style={{ 
+                            fontSize: 11, 
+                            padding: '3px 8px', 
+                            borderRadius: 6, 
+                            background: '#fee2e2', 
+                            color: '#991b1b',
+                            fontWeight: 600
+                          }}>
                             Attachments {c.features.attachments.required ? '(Required)' : ''}
                           </span>
                         )}
                       </div>
+
                       <div style={{ fontSize: 12, color: '#64748b' }}>
-                        <span style={{ fontWeight: 600 }}>Heads:</span> {c.categoryHeads?.length || 0} |
+                        <span style={{ fontWeight: 600 }}>Heads:</span> {c.categoryHeads?.length || 0} | 
                         <span style={{ fontWeight: 600, marginLeft: 8 }}>CCs:</span> {c.cc?.length || 0}
                       </div>
                     </div>
@@ -2343,53 +2638,158 @@ function Header({ logout }) {
               </>
             ) : (
               <>
-                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 20, padding: 12, background: '#f0fdf4', borderRadius: 10, border: '2px solid #bbf7d0' }}>
+                <div style={{ 
+                  fontSize: 13, 
+                  color: '#64748b', 
+                  marginBottom: 20,
+                  padding: 12,
+                  background: '#f0fdf4',
+                  borderRadius: 10,
+                  border: '2px solid #bbf7d0'
+                }}>
                   Editing: <strong>{editingCategory.name || editingCategory.categoryName}</strong>
-                  <button onClick={() => { setEditingCategory(null); resetCategoryForm(); }}
-                    style={{ marginLeft: 12, fontSize: 11, padding: '4px 10px', borderRadius: 6, background: '#fff', border: '2px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>
+                  <button
+                    onClick={() => {
+                      setEditingCategory(null);
+                      resetCategoryForm();
+                    }}
+                    style={{
+                      marginLeft: 12,
+                      fontSize: 11,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      background: '#fff',
+                      border: '2px solid #e2e8f0',
+                      cursor: 'pointer',
+                      fontWeight: 600
+                    }}
+                  >
                     ← Back to list
                   </button>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
+                  
                   <div className="form-group">
                     <label className="form-label">Category Name <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="Enter category name" className="form-input" />
+                    <input 
+                      value={categoryName} 
+                      onChange={(e) => setCategoryName(e.target.value)} 
+                      placeholder="Enter category name" 
+                      className="form-input"
+                    />
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
+                    
                     <div>
                       <label className="form-label">Category Heads <span style={{ color: '#ef4444' }}>*</span></label>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Start typing to search</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Start typing to search
+                      </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {categoryHeads.map((h, idx) => (
-                          <div key={idx} ref={el => categoryHeadsRefs.current[idx] = el} style={{ position: 'relative' }}>
+                          <div 
+                            key={idx} 
+                            ref={el => categoryHeadsRefs.current[idx] = el}
+                            style={{ position: 'relative' }}
+                          >
                             <div style={{ display: 'flex', gap: 6 }}>
-                              <input value={h.searchQuery} onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)} placeholder="Type name or email..."
-                                style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: h.email ? '2px solid #10b981' : '2px solid #e2e8f0', background: h.email ? '#ecfdf5' : 'white', fontSize: 13 }} />
+                              <input
+                                value={h.searchQuery}
+                                onChange={(e) => updateCategoryHeadQuery(idx, e.target.value)}
+                                placeholder="Type name or email..."
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '8px 10px', 
+                                  borderRadius: 6, 
+                                  border: h.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                  background: h.email ? '#ecfdf5' : 'white',
+                                  fontSize: 13
+                                }}
+                              />
                               {idx === categoryHeads.length - 1 ? (
-                                <button type="button" onClick={addCategoryHead} style={{ padding: '8px 12px', borderRadius: 6, background: '#eff6ff', border: '2px solid #dbeafe', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}>＋</button>
+                                <button 
+                                  type="button" 
+                                  onClick={addCategoryHead} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#eff6ff', 
+                                    border: '2px solid #dbeafe',
+                                    cursor: 'pointer',
+                                    fontSize: 16,
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  ＋
+                                </button>
                               ) : (
-                                <button type="button" onClick={() => removeCategoryHead(idx)} style={{ padding: '8px 12px', borderRadius: 6, background: '#fee2e2', border: '2px solid #fecaca', cursor: 'pointer', fontSize: 14 }}>✖</button>
+                                <button 
+                                  type="button" 
+                                  onClick={() => removeCategoryHead(idx)} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#fee2e2', 
+                                    border: '2px solid #fecaca',
+                                    cursor: 'pointer',
+                                    fontSize: 14
+                                  }}
+                                >
+                                  ✖
+                                </button>
                               )}
                             </div>
+
                             {h.showDropdown && h.searchResults.length > 0 && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '2px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 110 }}>
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                right: 0,
+                                background: 'white',
+                                border: '2px solid #e2e8f0',
+                                borderRadius: 8,
+                                marginTop: 4,
+                                maxHeight: 200,
+                                overflowY: 'auto',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                zIndex: 110
+                              }}>
                                 {h.searchResults.map((user, userIdx) => (
-                                  <div key={userIdx} onClick={() => selectCategoryHead(idx, user)}
-                                    style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none', background: 'white' }}
+                                  <div
+                                    key={userIdx}
+                                    onClick={() => selectCategoryHead(idx, user)}
+                                    style={{
+                                      padding: '10px 12px',
+                                      cursor: 'pointer',
+                                      borderBottom: userIdx < h.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                      background: 'white',
+                                      transition: 'background 0.15s'
+                                    }}
                                     onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}>
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                                  >
                                     <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
                                     <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                                   </div>
                                 ))}
                               </div>
                             )}
-                            {h.email && <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}><span>✓</span><span>{h.name} ({h.email})</span></div>}
-                            {h.searching && <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>Searching...</div>}
+
+                            {h.email && (
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>✓</span>
+                                <span>{h.name} ({h.email})</span>
+                              </div>
+                            )}
+
+                            {h.searching && (
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                                Searching...
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2397,111 +2797,321 @@ function Header({ logout }) {
 
                     <div>
                       <label className="form-label">CC Emails (Optional)</label>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Start typing to search</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Start typing to search
+                      </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {ccEmails.map((c, idx) => (
-                          <div key={idx} ref={el => ccEmailsRefs.current[idx] = el} style={{ position: 'relative' }}>
+                          <div 
+                            key={idx}
+                            ref={el => ccEmailsRefs.current[idx] = el}
+                            style={{ position: 'relative' }}
+                          >
                             <div style={{ display: 'flex', gap: 6 }}>
-                              <input value={c.searchQuery} onChange={(e) => updateCcEmailQuery(idx, e.target.value)} placeholder="Type name or email..."
-                                style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: c.email ? '2px solid #10b981' : '2px solid #e2e8f0', background: c.email ? '#ecfdf5' : 'white', fontSize: 13 }} />
+                              <input
+                                value={c.searchQuery}
+                                onChange={(e) => updateCcEmailQuery(idx, e.target.value)}
+                                placeholder="Type name or email..."
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '8px 10px', 
+                                  borderRadius: 6, 
+                                  border: c.email ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                  background: c.email ? '#ecfdf5' : 'white',
+                                  fontSize: 13
+                                }}
+                              />
                               {idx === ccEmails.length - 1 ? (
-                                <button type="button" onClick={addCcEmail} style={{ padding: '8px 12px', borderRadius: 6, background: '#eff6ff', border: '2px solid #dbeafe', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}>＋</button>
+                                <button 
+                                  type="button" 
+                                  onClick={addCcEmail} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#eff6ff', 
+                                    border: '2px solid #dbeafe',
+                                    cursor: 'pointer',
+                                    fontSize: 16,
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  ＋
+                                </button>
                               ) : (
-                                <button type="button" onClick={() => removeCcEmail(idx)} style={{ padding: '8px 12px', borderRadius: 6, background: '#fee2e2', border: '2px solid #fecaca', cursor: 'pointer', fontSize: 14 }}>✖</button>
+                                <button 
+                                  type="button" 
+                                  onClick={() => removeCcEmail(idx)} 
+                                  style={{ 
+                                    padding: '8px 12px', 
+                                    borderRadius: 6, 
+                                    background: '#fee2e2', 
+                                    border: '2px solid #fecaca',
+                                    cursor: 'pointer',
+                                    fontSize: 14
+                                  }}
+                                >
+                                  ✖
+                                </button>
                               )}
                             </div>
+
                             {c.showDropdown && c.searchResults.length > 0 && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '2px solid #e2e8f0', borderRadius: 8, marginTop: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 110 }}>
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                right: 0,
+                                background: 'white',
+                                border: '2px solid #e2e8f0',
+                                borderRadius: 8,
+                                marginTop: 4,
+                                maxHeight: 200,
+                                overflowY: 'auto',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                zIndex: 110
+                              }}>
                                 {c.searchResults.map((user, userIdx) => (
-                                  <div key={userIdx} onClick={() => selectCcEmail(idx, user)}
-                                    style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none', background: 'white' }}
+                                  <div
+                                    key={userIdx}
+                                    onClick={() => selectCcEmail(idx, user)}
+                                    style={{
+                                      padding: '10px 12px',
+                                      cursor: 'pointer',
+                                      borderBottom: userIdx < c.searchResults.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                      background: 'white',
+                                      transition: 'background 0.15s'
+                                    }}
                                     onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}>
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                                  >
                                     <div style={{ fontWeight: 700, fontSize: 13 }}>{user.displayName}</div>
                                     <div style={{ fontSize: 11, color: '#64748b' }}>{user.mail}</div>
                                   </div>
                                 ))}
                               </div>
                             )}
-                            {c.email && <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}><span>✓</span><span>{c.name} ({c.email})</span></div>}
-                            {c.searching && <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>Searching...</div>}
+
+                            {c.email && (
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>✓</span>
+                                <span>{c.name} ({c.email})</span>
+                              </div>
+                            )}
+
+                            {c.searching && (
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                                Searching...
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     </div>
+
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-
-                    <div style={{ padding: 16, border: '2px solid #e2e8f0', borderRadius: 12, background: enableOnBehalf ? '#f0f9ff' : '#fafafa' }}>
+                    
+                    <div style={{ 
+                      padding: 16, 
+                      border: '2px solid #e2e8f0', 
+                      borderRadius: 12,
+                      background: enableOnBehalf ? '#f0f9ff' : '#fafafa'
+                    }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <label style={{ fontWeight: 700, fontSize: 14 }}>On Behalf</label>
-                        <input type="checkbox" checked={enableOnBehalf} onChange={(e) => setEnableOnBehalf(e.target.checked)} style={{ width: 20, height: 20, cursor: 'pointer' }} />
+                        <input 
+                          type="checkbox" 
+                          checked={enableOnBehalf} 
+                          onChange={(e) => setEnableOnBehalf(e.target.checked)}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
+                        />
                       </div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Submit tickets for self or others</div>
-                      {enableOnBehalf && (
-                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginTop: 12 }}>
-                          <input type="checkbox" checked={requireOnBehalf} onChange={(e) => setRequireOnBehalf(e.target.checked)} style={{ width: 16, height: 16 }} />
-                          <span>Required field</span>
-                        </label>
-                      )}
-                    </div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Submit tickets for self or others
+                      </div>
 
-                    <div style={{ padding: 16, border: '2px solid #e2e8f0', borderRadius: 12, background: enableSubCategory ? '#f0fdf4' : '#fafafa' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
-                        <input type="checkbox" checked={enableSubCategory} onChange={(e) => setEnableSubCategory(e.target.checked)} style={{ width: 20, height: 20, cursor: 'pointer' }} />
-                      </div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Add subcategories</div>
-                      {enableSubCategory && (
+                      {enableOnBehalf && (
                         <div style={{ marginTop: 12 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {subCategories.length === 0 && (
-                              <button type="button" onClick={addSubCategory} style={{ alignSelf: 'flex-start', background: '#eff6ff', border: '2px solid #dbeafe', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>+ Add</button>
-                            )}
-                            {subCategories.map((s, idx) => (
-                              <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                <input value={s} onChange={(e) => updateSubCategory(idx, e.target.value)} placeholder="e.g., Salary"
-                                  style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '2px solid #e2e8f0', fontSize: 12 }} />
-                                {idx === subCategories.length - 1 ? (
-                                  <button type="button" onClick={addSubCategory} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>＋</button>
-                                ) : (
-                                  <button type="button" onClick={() => removeSubCategory(idx)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}>✖</button>
-                                )}
-                              </div>
-                            ))}
-                            <div style={{ padding: '6px 8px', borderRadius: 6, border: '2px dashed #cbd5e1', fontSize: 12, color: '#475569', background: '#f8fafc' }}>Other (fixed)</div>
-                          </div>
-                          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
-                            <input type="checkbox" checked={requireSubCategory} onChange={(e) => setRequireSubCategory(e.target.checked)} style={{ width: 16, height: 16 }} />
+                          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input
+                              type="checkbox"
+                              checked={requireOnBehalf}
+                              onChange={(e) => setRequireOnBehalf(e.target.checked)}
+                              style={{ width: 16, height: 16 }}
+                            />
                             <span>Required field</span>
                           </label>
                         </div>
                       )}
                     </div>
 
-                    <div style={{ padding: 16, border: '2px solid #e2e8f0', borderRadius: 12, background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa' }}>
+                    <div
+                      style={{
+                        padding: 16,
+                        border: '2px solid #e2e8f0',
+                        borderRadius: 12,
+                        background: enableSubCategory ? '#f0fdf4' : '#fafafa'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <label style={{ fontWeight: 700, fontSize: 14 }}>Sub-Category</label>
+                        <input
+                          type="checkbox"
+                          checked={enableSubCategory}
+                          onChange={(e) => setEnableSubCategory(e.target.checked)}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
+                        />
+                      </div>
+
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Add subcategories
+                      </div>
+
+                      {enableSubCategory && (
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {subCategories.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={addSubCategory}
+                                style={{
+                                  alignSelf: 'flex-start',
+                                  background: '#eff6ff',
+                                  border: '2px solid #dbeafe',
+                                  borderRadius: 6,
+                                  padding: '4px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  fontWeight: 600
+                                }}
+                              >
+                                + Add
+                              </button>
+                            )}
+
+                            {subCategories.map((s, idx) => (
+                              <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input
+                                  value={s}
+                                  onChange={(e) => updateSubCategory(idx, e.target.value)}
+                                  placeholder="e.g., Salary"
+                                  style={{
+                                    flex: 1,
+                                    padding: '6px 8px',
+                                    borderRadius: 6,
+                                    border: '2px solid #e2e8f0',
+                                    fontSize: 12
+                                  }}
+                                />
+                                {idx === subCategories.length - 1 ? (
+                                  <button
+                                    type="button"
+                                    onClick={addSubCategory}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}
+                                  >
+                                    ＋
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSubCategory(idx)}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, color: '#ef4444' }}
+                                  >
+                                    ✖
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+
+                            <div
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 6,
+                                border: '2px dashed #cbd5e1',
+                                fontSize: 12,
+                                color: '#475569',
+                                background: '#f8fafc'
+                              }}
+                            >
+                              Other (fixed)
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: 10 }}>
+                            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="checkbox"
+                                checked={requireSubCategory}
+                                onChange={(e) => setRequireSubCategory(e.target.checked)}
+                                style={{ width: 16, height: 16 }}
+                              />
+                              <span>Required field</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ 
+                      padding: 16, 
+                      border: '2px solid #e2e8f0', 
+                      borderRadius: 12,
+                      background: enableAttachmentsForCategory ? '#fef3f2' : '#fafafa'
+                    }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <label style={{ fontWeight: 700, fontSize: 14 }}>Attachments</label>
-                        <input type="checkbox" checked={enableAttachmentsForCategory} onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)} style={{ width: 20, height: 20, cursor: 'pointer' }} />
+                        <input 
+                          type="checkbox" 
+                          checked={enableAttachmentsForCategory} 
+                          onChange={(e) => setEnableAttachmentsForCategory(e.target.checked)}
+                          style={{ width: 20, height: 20, cursor: 'pointer' }}
+                        />
                       </div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>Allow file attachments</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+                        Allow file attachments
+                      </div>
+
                       {enableAttachmentsForCategory && (
-                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginTop: 12 }}>
-                          <input type="checkbox" checked={requireAttachmentsForCategory} onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)} style={{ width: 16, height: 16 }} />
-                          <span>Required field</span>
-                        </label>
+                        <div style={{ marginTop: 12 }}>
+                          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input 
+                              type="checkbox" 
+                              checked={requireAttachmentsForCategory} 
+                              onChange={(e) => setRequireAttachmentsForCategory(e.target.checked)}
+                              style={{ width: 16, height: 16 }}
+                            /> 
+                            <span>Required field</span>
+                          </label>
+                        </div>
                       )}
                     </div>
 
                   </div>
 
-                  <div style={{ padding: 16, border: '2px solid #e2e8f0', borderRadius: 12, background: requireApproval ? '#fff7ed' : '#fafafa' }}>
+                  <div
+                    style={{
+                      padding: 16,
+                      border: '2px solid #e2e8f0',
+                      borderRadius: 12,
+                      background: requireApproval ? '#fff7ed' : '#fafafa'
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <label style={{ fontWeight: 700, fontSize: 14 }}>Approval Required</label>
-                      <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} style={{ width: 20, height: 20, cursor: 'pointer' }} />
+                      <label style={{ fontWeight: 700, fontSize: 14 }}>
+                        Approval Required
+                      </label>
+                      <input
+                        type="checkbox"
+                        checked={requireApproval}
+                        onChange={(e) => setRequireApproval(e.target.checked)}
+                        style={{ width: 20, height: 20, cursor: 'pointer' }}
+                      />
                     </div>
-                    <div style={{ fontSize: 12, color: '#64748b' }}>Requires approval by head or CC</div>
+
+                    <div style={{ fontSize: 12, color: '#64748b' }}>
+                      Requires approval by head or CC
+                    </div>
                   </div>
                 </div>
 
@@ -2509,8 +3119,20 @@ function Header({ logout }) {
                 {categoryError && <div className="message message-error">✕ {categoryError}</div>}
 
                 <div className="modal-footer">
-                  <button onClick={() => { setEditingCategory(null); resetCategoryForm(); }} className="btn btn-secondary">Cancel</button>
-                  <button onClick={updateCategory} disabled={categoryLoading || !categoryName.trim()} className="btn btn-success">
+                  <button 
+                    onClick={() => { 
+                      setEditingCategory(null); 
+                      resetCategoryForm(); 
+                    }} 
+                    className="btn btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={updateCategory} 
+                    disabled={categoryLoading || !categoryName.trim()} 
+                    className="btn btn-success"
+                  >
                     {categoryLoading ? 'Updating...' : 'Update Category'}
                   </button>
                 </div>
@@ -2520,7 +3142,7 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* ── Remove Field Modal ─────────────────────────────────── */}
+      {/* Remove Field Modal */}
       {removeFieldOpen && (
         <>
           <div className="modal-overlay" onClick={() => setRemoveFieldOpen(false)} />
@@ -2540,8 +3162,11 @@ function Header({ logout }) {
                 <div style={{ textAlign: 'center', color: '#94a3b8' }}>No categories found.</div>
               )}
               {availableCategories.map(c => (
-                <div key={c.id} onClick={() => setSelectedCategoryToRemove(c)}
-                  className={`user-item ${selectedCategoryToRemove?.id === c.id ? 'danger-selected' : ''}`}>
+                <div
+                  key={c.id}
+                  onClick={() => setSelectedCategoryToRemove(c)}
+                  className={`user-item ${selectedCategoryToRemove?.id === c.id ? 'danger-selected' : ''}`}
+                >
                   <div className="user-name">{c.name || c.categoryName}</div>
                   <div className="user-email">{c.description || 'No description'}</div>
                 </div>
@@ -2553,7 +3178,11 @@ function Header({ logout }) {
 
             <div className="modal-footer">
               <button onClick={() => setRemoveFieldOpen(false)} className="btn btn-secondary">Cancel</button>
-              <button onClick={confirmRemoveCategory} disabled={removeCategoryLoading || !selectedCategoryToRemove} className="btn btn-danger">
+              <button
+                onClick={confirmRemoveCategory}
+                disabled={removeCategoryLoading || !selectedCategoryToRemove}
+                className="btn btn-danger"
+              >
                 {removeCategoryLoading ? 'Removing...' : 'Remove Category'}
               </button>
             </div>
@@ -2561,7 +3190,7 @@ function Header({ logout }) {
         </>
       )}
 
-      {/* ── Full Profile Modal ─────────────────────────────────── */}
+      {/* Full Profile Modal */}
       {fullProfileOpen && (
         <>
           <div className="modal-overlay" onClick={closeFullProfile} />
@@ -2572,13 +3201,25 @@ function Header({ logout }) {
             </div>
 
             <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 20, padding: 16, background: '#f8fafc', borderRadius: 12 }}>
-              <div style={{ width: 68, height: 68, borderRadius: 12, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#002060', overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{
+                width: 68,
+                height: 68,
+                borderRadius: 12,
+                background: '#eef2ff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                color: '#002060',
+                overflow: 'hidden'
+              }}>
                 {profilePhoto ? (
                   <img src={profilePhoto} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <span style={{ fontSize: 22 }}>{initials}</span>
                 )}
               </div>
+
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>{accounts?.[0]?.name || ''}</div>
                 <div style={{ color: '#64748b', fontSize: 14 }}>{accounts?.[0]?.username || ''}</div>
@@ -2588,7 +3229,9 @@ function Header({ logout }) {
             {loadingProfile && <p style={{ textAlign: 'center', color: '#64748b' }}>Loading profile...</p>}
 
             {profileError && (
-              <div className="message message-error">Error loading profile: {profileError}</div>
+              <div className="message message-error">
+                Error loading profile: {profileError}
+              </div>
             )}
 
             {profileData && (
