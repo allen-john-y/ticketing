@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
-import { BrowserRouter as Router, Route, Routes, useNavigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Login from './Login';
 import Home from './Home';
@@ -32,6 +32,7 @@ const pca = new PublicClientApplication({
 function Header({ logout }) {
   const { accounts, instance } = useMsal();
   const navigate = useNavigate();
+  const location = useLocation(); // Add this to get current route
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const [fullProfileOpen, setFullProfileOpen] = useState(false);
@@ -105,8 +106,8 @@ function Header({ logout }) {
   const categoryHeadsRefs = useRef([]);
   const ccEmailsRefs = useRef([]);
 
-  // Fixed sidebar width - no more hover expansion
-  const SIDEBAR_WIDTH = 260; // Fixed expanded width
+  // Fixed collapsed sidebar width
+  const SIDEBAR_WIDTH_COLLAPSED = 80; // Width for collapsed sidebar with only icons
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1060,7 +1061,7 @@ function Header({ logout }) {
         setProfileError(err.message);
       }
     } finally {
-      setLoadingProfile(false);
+      setProfileLoading(false);
     }
   };
 
@@ -1082,6 +1083,13 @@ function Header({ logout }) {
     .join('')
     .toUpperCase();
 
+  // Helper function to check if a route is active
+  const isActiveRoute = (path) => {
+    if (path === '/' && location.pathname === '/') return true;
+    if (path !== '/' && location.pathname.startsWith(path)) return true;
+    return false;
+  };
+
   return (
     <>
       <style>{`
@@ -1093,7 +1101,7 @@ function Header({ logout }) {
     min-height: 100vh;
   }
   
-  /* Vertical Sidebar - Fixed width, no hover expansion */
+  /* Vertical Sidebar - Collapsed (only icons) */
   .vertical-sidebar {
     position: fixed;
     left: 0;
@@ -1101,7 +1109,7 @@ function Header({ logout }) {
     height: 100vh;
     background: linear-gradient(135deg, #002060 0%, #003380 100%);
     color: white;
-    width: ${SIDEBAR_WIDTH}px; /* Fixed width - no more hover expansion */
+    width: ${SIDEBAR_WIDTH_COLLAPSED}px; /* Collapsed width - only icons */
     overflow: hidden;
     box-shadow: 2px 0 12px rgba(0, 32, 96, 0.15);
     z-index: 1000;
@@ -1112,21 +1120,23 @@ function Header({ logout }) {
     height: 100%;
     display: flex;
     flex-direction: column;
-    width: ${SIDEBAR_WIDTH}px; /* Fixed width */
+    align-items: center; /* Center icons horizontally */
+    width: ${SIDEBAR_WIDTH_COLLAPSED}px;
   }
   
   .sidebar-user {
     display: flex;
+    flex-direction: column; /* Stack vertically */
     align-items: center;
-    gap: 1rem;
-    padding: 0 1rem;
+    gap: 0.5rem;
+    padding: 0 0.5rem;
     margin-bottom: 2rem;
+    width: 100%;
   }
   
   .sidebar-avatar {
-    min-width: 42px;
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background: white;
     display: flex;
@@ -1134,7 +1144,7 @@ function Header({ logout }) {
     justify-content: center;
     font-weight: 700;
     color: #002060;
-    font-size: 14px;
+    font-size: 16px;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
@@ -1146,49 +1156,32 @@ function Header({ logout }) {
   }
   
   .sidebar-user-details {
-    opacity: 1; /* Always visible */
-    white-space: nowrap;
-  }
-  
-  .sidebar-user-name {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 2px;
-  }
-  
-  .sidebar-user-role {
-    font-size: 11px;
-    opacity: 0.8;
-    background: rgba(255, 255, 255, 0.15);
-    padding: 2px 8px;
-    border-radius: 4px;
-    display: inline-block;
+    display: none; /* Hide user details in collapsed mode */
   }
   
   .sidebar-nav {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding: 0 1rem;
+    gap: 0.75rem;
+    padding: 0 0.5rem;
+    width: 100%;
   }
   
   .sidebar-nav-item {
     display: flex;
+    justify-content: center; /* Center the icon */
     align-items: center;
-    gap: 1rem;
     padding: 0.75rem;
     border-radius: 8px;
     text-decoration: none;
     color: rgba(255, 255, 255, 0.8);
     transition: all 0.2s;
-    white-space: nowrap;
     cursor: pointer;
     border: none;
     background: none;
     width: 100%;
-    font-size: 14px;
-    font-weight: 500;
+    position: relative; /* For active indicator */
   }
   
   .sidebar-nav-item:hover {
@@ -1199,27 +1192,39 @@ function Header({ logout }) {
   .sidebar-nav-item.active {
     background: rgba(255, 255, 255, 0.15);
     color: white;
-    border-left: 3px solid #e98404;
+  }
+  
+  /* Active indicator - overlay effect */
+  .sidebar-nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 25%;
+    height: 50%;
+    width: 4px;
+    background: #e98404;
+    border-radius: 0 4px 4px 0;
   }
   
   .sidebar-nav-icon {
-    font-size: 20px;
+    font-size: 24px; /* Larger icons for collapsed view */
     min-width: 24px;
     display: flex;
     justify-content: center;
   }
   
   .sidebar-nav-label {
-    opacity: 1; /* Always visible */
+    display: none; /* Hide labels in collapsed mode */
   }
   
-  /* Main Content Area - Fixed margin to match sidebar */
+  /* Main Content Area - Fixed margin to match collapsed sidebar */
   .main-wrapper {
     flex: 1;
-    margin-left: ${SIDEBAR_WIDTH}px; /* Fixed margin to match sidebar */
-    width: calc(100% - ${SIDEBAR_WIDTH}px);
+    margin-left: ${SIDEBAR_WIDTH_COLLAPSED}px;
+    width: calc(100% - ${SIDEBAR_WIDTH_COLLAPSED}px);
     min-height: 100vh;
     background: #f8fafc;
+    transition: margin-left 0.3s ease;
   }
   
   /* App Header */
@@ -1713,6 +1718,28 @@ function Header({ logout }) {
     min-height: calc(100vh - 73px); /* Subtract header height */
   }
   
+  /* Tooltip for icons on hover (optional enhancement) */
+  .sidebar-nav-item {
+    position: relative;
+  }
+  
+  .sidebar-nav-item:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #1e293b;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    margin-left: 8px;
+    z-index: 1001;
+    pointer-events: none;
+  }
+  
   @media (max-width: 768px) {
     .vertical-sidebar {
       width: 0;
@@ -1733,10 +1760,10 @@ function Header({ logout }) {
 `}</style>
 
       <div className="app-container">
-        {/* Persistent Vertical Sidebar - Fixed, no hover expansion */}
+        {/* Persistent Vertical Sidebar - Collapsed (only icons) */}
         <div className="vertical-sidebar">
           <div className="sidebar-content">
-            {/* User Info */}
+            {/* User Avatar Only */}
             <div className="sidebar-user">
               <div className="sidebar-avatar">
                 {profilePhoto ? (
@@ -1745,31 +1772,36 @@ function Header({ logout }) {
                   <span>{initials}</span>
                 )}
               </div>
-              <div className="sidebar-user-details">
-                <div className="sidebar-user-name">
-                  {accounts?.[0]?.name || accounts?.[0]?.username}
-                </div>
-                <span className="sidebar-user-role">
-                  {isAdmin ? 'Admin' : 'User'}
-                </span>
-              </div>
+              {/* User details hidden */}
             </div>
 
-            {/* Navigation Items */}
+            {/* Navigation Items - Only Icons */}
             <div className="sidebar-nav">
-              <Link to="/" className="sidebar-nav-item">
+              <Link 
+                to="/" 
+                className={`sidebar-nav-item ${isActiveRoute('/') ? 'active' : ''}`}
+                data-tooltip="Dashboard"
+              >
                 <span className="sidebar-nav-icon">🏠</span>
-                <span className="sidebar-nav-label">Dashboard</span>
+                {/* Label hidden */}
               </Link>
               
-              <Link to="/create" className="sidebar-nav-item">
+              <Link 
+                to="/create" 
+                className={`sidebar-nav-item ${isActiveRoute('/create') ? 'active' : ''}`}
+                data-tooltip="Create Ticket"
+              >
                 <span className="sidebar-nav-icon">+</span>
-                <span className="sidebar-nav-label">Create Ticket</span>
+                {/* Label hidden */}
               </Link>
               
-              <Link to="/tickets" className="sidebar-nav-item">
+              <Link 
+                to="/tickets" 
+                className={`sidebar-nav-item ${isActiveRoute('/tickets') ? 'active' : ''}`}
+                data-tooltip="View Tickets"
+              >
                 <span className="sidebar-nav-icon">🎫</span>
-                <span className="sidebar-nav-label">View Tickets</span>
+                {/* Label hidden */}
               </Link>
             </div>
           </div>
