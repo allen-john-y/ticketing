@@ -14,6 +14,7 @@ function TicketDetails() {
   const [ticket, setTicket] = useState(null);
   const [authority, setAuthority] = useState('basic');
   const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // New loading state for initial data
 
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [closeReason, setCloseReason] = useState('');
@@ -93,6 +94,7 @@ function TicketDetails() {
 
   useEffect(() => {
     const fetchTicket = async () => {
+      setIsLoading(true); // Start loading
       try {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
@@ -138,6 +140,8 @@ function TicketDetails() {
 
       } catch (err) {
         console.error('Error fetching ticket:', err);
+      } finally {
+        setIsLoading(false); // End loading
       }
     };
     fetchTicket();
@@ -342,6 +346,274 @@ function TicketDetails() {
     setreopenError('');
   };
 
+  // Skeleton Components
+  const HeaderSkeleton = () => (
+    <div style={{
+      background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
+      color: 'white',
+      padding: '1.5rem 2rem',
+      boxShadow: '0 4px 16px rgba(0, 32, 96, 0.15)'
+    }}>
+      <div style={{
+        maxWidth: '1400px',
+        margin: '0 auto',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '2rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <div style={{
+            width: '120px',
+            height: '40px',
+            background: 'rgba(255,255,255,0.2)',
+            borderRadius: '8px',
+            animation: 'pulse 1.5s infinite'
+          }} />
+          <div style={{
+            width: '150px',
+            height: '28px',
+            background: 'rgba(255,255,255,0.2)',
+            borderRadius: '8px',
+            animation: 'pulse 1.5s infinite'
+          }} />
+        </div>
+        <div style={{
+          width: '120px',
+          height: '40px',
+          background: 'rgba(255,255,255,0.2)',
+          borderRadius: '8px',
+          animation: 'pulse 1.5s infinite'
+        }} />
+      </div>
+    </div>
+  );
+
+  const MainCardSkeleton = () => (
+    <div style={{
+      maxWidth: '800px',
+      margin: '2rem auto',
+      padding: '0 1.5rem'
+    }}>
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        borderLeft: '6px solid #e2e8f0',
+        boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
+        padding: '2.5rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px'
+      }}>
+        {/* User info skeleton */}
+        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flex: 1, minWidth: '300px' }}>
+            <div style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: '12px',
+              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 1.5s infinite',
+              flexShrink: 0
+            }} />
+            <div style={{ flex: 1 }}>
+              <div style={{
+                width: '200px',
+                height: '32px',
+                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.5s infinite',
+                borderRadius: '4px',
+                marginBottom: '12px'
+              }} />
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{
+                  width: '100px',
+                  height: '40px',
+                  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.5s infinite',
+                  borderRadius: '12px'
+                }} />
+                <div style={{
+                  width: '120px',
+                  height: '40px',
+                  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.5s infinite',
+                  borderRadius: '999px'
+                }} />
+              </div>
+            </div>
+          </div>
+          <div style={{ width: '280px' }}>
+            <div style={{
+              width: '150px',
+              height: '40px',
+              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 1.5s infinite',
+              borderRadius: '8px',
+              marginLeft: 'auto'
+            }} />
+          </div>
+        </div>
+
+        {/* Description skeleton */}
+        <div style={{
+          marginTop: '4px',
+          background: '#f8fafc',
+          padding: '24px',
+          borderRadius: '14px',
+          border: '2px solid #e2e8f0'
+        }}>
+          <div style={{
+            width: '100px',
+            height: '20px',
+            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.5s infinite',
+            borderRadius: '4px',
+            marginBottom: '12px'
+          }} />
+          <div style={{
+            width: '100%',
+            height: '60px',
+            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.5s infinite',
+            borderRadius: '8px'
+          }} />
+        </div>
+
+        {/* Metadata skeleton */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '16px'
+        }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{
+              padding: '12px',
+              background: '#f8fafc',
+              borderRadius: '10px',
+              border: '2px solid #e2e8f0'
+            }}>
+              <div style={{
+                width: '80px',
+                height: '16px',
+                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.5s infinite',
+                borderRadius: '4px',
+                marginBottom: '6px'
+              }} />
+              <div style={{
+                width: '120px',
+                height: '20px',
+                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.5s infinite',
+                borderRadius: '4px'
+              }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const HistorySkeleton = () => (
+    <div style={{ maxWidth: '800px', margin: '3rem auto 4rem', padding: '0 1.5rem' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '10px',
+        marginBottom: '2.5rem'
+      }}>
+        <div style={{
+          width: '28px',
+          height: '28px',
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.5s infinite',
+          borderRadius: '4px'
+        }} />
+        <div style={{
+          width: '150px',
+          height: '32px',
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.5s infinite',
+          borderRadius: '4px'
+        }} />
+      </div>
+      <div>
+        {[1, 2, 3].map(i => (
+          <div
+            key={i}
+            style={{
+              marginBottom: '20px',
+              padding: '24px',
+              background: '#f1f5f9',
+              borderRadius: '14px',
+              borderLeft: '4px solid #e2e8f0'
+            }}
+          >
+            <div style={{
+              width: '150px',
+              height: '24px',
+              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 1.5s infinite',
+              borderRadius: '4px',
+              marginBottom: '10px'
+            }} />
+            <div style={{
+              width: '200px',
+              height: '16px',
+              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 1.5s infinite',
+              borderRadius: '4px',
+              marginBottom: '12px'
+            }} />
+            <div style={{
+              width: '100%',
+              height: '40px',
+              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 1.5s infinite',
+              borderRadius: '10px'
+            }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+        <style>{`
+          @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
+          @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 0.8; }
+          }
+        `}</style>
+        <HeaderSkeleton />
+        <MainCardSkeleton />
+        <HistorySkeleton />
+      </div>
+    );
+  }
+
   if (!ticket) return (
     <div style={{ 
       minHeight: '100vh', 
@@ -353,7 +625,7 @@ function TicketDetails() {
       color: '#64748b',
       fontWeight: 600
     }}>
-      Loading ticket...
+      Ticket not found
     </div>
   );
 

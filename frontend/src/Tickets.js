@@ -26,6 +26,13 @@ function Tickets() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false); // For load more state
+  
+  // Pagination states
+  const [displayedTickets, setDisplayedTickets] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [ticketsPerPage] = useState(10);
+  const [hasMore, setHasMore] = useState(false);
   
   const dropdownRef = useRef(null);
   const categoryBtnRef = useRef(null);
@@ -112,6 +119,9 @@ function Tickets() {
 
         setCategories([...new Set(allTickets.map(t => t.category).filter(Boolean))]);
         setUsers([...new Set(allTickets.map(t => t.userName).filter(Boolean))]);
+        
+        // Reset pagination when new data arrives
+        setCurrentPage(1);
       } catch (err) {
         console.error('Error fetching tickets:', err);
       } finally {
@@ -122,82 +132,65 @@ function Tickets() {
     fetchData();
   }, [accounts, instance, refreshKey]);
 
-  // Improved dropdown positioning and click outside handling
+  // Update displayed tickets when filters change or tickets change
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownOpen) {
-        const isClickOnButton = 
-          (categoryBtnRef.current && categoryBtnRef.current.contains(event.target)) ||
-          (userBtnRef.current && userBtnRef.current.contains(event.target));
-        
-        const isClickInDropdown = dropdownRef.current && dropdownRef.current.contains(event.target);
-        
-        if (!isClickOnButton && !isClickInDropdown) {
-          setDropdownOpen(null);
-        }
-      }
-    };
+    updateDisplayedTickets();
+  }, [tickets, appliedCategories, appliedUsers, searchTerm, statusFilter, showMyTickets, authority, accounts, currentPage]);
 
-    const handleScroll = () => {
-      if (dropdownOpen) {
-        // Update dropdown position on scroll
-        const ref = dropdownOpen === 'category' ? categoryBtnRef.current : userBtnRef.current;
-        if (ref) {
-          const rect = ref.getBoundingClientRect();
-          setDropdownPos({
-            top: rect.bottom + window.scrollY + 8,
-            left: rect.left + window.scrollX,
-            width: Math.max(260, rect.width)
-          });
-        }
-      }
-    };
+  const updateDisplayedTickets = () => {
+    // Get filtered tickets
+    const filtered = getFilteredTickets();
+    
+    // Calculate pagination
+    const indexOfLastTicket = currentPage * ticketsPerPage;
+    const indexOfFirstTicket = 0; // Start from beginning for "load more" style
+    const currentTickets = filtered.slice(0, indexOfLastTicket);
+    
+    setDisplayedTickets(currentTickets);
+    setHasMore(filtered.length > indexOfLastTicket);
+  };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('resize', handleScroll);
+  // FILTERING LOGIC - extracted to a function for reuse
+  const getFilteredTickets = () => {
+    const baseFiltered = authority === 'admin' && showMyTickets
+      ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
+      : tickets;
 
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', handleScroll);
-    };
-  }, [dropdownOpen]);
+    const categoryFiltered = appliedCategories.length === 0
+      ? baseFiltered
+      : baseFiltered.filter(t => appliedCategories.includes(t.category));
 
-  // FILTERING LOGIC
-  const baseFilteredTickets = authority === 'admin' && showMyTickets
-    ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
-    : tickets;
+    const userFiltered = appliedUsers.length === 0
+      ? categoryFiltered
+      : categoryFiltered.filter(t => appliedUsers.includes(t.userName));
 
-  const categoryFiltered = appliedCategories.length === 0
-    ? baseFilteredTickets
-    : baseFilteredTickets.filter(t => appliedCategories.includes(t.category));
+    const searchFiltered = searchTerm.trim() === ''
+      ? userFiltered
+      : userFiltered.filter(t =>
+          (t.ticketNumber || '').toString().includes(searchTerm) ||
+          (t.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
-  const userFiltered = appliedUsers.length === 0
-    ? categoryFiltered
-    : categoryFiltered.filter(t => appliedUsers.includes(t.userName));
+    let statusFiltered = searchFiltered;
+    if (statusFilter === 'open') {
+      statusFiltered = searchFiltered.filter(t => t.status === 'Open' || t.status === 'Pending');
+    } else if (statusFilter === 'progress') {
+      statusFiltered = searchFiltered.filter(t => t.status === 'Waiting for approval');
+    } else if (statusFilter === 'closed') {
+      statusFiltered = searchFiltered.filter(t => t.status === 'Closed');
+    }
 
-  const searchFiltered = searchTerm.trim() === ''
-    ? userFiltered
-    : userFiltered.filter(t =>
-        (t.ticketNumber || '').toString().includes(searchTerm) ||
-        (t.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (t.description || '').toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    return statusFiltered;
+  };
 
-  let statusFiltered = searchFiltered;
-  if (statusFilter === 'open') {
-    statusFiltered = searchFiltered.filter(t => t.status === 'Open' || t.status === 'Pending');
-  } else if (statusFilter === 'progress') {
-    statusFiltered = searchFiltered.filter(t => t.status === 'Waiting for approval');
-  } else if (statusFilter === 'closed') {
-    statusFiltered = searchFiltered.filter(t => t.status === 'Closed');
-  }
+  const totalFilteredCount = getFilteredTickets().length;
 
   const applyFilters = () => {
     setAppliedCategories([...selectedCategories]);
     setAppliedUsers([...selectedUsers]);
     setDropdownOpen(null);
+    setCurrentPage(1); // Reset to first page when filters change
   };
 
   const removeFilter = (type, value) => {
@@ -210,6 +203,7 @@ function Tickets() {
       setAppliedUsers(updated);
       setSelectedUsers(updated);
     }
+    setCurrentPage(1); // Reset to first page when filters change
   };
 
   const clearAllFilters = () => {
@@ -218,6 +212,7 @@ function Tickets() {
     setAppliedCategories([]);
     setAppliedUsers([]);
     setStatusFilter('all');
+    setCurrentPage(1); // Reset to first page when filters change
   };
 
   const handleSelect = (type, value) => {
@@ -250,6 +245,15 @@ function Tickets() {
     }
   };
 
+  const loadMoreTickets = () => {
+    setLoadingMore(true);
+    // Simulate loading delay for better UX
+    setTimeout(() => {
+      setCurrentPage(prevPage => prevPage + 1);
+      setLoadingMore(false);
+    }, 500);
+  };
+
   const categoryColor = (category) => {
     if (!category) return '#002060';
     const c = category.toLowerCase();
@@ -261,10 +265,96 @@ function Tickets() {
 
   const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
 
+  // Skeleton loader for ticket cards
+  const TicketCardSkeleton = () => (
+    <div className="ticket-card" style={{ borderLeftColor: '#e2e8f0', cursor: 'default' }}>
+      <div className="ticket-header">
+        <div style={{
+          width: '200px',
+          height: '24px',
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.5s infinite',
+          borderRadius: '4px'
+        }} />
+        <div style={{
+          width: '100px',
+          height: '24px',
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.5s infinite',
+          borderRadius: '12px'
+        }} />
+      </div>
+      
+      <div style={{
+        width: '100%',
+        height: '48px',
+        background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 1.5s infinite',
+        borderRadius: '8px',
+        margin: '0.75rem 0'
+      }} />
+      
+      {authority === 'admin' && (
+        <div style={{
+          marginTop: '0.75rem',
+          padding: '0.75rem',
+          background: '#f8fafc',
+          borderRadius: '8px',
+          border: '1px solid #e2e8f0'
+        }}>
+          <div style={{
+            width: '150px',
+            height: '16px',
+            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.5s infinite',
+            borderRadius: '4px',
+            marginBottom: '4px'
+          }} />
+          <div style={{
+            width: '200px',
+            height: '16px',
+            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.5s infinite',
+            borderRadius: '4px'
+          }} />
+        </div>
+      )}
+      
+      <div className="ticket-meta">
+        <div style={{
+          width: '100px',
+          height: '24px',
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.5s infinite',
+          borderRadius: '10px'
+        }} />
+        <div style={{
+          width: '100px',
+          height: '24px',
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.5s infinite',
+          borderRadius: '4px'
+        }} />
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <style>{`
         * { box-sizing: border-box; }
+        
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
         
         .header-bar {
           background: linear-gradient(135deg, #002060 0%, #003380 100%);
@@ -649,6 +739,60 @@ function Tickets() {
           font-size: 64px;
           margin-bottom: 1rem;
         }
+
+        .load-more-container {
+          display: flex;
+          justify-content: center;
+          margin-top: 2rem;
+          margin-bottom: 1rem;
+        }
+
+        .load-more-btn {
+          background: #002060;
+          color: white;
+          border: none;
+          padding: 12px 32px;
+          border-radius: 30px;
+          font-weight: 700;
+          font-size: 16px;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(0, 32, 96, 0.2);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .load-more-btn:hover:not(:disabled) {
+          background: #001a4d;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(0, 32, 96, 0.3);
+        }
+
+        .load-more-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .loading-spinner {
+          width: 20px;
+          height: 20px;
+          border: 3px solid rgba(255,255,255,0.3);
+          border-radius: 50%;
+          border-top-color: white;
+          animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .showing-text {
+          text-align: center;
+          color: #64748b;
+          font-size: 14px;
+          margin-top: 1rem;
+        }
         
         @media (max-width: 768px) {
           .header-content {
@@ -819,17 +963,18 @@ function Tickets() {
               : `Your Tickets`)}
           </h2>
           <div className="ticket-count">
-            {statusFiltered.length} {statusFiltered.length === 1 ? 'ticket' : 'tickets'}
+            {totalFilteredCount} {totalFilteredCount === 1 ? 'ticket' : 'tickets'} total
           </div>
         </div>
 
         {loading ? (
-          <div className="empty-state">
-            <div className="empty-icon">⏳</div>
-            <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>Loading tickets...</h3>
-            <p style={{ color: '#94a3b8' }}>Please wait while we fetch your tickets</p>
+          // Show skeleton loaders while initial loading
+          <div>
+            {[1, 2, 3].map(i => (
+              <TicketCardSkeleton key={i} />
+            ))}
           </div>
-        ) : statusFiltered.length === 0 ? (
+        ) : displayedTickets.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📭</div>
             <h3 style={{ color: '#475569', marginBottom: '0.5rem' }}>No tickets found</h3>
@@ -837,7 +982,7 @@ function Tickets() {
           </div>
         ) : (
           <div>
-            {statusFiltered.map(ticket => (
+            {displayedTickets.map(ticket => (
               <Link key={ticket._id} to={`/ticket/${ticket._id}`} className="ticket-card" style={{ borderLeftColor: categoryColor(ticket.category) }}>
                 <div className="ticket-header">
                   <h3 className="ticket-number">#{ticket.ticketNumber} - {ticket.category}</h3>
@@ -880,6 +1025,37 @@ function Tickets() {
                 </div>
               </Link>
             ))}
+
+            {/* Load More Button */}
+            {hasMore && (
+              <div className="load-more-container">
+                <button
+                  onClick={loadMoreTickets}
+                  disabled={loadingMore}
+                  className="load-more-btn"
+                >
+                  {loadingMore ? (
+                    <>
+                      <div className="loading-spinner" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      Load More Tickets
+                      <span style={{ fontSize: '14px', opacity: 0.8 }}>
+                        ({displayedTickets.length} of {totalFilteredCount})
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {!hasMore && displayedTickets.length > 0 && (
+              <div className="showing-text">
+                Showing all {displayedTickets.length} tickets
+              </div>
+            )}
           </div>
         )}
       </div>

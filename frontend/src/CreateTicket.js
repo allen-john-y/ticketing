@@ -65,7 +65,6 @@ function PasswordPopup({ password, onClose }) {
 function CreateTicket() {
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
-
   const backendBase = process.env.REACT_APP_BACKEND_URL;
 
   const [formData, setFormData] = useState({

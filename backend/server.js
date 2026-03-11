@@ -23,7 +23,7 @@ app.use(express.json({ limit: '25mb' }));
 
 // ---------------------- CORS ------------------------------
 const allowedOrigins = [
-  process.env.CORS_ORIGIN?.trim()
+  process.env.CORS_ORIGIN?.trim(),
 ];
 
 app.use(
@@ -2163,7 +2163,7 @@ app.post("/tickets/:id/approve", async (req, res) => {
             }
           ],
           description: note || "Your request has been approved.",
-          actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
+                actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
           actionText: "View Ticket"
         });
 
@@ -2263,7 +2263,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
       statusColor: "#dc2626",
       fields: userFields,
       description: `Reason:\n${reason || 'No reason provided.'}\n\nIf you believe this is in error, please contact the department or raise a new ticket.`,
-      actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
+          actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
       actionText: "View Ticket"
     });
 
@@ -2279,7 +2279,7 @@ app.post("/tickets/:id/reject", async (req, res) => {
         { label: "Rejected On", value: nowIST },
       ],
       description: `The ticket has been rejected`,
-      actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
+          actionLink: `${process.env.PROD_URL}/ticket/${ticket._id}`,
       actionText: "Open Ticket"
     });
 

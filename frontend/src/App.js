@@ -20,14 +20,6 @@ import removeFieldIcon from './remove-field.jpg';
 const HELP_DESK_GROUP_ID = process.env.REACT_APP_HELP_DESK_GROUP_ID;
 const backendBase = process.env.REACT_APP_BACKEND_URL;
 
-const pca = new PublicClientApplication({
-  auth: {
-    clientId: process.env.REACT_APP_CLIENT_ID,
-    authority: 'https://login.microsoftonline.com/' + process.env.REACT_APP_TENANT_ID,
-    redirectUri: process.env.REACT_APP_FRONTEND_URL,
-  },
-  cache: { cacheLocation: 'localStorage' },
-});
 
 function Header({ logout }) {
   const { accounts, instance } = useMsal();
@@ -3326,11 +3318,7 @@ function AppContent() {
 }
 
 function App() {
-  return (
-    <MsalProvider instance={pca}>
-      <AppContent />
-    </MsalProvider>
-  );
+  return <AppContent />;
 }
 
 export default App;

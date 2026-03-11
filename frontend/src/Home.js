@@ -13,7 +13,8 @@ function Home() {
   const [userName, setUserName] = useState('User');
   const [refreshKey, setRefreshKey] = useState(0);
   const [showMyTickets, setShowMyTickets] = useState(false);
-  const [,setProfilePhoto] = useState(null);
+  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [isLoading, setIsLoading] = useState(true); // New loading state
 
   useEffect(() => {
     if (location.state?.refresh) {
@@ -24,7 +25,12 @@ function Home() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!accounts[0]) return;
+      if (!accounts[0]) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true); // Start loading
 
       let tokenResponse;
       try {
@@ -39,6 +45,7 @@ function Home() {
           });
         } else {
           console.error('Token acquisition failed:', err);
+          setIsLoading(false);
           return;
         }
       }
@@ -86,6 +93,8 @@ function Home() {
         setTickets(allTickets);
       } catch (err) {
         console.error('Error fetching tickets:', err);
+      } finally {
+        setIsLoading(false); // End loading regardless of outcome
       }
     };
 
@@ -97,7 +106,7 @@ function Home() {
     ? tickets.filter(t => t.userId === accounts[0]?.localAccountId)
     : tickets;
 
-  // Calculate stats
+  // Calculate stats (only if not loading)
   const openTickets = filteredTickets.filter(t => t.status === 'Open' || t.status === 'Pending');
   const closedTickets = filteredTickets.filter(t => t.status === 'Closed');
   const inProgressTickets = filteredTickets.filter(t => t.status === 'Waiting for approval');
@@ -107,10 +116,8 @@ function Home() {
   const mediumPriority = filteredTickets.filter(t => t.priority === 'Medium' && t.status !== 'Closed');
   const lowPriority = filteredTickets.filter(t => t.priority === 'Low' && t.status !== 'Closed');
 
- // const initials = (userName || accounts?.[0]?.username || 'U').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
-
   // Animated Pie Chart Component with smooth loading
-  const PieChart = ({ data, colors, size = 180 }) => {
+  const PieChart = ({ data, colors, size = 180, isLoading }) => {
     const [animatedData, setAnimatedData] = useState(data.map(d => ({ ...d, value: 0 })));
     
     // Memoize data string for dependency tracking
@@ -145,13 +152,35 @@ function Home() {
       }, stepDuration);
 
       return () => clearInterval(interval);
-    }, [dataString, data]); // Include both dataString and data
+    }, [dataString, data]);
+
+    // Show skeleton if loading
+    if (isLoading) {
+      return (
+        <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{
+            width: size,
+            height: size,
+            borderRadius: '50%',
+            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.5s infinite',
+          }} />
+          <style>{`
+            @keyframes shimmer {
+              0% { background-position: 200% 0; }
+              100% { background-position: -200% 0; }
+            }
+          `}</style>
+        </div>
+      );
+    }
 
     const total = animatedData.reduce((sum, d) => sum + d.value, 0);
     
     if (total === 0) return (
       <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '14px', fontWeight: '600' }}>
-        Loading...
+        No data
       </div>
     );
 
@@ -207,10 +236,15 @@ function Home() {
   const priorityColors = ['#ef4444', '#e98404', '#10b981'];
 
   // Animated Counter Component for smooth number animations
-  const AnimatedCounter = ({ value, duration = 1000 }) => {
+  const AnimatedCounter = ({ value, duration = 1000, isLoading }) => {
     const [count, setCount] = useState(0);
 
     useEffect(() => {
+      if (isLoading) {
+        setCount(0);
+        return;
+      }
+
       const steps = 60;
       const stepDuration = duration / steps;
       let currentStep = 0;
@@ -229,10 +263,108 @@ function Home() {
       }, stepDuration);
 
       return () => clearInterval(interval);
-    }, [value, duration]);
+    }, [value, duration, isLoading]);
+
+    if (isLoading) {
+      return (
+        <div style={{
+          width: '60px',
+          height: '36px',
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.5s infinite',
+          borderRadius: '4px'
+        }} />
+      );
+    }
 
     return <span>{count}</span>;
   };
+
+  // Skeleton loader for stat cards
+  const StatCardSkeleton = () => (
+    <div className="stat-card" style={{ borderLeftColor: '#e2e8f0' }}>
+      <div className="stat-header">
+        <div>
+          <div style={{
+            width: '60px',
+            height: '36px',
+            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.5s infinite',
+            borderRadius: '4px',
+            marginBottom: '6px'
+          }} />
+          <div style={{
+            width: '80px',
+            height: '14px',
+            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.5s infinite',
+            borderRadius: '4px'
+          }} />
+        </div>
+        <div className="stat-icon" style={{ background: '#f0f0f0', color: 'transparent' }}>
+          ⚠️
+        </div>
+      </div>
+    </div>
+  );
+
+  // Skeleton loader for chart card
+  const ChartCardSkeleton = () => (
+    <div className="chart-card">
+      <div style={{
+        width: '150px',
+        height: '24px',
+        background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 1.5s infinite',
+        borderRadius: '4px',
+        marginBottom: '1.5rem'
+      }} />
+      <div className="chart-content">
+        <div style={{
+          width: 180,
+          height: 180,
+          borderRadius: '50%',
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.5s infinite',
+        }} />
+        <div className="chart-legend" style={{ flex: 1 }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} className="legend-item">
+              <div style={{
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.5s infinite',
+              }} />
+              <div style={{
+                flex: 1,
+                height: 14,
+                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.5s infinite',
+                borderRadius: 4
+              }} />
+              <div style={{
+                width: 30,
+                height: 18,
+                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.5s infinite',
+                borderRadius: 4
+              }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
@@ -445,6 +577,29 @@ function Home() {
           font-size: 16px;
         }
 
+        .welcome-text-skeleton {
+          width: 300px;
+        }
+
+        .welcome-text-skeleton h2 {
+          width: 250px;
+          height: 32px;
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          backgroundSize: '200% 100%';
+          animation: 'shimmer 1.5s infinite';
+          borderRadius: 4px;
+          marginBottom: 8px;
+        }
+
+        .welcome-text-skeleton p {
+          width: 200px;
+          height: 16px;
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          backgroundSize: '200% 100%';
+          animation: 'shimmer 1.5s infinite';
+          borderRadius: 4px;
+        }
+
         .quick-actions {
           display: flex;
           gap: 1rem;
@@ -484,6 +639,20 @@ function Home() {
         .btn-view:hover {
           background: #f8fafc;
           transform: translateY(-2px);
+        }
+
+        .btn-skeleton {
+          width: 120px;
+          height: 48px;
+          background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+          backgroundSize: '200% 100%';
+          animation: 'shimmer 1.5s infinite';
+          borderRadius: 10px;
+        }
+        
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
         
         @media (max-width: 768px) {
@@ -525,23 +694,67 @@ function Home() {
       <div className="main-content">
         {/* Welcome Banner */}
         <div className="welcome-banner">
-          <div className="welcome-text">
-            <h2>Welcome back, {userName}! 👋</h2>
-            <p>Track your support tickets and create new requests</p>
-          </div>
-          <div className="quick-actions">
-            <Link to="/create" className="quick-action-btn btn-create">
-              <span>+</span> Create Ticket
-            </Link>
-            <Link to="/tickets" className="quick-action-btn btn-view">
-              <span>📋</span> View All Tickets
-            </Link>
-          </div>
+          {isLoading ? (
+            <>
+              <div className="welcome-text-skeleton">
+                <div style={{
+                  width: '250px',
+                  height: '32px',
+                  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.5s infinite',
+                  borderRadius: '4px',
+                  marginBottom: '8px'
+                }} />
+                <div style={{
+                  width: '200px',
+                  height: '16px',
+                  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.5s infinite',
+                  borderRadius: '4px'
+                }} />
+              </div>
+              <div className="quick-actions">
+                <div style={{
+                  width: '120px',
+                  height: '48px',
+                  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.5s infinite',
+                  borderRadius: '10px'
+                }} />
+                <div style={{
+                  width: '120px',
+                  height: '48px',
+                  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.5s infinite',
+                  borderRadius: '10px'
+                }} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="welcome-text">
+                <h2>Welcome back, {userName}! 👋</h2>
+                <p>Track your support tickets and create new requests</p>
+              </div>
+              <div className="quick-actions">
+                <Link to="/create" className="quick-action-btn btn-create">
+                  <span>+</span> Create Ticket
+                </Link>
+                <Link to="/tickets" className="quick-action-btn btn-view">
+                  <span>📋</span> View All Tickets
+                </Link>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="content-wrapper">
           {/* Admin: Show only my tickets toggle */}
-          {authority === 'admin' && (
+          {!isLoading && authority === 'admin' && (
             <div className="my-tickets-toggle">
               <input
                 type="checkbox"
@@ -557,94 +770,114 @@ function Home() {
 
           {/* Stats Grid */}
           <div className="stats-grid">
-            <div 
-              className="stat-card orange"
-              onClick={() => navigate('/tickets', { state: { filter: 'open' } })}
-            >
-              <div className="stat-header">
-                <div>
-                  <div className="stat-value"><AnimatedCounter value={openTickets.length} /></div>
-                  <div className="stat-label">Open Tickets</div>
+            {isLoading ? (
+              <>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </>
+            ) : (
+              <>
+                <div 
+                  className="stat-card orange"
+                  onClick={() => navigate('/tickets', { state: { filter: 'open' } })}
+                >
+                  <div className="stat-header">
+                    <div>
+                      <div className="stat-value"><AnimatedCounter value={openTickets.length} isLoading={isLoading} /></div>
+                      <div className="stat-label">Open Tickets</div>
+                    </div>
+                    <div className="stat-icon orange">📝</div>
+                  </div>
                 </div>
-                <div className="stat-icon orange">📝</div>
-              </div>
-            </div>
 
-            <div 
-              className="stat-card blue"
-              onClick={() => navigate('/tickets', { state: { filter: 'progress' } })}
-            >
-              <div className="stat-header">
-                <div>
-                  <div className="stat-value"><AnimatedCounter value={inProgressTickets.length} /></div>
-                  <div className="stat-label">Waiting for approval</div>
+                <div 
+                  className="stat-card blue"
+                  onClick={() => navigate('/tickets', { state: { filter: 'progress' } })}
+                >
+                  <div className="stat-header">
+                    <div>
+                      <div className="stat-value"><AnimatedCounter value={inProgressTickets.length} isLoading={isLoading} /></div>
+                      <div className="stat-label">Waiting for approval</div>
+                    </div>
+                    <div className="stat-icon blue">⚙️</div>
+                  </div>
                 </div>
-                <div className="stat-icon blue">⚙️</div>
-              </div>
-            </div>
 
-            <div 
-              className="stat-card green"
-              onClick={() => navigate('/dashboard')}
-            >
-              <div className="stat-header">
-                <div>
-                  <div className="stat-value"><AnimatedCounter value={closedTickets.length} /></div>
-                  <div className="stat-label">Closed Tickets</div>
+                <div 
+                  className="stat-card green"
+                  onClick={() => navigate('/dashboard')}
+                >
+                  <div className="stat-header">
+                    <div>
+                      <div className="stat-value"><AnimatedCounter value={closedTickets.length} isLoading={isLoading} /></div>
+                      <div className="stat-label">Closed Tickets</div>
+                    </div>
+                    <div className="stat-icon green">✅</div>
+                  </div>
                 </div>
-                <div className="stat-icon green">✅</div>
-              </div>
-            </div>
 
-            <div 
-              className="stat-card red"
-              onClick={() => navigate('/tickets', { state: { filter: 'high' } })}
-            >
-              <div className="stat-header">
-                <div>
-                  <div className="stat-value"><AnimatedCounter value={highPriority.length} /></div>
-                  <div className="stat-label">High Priority</div>
+                <div 
+                  className="stat-card red"
+                  onClick={() => navigate('/tickets', { state: { filter: 'high' } })}
+                >
+                  <div className="stat-header">
+                    <div>
+                      <div className="stat-value"><AnimatedCounter value={highPriority.length} isLoading={isLoading} /></div>
+                      <div className="stat-label">High Priority</div>
+                    </div>
+                    <div className="stat-icon red">⚠️</div>
+                  </div>
                 </div>
-                <div className="stat-icon red">⚠️</div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           {/* Charts Section */}
           <div className="charts-section">
-            {/* Status Distribution */}
-            <div className="chart-card">
-              <h3 className="chart-title">Ticket Status Distribution</h3>
-              <div className="chart-content">
-                <PieChart data={statusData} colors={statusColors} size={180} />
-                <div className="chart-legend">
-                  {statusData.map((item, idx) => (
-                    <div key={idx} className="legend-item">
-                      <div className="legend-color" style={{ background: statusColors[idx] }}></div>
-                      <span className="legend-label">{item.label}</span>
-                      <span className="legend-value"><AnimatedCounter value={item.value} /></span>
+            {isLoading ? (
+              <>
+                <ChartCardSkeleton />
+                <ChartCardSkeleton />
+              </>
+            ) : (
+              <>
+                {/* Status Distribution */}
+                <div className="chart-card">
+                  <h3 className="chart-title">Ticket Status Distribution</h3>
+                  <div className="chart-content">
+                    <PieChart data={statusData} colors={statusColors} size={180} isLoading={isLoading} />
+                    <div className="chart-legend">
+                      {statusData.map((item, idx) => (
+                        <div key={idx} className="legend-item">
+                          <div className="legend-color" style={{ background: statusColors[idx] }}></div>
+                          <span className="legend-label">{item.label}</span>
+                          <span className="legend-value"><AnimatedCounter value={item.value} isLoading={isLoading} /></span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Priority Distribution */}
-            <div className="chart-card">
-              <h3 className="chart-title">Priority Breakdown (Open)</h3>
-              <div className="chart-content">
-                <PieChart data={priorityData} colors={priorityColors} size={180} />
-                <div className="chart-legend">
-                  {priorityData.map((item, idx) => (
-                    <div key={idx} className="legend-item">
-                      <div className="legend-color" style={{ background: priorityColors[idx] }}></div>
-                      <span className="legend-label">{item.label} Priority</span>
-                      <span className="legend-value"><AnimatedCounter value={item.value} /></span>
+                {/* Priority Distribution */}
+                <div className="chart-card">
+                  <h3 className="chart-title">Priority Breakdown (Open)</h3>
+                  <div className="chart-content">
+                    <PieChart data={priorityData} colors={priorityColors} size={180} isLoading={isLoading} />
+                    <div className="chart-legend">
+                      {priorityData.map((item, idx) => (
+                        <div key={idx} className="legend-item">
+                          <div className="legend-color" style={{ background: priorityColors[idx] }}></div>
+                          <span className="legend-label">{item.label} Priority</span>
+                          <span className="legend-value"><AnimatedCounter value={item.value} isLoading={isLoading} /></span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>
