@@ -1,4 +1,4 @@
-// TicketDetails.js — Professional Business UI matching Home.js style
+// TicketDetails.js — Redesigned to match Home.js / Tickets.js / Dashboard.js design system
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
@@ -14,7 +14,7 @@ function TicketDetails() {
   const [ticket, setTicket] = useState(null);
   const [authority, setAuthority] = useState('basic');
   const [loading, setLoading] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // New loading state for initial data
+  const [isLoading, setIsLoading] = useState(true);
 
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [closeReason, setCloseReason] = useState('');
@@ -55,8 +55,7 @@ function TicketDetails() {
           headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
         });
         const groups = groupsRes.data.value.map(g => g.displayName);
-        const isAdmin = groups.includes('Helpdesk_Admin');
-        setAuthority(isAdmin ? 'admin' : 'basic');
+        setAuthority(groups.includes('Helpdesk_Admin') ? 'admin' : 'basic');
       } catch (err) {
         console.error('Authority error:', err);
       }
@@ -66,13 +65,8 @@ function TicketDetails() {
 
   useEffect(() => {
     let objectUrl = null;
-
     const loadImage = async () => {
-      if (!activeAttachment || !activeAttachment.fileUrl) {
-        setImagePreviewUrl(null);
-        return;
-      }
-
+      if (!activeAttachment || !activeAttachment.fileUrl) { setImagePreviewUrl(null); return; }
       try {
         const res = await fetch(activeAttachment.fileUrl);
         if (!res.ok) throw new Error('Failed to load image preview');
@@ -80,34 +74,23 @@ function TicketDetails() {
         objectUrl = URL.createObjectURL(blob);
         setImagePreviewUrl(objectUrl);
       } catch (e) {
-        console.error("Image load failed", e);
         setImagePreviewUrl(null);
       }
     };
-
     loadImage();
-
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [activeAttachment]);
 
   useEffect(() => {
     const fetchTicket = async () => {
-      setIsLoading(true); // Start loading
+      setIsLoading(true);
       try {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
         try {
           const all = await axios.get(`${backendBase}/api/categories`);
-          setCategoryMeta(
-            all.data.find(
-              c => c.name?.toLowerCase() === res.data.category?.toLowerCase()
-            ) || null
-          );
-        } catch (e) {
-          setCategoryMeta(null);
-        }
+          setCategoryMeta(all.data.find(c => c.name?.toLowerCase() === res.data.category?.toLowerCase()) || null);
+        } catch (e) { setCategoryMeta(null); }
 
         const list = [];
         if (res.data.attachments && Array.isArray(res.data.attachments) && res.data.attachments.length) {
@@ -115,33 +98,20 @@ function TicketDetails() {
             const driveId = a.driveId || a.parentReference?.driveId || null;
             const driveItemId = a.id || a.fileId || null;
             const proxyUrl = driveItemId ? `${backendBase}/attachments/${driveItemId}${driveId ? `?driveId=${encodeURIComponent(driveId)}` : ''}` : (a.fileUrl || a.url || a.path || null);
-            list.push({
-              fileName: a.fileName || a.file_name || a.originalname || '',
-              fileType: a.fileType || a.file_type || a.mimetype || '',
-              fileUrl: proxyUrl,
-              id: driveItemId,
-              driveId: driveId || null
-            });
+            list.push({ fileName: a.fileName || a.file_name || a.originalname || '', fileType: a.fileType || a.file_type || a.mimetype || '', fileUrl: proxyUrl, id: driveItemId, driveId: driveId || null });
           });
         } else if (res.data.attachment && (res.data.attachment.fileName || res.data.attachment.fileUrl)) {
           const a = res.data.attachment;
           const driveId = a.driveId || a.parentReference?.driveId || null;
           const driveItemId = a.id || a.fileId || null;
           const proxyUrl = driveItemId ? `${backendBase}/attachments/${driveItemId}${driveId ? `?driveId=${encodeURIComponent(driveId)}` : ''}` : (a.fileUrl || null);
-          list.push({
-            fileName: a.fileName || '',
-            fileType: a.fileType || '',
-            fileUrl: proxyUrl,
-            id: driveItemId || null,
-            driveId: driveId || null
-          });
+          list.push({ fileName: a.fileName || '', fileType: a.fileType || '', fileUrl: proxyUrl, id: driveItemId || null, driveId: driveId || null });
         }
         setAttachmentList(list);
-
       } catch (err) {
         console.error('Error fetching ticket:', err);
       } finally {
-        setIsLoading(false); // End loading
+        setIsLoading(false);
       }
     };
     fetchTicket();
@@ -149,538 +119,93 @@ function TicketDetails() {
 
   useEffect(() => {
     if (!accounts[0] || !ticket || !categoryMeta) return;
-
     const acct = accounts[0] || {};
-    const possibleEmails = [
-      acct.username,
-      acct.upn,
-      acct.preferred_username,
-      acct.email
-    ].filter(Boolean);
-
-    const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '')
-      .toLowerCase()
-      .trim();
-
-    const heads =
-      (categoryMeta.categoryHeads || [])
-        .map(h => (h.email || '').toLowerCase().trim())
-        .filter(Boolean);
-
+    const possibleEmails = [acct.username, acct.upn, acct.preferred_username, acct.email].filter(Boolean);
+    const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '').toLowerCase().trim();
+    const heads = (categoryMeta.categoryHeads || []).map(h => (h.email || '').toLowerCase().trim()).filter(Boolean);
     const isHead = loggedEmail && heads.includes(loggedEmail);
-
     setIsCategoryHead(!!isHead);
-
-    const status = (ticket.status || '').toString();
-
-    if (isHead && status === "Waiting for approval") {
-      setShowApprovalModal(true);
-    } else {
-      setShowApprovalModal(false);
-    }
+    setShowApprovalModal(isHead && ticket.status === 'Waiting for approval');
   }, [accounts, ticket, categoryMeta]);
 
   const formatDate = (dateString) => {
-    if (!dateString) return "—";
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
-  const needsApprovalBanner =
-    isCategoryHead &&
-    ticket &&
-    ticket.status === 'Waiting for approval' &&
-    !showApprovalModal;
+  const needsApprovalBanner = isCategoryHead && ticket && ticket.status === 'Waiting for approval' && !showApprovalModal;
 
   const copyToClipboard = (text) => {
-    try {
-      navigator.clipboard.writeText(text);
-      alert('Password copied to clipboard');
-    } catch (e) {
-      console.error('Copy failed', e);
-    }
+    try { navigator.clipboard.writeText(text); alert('Password copied to clipboard'); } catch (e) {}
   };
 
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
-      if (!ticket || ticket.status !== "Waiting for approval") {
-        alert("Approval is not allowed for this ticket.");
-        setApproveLoading(false);
-        return;
-      }
-
-      const res = await axios.post(`${backendBase}/tickets/${id}/approve`, {
-        approvedBy: accounts[0]?.name || accounts[0]?.username,
-        note: adminNote
-      });
-
+      if (!ticket || ticket.status !== 'Waiting for approval') { alert('Approval is not allowed for this ticket.'); return; }
+      const res = await axios.post(`${backendBase}/tickets/${id}/approve`, { approvedBy: accounts[0]?.name || accounts[0]?.username, note: adminNote });
       setShowApprovalModal(false);
-
-      if (res.data?.newPassword) {
-        setReturnedPassword(res.data.newPassword);
-        setShowPasswordPopup(true);
-      } else {
-        setTimeout(() => {
-          navigate("/", { state: { refresh: true } });
-        }, 200);
-      }
+      if (res.data?.newPassword) { setReturnedPassword(res.data.newPassword); setShowPasswordPopup(true); }
+      else setTimeout(() => navigate('/', { state: { refresh: true } }), 200);
     } catch (err) {
-      console.error("Approve error:", err);
-      alert("Approval failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
-    } finally {
-      setApproveLoading(false);
-      setAdminNote('');
-    }
+      alert('Approval failed: ' + (err?.response?.data?.message || err.message || 'Unknown error'));
+    } finally { setApproveLoading(false); setAdminNote(''); }
   };
 
   const handleReject = async () => {
     setRejectLoading(true);
     try {
       if (!ticket) throw new Error('Ticket missing');
-
-      await axios.post(`${backendBase}/tickets/${id}/reject`, {
-        rejectedBy: accounts[0]?.name || accounts[0]?.username,
-        reason: adminNote
-      });
-
-      setShowApprovalModal(false);
-      setAdminNote('');
-
-      setTimeout(() => {
-        navigate("/", { state: { refresh: true } });
-      }, 200);
+      await axios.post(`${backendBase}/tickets/${id}/reject`, { rejectedBy: accounts[0]?.name || accounts[0]?.username, reason: adminNote });
+      setShowApprovalModal(false); setAdminNote('');
+      setTimeout(() => navigate('/', { state: { refresh: true } }), 200);
     } catch (err) {
-      console.error("Reject error:", err);
-      alert("Rejection failed: " + (err?.response?.data?.message || err.message || 'Unknown error'));
-    } finally {
-      setRejectLoading(false);
-    }
+      alert('Rejection failed: ' + (err?.response?.data?.message || err.message || 'Unknown error'));
+    } finally { setRejectLoading(false); }
   };
 
   const handleSubmitReason = () => {
-    if (!closeReason.trim()) {
-      setCloseError("Please provide a reason for closing this ticket.");
-      return;
-    }
-    setCloseError('');
-    setShowReasonInput(false);
-    setConfirmModal(true);
+    if (!closeReason.trim()) { setCloseError('Please provide a reason for closing this ticket.'); return; }
+    setCloseError(''); setShowReasonInput(false); setConfirmModal(true);
   };
 
   const confirmCloseTicket = async () => {
     setLoading(true);
     try {
-      await axios.put(`${backendBase}/tickets/${id}/close`, {
-        closeReason: closeReason.trim(),
-        closedBy: accounts[0]?.name || accounts[0]?.username
-      });
-
-      setConfirmModal(false);
-      setShowReasonInput(false);
-      setCloseReason('');
-      setCloseError('');
-
-      setTimeout(() => {
-        navigate('/', { state: { refresh: true } });
-      }, 200);
-    } catch (err) {
-      setCloseError("Failed to close ticket. Please try again.");
-      console.error("Close error:", err);
-    } finally {
-      setLoading(false);
-    }
+      await axios.put(`${backendBase}/tickets/${id}/close`, { closeReason: closeReason.trim(), closedBy: accounts[0]?.name || accounts[0]?.username });
+      setConfirmModal(false); setShowReasonInput(false); setCloseReason(''); setCloseError('');
+      setTimeout(() => navigate('/', { state: { refresh: true } }), 200);
+    } catch (err) { setCloseError('Failed to close ticket. Please try again.'); }
+    finally { setLoading(false); }
   };
 
-  const cancelClose = () => {
-    setShowReasonInput(false);
-    setConfirmModal(false);
-    setCloseReason('');
-    setCloseError('');
-  };
+  const cancelClose = () => { setShowReasonInput(false); setConfirmModal(false); setCloseReason(''); setCloseError(''); };
 
   const handleSubmitreopenReason = () => {
-    if (!reopenReason.trim()) {
-      setreopenError("Please provide a reason for reviving this ticket.");
-      return;
-    }
-    setreopenError('');
-    setShowreopenReasonInput(false);
-    setConfirmreopenModal(true);
+    if (!reopenReason.trim()) { setreopenError('Please provide a reason for reviving this ticket.'); return; }
+    setreopenError(''); setShowreopenReasonInput(false); setConfirmreopenModal(true);
   };
 
   const confirmreopenTicket = async () => {
     setLoading(true);
     try {
-      await axios.put(`${backendBase}/tickets/${id}/revive`, {
-        revivedBy: accounts[0]?.name || accounts[0]?.username || "User",
-        reviveReason: reopenReason.trim()
-      });
-
-      setConfirmreopenModal(false);
-      setShowreopenReasonInput(false);
-      setreopenReason('');
-      setreopenError('');
-
-      setTimeout(() => {
-        navigate('/', { state: { refresh: true } });
-      }, 200);
-    } catch (err) {
-      setreopenError("Failed to reopen ticket. Please try again.");
-      console.error("reopen error:", err);
-    } finally {
-      setLoading(false);
-    }
+      await axios.put(`${backendBase}/tickets/${id}/revive`, { revivedBy: accounts[0]?.name || accounts[0]?.username || 'User', reviveReason: reopenReason.trim() });
+      setConfirmreopenModal(false); setShowreopenReasonInput(false); setreopenReason(''); setreopenError('');
+      setTimeout(() => navigate('/', { state: { refresh: true } }), 200);
+    } catch (err) { setreopenError('Failed to reopen ticket. Please try again.'); }
+    finally { setLoading(false); }
   };
 
-  const cancelreopen = () => {
-    setShowreopenReasonInput(false);
-    setConfirmreopenModal(false);
-    setreopenReason('');
-    setreopenError('');
-  };
-
-  // Skeleton Components
-  const HeaderSkeleton = () => (
-    <div style={{
-      background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
-      color: 'white',
-      padding: '1.5rem 2rem',
-      boxShadow: '0 4px 16px rgba(0, 32, 96, 0.15)'
-    }}>
-      <div style={{
-        maxWidth: '1400px',
-        margin: '0 auto',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '2rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-          <div style={{
-            width: '120px',
-            height: '40px',
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: '8px',
-            animation: 'pulse 1.5s infinite'
-          }} />
-          <div style={{
-            width: '150px',
-            height: '28px',
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: '8px',
-            animation: 'pulse 1.5s infinite'
-          }} />
-        </div>
-        <div style={{
-          width: '120px',
-          height: '40px',
-          background: 'rgba(255,255,255,0.2)',
-          borderRadius: '8px',
-          animation: 'pulse 1.5s infinite'
-        }} />
-      </div>
-    </div>
-  );
-
-  const MainCardSkeleton = () => (
-    <div style={{
-      maxWidth: '800px',
-      margin: '2rem auto',
-      padding: '0 1.5rem'
-    }}>
-      <div style={{
-        background: '#ffffff',
-        borderRadius: '16px',
-        borderLeft: '6px solid #e2e8f0',
-        boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
-        padding: '2.5rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '24px'
-      }}>
-        {/* User info skeleton */}
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flex: 1, minWidth: '300px' }}>
-            <div style={{
-              width: '72px',
-              height: '72px',
-              borderRadius: '12px',
-              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-              backgroundSize: '200% 100%',
-              animation: 'shimmer 1.5s infinite',
-              flexShrink: 0
-            }} />
-            <div style={{ flex: 1 }}>
-              <div style={{
-                width: '200px',
-                height: '32px',
-                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-                backgroundSize: '200% 100%',
-                animation: 'shimmer 1.5s infinite',
-                borderRadius: '4px',
-                marginBottom: '12px'
-              }} />
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <div style={{
-                  width: '100px',
-                  height: '40px',
-                  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-                  backgroundSize: '200% 100%',
-                  animation: 'shimmer 1.5s infinite',
-                  borderRadius: '12px'
-                }} />
-                <div style={{
-                  width: '120px',
-                  height: '40px',
-                  background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-                  backgroundSize: '200% 100%',
-                  animation: 'shimmer 1.5s infinite',
-                  borderRadius: '999px'
-                }} />
-              </div>
-            </div>
-          </div>
-          <div style={{ width: '280px' }}>
-            <div style={{
-              width: '150px',
-              height: '40px',
-              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-              backgroundSize: '200% 100%',
-              animation: 'shimmer 1.5s infinite',
-              borderRadius: '8px',
-              marginLeft: 'auto'
-            }} />
-          </div>
-        </div>
-
-        {/* Description skeleton */}
-        <div style={{
-          marginTop: '4px',
-          background: '#f8fafc',
-          padding: '24px',
-          borderRadius: '14px',
-          border: '2px solid #e2e8f0'
-        }}>
-          <div style={{
-            width: '100px',
-            height: '20px',
-            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 1.5s infinite',
-            borderRadius: '4px',
-            marginBottom: '12px'
-          }} />
-          <div style={{
-            width: '100%',
-            height: '60px',
-            background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 1.5s infinite',
-            borderRadius: '8px'
-          }} />
-        </div>
-
-        {/* Metadata skeleton */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px'
-        }}>
-          {[1, 2, 3].map(i => (
-            <div key={i} style={{
-              padding: '12px',
-              background: '#f8fafc',
-              borderRadius: '10px',
-              border: '2px solid #e2e8f0'
-            }}>
-              <div style={{
-                width: '80px',
-                height: '16px',
-                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-                backgroundSize: '200% 100%',
-                animation: 'shimmer 1.5s infinite',
-                borderRadius: '4px',
-                marginBottom: '6px'
-              }} />
-              <div style={{
-                width: '120px',
-                height: '20px',
-                background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-                backgroundSize: '200% 100%',
-                animation: 'shimmer 1.5s infinite',
-                borderRadius: '4px'
-              }} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const HistorySkeleton = () => (
-    <div style={{ maxWidth: '800px', margin: '3rem auto 4rem', padding: '0 1.5rem' }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '10px',
-        marginBottom: '2.5rem'
-      }}>
-        <div style={{
-          width: '28px',
-          height: '28px',
-          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-          backgroundSize: '200% 100%',
-          animation: 'shimmer 1.5s infinite',
-          borderRadius: '4px'
-        }} />
-        <div style={{
-          width: '150px',
-          height: '32px',
-          background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-          backgroundSize: '200% 100%',
-          animation: 'shimmer 1.5s infinite',
-          borderRadius: '4px'
-        }} />
-      </div>
-      <div>
-        {[1, 2, 3].map(i => (
-          <div
-            key={i}
-            style={{
-              marginBottom: '20px',
-              padding: '24px',
-              background: '#f1f5f9',
-              borderRadius: '14px',
-              borderLeft: '4px solid #e2e8f0'
-            }}
-          >
-            <div style={{
-              width: '150px',
-              height: '24px',
-              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-              backgroundSize: '200% 100%',
-              animation: 'shimmer 1.5s infinite',
-              borderRadius: '4px',
-              marginBottom: '10px'
-            }} />
-            <div style={{
-              width: '200px',
-              height: '16px',
-              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-              backgroundSize: '200% 100%',
-              animation: 'shimmer 1.5s infinite',
-              borderRadius: '4px',
-              marginBottom: '12px'
-            }} />
-            <div style={{
-              width: '100%',
-              height: '40px',
-              background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-              backgroundSize: '200% 100%',
-              animation: 'shimmer 1.5s infinite',
-              borderRadius: '10px'
-            }} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  if (isLoading) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-        <style>{`
-          @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-          }
-          @keyframes pulse {
-            0%, 100% { opacity: 0.6; }
-            50% { opacity: 0.8; }
-          }
-        `}</style>
-        <HeaderSkeleton />
-        <MainCardSkeleton />
-        <HistorySkeleton />
-      </div>
-    );
-  }
-
-  if (!ticket) return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: '#f8fafc', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      fontSize: '18px',
-      color: '#64748b',
-      fontWeight: 600
-    }}>
-      Ticket not found
-    </div>
-  );
-
-  const statusColorStyles = {
-    background:
-      ticket.status === "Closed" ? "#fee2e2" :
-      ticket.status === "Approved" ? "#dcfce7" :
-      ticket.status === "Waiting for approval" ? "#fef3c7" :
-      "#e0f2fe",
-    color:
-      ticket.status === "Closed" ? "#b91c1c" :
-      ticket.status === "Approved" ? "#166534" :
-      ticket.status === "Waiting for approval" ? "#92400e" :
-      "#0369a1"
-  };
-
-  const historyEvents = ticket.history && ticket.history.length > 0
-    ? ticket.history
-    : [
-        { action: "created", by: ticket.userName, at: ticket.createdAt, reason: null },
-        ...(ticket.closedAt ? [{ action: "closed", by: ticket.closedBy || "Unknown", at: ticket.closedAt, reason: ticket.closeReason }] : []),
-        ...(ticket.reopenedAt ? [{ action: "reopend", by: ticket.reopenedBy || "Unknown", at: ticket.reopenedAt, reason: ticket.reopenReason }] : [])
-      ];
-
-  const hasAttachment = (attachmentList && attachmentList.length > 0);
+  const cancelreopen = () => { setShowreopenReasonInput(false); setConfirmreopenModal(false); setreopenReason(''); setreopenError(''); };
 
   const isImageType = (type) => type && type.startsWith && type.startsWith('image/');
-  const isPdfType = (type, url) => {
-    if (type && type === 'application/pdf') return true;
-    if (url && url.toLowerCase().endsWith('.pdf')) return true;
-    return false;
-  };
+  const isPdfType = (type, url) => (type && type === 'application/pdf') || (url && url.toLowerCase().endsWith('.pdf'));
 
   const openAttachmentViewer = (attachment) => {
     if (!attachment) return;
-
-    const fileUrl = attachment.fileUrl;
-    const viewableImage = isImageType(attachment.fileType);
-    const viewablePdf = isPdfType(attachment.fileType, fileUrl);
-
-    if (viewablePdf) {
-      downloadAttachment(attachment);
-      return;
-    }
-
-    if (!viewableImage) {
-      window.open(fileUrl, '_blank', 'noopener');
-      return;
-    }
-
-    setActiveAttachment({
-      ...attachment,
-      fileUrl
-    });
-
+    if (isPdfType(attachment.fileType, attachment.fileUrl)) { downloadAttachment(attachment); return; }
+    if (!isImageType(attachment.fileType)) { window.open(attachment.fileUrl, '_blank', 'noopener'); return; }
+    setActiveAttachment({ ...attachment });
     setAttachmentModalOpen(true);
   };
 
@@ -693,1020 +218,746 @@ function TicketDetails() {
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = blobUrl;
-      const filename = attachment.fileName || (attachment.fileUrl.split('/').pop().split('?')[0]) || 'download';
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      a.download = attachment.fileName || attachment.fileUrl.split('/').pop().split('?')[0] || 'download';
+      document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.warn('Download fallback, opening in new tab', err);
-      window.open(attachment.fileUrl, '_blank', 'noopener');
-    }
+    } catch (err) { window.open(attachment.fileUrl, '_blank', 'noopener'); }
   };
 
   const downloadAllAttachments = async () => {
     if (!attachmentList || attachmentList.length === 0) return;
-
     const downloadable = attachmentList.filter(a => a && a.id);
-    if (downloadable.length === 0) {
-      alert('No downloadable attachments available (missing internal ids).');
-      return;
-    }
-
+    if (!downloadable.length) { alert('No downloadable attachments available.'); return; }
     const ids = downloadable.map(a => a.id).join(',');
     const driveIds = downloadable.map(a => a.driveId || '').join(',');
-
-    if (downloadable.length < attachmentList.length) {
-      alert(`Only ${downloadable.length} of ${attachmentList.length} attachments can be included in the ZIP. The downloadable ones will be downloaded.`);
-    }
-
-    const encodedIds = encodeURIComponent(ids);
-    const encodedDriveIds = driveIds ? `&driveIds=${encodeURIComponent(driveIds)}` : '';
-    const url = `${backendBase}/attachments/zip?ids=${encodedIds}${encodedDriveIds}`;
-
+    const url = `${backendBase}/attachments/zip?ids=${encodeURIComponent(ids)}${driveIds ? `&driveIds=${encodeURIComponent(driveIds)}` : ''}`;
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `attachments-${ticket.ticketNumber || id}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href = url; a.download = `attachments-${ticket.ticketNumber || id}.zip`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  const accentColor = (ticket) => {
+    if (!ticket) return '#1d4ed8';
+    if (ticket.status === 'Closed') return '#ef4444';
+    if (ticket.status === 'Approved') return '#10b981';
+    if (ticket.status === 'Waiting for approval') return '#f59e0b';
+    return '#1d4ed8';
+  };
+
+  const statusPill = (status) => {
+    if (!status) return { bg: '#f3f4f6', color: '#374151' };
+    if (status === 'Closed') return { bg: '#fee2e2', color: '#b91c1c' };
+    if (status === 'Approved') return { bg: '#d1fae5', color: '#065f46' };
+    if (status === 'Waiting for approval') return { bg: '#fef3c7', color: '#92400e' };
+    return { bg: '#dbeafe', color: '#1e3a8a' };
+  };
+
+  const priorityMeta = (p) => {
+    if (!p) return { color: '#6b7280', bg: '#f3f4f6' };
+    if (p === 'High') return { color: '#ef4444', bg: '#fee2e2' };
+    if (p === 'Medium') return { color: '#f59e0b', bg: '#fef3c7' };
+    return { color: '#10b981', bg: '#d1fae5' };
+  };
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  // ── Skeleton ──
+  if (isLoading) {
+    return (
+      <div className="td-root">
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          .td-root { min-height: 100vh; background: #f4f4f0; font-family: 'DM Sans', sans-serif; }
+          @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.45} }
+          .skel { background: #ddd9d0; animation: pulse 1.6s ease-in-out infinite; border-radius: 4px; }
+        `}</style>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '2.5rem 2rem 4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid #d9d5cc' }}>
+            <div>
+              <div className="skel" style={{ width: 160, height: 11, marginBottom: 8 }} />
+              <div className="skel" style={{ width: 240, height: 28 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div className="skel" style={{ width: 120, height: 38, borderRadius: 6 }} />
+              <div className="skel" style={{ width: 120, height: 38, borderRadius: 6 }} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24 }}>
+            <div>
+              <div style={{ background: '#fff', border: '1px solid #d9d5cc', borderRadius: 10, overflow: 'hidden', marginBottom: 24 }}>
+                <div style={{ width: 3, background: '#e5e7eb', position: 'absolute' }} />
+                <div style={{ padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {[1,2,3,4].map(i => <div key={i} className="skel" style={{ height: 14, width: `${60 + i * 8}%` }} />)}
+                </div>
+              </div>
+              <div style={{ background: '#fff', border: '1px solid #d9d5cc', borderRadius: 10, padding: '1.5rem 1.75rem' }}>
+                {[1,2,3].map(i => <div key={i} className="skel" style={{ height: 60, borderRadius: 6, marginBottom: 12 }} />)}
+              </div>
+            </div>
+            <div style={{ background: '#fff', border: '1px solid #d9d5cc', borderRadius: 10, padding: '1.5rem', height: 'fit-content' }}>
+              {[1,2,3,4].map(i => <div key={i} className="skel" style={{ height: 14, width: `${40 + i * 10}%`, marginBottom: 14 }} />)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!ticket) return (
+    <div style={{ minHeight: '100vh', background: '#f4f4f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Sans, sans-serif', fontSize: 16, color: '#6b7280', fontWeight: 500 }}>
+      Ticket not found
+    </div>
+  );
+
+  const sp = statusPill(ticket.status);
+  const pm = priorityMeta(ticket.priority);
+  const ac = accentColor(ticket);
+
+  const historyEvents = ticket.history && ticket.history.length > 0
+    ? ticket.history
+    : [
+        { action: 'created', by: ticket.userName, at: ticket.createdAt, reason: null },
+        ...(ticket.closedAt ? [{ action: 'closed', by: ticket.closedBy || 'Unknown', at: ticket.closedAt, reason: ticket.closeReason }] : []),
+        ...(ticket.reopenedAt ? [{ action: 'reopend', by: ticket.reopenedBy || 'Unknown', at: ticket.reopenedAt, reason: ticket.reopenReason }] : [])
+      ];
+
+  const hasAttachment = attachmentList && attachmentList.length > 0;
+
+  const renderAttachmentBlock = (inline = false) => {
+    if (!hasAttachment) return null;
+    const a = attachmentList[0];
+    const isPdf = isPdfType(a.fileType, a.fileUrl);
+    return (
+      <div style={{ marginTop: inline ? 16 : 0, paddingTop: inline ? 16 : 0, borderTop: inline ? '1px solid #e5e7eb' : 'none' }}>
+        <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>
+          {attachmentList.length > 1 ? `Attachments (${attachmentList.length})` : 'Attachment'}
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {attachmentList.length === 1 ? (
+            <>
+              <button onClick={() => isPdf ? downloadAttachment(a) : openAttachmentViewer(a)} className="td-btn td-btn-sm td-btn-secondary">
+                {isPdf ? 'Download PDF' : 'View file'}
+              </button>
+              {!isPdf && (
+                <button onClick={() => downloadAttachment(a)} className="td-btn td-btn-sm td-btn-ghost">
+                  Download
+                </button>
+              )}
+              <span style={{ fontSize: 12, color: '#9ca3af', alignSelf: 'center' }}>{a.fileName}</span>
+            </>
+          ) : (
+            <>
+              <button onClick={() => { setActiveAttachment(attachmentList[0]); setAttachmentModalOpen(true); }} className="td-btn td-btn-sm td-btn-secondary">
+                View all
+              </button>
+              <button onClick={downloadAllAttachments} className="td-btn td-btn-sm td-btn-ghost">
+                Download ZIP
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const renderHistoryAttachment = (event) => {
     if (!event.attachment || (!event.attachment.fileName && !event.attachment.fileUrl)) return null;
-    const label = event.attachment.fileName || 'Attachment';
-    const typeLabel = event.attachment.fileType || '';
-    const url = event.attachment.fileUrl;
-    const att = { fileName: label, fileType: typeLabel, fileUrl: url, id: null };
+    const att = { fileName: event.attachment.fileName || 'Attachment', fileType: event.attachment.fileType || '', fileUrl: event.attachment.fileUrl, id: null };
+    const isPdf = isPdfType(att.fileType, att.fileUrl);
     return (
-      <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: 600, fontSize: '14px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <img src={AttachmentIcon} alt="Attachment" style={{ width: '18px', height: '18px' }} />
-          Attachment:
-        </span>
-
-        <button
-          onClick={() => {
-            if (isPdfType(typeLabel, url)) {
-              downloadAttachment(att);
-            } else {
-              openAttachmentViewer(att);
-            }
-          }}
-          style={{ 
-            background: '#002060', 
-            color: 'white', 
-            border: 'none', 
-            padding: '8px 16px', 
-            borderRadius: '8px', 
-            cursor: 'pointer', 
-            fontWeight: 600,
-            fontSize: '13px',
-            transition: 'all 0.2s',
-            boxShadow: '0 4px 12px rgba(0, 32, 96, 0.15)'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#001a4d';
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 32, 96, 0.25)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#002060';
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 32, 96, 0.15)';
-          }}
-        >
-          {isPdfType(typeLabel, url) ? 'Download PDF' : 'View attachment'}
+      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>Attachment:</span>
+        <button onClick={() => isPdf ? downloadAttachment(att) : openAttachmentViewer(att)} className="td-btn td-btn-sm td-btn-secondary">
+          {isPdf ? 'Download PDF' : 'View'}
         </button>
-        {typeLabel && (
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-            ({typeLabel})
-          </span>
-        )}
+        <span style={{ fontSize: 12, color: '#9ca3af' }}>{att.fileName}</span>
       </div>
     );
   };
 
-  const renderAttachmentSummary = () => {
-    if (!hasAttachment) return null;
-
-    if (attachmentList.length === 1) {
-      const a = attachmentList[0];
-      const isPdf = isPdfType(a.fileType, a.fileUrl);
-      return (
-        <div style={{ 
-          marginTop: '20px', 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '12px',
-          padding: '16px',
-          background: '#f8fafc',
-          borderRadius: '10px',
-          border: '2px solid #e2e8f0'
-        }}>
-          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <img src={AttachmentIcon} alt="Attachment" style={{ width: '18px', height: '18px' }} />
-            Attachment:
-          </span>
-
-          <button
-            onClick={() => {
-              if (isPdf) {
-                downloadAttachment(a);
-              } else {
-                openAttachmentViewer(a);
-              }
-            }}
-            style={{ 
-              background: '#002060', 
-              color: 'white', 
-              border: 'none', 
-              padding: '8px 16px', 
-              borderRadius: '8px', 
-              cursor: 'pointer', 
-              fontWeight: 600,
-              fontSize: '13px',
-              transition: 'all 0.2s',
-              boxShadow: '0 4px 12px rgba(0, 32, 96, 0.15)'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#001a4d';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#002060';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            {isPdf ? 'Download PDF' : 'View attachment'}
-          </button>
-          {!isPdf && (
-            <button
-              onClick={() => downloadAttachment(a)}
-              style={{ 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                padding: '8px 12px', 
-                borderRadius: '8px', 
-                border: '2px solid #e2e8f0', 
-                background: '#fff', 
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#f8fafc';
-                e.currentTarget.style.borderColor = '#002060';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#fff';
-                e.currentTarget.style.borderColor = '#e2e8f0';
-              }}
-            >
-              <img src={DownloadIcon} alt="Download" style={{ width: '18px', height: '18px' }} />
-            </button>
-          )}
-          <span style={{ fontSize: '13px', color: '#64748b' }}>{a.fileName}</span>
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ 
-        marginTop: '20px', 
-        padding: '16px',
-        background: '#f8fafc',
-        borderRadius: '10px',
-        border: '2px solid #e2e8f0'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <img src={AttachmentIcon} alt="Attachments" style={{ width: '18px', height: '18px' }} />
-            Attachments ({attachmentList.length}):
-          </span>
-
-          <button
-            onClick={() => {
-              if (attachmentList.length) {
-                setActiveAttachment(attachmentList[0]);
-                setAttachmentModalOpen(true);
-              }
-            }}
-            style={{ 
-              background: '#002060', 
-              color: 'white', 
-              border: 'none', 
-              padding: '8px 16px', 
-              borderRadius: '8px', 
-              cursor: 'pointer', 
-              fontWeight: 600,
-              fontSize: '13px',
-              transition: 'all 0.2s'
-            }}
-          >
-            View all attachments
-          </button>
-          <button
-            onClick={downloadAllAttachments}
-            style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              gap: '8px', 
-              padding: '8px 16px', 
-              borderRadius: '8px', 
-              border: '2px solid #e2e8f0', 
-              background: '#fff', 
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '13px',
-              color: '#0f172a',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f8fafc';
-              e.currentTarget.style.borderColor = '#002060';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#fff';
-              e.currentTarget.style.borderColor = '#e2e8f0';
-            }}
-          >
-            <img src={DownloadIcon} alt="Download all" style={{ width: '18px', height: '18px' }} />
-            Download all (ZIP)
-          </button>
-        </div>
-      </div>
-    );
+  const historyEventMeta = (action) => {
+    if (action === 'created') return { label: 'Ticket created', accent: '#f59e0b', bg: '#fffbeb' };
+    if (action === 'closed') return { label: 'Ticket closed', accent: '#ef4444', bg: '#fef2f2' };
+    if (action === 'reopend' || action === 'reopened') return { label: 'Ticket reopened', accent: '#10b981', bg: '#f0fdf4' };
+    if (action === 'approved') return { label: 'Ticket approved', accent: '#10b981', bg: '#f0fdf4' };
+    if (action === 'rejected') return { label: 'Ticket rejected', accent: '#ef4444', bg: '#fef2f2' };
+    return { label: action, accent: '#6b7280', bg: '#f9fafb' };
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: '40px' }}>
+    <div className="td-root">
       <style>{`
-        * { box-sizing: border-box; }
-        
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        
-        .overlay { 
-          position: fixed; 
-          top: 0; 
-          left: 0; 
-          width: 100vw; 
-          height: 100vh; 
-          background: rgba(0,0,0,0.65); 
-          display: flex; 
-          justify-content: center; 
-          align-items: center; 
-          z-index: 9999; 
-          animation: fadeIn 0.2s; 
-          backdrop-filter: blur(4px);
-        }
-        
-        .modal-box { 
-          background: white; 
-          padding: 32px; 
-          border-radius: 16px; 
-          width: 92%; 
-          max-width: 980px; 
-          text-align: center; 
-          box-shadow: 0 20px 60px rgba(0,0,0,0.3); 
-          animation: slideUp 0.3s; 
-          position: relative; 
-          max-height: 90vh;
-          overflow-y: auto;
-        }
-        
-        .reason-input { 
-          width: 100%; 
-          padding: 14px; 
-          margin: 12px 0; 
-          border: 2px solid #e2e8f0; 
-          border-radius: 12px; 
-          font-size: 15px;
-          font-family: inherit;
-          transition: all 0.2s;
-        }
-        
-        .reason-input:focus {
-          outline: none;
-          border-color: #002060;
-          box-shadow: 0 0 0 3px rgba(0, 32, 96, 0.1);
-        }
-        
-        .error-text { 
-          color: #dc2626; 
-          font-size: 14px; 
-          margin-top: 8px; 
-          font-weight: 600; 
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        .td-root {
+          min-height: 100vh;
+          background: #f4f4f0;
+          font-family: 'DM Sans', sans-serif;
+          color: #111827;
         }
 
-        .att-viewer { 
-          display:flex; 
-          flex-direction:column; 
-          gap:16px; 
-          align-items:stretch; 
+        .td-body {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 2.5rem 2rem 4rem;
         }
-        
-        .att-toolbar { 
-          display:flex; 
-          justify-content:space-between; 
-          align-items:center; 
-          gap:12px; 
-          padding-bottom: 16px;
-          border-bottom: 2px solid #e2e8f0;
+
+        /* ── Header ── */
+        .td-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          margin-bottom: 2.5rem;
+          padding-bottom: 1.5rem;
+          border-bottom: 1px solid #d9d5cc;
         }
-        
-        .att-title { 
-          font-weight:800; 
-          font-size:18px; 
-          color:#0f172a; 
+        .td-date {
+          font-size: 11px; font-weight: 500;
+          letter-spacing: 0.1em; text-transform: uppercase;
+          color: #9ca3af; margin-bottom: 6px;
         }
-        
-        .att-close { 
-          background:transparent; 
-          border:none; 
-          font-size:24px; 
-          cursor:pointer; 
-          color:#64748b;
-          width: 36px;
-          height: 36px;
+        .td-page-title {
+          font-size: 26px; font-weight: 600;
+          color: #111827; letter-spacing: -0.02em;
+        }
+        .td-header-actions { display: flex; gap: 10px; align-items: center; }
+
+        /* ── Buttons ── */
+        .hd-btn {
+          display: inline-flex; align-items: center; gap: 7px;
+          padding: 9px 18px; border-radius: 6px; font-size: 13px;
+          font-weight: 500; font-family: 'DM Sans', sans-serif;
+          cursor: pointer; text-decoration: none;
+          transition: background 0.15s, transform 0.1s; border: none;
+        }
+        .hd-btn-primary { background: #111827; color: #fff; }
+        .hd-btn-primary:hover { background: #1f2937; transform: translateY(-1px); }
+        .hd-btn-secondary { background: #fff; color: #111827; border: 1px solid #d9d5cc; }
+        .hd-btn-secondary:hover { background: #f9f8f6; transform: translateY(-1px); }
+
+        .td-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          border-radius: 6px; font-size: 13px; font-weight: 500;
+          font-family: 'DM Sans', sans-serif; cursor: pointer;
+          border: none; transition: background 0.15s, transform 0.1s;
+          text-decoration: none;
+        }
+        .td-btn-sm { padding: 7px 14px; }
+        .td-btn-md { padding: 9px 18px; }
+        .td-btn-lg { padding: 11px 22px; font-size: 14px; }
+
+        .td-btn-primary { background: #111827; color: #fff; }
+        .td-btn-primary:hover { background: #1f2937; transform: translateY(-1px); }
+        .td-btn-secondary { background: #fff; color: #374151; border: 1px solid #d9d5cc; }
+        .td-btn-secondary:hover { background: #f9f8f6; }
+        .td-btn-ghost { background: transparent; color: #6b7280; border: 1px solid #e5e7eb; }
+        .td-btn-ghost:hover { background: #f4f4f0; color: #374151; }
+        .td-btn-danger { background: #ef4444; color: #fff; }
+        .td-btn-danger:hover { background: #dc2626; transform: translateY(-1px); }
+        .td-btn-success { background: #10b981; color: #fff; }
+        .td-btn-success:hover { background: #059669; transform: translateY(-1px); }
+        .td-btn-warn { background: #f59e0b; color: #fff; }
+        .td-btn-warn:hover { background: #d97706; transform: translateY(-1px); }
+        .td-btn-muted { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+        .td-btn-muted:hover { background: #e5e7eb; }
+        .td-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+        /* ── Main Layout ── */
+        .td-layout {
+          display: grid;
+          grid-template-columns: 1fr 300px;
+          gap: 1px;
+          background: #d9d5cc;
+          border: 1px solid #d9d5cc;
+          border-radius: 10px;
+          overflow: hidden;
+          margin-bottom: 24px;
+        }
+
+        .td-main-col { background: #fff; }
+        .td-side-col { background: #fff; }
+
+        /* ── Ticket header strip ── */
+        .td-ticket-strip {
+          padding: 1.5rem 1.75rem;
+          border-bottom: 1px solid #f3f4f6;
+          display: flex;
+          gap: 1rem;
+          align-items: flex-start;
+        }
+
+        .td-accent-bar {
+          width: 3px;
+          border-radius: 2px;
+          align-self: stretch;
+          flex-shrink: 0;
+          min-height: 60px;
+        }
+
+        .td-ticket-id {
+          font-size: 11px; font-weight: 600;
+          font-family: 'DM Mono', monospace;
+          color: #9ca3af; letter-spacing: 0.06em;
+          margin-bottom: 3px;
+        }
+        .td-ticket-cat {
+          font-size: 20px; font-weight: 600;
+          color: #111827; letter-spacing: -0.02em;
+          margin-bottom: 10px;
+        }
+
+        .td-pills { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .td-pill {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 3px 10px; border-radius: 20px;
+          font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
+          white-space: nowrap;
+        }
+        .td-pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+        /* ── Description block ── */
+        .td-description {
+          padding: 1.5rem 1.75rem;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        .td-block-label {
+          font-size: 11px; font-weight: 500;
+          letter-spacing: 0.08em; text-transform: uppercase;
+          color: #9ca3af; margin-bottom: 10px;
+        }
+        .td-desc-text {
+          font-size: 14px; color: #374151; line-height: 1.7;
+          white-space: pre-wrap;
+        }
+
+        /* ── Meta grid ── */
+        .td-meta-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1px;
+          background: #f3f4f6;
+          border-top: 1px solid #f3f4f6;
+        }
+        .td-meta-cell {
+          background: #fff;
+          padding: 1rem 1.75rem;
+        }
+        .td-meta-key {
+          font-size: 11px; font-weight: 500;
+          text-transform: uppercase; letter-spacing: 0.08em;
+          color: #9ca3af; margin-bottom: 4px;
+        }
+        .td-meta-val {
+          font-size: 14px; font-weight: 600;
+          color: #111827; font-family: 'DM Sans', sans-serif;
+        }
+        .td-meta-val-mono {
+          font-family: 'DM Mono', monospace;
+          font-size: 13px;
+        }
+
+        /* ── Sidebar ── */
+        .td-sidebar-section {
+          padding: 1.25rem 1.5rem;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        .td-sidebar-section:last-child { border-bottom: none; }
+
+        /* ── Approval banner ── */
+        .td-approval-banner {
+          background: #fffbeb;
+          border: 1px solid #fcd34d;
+          border-radius: 8px;
+          padding: 1.25rem;
+          margin: 1.5rem 1.75rem;
+          text-align: center;
+        }
+
+        /* ── History ── */
+        .td-history {
+          background: #fff;
+          border: 1px solid #d9d5cc;
+          border-radius: 10px;
+          overflow: hidden;
+        }
+
+        .td-history-header {
+          padding: 1.25rem 1.75rem;
+          border-bottom: 1px solid #f3f4f6;
+          font-size: 12px;
+          font-weight: 500;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #6b7280;
+        }
+
+        .td-history-event {
+          display: flex;
+          gap: 0;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        .td-history-event:last-child { border-bottom: none; }
+
+        .td-history-accent { width: 3px; flex-shrink: 0; align-self: stretch; }
+        .td-history-body { padding: 1.1rem 1.5rem; flex: 1; }
+        .td-history-action {
+          font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 3px;
+        }
+        .td-history-by {
+          font-size: 12px; color: #9ca3af; margin-bottom: 8px;
+          font-family: 'DM Mono', monospace;
+        }
+        .td-history-reason {
+          font-size: 13px; color: #374151;
+          background: #fafaf8; border: 1px solid #e5e7eb;
+          border-radius: 5px; padding: 8px 12px; margin-top: 8px;
+        }
+
+        .td-current-status {
+          padding: 1.25rem 1.75rem;
           display: flex;
           align-items: center;
-          justify-content: center;
-          border-radius: 8px;
-          transition: all 0.2s;
+          gap: 10px;
+          background: #fafaf8;
         }
-        
-        .att-close:hover {
-          background: #f1f5f9;
-          color: #475569;
-        }
-        
-        .att-content { 
-          width:100%; 
-          min-height: 240px; 
-          max-height: 70vh; 
-          display:flex; 
-          justify-content:center; 
-          align-items:center; 
-          overflow:auto; 
-          background:#f8fafc; 
-          border-radius:12px; 
-          padding:16px; 
-          flex-direction:column; 
-          border: 2px solid #e2e8f0;
-        }
-        
-        .att-img { 
-          max-width:100%; 
-          max-height:68vh; 
-          object-fit:contain; 
-          border-radius:10px; 
-          box-shadow:0 8px 24px rgba(0,0,0,0.12); 
-        }
-        
-        .att-list { 
-          display:flex; 
-          gap:10px; 
-          overflow:auto; 
-          padding-top:12px; 
-        }
-        
-        .att-thumb { 
-          padding:10px; 
-          background:#fff; 
-          border-radius:10px; 
-          border:2px solid #e2e8f0; 
-          cursor:pointer; 
-          min-width:140px; 
-          display:flex; 
-          gap:10px; 
-          align-items:center;
-          transition: all 0.2s;
-        }
-        
-        .att-thumb:hover {
-          border-color: #002060;
-          box-shadow: 0 4px 12px rgba(0, 32, 96, 0.1);
-        }
-        
-        .att-thumb img { 
-          width:60px; 
-          height:60px; 
-          object-fit:cover; 
-          border-radius:8px; 
-        }
-        
-        .att-thumb .meta { 
-          display:flex; 
-          flex-direction:column; 
-          align-items:flex-start; 
-          min-width:0; 
-        }
-        
-        .att-thumb .meta .name { 
-          font-weight:700; 
-          font-size:13px; 
-          white-space:nowrap; 
-          overflow:hidden; 
-          text-overflow:ellipsis; 
-        }
-        
-        .att-thumb .meta .type { 
-          font-size:12px; 
-          color:#64748b; 
+        .td-current-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+        /* ── Modals ── */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .td-overlay {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.5);
+          display: flex; justify-content: center; align-items: center;
+          z-index: 9999;
+          animation: fadeIn 0.15s;
+          backdrop-filter: blur(3px);
         }
 
-        .att-actions { 
-          display:flex; 
-          gap:10px; 
-          margin-top:16px; 
+        .td-modal {
+          background: #fff;
+          border-radius: 10px;
+          padding: 2rem;
+          width: 92%; max-width: 560px;
+          animation: slideUp 0.2s;
+          max-height: 90vh; overflow-y: auto;
         }
-        
-        .att-btn { 
-          padding:12px 20px; 
-          background:#002060; 
-          color:#fff; 
-          border-radius:10px; 
-          text-decoration:none; 
-          font-weight:700; 
-          border:none; 
-          cursor:pointer; 
-          display:inline-flex; 
-          align-items:center; 
-          gap:8px;
-          transition: all 0.2s;
+
+        .td-modal-wide { max-width: 900px; }
+
+        .td-modal-title {
+          font-size: 18px; font-weight: 600; color: #111827;
+          margin-bottom: 6px; letter-spacing: -0.01em;
         }
-        
-        .att-btn:hover {
-          background: #001a4d;
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(0, 32, 96, 0.3);
+        .td-modal-sub {
+          font-size: 13px; color: #6b7280; margin-bottom: 1.5rem;
+          line-height: 1.5;
         }
-        
-        .att-btn img { 
-          width:18px; 
-          height:18px; 
+
+        .td-textarea {
+          width: 100%; padding: 10px 14px;
+          border: 1px solid #d9d5cc; border-radius: 7px;
+          font-size: 14px; font-family: 'DM Sans', sans-serif;
+          background: #fafaf8; color: #111827;
+          resize: vertical; min-height: 100px;
+          transition: border-color 0.15s, box-shadow 0.15s;
+          margin-bottom: 4px;
         }
-        
-        .btn-primary {
-          background: linear-gradient(135deg, #002060 0%, #003380 100%);
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 12px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
-          box-shadow: 0 6px 18px rgba(0, 32, 96, 0.15);
+        .td-textarea:focus {
+          outline: none; border-color: #111827; background: #fff;
+          box-shadow: 0 0 0 3px rgba(17,24,39,0.07);
         }
-        
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(0, 32, 96, 0.25);
+
+        .td-error { font-size: 12px; color: #ef4444; font-weight: 500; margin-top: 4px; margin-bottom: 10px; }
+
+        .td-modal-actions { display: flex; gap: 10px; margin-top: 1.5rem; flex-wrap: wrap; }
+
+        /* ── Approval detail grid ── */
+        .td-approval-grid {
+          background: #fafaf8; border: 1px solid #e5e7eb;
+          border-radius: 8px; padding: 1.25rem;
+          margin-bottom: 1.25rem;
         }
-        
-        .btn-danger {
-          background: #ef4444;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 12px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
-          box-shadow: 0 6px 18px rgba(239, 68, 68, 0.15);
+        .td-approval-row {
+          display: flex; gap: 8px;
+          font-size: 13px; margin-bottom: 8px;
+          align-items: flex-start;
         }
-        
-        .btn-danger:hover {
-          background: #dc2626;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(239, 68, 68, 0.25);
+        .td-approval-row:last-child { margin-bottom: 0; }
+        .td-approval-key { font-weight: 600; color: #6b7280; width: 120px; flex-shrink: 0; }
+        .td-approval-val { color: #111827; }
+
+        /* ── Password popup ── */
+        .td-password-box {
+          background: #f4f4f0; border: 1px solid #d9d5cc;
+          border-radius: 8px; padding: 1.25rem;
+          font-family: 'DM Mono', monospace;
+          font-size: 18px; font-weight: 500;
+          color: #111827; word-break: break-all;
+          margin: 1rem 0 1.5rem; text-align: center;
+          letter-spacing: 0.05em;
         }
-        
-        .btn-success {
-          background: #10b981;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 12px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
-          box-shadow: 0 6px 18px rgba(16, 185, 129, 0.15);
+
+        /* ── Attachment viewer ── */
+        .td-att-content {
+          min-height: 200px; max-height: 65vh;
+          display: flex; justify-content: center; align-items: center;
+          background: #f4f4f0; border: 1px solid #d9d5cc;
+          border-radius: 8px; padding: 1rem;
+          overflow: auto; flex-direction: column;
         }
-        
-        .btn-success:hover {
-          background: #059669;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);
+        .td-att-img { max-width: 100%; max-height: 62vh; object-fit: contain; border-radius: 6px; }
+        .td-att-list { display: flex; gap: 8px; overflow-x: auto; padding-top: 12px; }
+        .td-att-thumb {
+          padding: 8px; background: #fff;
+          border: 1px solid #d9d5cc; border-radius: 7px;
+          cursor: pointer; min-width: 130px; display: flex;
+          gap: 8px; align-items: center; flex-shrink: 0;
+          transition: border-color 0.15s;
         }
-        
-        .btn-secondary {
-          background: #64748b;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 12px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
+        .td-att-thumb:hover { border-color: #111827; }
+        .td-att-thumb img { width: 52px; height: 52px; object-fit: cover; border-radius: 5px; }
+        .td-att-thumb-name { font-size: 12px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .td-att-thumb-type { font-size: 11px; color: #9ca3af; }
+
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
+          .td-layout { grid-template-columns: 1fr; }
+          .td-side-col { border-top: 1px solid #d9d5cc; }
         }
-        
-        .btn-secondary:hover {
-          background: #475569;
-        }
-        
-        @media (max-width: 768px) {
-          .modal-box {
-            padding: 24px;
-            width: 95%;
-          }
+        @media (max-width: 640px) {
+          .td-body { padding: 1.5rem 1rem 3rem; }
+          .td-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+          .td-header-actions { width: 100%; }
+          .hd-btn { flex: 1; justify-content: center; }
+          .td-meta-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
-      {/* Header Bar - Matching Home.js style */}
-      <div style={{
-        background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
-        color: 'white',
-        padding: '1.5rem 2rem',
-        boxShadow: '0 4px 16px rgba(0, 32, 96, 0.15)'
-      }}>
-        <div style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '2rem'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            <button
-              onClick={() => navigate('/tickets')}
-              style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: 'none',
-                color: 'white',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.2s',
-                fontSize: '15px'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
-            >
-              ← Back to Tickets
-            </button>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Ticket Details</h1>
+      <div className="td-body">
+        {/* ── Header ── */}
+        <div className="td-header">
+          <div>
+            <div className="td-date">{today}</div>
+            <div className="td-page-title">Ticket Details</div>
           </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <Link to="/create" className="btn-header btn-primary" style={{
-              padding: '10px 20px',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              textDecoration: 'none',
-              display: 'inline-block',
-              background: '#e98404',
-              color: 'white',
-              boxShadow: '0 4px 12px rgba(233, 132, 4, 0.3)'
-            }}>
-              + Create Ticket
+          <div className="td-header-actions">
+            <Link to="/create" className="hd-btn hd-btn-primary">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              New Ticket
             </Link>
+            <button onClick={() => navigate('/tickets')} className="hd-btn hd-btn-secondary">
+              ← All Tickets
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* MAIN CARD */}
-      <div style={{
-        maxWidth: '800px',
-        margin: '2rem auto',
-        padding: '0 1.5rem'
-      }}>
-        <div style={{
-          background: '#ffffff',
-          borderRadius: '16px',
-          borderLeft: `6px solid ${ticket.status === "Closed" ? "#ef4444" : ticket.status === "Approved" ? "#10b981" : "#e98404"}`,
-          boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
-          padding: '2.5rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '24px'
-        }}>
-          <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flex: 1, minWidth: '300px' }}>
-              <div style={{
-                width: '72px',
-                height: '72px',
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #002060 0%, #003380 100%)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: '20px',
-                boxShadow: '0 8px 24px rgba(0, 32, 96, 0.2)',
-                flexShrink: 0
-              }}>
-                {ticket.userName ? ticket.userName.split(' ').map(n => n[0]).slice(0,2).join('') : 'U'}
-              </div>
-
+        {/* ── Main layout ── */}
+        <div className="td-layout">
+          {/* LEFT: main content */}
+          <div className="td-main-col">
+            {/* Ticket strip */}
+            <div className="td-ticket-strip">
+              <div className="td-accent-bar" style={{ background: ac }} />
               <div style={{ flex: 1 }}>
-                <h1 style={{ margin: '0 0 8px 0', fontSize: '1.75rem', color: '#0f172a', fontWeight: 800 }}>
-                  {ticket.category}
-                </h1>
-
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{
-                    padding: '8px 16px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                    color: '#002060',
-                    fontWeight: 800,
-                    fontSize: '13px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    boxShadow: '0 4px 12px rgba(0, 32, 96, 0.08)'
-                  }}>
-                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700 }}>Ticket #</span>
-                    <span style={{ fontSize: '20px', marginTop: '2px', letterSpacing: '0.5px' }}>{ticket.ticketNumber}</span>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{
-                      padding: '8px 12px',
-                      borderRadius: '999px',
-                      background: ticket.priority === 'High' ? '#fee2e2' : ticket.priority === 'Medium' ? '#fff7ed' : '#d1fae5',
-                      color: ticket.priority === 'High' ? '#991b1b' : ticket.priority === 'Medium' ? '#b45309' : '#065f46',
-                      fontWeight: 700,
-                      fontSize: '13px',
-                      border: `2px solid ${ticket.priority === 'High' ? '#fecaca' : ticket.priority === 'Medium' ? '#fed7aa' : '#a7f3d0'}`
-                    }}>{ticket.priority} Priority</span>
-
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 12px',
-                      borderRadius: '999px',
-                      fontWeight: 700,
-                      fontSize: '13px',
-                      border: '2px solid',
-                      ...statusColorStyles,
-                      borderColor: ticket.status === 'Closed' ? '#fecaca' : (ticket.status === 'Approved' ? '#a7f3d0' : (ticket.status === 'Waiting for approval' ? '#fcd34d' : '#bae6fd'))
-                    }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ticket.status === 'Closed' ? '#dc2626' : (ticket.status === 'Approved' ? '#10b981' : (ticket.status === 'Waiting for approval' ? '#e98404' : '#0284c7')) }} />
-                      {ticket.status}
-                    </span>
-                  </div>
-                </div>
-
+                <div className="td-ticket-id">TICKET #{ticket.ticketNumber}</div>
+                <div className="td-ticket-cat">{ticket.category}</div>
                 {ticket.category === 'Operational & Finance' && ticket.subQuery && (
-                  <div style={{ marginTop: '12px', fontSize: '14px', color: '#475569' }}>
-                    <span style={{ fontWeight: 700 }}>Sub Category:</span> {ticket.subQuery}
-                    {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
-                      <div style={{ marginTop: '4px' }}>
-                        <span style={{ fontWeight: 700 }}>Details:</span> {ticket.otherSubQueryText}
-                      </div>
-                    )}
+                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600 }}>Sub-category:</span> {ticket.subQuery}
+                    {ticket.subQuery === 'Other' && ticket.otherSubQueryText && <span> — {ticket.otherSubQueryText}</span>}
+                  </div>
+                )}
+                <div className="td-pills">
+                  <span className="td-pill" style={{ background: sp.bg, color: sp.color }}>
+                    <span className="td-pill-dot" style={{ background: sp.color }} />
+                    {ticket.status}
+                  </span>
+                  <span className="td-pill" style={{ background: pm.bg, color: pm.color }}>
+                    {ticket.priority} Priority
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Approval banner */}
+            {needsApprovalBanner && (
+              <div className="td-approval-banner">
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 6 }}>
+                  Waiting for your approval — {ticket.category}
+                </div>
+                <button onClick={() => setShowApprovalModal(true)} className="td-btn td-btn-md td-btn-warn">
+                  Review & take action
+                </button>
+              </div>
+            )}
+
+            {/* Description */}
+            <div className="td-description">
+              <div className="td-block-label">Description</div>
+              <div className="td-desc-text">{ticket.description}</div>
+              {renderAttachmentBlock(true)}
+            </div>
+
+            {/* Meta grid */}
+            <div className="td-meta-grid">
+              <div className="td-meta-cell">
+                <div className="td-meta-key">Created</div>
+                <div className="td-meta-val td-meta-val-mono">{formatDate(ticket.createdAt)}</div>
+              </div>
+              <div className="td-meta-cell">
+                <div className="td-meta-key">Submitted by</div>
+                <div className="td-meta-val">{ticket.userName}</div>
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>{ticket.userEmail}</div>
+              </div>
+              {ticket.closedAt && (
+                <div className="td-meta-cell">
+                  <div className="td-meta-key">Closed</div>
+                  <div className="td-meta-val td-meta-val-mono">{formatDate(ticket.closedAt)}</div>
+                </div>
+              )}
+              {ticket.assignedTo && (
+                <div className="td-meta-cell">
+                  <div className="td-meta-key">Assigned to</div>
+                  <div className="td-meta-val">{ticket.assignedTo}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT: sidebar */}
+          <div className="td-side-col">
+            {/* Actions */}
+            {(authority === 'admin' && ticket.status !== 'Closed') || ticket.status === 'Closed' ? (
+              <div className="td-sidebar-section">
+                <div className="td-block-label" style={{ marginBottom: 12 }}>Actions</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {authority === 'admin' && ticket.status !== 'Closed' && (
+                    <button onClick={() => setShowReasonInput(true)} className="td-btn td-btn-md td-btn-danger" style={{ width: '100%', justifyContent: 'center' }}>
+                      Close ticket
+                    </button>
+                  )}
+                  {ticket.status === 'Closed' && (
+                    <button onClick={() => setShowreopenReasonInput(true)} className="td-btn td-btn-md td-btn-success" style={{ width: '100%', justifyContent: 'center' }}>
+                      Reopen ticket
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Quick info */}
+            <div className="td-sidebar-section">
+              <div className="td-block-label" style={{ marginBottom: 12 }}>Ticket info</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Status</div>
+                  <span className="td-pill" style={{ background: sp.bg, color: sp.color }}>
+                    <span className="td-pill-dot" style={{ background: sp.color }} />
+                    {ticket.status}
+                  </span>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Priority</div>
+                  <span className="td-pill" style={{ background: pm.bg, color: pm.color }}>{ticket.priority}</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Ticket #</div>
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 500, color: '#111827' }}>{ticket.ticketNumber}</span>
+                </div>
+                {ticket.onBehalf && (
+                  <div>
+                    <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>On behalf of</div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>{ticket.onBehalf}</div>
+                    {ticket.onBehalfEmail && <div style={{ fontSize: 12, color: '#9ca3af' }}>{ticket.onBehalfEmail}</div>}
                   </div>
                 )}
               </div>
             </div>
-
-            <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-end' }}>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>Created by</div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '15px' }}>{ticket.userName}</div>
-                <a href={`mailto:${ticket.userEmail}`} style={{ color: '#002060', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}>
-                  {ticket.userEmail}
-                </a>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '10px' }}>
-                {authority === 'admin' && ticket.status !== 'Closed' && (
-                  <button
-                    onClick={() => setShowReasonInput(true)}
-                    className="btn-danger"
-                    style={{ width: '100%', fontSize: '15px' }}
-                  >
-                    Close Ticket
-                  </button>
-                )}
-
-                {ticket.status === 'Closed' && (
-                  <button
-                    onClick={() => setShowreopenReasonInput(true)}
-                    className="btn-success"
-                    style={{ width: '100%', fontSize: '15px' }}
-                  >
-                    Reopen Ticket
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {needsApprovalBanner && (
-            <div style={{
-              background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
-              border: "2px solid #fcd34d",
-              padding: "20px",
-              borderRadius: "14px",
-              textAlign: "center",
-              boxShadow: "0 6px 18px rgba(252, 211, 77, 0.15)"
-            }}>
-              <h3 style={{ margin: 0, color: "#92400e", fontWeight: 800, fontSize: '1.2rem' }}>
-                ⚠️ Waiting for Your Approval
-              </h3>
-              <p style={{ color: "#92400e", marginTop: '8px', marginBottom: '12px' }}>
-                This ticket requires action from <strong>you ({ticket.category})</strong>.
-              </p>
-
-              <button
-                onClick={() => setShowApprovalModal(true)}
-                style={{
-                  marginTop: '10px',
-                  background: "#e98404",
-                  color: "white",
-                  borderRadius: "12px",
-                  padding: "12px 24px",
-                  border: "none",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  boxShadow: "0 6px 18px rgba(233, 132, 4, 0.2)",
-                  transition: "all 0.2s"
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#d97706";
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#e98404";
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
-              >
-                Review & Take Action
-              </button>
-            </div>
-          )}
-
-          <div style={{
-            marginTop: '4px',
-            background: '#f8fafc',
-            padding: '24px',
-            borderRadius: '14px',
-            border: '2px solid #e2e8f0',
-            color: '#334155',
-            lineHeight: 1.7,
-            fontSize: '15px'
-          }}>
-            <strong style={{ display: 'block', marginBottom: '12px', fontSize: '16px', color: '#0f172a' }}>Description</strong>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
-            {renderAttachmentSummary()}
-          </div>
-
-          {/* Metadata Section */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '16px',
-            marginTop: '8px'
-          }}>
-            <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
-              <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Created Date</div>
-              <div style={{ fontWeight: 700, color: '#0f172a' }}>{formatDate(ticket.createdAt)}</div>
-            </div>
-            {ticket.closedAt && (
-              <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
-                <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Closed Date</div>
-                <div style={{ fontWeight: 700, color: '#0f172a' }}>{formatDate(ticket.closedAt)}</div>
-              </div>
-            )}
-            {ticket.assignedTo && (
-              <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '2px solid #e2e8f0' }}>
-                <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Assigned To</div>
-                <div style={{ fontWeight: 700, color: '#0f172a' }}>{ticket.assignedTo}</div>
-              </div>
-            )}
           </div>
         </div>
-      </div>
 
-      {/* HISTORY TIMELINE */}
-      <div style={{ maxWidth: '800px', margin: '3rem auto 4rem', padding: '0 1.5rem' }}>
-        <h2 style={{ 
-          fontSize: '2rem', 
-          color: '#0f172a', 
-          marginBottom: '2.5rem', 
-          textAlign: 'center', 
-          fontWeight: 800,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '10px'
-        }}>
-          <img src={HistoryIcon} alt="History" style={{ width: '28px', height: '28px' }} />
-          Ticket History
-        </h2>
-        <div>
-          {historyEvents.map((event, index) => {
-            const isCreatedEvent = event.action === 'created';
-            const createdByDifferentPerson = isCreatedEvent && event.by !== ticket.userName;
-            const showOnBehalf = isCreatedEvent && (ticket.onBehalf || createdByDifferentPerson);
+        {/* ── History ── */}
+        <div className="td-history">
+          <div className="td-history-header">Ticket history</div>
+          {historyEvents.map((event, idx) => {
+            const hm = historyEventMeta(event.action);
             const isOpsFin = ticket.category === 'Operational & Finance';
-
             return (
-              <div
-                key={index}
-                style={{
-                  marginBottom: '20px',
-                  padding: '24px',
-                  background:
-                    event.action === 'closed'
-                      ? '#fee2e2'
-                      : event.action === 'created'
-                      ? '#fef3c7'
-                      : '#f1f5f9',
-                  borderRadius: '14px',
-                  borderLeft: event.action === 'created' ? '4px solid #e98404' : event.action === 'closed' ? '4px solid #ef4444' : '4px solid #10b981',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-                }}
-              >
-                <strong style={{ display: 'block', marginBottom: '10px', textTransform: 'capitalize', fontSize: '1.15rem', color: '#0f172a' }}>
-                  {event.action === 'created' ? '✨ Ticket Created' :
-                   event.action === 'closed' ? '🔒 Ticket Closed' :
-                   event.action === 'reopend' ? '🔄 Ticket Reopened' : event.action}
-                </strong>
-
-                <small style={{ color: '#475569', fontWeight: 600, display: 'block', marginBottom: '12px' }}>
-                  {formatDate(event.at)} by <strong>{event.by || "Unknown"}</strong>
-                  {showOnBehalf && (
-                    <>
-                      {' '}on behalf of{' '}
-                      <strong style={{ color: '#e98404' }}>
-                        {ticket.onBehalf || ticket.userName}
-                        {ticket.onBehalfEmail ? ` (${ticket.onBehalfEmail})` : ''}
-                      </strong>
-                    </>
+              <div key={idx} className="td-history-event">
+                <div className="td-history-accent" style={{ background: hm.accent }} />
+                <div className="td-history-body" style={{ background: idx % 2 === 0 ? '#fff' : '#fafaf8' }}>
+                  <div className="td-history-action">{hm.label}</div>
+                  <div className="td-history-by">
+                    {formatDate(event.at)} · {event.by || 'Unknown'}
+                    {event.action === 'created' && (ticket.onBehalf || (event.by !== ticket.userName)) && (
+                      <span style={{ color: '#f59e0b' }}> · on behalf of {ticket.onBehalf || ticket.userName}{ticket.onBehalfEmail ? ` (${ticket.onBehalfEmail})` : ''}</span>
+                    )}
+                  </div>
+                  {isOpsFin && event.subQuery && (
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
+                      Sub-category: <strong>{event.subQuery}</strong>
+                      {event.subQuery === 'Other' && event.otherSubQueryText && <span> — {event.otherSubQueryText}</span>}
+                    </div>
                   )}
-                </small>
-
-                {isOpsFin && (event.subQuery || event.otherSubQueryText) && (
-                  <div style={{ marginTop: '8px', fontSize: '13px', color: '#64748b' }}>
-                    {event.subQuery && (
-                      <div>
-                        <span style={{ fontWeight: 700 }}>Sub Category:</span> {event.subQuery}
-                      </div>
-                    )}
-                    {event.subQuery === 'Other' && event.otherSubQueryText && (
-                      <div style={{ marginTop: '2px' }}>
-                        <span style={{ fontWeight: 700 }}>Details:</span> {event.otherSubQueryText}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {event.reason && (
-                  <div style={{ 
-                    marginTop: '14px', 
-                    padding: '14px', 
-                    background: '#ffffff', 
-                    borderRadius: '10px', 
-                    border: '2px solid #e2e8f0',
-                    fontSize: '14px'
-                  }}>
-                    <span style={{ fontWeight: 700 }}>Reason:</span> {event.reason}
-                  </div>
-                )}
-
-                {renderHistoryAttachment(event)}
+                  {event.reason && (
+                    <div className="td-history-reason">{event.reason}</div>
+                  )}
+                  {renderHistoryAttachment(event)}
+                </div>
               </div>
             );
           })}
-
-          <div style={{ 
-            marginTop: '24px', 
-            padding: '24px', 
-            background: ticket.status === "Closed" ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)' : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', 
-            borderRadius: '14px',
-            border: `2px solid ${ticket.status === "Closed" ? "#fecaca" : "#a7f3d0"}`,
-            boxShadow: '0 6px 18px rgba(0,0,0,0.06)',
-            textAlign: 'center'
-          }}>
-            <strong style={{ fontSize: '1.3rem', color: ticket.status === "Closed" ? '#991b1b' : '#065f46', display: 'block' }}>
-              Current Status: {ticket.status}
-            </strong>
+          <div className="td-current-status">
+            <div className="td-current-dot" style={{ background: sp.color }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Current status:</span>
+            <span className="td-pill" style={{ background: sp.bg, color: sp.color }}>{ticket.status}</span>
           </div>
         </div>
       </div>
 
-      {/* APPROVAL MODAL */}
+      {/* ── APPROVAL MODAL ── */}
       {showApprovalModal && isCategoryHead && (
-        <div className="overlay">
-          <div className="modal-box" style={{ maxHeight: "90vh", overflowY: "auto" }}>
-            <h2 style={{ marginBottom: '12px', fontWeight: 800, color: '#0f172a', fontSize: '1.75rem' }}>
-              Approval Required
-            </h2>
-            <p style={{ color: "#64748b", marginBottom: '24px', fontSize: '15px' }}>
-              You are the <strong style={{ color: '#002060' }}>Category Head</strong> for <strong>{ticket.category}</strong>.<br />
-              Review the ticket details below before taking action.
-            </p>
-
-            <div style={{
-              background: "#f8fafc",
-              padding: "24px",
-              borderRadius: "14px",
-              textAlign: "left",
-              marginBottom: "20px",
-              border: "2px solid #e2e8f0"
-            }}>
-              <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                📋 Ticket Summary
-              </h3>
-              <div style={{ display: 'grid', gap: '12px' }}>
-                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Ticket #:</span> {ticket.ticketNumber}</p>
-                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Created By:</span> {ticket.userName} ({ticket.userEmail})</p>
-                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Category:</span> {ticket.category}</p>
-                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Priority:</span> {ticket.priority}</p>
-                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>On Behalf:</span> {ticket.onBehalf || "Self"}</p>
-                {ticket.onBehalfEmail && <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>On Behalf Email:</span> {ticket.onBehalfEmail}</p>}
-                {ticket.deliveryEmail && <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Delivery Email:</span> {ticket.deliveryEmail}</p>}
-                <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Created On:</span> {formatDate(ticket.createdAt)}</p>
-
-                {ticket.category === 'Operational & Finance' && ticket.subQuery && (
-                  <>
-                    <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Sub Category:</span> {ticket.subQuery}</p>
-                    {ticket.subQuery === 'Other' && ticket.otherSubQueryText && (
-                      <p style={{ margin: 0 }}><span style={{ fontWeight: 700, color: '#475569' }}>Sub Details:</span> {ticket.otherSubQueryText}</p>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {hasAttachment && (
-                <div style={{ marginTop: '16px' }}>
-                  {renderAttachmentSummary()}
+        <div className="td-overlay">
+          <div className="td-modal td-modal-wide" onClick={e => e.stopPropagation()}>
+            <div className="td-modal-title">Approval required — {ticket.category}</div>
+            <div className="td-modal-sub">You are the category head. Review the ticket and take action.</div>
+            <div className="td-approval-grid">
+              {[
+                ['Ticket #', ticket.ticketNumber],
+                ['Created by', `${ticket.userName} (${ticket.userEmail})`],
+                ['Priority', ticket.priority],
+                ['On behalf of', ticket.onBehalf || 'Self'],
+                ticket.onBehalfEmail && ['On behalf email', ticket.onBehalfEmail],
+                ticket.deliveryEmail && ['Delivery email', ticket.deliveryEmail],
+                ['Created on', formatDate(ticket.createdAt)],
+                ticket.category === 'Operational & Finance' && ticket.subQuery && ['Sub-category', ticket.subQuery],
+              ].filter(Boolean).map(([k, v]) => (
+                <div key={k} className="td-approval-row">
+                  <span className="td-approval-key">{k}</span>
+                  <span className="td-approval-val">{v}</span>
                 </div>
-              )}
-
-              <div style={{ marginTop: '20px' }}>
-                <span style={{ fontWeight: 700, color: '#475569', display: 'block', marginBottom: '8px' }}>Description:</span>
-                <div style={{
-                  background: "#ffffff",
-                  padding: "16px",
-                  borderRadius: "10px",
-                  whiteSpace: "pre-wrap",
-                  border: '2px solid #e2e8f0',
-                  fontSize: '14px',
-                  lineHeight: 1.6
-                }}>
-                  {ticket.description}
-                </div>
+              ))}
+              <div className="td-approval-row" style={{ flexDirection: 'column' }}>
+                <span className="td-approval-key" style={{ width: 'auto', marginBottom: 6 }}>Description</span>
+                <div style={{ fontSize: 13, color: '#374151', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '10px 12px', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
               </div>
+              {hasAttachment && <div style={{ marginTop: 8 }}>{renderAttachmentBlock()}</div>}
             </div>
-
-            <textarea
-              className="reason-input"
-              placeholder="Optional note to requester..."
-              value={adminNote}
-              onChange={(e) => setAdminNote(e.target.value)}
-              rows={4}
-              style={{ width: "100%", marginBottom: "16px" }}
-            />
-
-            <div style={{ display: "flex", gap: "14px", marginTop: "12px", justifyContent: "center", flexWrap: 'wrap' }}>
-              <button
-                onClick={handleApprove}
-                disabled={approveLoading}
-                className="btn-success"
-                style={{ minWidth: "140px", fontSize: '15px' }}
-              >
-                {approveLoading ? "Approving..." : "✓ Approve"}
+            <textarea className="td-textarea" placeholder="Optional note to requester…" value={adminNote} onChange={e => setAdminNote(e.target.value)} rows={3} />
+            <div className="td-modal-actions">
+              <button onClick={handleApprove} disabled={approveLoading} className="td-btn td-btn-lg td-btn-success">
+                {approveLoading ? 'Approving…' : '✓ Approve'}
               </button>
-              <button
-                onClick={handleReject}
-                disabled={rejectLoading}
-                className="btn-danger"
-                style={{ minWidth: "140px", fontSize: '15px' }}
-              >
-                {rejectLoading ? "Rejecting..." : "✕ Reject"}
+              <button onClick={handleReject} disabled={rejectLoading} className="td-btn td-btn-lg td-btn-danger">
+                {rejectLoading ? 'Rejecting…' : '✕ Reject'}
               </button>
-              <button
-                onClick={() => { setShowApprovalModal(false); setAdminNote(''); }}
-                className="btn-secondary"
-                style={{ fontSize: '15px' }}
-              >
+              <button onClick={() => { setShowApprovalModal(false); setAdminNote(''); }} className="td-btn td-btn-lg td-btn-muted">
                 Dismiss
               </button>
             </div>
@@ -1714,235 +965,134 @@ function TicketDetails() {
         </div>
       )}
 
-      {/* PASSWORD POPUP */}
+      {/* ── PASSWORD POPUP ── */}
       {showPasswordPopup && (
-        <div className="overlay">
-          <div className="modal-box" style={{ maxWidth: "600px" }}>
-            <h2 style={{ color: '#10b981', fontWeight: 800, fontSize: '1.75rem', marginBottom: '16px' }}>
-              ✓ Password Reset Successful
-            </h2>
-            <p style={{ color: '#64748b', marginBottom: '24px' }}>
-              The new temporary password generated for the target account is shown below. Please copy it and share as needed.
-            </p>
-            <div style={{
-              padding: "20px",
-              background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
-              borderRadius: "12px",
-              fontFamily: "monospace",
-              fontSize: "20px",
-              fontWeight: 700,
-              color: '#002060',
-              border: '2px solid #bae6fd',
-              marginBottom: '24px',
-              wordBreak: 'break-all'
-            }}>
-              {returnedPassword}
-            </div>
-            <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
-              <button
-                onClick={() => copyToClipboard(returnedPassword)}
-                className="btn-primary"
-              >
-                📋 Copy to Clipboard
+        <div className="td-overlay">
+          <div className="td-modal" onClick={e => e.stopPropagation()}>
+            <div className="td-modal-title" style={{ color: '#10b981' }}>Password reset successful</div>
+            <div className="td-modal-sub">The new temporary password is shown below. Copy and share as needed.</div>
+            <div className="td-password-box">{returnedPassword}</div>
+            <div className="td-modal-actions">
+              <button onClick={() => copyToClipboard(returnedPassword)} className="td-btn td-btn-lg td-btn-secondary">
+                Copy to clipboard
               </button>
-              <button
-                onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }}
-                className="btn-success"
-              >
-                ✓ Done
+              <button onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }} className="td-btn td-btn-lg td-btn-success">
+                Done
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* CLOSE MODALS */}
+      {/* ── CLOSE MODALS ── */}
       {showReasonInput && (
-        <div className="overlay" onClick={cancelClose}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#0f172a', fontSize: '1.6rem', fontWeight: 800 }}>
-              Close Ticket #{ticket.ticketNumber}
-            </h3>
-            <p style={{ color: '#64748b', marginBottom: '24px' }}>Please provide a reason for closing this ticket.</p>
-            <textarea
-              className="reason-input"
-              rows="6"
-              placeholder="Explain why this ticket is being closed..."
-              value={closeReason}
-              onChange={(e) => setCloseReason(e.target.value)}
-              autoFocus
-            />
-            {closeError && <div className="error-text">{closeError}</div>}
-            <div style={{ marginTop: '28px', display: 'flex', gap: '16px', justifyContent: 'center' }}>
-              <button onClick={handleSubmitReason} className="btn-danger" style={{ padding: '14px 32px' }}>
-                Continue to Close
-              </button>
-              <button onClick={cancelClose} className="btn-secondary" style={{ padding: '14px 32px' }}>
-                Cancel
-              </button>
+        <div className="td-overlay" onClick={cancelClose}>
+          <div className="td-modal" onClick={e => e.stopPropagation()}>
+            <div className="td-modal-title">Close ticket #{ticket.ticketNumber}</div>
+            <div className="td-modal-sub">Provide a reason for closing this ticket.</div>
+            <textarea className="td-textarea" rows={5} placeholder="Why is this ticket being closed?" value={closeReason} onChange={e => setCloseReason(e.target.value)} autoFocus />
+            {closeError && <div className="td-error">{closeError}</div>}
+            <div className="td-modal-actions">
+              <button onClick={handleSubmitReason} className="td-btn td-btn-lg td-btn-danger">Continue</button>
+              <button onClick={cancelClose} className="td-btn td-btn-lg td-btn-muted">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
       {confirmModal && (
-        <div className="overlay" onClick={cancelClose}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#ef4444', fontSize: '1.75rem', fontWeight: 800 }}>
-              ⚠️ Permanently Close Ticket?
-            </h3>
-            <p style={{ color: '#64748b', marginBottom: '32px', fontSize: '15px' }}>Are you sure you want to close this ticket?</p>
-            <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
-              <button onClick={confirmCloseTicket} disabled={loading} className="btn-danger" style={{ padding: '16px 40px' }}>
-                {loading ? 'Closing...' : 'Yes, Close It'}
+        <div className="td-overlay" onClick={cancelClose}>
+          <div className="td-modal" onClick={e => e.stopPropagation()}>
+            <div className="td-modal-title">Confirm close ticket?</div>
+            <div className="td-modal-sub">This will permanently mark the ticket as closed.</div>
+            <div className="td-modal-actions">
+              <button onClick={confirmCloseTicket} disabled={loading} className="td-btn td-btn-lg td-btn-danger">
+                {loading ? 'Closing…' : 'Yes, close it'}
               </button>
-              <button onClick={cancelClose} className="btn-secondary" style={{ padding: '16px 40px' }}>
-                Cancel
-              </button>
+              <button onClick={cancelClose} className="td-btn td-btn-lg td-btn-muted">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* REOPEN MODALS */}
+      {/* ── REOPEN MODALS ── */}
       {showreopenReasonInput && (
-        <div className="overlay" onClick={cancelreopen}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#0f172a', fontSize: '1.6rem', fontWeight: 800 }}>
-              Reopen Ticket #{ticket.ticketNumber}
-            </h3>
-            <p style={{ color: '#64748b', marginBottom: '24px' }}>Please explain why this ticket needs to be reopened.</p>
-            <textarea
-              className="reason-input"
-              rows="6"
-              placeholder="Why is this ticket being reopened?"
-              value={reopenReason}
-              onChange={(e) => setreopenReason(e.target.value)}
-              autoFocus
-            />
-            {reopenError && <div className="error-text">{reopenError}</div>}
-            <div style={{ marginTop: '28px', display: 'flex', gap: '16px', justifyContent: 'center' }}>
-              <button onClick={handleSubmitreopenReason} className="btn-success" style={{ padding: '14px 32px' }}>
-                Continue to Reopen
-              </button>
-              <button onClick={cancelreopen} className="btn-secondary" style={{ padding: '14px 32px' }}>
-                Cancel
-              </button>
+        <div className="td-overlay" onClick={cancelreopen}>
+          <div className="td-modal" onClick={e => e.stopPropagation()}>
+            <div className="td-modal-title">Reopen ticket #{ticket.ticketNumber}</div>
+            <div className="td-modal-sub">Explain why this ticket needs to be reopened.</div>
+            <textarea className="td-textarea" rows={5} placeholder="Why is this ticket being reopened?" value={reopenReason} onChange={e => setreopenReason(e.target.value)} autoFocus />
+            {reopenError && <div className="td-error">{reopenError}</div>}
+            <div className="td-modal-actions">
+              <button onClick={handleSubmitreopenReason} className="td-btn td-btn-lg td-btn-success">Continue</button>
+              <button onClick={cancelreopen} className="td-btn td-btn-lg td-btn-muted">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
       {confirmreopenModal && (
-        <div className="overlay" onClick={cancelreopen}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px', color: '#10b981', fontSize: '1.75rem', fontWeight: 800 }}>
-              🔄 Reopen This Ticket?
-            </h3>
-            <p style={{ color: '#64748b', marginBottom: '32px', fontSize: '15px' }}>The ticket will be reopened and require attention.</p>
-            <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
-              <button onClick={confirmreopenTicket} disabled={loading} className="btn-success" style={{ padding: '16px 40px' }}>
-                {loading ? 'Reopening...' : 'Yes, Reopen It'}
+        <div className="td-overlay" onClick={cancelreopen}>
+          <div className="td-modal" onClick={e => e.stopPropagation()}>
+            <div className="td-modal-title">Confirm reopen ticket?</div>
+            <div className="td-modal-sub">The ticket will be reopened and require attention.</div>
+            <div className="td-modal-actions">
+              <button onClick={confirmreopenTicket} disabled={loading} className="td-btn td-btn-lg td-btn-success">
+                {loading ? 'Reopening…' : 'Yes, reopen it'}
               </button>
-              <button onClick={cancelreopen} className="btn-secondary" style={{ padding: '16px 40px' }}>
-                Cancel
-              </button>
+              <button onClick={cancelreopen} className="td-btn td-btn-lg td-btn-muted">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ATTACHMENT VIEWER MODAL */}
+      {/* ── ATTACHMENT VIEWER ── */}
       {attachmentModalOpen && activeAttachment && (
-        <div className="overlay" onClick={() => setAttachmentModalOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1100px' }}>
-            <div className="att-viewer">
-              <div className="att-toolbar">
-                <div className="att-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <img src={AttachmentIcon} alt="Attachment" style={{ width: '20px', height: '20px' }} />
-                  {activeAttachment.fileName || 'Attachment'}
+        <div className="td-overlay" onClick={() => setAttachmentModalOpen(false)}>
+          <div className="td-modal td-modal-wide" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #e5e7eb' }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>{activeAttachment.fileName || 'Attachment'}</div>
+              <button onClick={() => setAttachmentModalOpen(false)} className="td-btn td-btn-sm td-btn-muted">✕</button>
+            </div>
+            <div className="td-att-content">
+              {isImageType(activeAttachment.fileType) ? (
+                <img src={imagePreviewUrl} alt={activeAttachment.fileName} className="td-att-img" />
+              ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>PDF files are downloaded directly.</div>
+                  <button onClick={() => downloadAttachment(activeAttachment)} className="td-btn td-btn-md td-btn-primary">Download PDF</button>
                 </div>
-
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  {attachmentList && attachmentList.length > 1 && (
-                    <div style={{ fontSize: '13px', color: '#64748b', marginRight: '8px', fontWeight: 600 }}>
-                      {attachmentList.length} attachments
-                    </div>
-                  )}
-                  <button className="att-close" onClick={() => setAttachmentModalOpen(false)} aria-label="Close attachment viewer">✖</button>
-                </div>
-              </div>
-
-              <div className="att-content">
-                {isImageType(activeAttachment.fileType) ? (
-                  <>
-                    <img
-                      src={imagePreviewUrl}
-                      alt={activeAttachment.fileName}
-                      className="att-img"
-                    />
-
-                    <div className="att-actions">
-                      <button
-                        className="att-btn"
-                        onClick={() => downloadAttachment(activeAttachment)}
-                        title="Download image"
-                      >
-                        <img src={DownloadIcon} alt="Download" />
-                        Download image
-                      </button>
-                    </div>
-                  </>
-                ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ marginBottom: '16px', color: '#64748b' }}>PDF will be downloaded when you click the button.</p>
-                    <button
-                      className="att-btn"
-                      onClick={() => downloadAttachment(activeAttachment)}
-                    >
-                      <img src={DownloadIcon} alt="Download" />
-                      Download PDF
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ marginBottom: '16px', color: '#64748b' }}>This file type cannot be previewed inline.</p>
-                    <a
-                      href={activeAttachment.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="att-btn"
-                      style={{ textDecoration: 'none' }}
-                    >
-                      Open attachment
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              {attachmentList && attachmentList.length > 1 && (
-                <div className="att-list" style={{ marginTop: '12px' }}>
-                  {attachmentList.map((a, idx) => {
-                    const previewIsImage = isImageType(a.fileType);
-                    return (
-                      <div key={`${a.fileName}-${idx}`} className="att-thumb" onClick={() => setActiveAttachment(a)} title={a.fileName}>
-                        {previewIsImage ? (
-                          <img src={a.fileUrl} alt={a.fileName} />
-                        ) : (
-                          <div style={{ width: '60px', height: '60px', display:'flex', alignItems:'center', justifyContent:'center', background:'#f3f4f6', borderRadius:'8px', fontSize:'12px', padding:'6px', fontWeight: 700, color: '#002060' }}>
-                            {a.fileName?.split('.').pop()?.toUpperCase() || 'FILE'}
-                          </div>
-                        )}
-                        <div className="meta">
-                          <div className="name">{a.fileName}</div>
-                          <div className="type">{a.fileType || (a.fileUrl ? a.fileUrl.split('.').pop() : '')}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
+              ) : (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>This file type cannot be previewed.</div>
+                  <a href={activeAttachment.fileUrl} target="_blank" rel="noopener noreferrer" className="td-btn td-btn-md td-btn-primary" style={{ textDecoration: 'none' }}>Open file</a>
                 </div>
               )}
             </div>
+            {isImageType(activeAttachment.fileType) && (
+              <div style={{ marginTop: 12 }}>
+                <button onClick={() => downloadAttachment(activeAttachment)} className="td-btn td-btn-sm td-btn-ghost">Download image</button>
+              </div>
+            )}
+            {attachmentList.length > 1 && (
+              <div className="td-att-list">
+                {attachmentList.map((a, idx) => (
+                  <div key={idx} className="td-att-thumb" onClick={() => setActiveAttachment(a)}>
+                    {isImageType(a.fileType) ? (
+                      <img src={a.fileUrl} alt={a.fileName} />
+                    ) : (
+                      <div style={{ width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', borderRadius: 5, fontSize: 11, fontWeight: 700, color: '#374151' }}>
+                        {a.fileName?.split('.').pop()?.toUpperCase() || 'FILE'}
+                      </div>
+                    )}
+                    <div>
+                      <div className="td-att-thumb-name">{a.fileName}</div>
+                      <div className="td-att-thumb-type">{a.fileType || ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
