@@ -31,7 +31,7 @@ function CreateTicket() {
   const [formData, setFormData] = useState({
     category: '', description: '', priority: 'Medium',
     onBehalf: 'Self', onBehalfEmail: '', alternativeEmail: '',
-    subQuery: '', otherSubQueryText: '', subCategory: '',
+    subCategory: '',
   });
 
   const [categoriesConfig, setCategoriesConfig] = useState([]);
@@ -39,6 +39,7 @@ function CreateTicket() {
   const [selectedCategoryConfig, setSelectedCategoryConfig] = useState(null);
   const [otherSubCategoryText, setOtherSubCategoryText] = useState('');
 
+  // Dynamic on-behalf for non-password categories
   const [dynamicOnBehalfSelection, setDynamicOnBehalfSelection] = useState('Self');
   const [dynamicOnBehalfEmail, setDynamicOnBehalfEmail] = useState('');
   const [dynamicOnBehalfSearchResults, setDynamicOnBehalfSearchResults] = useState([]);
@@ -51,7 +52,7 @@ function CreateTicket() {
   const ALLOWED_TYPES = ['image/png','image/jpeg','image/jpg','image/gif','application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/msword','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','application/zip'];
 
   const [loading, setLoading] = useState(false);
-  const [newPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [showPasswordPopup, setShowPasswordPopup] = useState(false);
   const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info' });
   const [createdTicketId, setCreatedTicketId] = useState(null);
@@ -73,6 +74,7 @@ function CreateTicket() {
   useEffect(() => { attachmentsRef.current = attachments; }, [attachments]);
   useEffect(() => { return () => { attachmentsRef.current.forEach(a => { if (a.preview) try { URL.revokeObjectURL(a.preview); } catch (e) {} }); }; }, []);
 
+  // Fetch categories from backend
   useEffect(() => {
     let mounted = true;
     const fetchCategories = async () => {
@@ -88,6 +90,7 @@ function CreateTicket() {
     return () => { mounted = false; };
   }, [instance, accounts, backendBase]);
 
+  // Fetch user profile
   useEffect(() => {
     let mounted = true;
     const fetchUser = async () => {
@@ -110,8 +113,9 @@ function CreateTicket() {
     };
     fetchUser();
     return () => { mounted = false; };
-  }, [instance, accounts, setProfilePhoto]);
+  }, [instance, accounts]);
 
+  // Check if user is device admin
   useEffect(() => {
     if (!accounts || !accounts[0]) return;
     const fetchGroups = async () => {
@@ -127,12 +131,40 @@ function CreateTicket() {
     fetchGroups();
   }, [instance, accounts]);
 
+  // Set selected category config when category changes
   useEffect(() => {
     if (formData.category && categoriesConfig.length > 0) {
-      setSelectedCategoryConfig(categoriesConfig.find(c => c.name === formData.category) || null);
-    } else { setSelectedCategoryConfig(null); }
+      const config = categoriesConfig.find(c => c.name === formData.category) || null;
+      setSelectedCategoryConfig(config);
+      // Reset sub-category when category changes
+      setFormData(prev => ({ ...prev, subCategory: '' }));
+      setOtherSubCategoryText('');
+      setAttachments([]);
+      setDynamicOnBehalfSelection('Self');
+      setDynamicOnBehalfSelectedUser(null);
+    } else {
+      setSelectedCategoryConfig(null);
+    }
   }, [formData.category, categoriesConfig]);
 
+  // Get the selected sub-category object
+  const getSelectedSubCategory = () => {
+    if (!selectedCategoryConfig?.subCategories) return null;
+    return selectedCategoryConfig.subCategories.find(
+      sc => sc.name.toLowerCase() === formData.subCategory?.toLowerCase()
+    );
+  };
+
+  const selectedSubCategory = getSelectedSubCategory();
+
+  // Check if sub-category requires approval
+  const requiresApproval = () => {
+    if (selectedCategoryConfig?.type === 'PASSWORD_RESET') return true;
+    if (selectedCategoryConfig?.type === 'ADMIN_ACCESS') return true;
+    return selectedSubCategory?.approval?.requireApproval === true;
+  };
+
+  // Dynamic on-behalf search
   const handleDynamicOnBehalfSearch = async (searchText) => {
     if (!searchText || searchText.trim().length < 2) { setDynamicOnBehalfSearchResults([]); return; }
     setDynamicOnBehalfSearching(true);
@@ -150,6 +182,7 @@ function CreateTicket() {
     setDynamicOnBehalfSearchResults([]);
   };
 
+  // Password reset verification
   const handleVerifyOther = async () => {
     const email = (formData.onBehalfEmail || '').trim();
     setVerifyError(''); setVerifiedName(''); setVerifyStatus('idle');
@@ -169,18 +202,21 @@ function CreateTicket() {
     }
   };
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setCreatedTicketId(null);
 
+    // Check Admin Access restriction
     if (formData.category === 'Admin Access' && isDeviceAdmin) {
       setModal({ open: true, title: 'Cannot create request', message: 'You already have admin access to the device.', type: 'error' });
       setLoading(false); return;
     }
 
-    if (selectedCategoryConfig?.features?.subCategories?.enabled) {
-      if (selectedCategoryConfig.features.subCategories.required && !formData.subCategory) {
+    // Validate sub-category selection
+    if (selectedCategoryConfig?.subCategories?.length > 0) {
+      if (!formData.subCategory) {
         setModal({ open: true, title: 'Validation', message: 'Please select a sub-category.', type: 'error' });
         setLoading(false); return;
       }
@@ -190,8 +226,9 @@ function CreateTicket() {
       }
     }
 
-    if (selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET') {
-      if (selectedCategoryConfig.features.onBehalf.required && !dynamicOnBehalfSelection) {
+    // Validate On-Behalf for non-password categories based on selected sub-category
+    if (selectedSubCategory?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET') {
+      if (selectedSubCategory.onBehalf.required && !dynamicOnBehalfSelection) {
         setModal({ open: true, title: 'Validation', message: 'Please select who this ticket is for.', type: 'error' });
         setLoading(false); return;
       }
@@ -201,24 +238,28 @@ function CreateTicket() {
       }
     }
 
-    if (selectedCategoryConfig?.features?.attachments?.enabled && selectedCategoryConfig.features.attachments.required && attachments.length === 0) {
-      setModal({ open: true, title: 'Validation', message: 'Please attach at least one file for this category.', type: 'error' });
+    // Validate Attachments based on selected sub-category
+    if (selectedSubCategory?.attachments?.enabled && selectedSubCategory.attachments.required && attachments.length === 0) {
+      setModal({ open: true, title: 'Validation', message: 'Please attach at least one file for this sub-category.', type: 'error' });
       setLoading(false); return;
     }
 
-    if (selectedCategoryConfig?.type === 'PASSWORD_RESET' && formData.onBehalf === 'Other') {
-      if (!formData.onBehalfEmail.trim()) { setModal({ open: true, title: 'Validation', message: "Please enter the company email of the person.", type: 'error' }); setLoading(false); return; }
-      if (verifyStatus !== 'verified') { setModal({ open: true, title: 'Validation', message: "Please verify the target user's email first.", type: 'error' }); setLoading(false); return; }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!formData.alternativeEmail.trim() || !emailRegex.test(formData.alternativeEmail)) {
-        setModal({ open: true, title: 'Validation', message: 'Please provide a valid alternative email.', type: 'error' }); setLoading(false); return;
+    // Validate Password Reset
+    if (selectedCategoryConfig?.type === 'PASSWORD_RESET') {
+      if (formData.onBehalf === 'Other') {
+        if (!formData.onBehalfEmail.trim()) {
+          setModal({ open: true, title: 'Validation', message: "Please enter the company email of the person.", type: 'error' });
+          setLoading(false); return;
+        }
+        if (verifyStatus !== 'verified') {
+          setModal({ open: true, title: 'Validation', message: "Please verify the target user's email first.", type: 'error' });
+          setLoading(false); return;
+        }
       }
-    }
-
-    if (selectedCategoryConfig?.type === 'PASSWORD_RESET' && formData.onBehalf === 'Self') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!formData.alternativeEmail.trim() || !emailRegex.test(formData.alternativeEmail)) {
-        setModal({ open: true, title: 'Validation', message: 'Please provide a valid alternative email.', type: 'error' }); setLoading(false); return;
+        setModal({ open: true, title: 'Validation', message: 'Please provide a valid alternative email.', type: 'error' });
+        setLoading(false); return;
       }
     }
 
@@ -231,14 +272,15 @@ function CreateTicket() {
         latestEmail = (userRes.data.mail && userRes.data.mail.trim()) || (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) || latestEmail || '';
       } catch (_) {}
 
-      const isPasswordReset = selectedCategoryConfig?.type === 'PASSWORD_RESET';
-      const normalizeServerResp = (sd, file) => ({ fileName: (sd||{}).fileName || (sd||{}).file_name || file?.name || '', fileType: (sd||{}).fileType || (sd||{}).file_type || file?.type || '', fileUrl: (sd||{}).fileUrl || (sd||{}).url || (sd||{}).path || (sd||{}).location || null, id: (sd||{}).id || (sd||{}).fileId || (sd||{}).filename || null, size: (sd||{}).size || (file ? file.size : null) });
-
+      // Upload attachments if any
       let attachmentsMeta = [];
       if (attachments && attachments.length > 0) {
         for (let i = 0; i < attachments.length; i++) {
           const att = attachments[i];
-          if (att.uploaded) { attachmentsMeta.push(normalizeServerResp(att.serverResponse, att.file)); continue; }
+          if (att.uploaded) {
+            attachmentsMeta.push(att.serverResponse);
+            continue;
+          }
           setAttachments(prev => { const c = [...prev]; c[i] = { ...c[i], uploading: true, progress: 0, error: null }; return c; });
           try {
             const form = new FormData();
@@ -247,7 +289,7 @@ function CreateTicket() {
               headers: { Authorization: `Bearer ${token.accessToken}`, 'Content-Type': 'multipart/form-data' },
               onUploadProgress: (pe) => { const p = pe.total ? Math.round((pe.loaded * 100) / pe.total) : 0; setAttachments(prev => { const c = [...prev]; c[i] = { ...c[i], progress: p }; return c; }); }
             });
-            const sd = normalizeServerResp(uploadResp?.data || null, att.file);
+            const sd = uploadResp?.data || null;
             setAttachments(prev => { const c = [...prev]; c[i] = { ...c[i], uploading: false, uploaded: true, serverResponse: sd, progress: 100 }; return c; });
             attachmentsMeta.push(sd);
           } catch (err) {
@@ -258,36 +300,43 @@ function CreateTicket() {
         }
       }
 
-      let ticketUserName = latestName || accounts[0]?.username;
+      // Determine ticket user info for on-behalf
+      let ticketUserName = latestName;
       let ticketUserEmail = latestEmail;
-      let ticketCreatedBy = latestEmail;
 
-      if (selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && dynamicOnBehalfSelection === 'Other' && dynamicOnBehalfSelectedUser) {
+      if (selectedSubCategory?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && dynamicOnBehalfSelection === 'Other' && dynamicOnBehalfSelectedUser) {
         ticketUserName = dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail;
         ticketUserEmail = dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName;
       }
 
+      // Build ticket data
       const ticketData = {
-        category: formData.category, description: formData.description, priority: formData.priority,
-        userId: accounts[0]?.localAccountId, userName: ticketUserName, userEmail: ticketUserEmail,
-        ...(selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && dynamicOnBehalfSelection === 'Other' && dynamicOnBehalfSelectedUser ? { createdBy: ticketCreatedBy, createdByName: latestName, onBehalfOf: ticketUserEmail } : {}),
-        ...(isPasswordReset ? { onBehalf: formData.onBehalf, onBehalfEmail: formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail } : {}),
-        ...(formData.alternativeEmail && formData.alternativeEmail.trim() ? { deliveryEmail: formData.alternativeEmail.trim() } : {}),
-        ...(isPasswordReset && formData.onBehalf === 'Self' ? { returnPasswordToRequester: true } : {}),
-        ...(formData.category === 'Operational & Finance' && formData.subQuery ? { subQuery: formData.subQuery, ...(formData.subQuery === 'Other' && formData.otherSubQueryText.trim() ? { otherSubQueryText: formData.otherSubQueryText.trim() } : {}) } : {}),
-        ...(formData.subCategory ? { subCategory: formData.subCategory, ...(formData.subCategory === 'Other' && otherSubCategoryText.trim() ? { otherSubCategoryText: otherSubCategoryText.trim() } : {}) } : {}),
-        ...(attachmentsMeta && attachmentsMeta.length ? { attachments: attachmentsMeta } : {}),
+        category: formData.category,
+        description: formData.description,
+        priority: formData.priority,
+        userId: accounts[0]?.localAccountId,
+        userName: ticketUserName,
+        userEmail: ticketUserEmail,
+        subCategory: formData.subCategory === 'Other' ? otherSubCategoryText : formData.subCategory,
+        ...(selectedCategoryConfig?.type === 'PASSWORD_RESET' && {
+          onBehalf: formData.onBehalf,
+          onBehalfEmail: formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail,
+          deliveryEmail: formData.alternativeEmail.trim(),
+        }),
+        ...(attachmentsMeta.length > 0 && { attachments: attachmentsMeta }),
       };
 
       const response = await axios.post(`${backendBase}/tickets`, ticketData, { headers: { Authorization: `Bearer ${token.accessToken}` } });
-      const id = response?.data?._id || response?.data?.id || response?.data?.ticketId || null;
+      const id = response?.data?._id || response?.data?.id || null;
       if (id) setCreatedTicketId(id);
 
       const successMessage = dynamicOnBehalfSelection === 'Other' && dynamicOnBehalfSelectedUser
         ? `Ticket created on behalf of ${dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail}.`
-        : formData.category === 'Password Reset'
+        : selectedCategoryConfig?.type === 'PASSWORD_RESET'
           ? 'Password reset ticket created. If approved, the new password will be sent to the delivery email.'
-          : 'Ticket created successfully.';
+          : requiresApproval()
+            ? 'Ticket created and waiting for approval.'
+            : 'Ticket created successfully.';
 
       setModal({ open: true, title: 'Ticket created', message: successMessage, type: 'success' });
     } catch (error) {
@@ -313,11 +362,6 @@ function CreateTicket() {
     const k = 1024, sizes = ['B','KB','MB','GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const fileTypeLabel = (type, name) => {
-    if (!type) { if (name) return name.split('.').pop()?.toLowerCase() || ''; return ''; }
-    return type.split('/').pop();
   };
 
   const isImageType = (t) => t && t.startsWith('image/');
@@ -353,14 +397,14 @@ function CreateTicket() {
   return (
     <div className="ct-root">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         .ct-root {
           min-height: 100vh;
-          background: #f4f4f0;
-          font-family: 'DM Sans', sans-serif;
-          color: #111827;
+          background: linear-gradient(135deg, #0f172a 0%, #1a1f35 100%);
+          font-family: 'Inter', sans-serif;
+          color: #f3f4f6;
         }
 
         .ct-body {
@@ -369,14 +413,16 @@ function CreateTicket() {
           padding: 2.5rem 2rem 4rem;
         }
 
-        /* ── Header ── */
         .ct-header {
           display: flex;
           align-items: flex-end;
           justify-content: space-between;
           margin-bottom: 2.5rem;
-          padding-bottom: 1.5rem;
-          border-bottom: 1px solid #d9d5cc;
+          padding: 2rem;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 20px;
+          backdrop-filter: blur(10px);
         }
         .ct-date {
           font-size: 11px; font-weight: 500;
@@ -384,17 +430,16 @@ function CreateTicket() {
           color: #9ca3af; margin-bottom: 6px;
         }
         .ct-page-title {
-          font-size: 26px; font-weight: 600;
-          color: #111827; letter-spacing: -0.02em;
+          font-size: 28px; font-weight: 700;
+          color: #f3f4f6; letter-spacing: -0.02em;
         }
         .ct-header-actions { display: flex; gap: 10px; }
 
-        /* ── Buttons ── */
         .ct-btn {
           display: inline-flex; align-items: center; gap: 7px;
-          border-radius: 6px; font-size: 13px; font-weight: 500;
-          font-family: 'DM Sans', sans-serif; cursor: pointer;
-          border: none; transition: background 0.15s, transform 0.1s;
+          border-radius: 8px; font-size: 13px; font-weight: 600;
+          font-family: 'Inter', sans-serif; cursor: pointer;
+          border: none; transition: all 0.2s;
           text-decoration: none; white-space: nowrap;
         }
         .ct-btn-sm  { padding: 6px 12px; font-size: 12px; }
@@ -402,41 +447,40 @@ function CreateTicket() {
         .ct-btn-lg  { padding: 11px 22px; font-size: 14px; }
         .ct-btn-full { width: 100%; justify-content: center; }
 
-        .ct-btn-primary { background: #111827; color: #fff; }
-        .ct-btn-primary:hover:not(:disabled) { background: #1f2937; transform: translateY(-1px); }
-        .ct-btn-secondary { background: #fff; color: #111827; border: 1px solid #d9d5cc; }
-        .ct-btn-secondary:hover { background: #f9f8f6; }
-        .ct-btn-ghost { background: transparent; color: #6b7280; border: 1px solid #e5e7eb; }
-        .ct-btn-ghost:hover { background: #f4f4f0; color: #374151; }
+        .ct-btn-primary { background: #3b82f6; color: #fff; }
+        .ct-btn-primary:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .ct-btn-secondary { background: rgba(255, 255, 255, 0.1); color: #e5e7eb; border: 1px solid rgba(255, 255, 255, 0.2); }
+        .ct-btn-secondary:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.3); transform: translateY(-2px); }
+        .ct-btn-ghost { background: transparent; color: #9ca3af; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .ct-btn-ghost:hover { background: rgba(255, 255, 255, 0.05); color: #d1d5db; }
         .ct-btn-danger { background: #ef4444; color: #fff; }
-        .ct-btn-danger:hover:not(:disabled) { background: #dc2626; }
+        .ct-btn-danger:hover:not(:disabled) { background: #dc2626; transform: translateY(-2px); }
         .ct-btn-success { background: #10b981; color: #fff; }
-        .ct-btn-success:hover:not(:disabled) { background: #059669; }
-        .ct-btn-submit { background: #111827; color: #fff; font-size: 14px; font-weight: 600; }
-        .ct-btn-submit:hover:not(:disabled) { background: #1f2937; transform: translateY(-1px); }
+        .ct-btn-success:hover:not(:disabled) { background: #059669; transform: translateY(-2px); }
+        .ct-btn-submit { background: #3b82f6; color: #fff; font-size: 14px; font-weight: 600; }
+        .ct-btn-submit:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
         .ct-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
 
-        /* ── Form card ── */
         .ct-card {
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 16px;
           overflow: hidden;
+          backdrop-filter: blur(10px);
         }
 
         .ct-card-section {
-          padding: 1.5rem 1.75rem;
-          border-bottom: 1px solid #f3f4f6;
+          padding: 1.75rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
         .ct-card-section:last-child { border-bottom: none; }
 
         .ct-section-label {
-          font-size: 11px; font-weight: 500;
-          letter-spacing: 0.08em; text-transform: uppercase;
-          color: #9ca3af; margin-bottom: 1rem;
+          font-size: 11px; font-weight: 600;
+          letter-spacing: 0.1em; text-transform: uppercase;
+          color: #9ca3af; margin-bottom: 1.25rem;
         }
 
-        /* ── Form fields ── */
         .ct-field { display: flex; flex-direction: column; margin-bottom: 1.25rem; }
         .ct-field:last-child { margin-bottom: 0; }
 
@@ -450,186 +494,183 @@ function CreateTicket() {
 
         .ct-label {
           font-size: 12px; font-weight: 600;
-          color: #374151; margin-bottom: 6px;
+          color: #d1d5db; margin-bottom: 8px;
           letter-spacing: 0.01em;
         }
-        .ct-required { color: #ef4444; margin-left: 3px; }
+        .ct-required { color: #f87171; margin-left: 3px; }
 
         .ct-input, .ct-select, .ct-textarea {
-          width: 100%; padding: 9px 12px;
-          border: 1px solid #d9d5cc; border-radius: 7px;
-          font-size: 14px; font-family: 'DM Sans', sans-serif;
-          background: #fafaf8; color: #111827;
-          transition: border-color 0.15s, box-shadow 0.15s;
+          width: 100%; padding: 10px 14px;
+          border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;
+          font-size: 14px; font-family: 'Inter', sans-serif;
+          background: rgba(255, 255, 255, 0.05); color: #f3f4f6;
+          transition: all 0.2s;
+        }
+        .ct-input option, .ct-select option {
+          background: #1f2937;
+          color: #f3f4f6;
         }
         .ct-input:focus, .ct-select:focus, .ct-textarea:focus {
-          outline: none; border-color: #111827; background: #fff;
-          box-shadow: 0 0 0 3px rgba(17,24,39,0.07);
+          outline: none; border-color: #3b82f6; background: rgba(255, 255, 255, 0.08);
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
-        .ct-input::placeholder, .ct-textarea::placeholder { color: #9ca3af; }
+        .ct-input::placeholder, .ct-textarea::placeholder { color: #6b7280; }
         .ct-textarea { min-height: 130px; resize: vertical; }
 
         .ct-hint {
           font-size: 11px; color: #9ca3af;
-          margin-top: 5px; line-height: 1.4;
+          margin-top: 6px; line-height: 1.4;
         }
 
-        /* ── Info banners ── */
         .ct-banner {
-          padding: 10px 14px;
-          border-radius: 6px;
+          padding: 12px 14px;
+          border-radius: 8px;
           font-size: 13px;
           line-height: 1.5;
           margin-bottom: 1rem;
         }
         .ct-banner:last-child { margin-bottom: 0; }
-        .ct-banner-warn  { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
-        .ct-banner-info  { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; }
-        .ct-banner-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+        .ct-banner-warn  { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; }
+        .ct-banner-info  { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; }
+        .ct-banner-error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
 
-        /* ── On behalf / search ── */
         .ct-search-wrap { position: relative; }
         .ct-search-results {
           position: absolute; top: 100%; left: 0; right: 0;
-          background: #fff; border: 1px solid #d9d5cc;
-          border-radius: 7px; margin-top: 4px;
+          background: #1f2937; border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px; margin-top: 4px;
           max-height: 180px; overflow-y: auto;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
           z-index: 1000;
         }
         .ct-search-item {
           padding: 10px 12px; cursor: pointer;
-          border-bottom: 1px solid #f3f4f6;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
           transition: background 0.1s;
         }
         .ct-search-item:last-child { border-bottom: none; }
-        .ct-search-item:hover { background: #f4f4f0; }
-        .ct-search-name { font-size: 13px; font-weight: 600; color: #111827; }
+        .ct-search-item:hover { background: rgba(255, 255, 255, 0.1); }
+        .ct-search-name { font-size: 13px; font-weight: 600; color: #f3f4f6; }
         .ct-search-email { font-size: 12px; color: #9ca3af; margin-top: 1px; }
 
         .ct-selected-user {
-          margin-top: 10px; padding: 10px 12px;
-          background: #f0fdf4; border: 1px solid #86efac;
-          border-radius: 6px; font-size: 13px;
+          margin-top: 10px; padding: 12px;
+          background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);
+          border-radius: 8px; font-size: 13px;
         }
-        .ct-selected-user strong { color: #065f46; display: block; font-size: 12px; margin-bottom: 2px; }
+        .ct-selected-user strong { color: #86efac; display: block; font-size: 12px; margin-bottom: 4px; }
 
-        /* ── Verify ── */
         .ct-verify-row { display: flex; gap: 8px; align-items: flex-start; }
         .ct-verify-row .ct-input { flex: 1; }
         .ct-verify-status {
-          font-size: 12px; padding: 7px 10px;
-          border-radius: 5px; margin-top: 6px;
+          font-size: 12px; padding: 8px 12px;
+          border-radius: 6px; margin-top: 8px;
         }
-        .ct-verify-idle     { background: #f4f4f0; color: #6b7280; }
-        .ct-verify-verifying{ background: #dbeafe; color: #1e40af; }
-        .ct-verify-verified { background: #d1fae5; color: #065f46; }
+        .ct-verify-idle     { background: rgba(255, 255, 255, 0.05); color: #9ca3af; }
+        .ct-verify-verifying{ background: rgba(59, 130, 246, 0.1); color: #93c5fd; }
+        .ct-verify-verified { background: rgba(16, 185, 129, 0.1); color: #86efac; }
         .ct-verify-notfound,
-        .ct-verify-error    { background: #fee2e2; color: #991b1b; }
+        .ct-verify-error    { background: rgba(239, 68, 68, 0.1); color: #fca5a5; }
 
-        /* ── Attachments ── */
         .ct-dropzone {
-          border: 1px dashed #d9d5cc;
-          border-radius: 8px; padding: 2rem;
+          border: 2px dashed rgba(255, 255, 255, 0.2);
+          border-radius: 10px; padding: 2.5rem 2rem;
           text-align: center; cursor: pointer;
-          transition: border-color 0.15s, background 0.15s;
-          background: #fafaf8;
+          transition: all 0.2s;
+          background: rgba(255, 255, 255, 0.02);
         }
         .ct-dropzone:hover, .ct-dropzone.dragging {
-          border-color: #111827; background: #f4f4f0;
+          border-color: #3b82f6; background: rgba(59, 130, 246, 0.05);
         }
-        .ct-dropzone-icon { margin-bottom: 10px; }
-        .ct-dropzone-icon img { width: 36px; height: 36px; object-fit: contain; opacity: 0.7; }
-        .ct-dropzone-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+        .ct-dropzone-icon { margin-bottom: 12px; }
+        .ct-dropzone-icon img { width: 40px; height: 40px; object-fit: contain; opacity: 0.6; }
+        .ct-dropzone-title { font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px; }
         .ct-dropzone-hint  { font-size: 12px; color: #9ca3af; }
 
         .ct-att-list {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-          gap: 10px; margin-top: 12px;
+          gap: 12px; margin-top: 16px;
         }
         .ct-att-item {
-          border: 1px solid #e5e7eb; border-radius: 7px;
-          padding: 10px; background: #fff; position: relative;
+          border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;
+          padding: 10px; background: rgba(255, 255, 255, 0.03); position: relative;
         }
         .ct-att-preview {
-          width: 100%; height: 100px; border-radius: 5px;
+          width: 100%; height: 100px; border-radius: 6px;
           overflow: hidden; margin-bottom: 8px;
-          background: #f4f4f0;
+          background: rgba(255, 255, 255, 0.05);
           display: flex; align-items: center; justify-content: center;
         }
         .ct-att-preview img { width: 100%; height: 100%; object-fit: cover; }
         .ct-att-type-icon {
-          font-size: 13px; font-weight: 700; color: #6b7280;
-          font-family: 'DM Mono', monospace;
+          font-size: 13px; font-weight: 700; color: #9ca3af;
+          font-family: 'Inter', monospace;
         }
-        .ct-att-name { font-size: 12px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+        .ct-att-name { font-size: 12px; font-weight: 600; color: #f3f4f6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
         .ct-att-size { font-size: 11px; color: #9ca3af; }
         .ct-att-remove {
           position: absolute; top: 6px; right: 6px;
-          width: 22px; height: 22px; border-radius: 50%;
+          width: 24px; height: 24px; border-radius: 50%;
           background: #ef4444; color: #fff; border: none;
           cursor: pointer; font-size: 12px;
           display: flex; align-items: center; justify-content: center;
-          transition: background 0.15s;
+          transition: all 0.2s;
         }
-        .ct-att-remove:hover { background: #dc2626; }
+        .ct-att-remove:hover { background: #dc2626; transform: scale(1.1); }
 
         .ct-progress { margin-top: 6px; }
-        .ct-progress-bar { height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; }
-        .ct-progress-fill { height: 100%; background: #111827; transition: width 0.3s; }
+        .ct-progress-bar { height: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
+        .ct-progress-fill { height: 100%; background: #3b82f6; transition: width 0.3s; }
         .ct-progress-text { font-size: 10px; color: #9ca3af; margin-top: 3px; }
 
         .ct-att-badge {
-          font-size: 11px; padding: 3px 7px;
+          font-size: 11px; padding: 4px 8px;
           border-radius: 4px; margin-top: 5px;
-          display: inline-block; font-weight: 500;
+          display: inline-block; font-weight: 600;
         }
-        .ct-att-badge-ok    { background: #d1fae5; color: #065f46; }
-        .ct-att-badge-err   { background: #fee2e2; color: #991b1b; }
+        .ct-att-badge-ok    { background: rgba(16, 185, 129, 0.2); color: #86efac; }
+        .ct-att-badge-err   { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
 
-        /* ── Form actions ── */
         .ct-form-actions {
-          padding: 1.5rem 1.75rem;
-          display: flex; gap: 10px;
-          background: #fafaf8;
-          border-top: 1px solid #d9d5cc;
-          border-radius: 0 0 10px 10px;
+          padding: 1.75rem;
+          display: flex; gap: 12px;
+          background: rgba(255, 255, 255, 0.02);
+          border-top: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 0 0 16px 16px;
         }
 
-        /* ── Modal ── */
-        @keyframes fadeIn  { from { opacity: 0; }              to { opacity: 1; } }
+        @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         .ct-overlay {
           position: fixed; inset: 0;
-          background: rgba(0,0,0,0.45);
+          background: rgba(0, 0, 0, 0.6);
           display: flex; align-items: center; justify-content: center;
           z-index: 9999; animation: fadeIn 0.15s;
-          backdrop-filter: blur(3px); padding: 1rem;
+          backdrop-filter: blur(5px); padding: 1rem;
         }
         .ct-modal {
-          background: #fff; border-radius: 10px;
-          padding: 1.75rem; width: 100%; max-width: 440px;
-          animation: slideUp 0.2s;
+          background: #1f2937; border-radius: 12px;
+          padding: 2rem; width: 100%; max-width: 440px;
+          animation: slideUp 0.2s; border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .ct-modal-title { font-size: 17px; font-weight: 600; color: #111827; margin-bottom: 4px; }
-        .ct-modal-sub   { font-size: 13px; color: #6b7280; margin-bottom: 1.25rem; line-height: 1.5; }
-        .ct-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        .ct-modal-title { font-size: 18px; font-weight: 700; color: #f3f4f6; margin-bottom: 6px; }
+        .ct-modal-sub   { font-size: 13px; color: #d1d5db; margin-bottom: 1.5rem; line-height: 1.6; }
+        .ct-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
         .ct-password-box {
-          background: #f4f4f0; border: 1px solid #d9d5cc;
-          border-radius: 7px; padding: 1rem;
-          font-family: 'DM Mono', monospace; font-size: 17px;
-          font-weight: 500; color: #111827;
+          background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px; padding: 1.25rem;
+          font-family: 'Inter', monospace; font-size: 16px;
+          font-weight: 600; color: #f3f4f6;
           word-break: break-all; text-align: center;
-          margin-bottom: 1rem; letter-spacing: 0.04em;
+          margin-bottom: 1.5rem; letter-spacing: 0.05em;
         }
 
-        /* ── Responsive ── */
         @media (max-width: 640px) {
           .ct-body { padding: 1.5rem 1rem 3rem; }
-          .ct-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+          .ct-header { flex-direction: column; align-items: flex-start; gap: 1rem; padding: 1.5rem; }
           .ct-header-actions { width: 100%; }
           .ct-btn { flex: 1; justify-content: center; }
           .ct-row { grid-template-columns: 1fr; }
@@ -638,11 +679,10 @@ function CreateTicket() {
       `}</style>
 
       <div className="ct-body">
-        {/* Header */}
         <div className="ct-header">
           <div>
             <div className="ct-date">{today}</div>
-            <div className="ct-page-title">New Ticket</div>
+            <div className="ct-page-title">Create Ticket</div>
           </div>
           <div className="ct-header-actions">
             <button onClick={() => navigate('/')} className="ct-btn ct-btn-md ct-btn-secondary">
@@ -652,15 +692,15 @@ function CreateTicket() {
         </div>
 
         {loadingCategories && (
-          <div className="ct-banner ct-banner-info" style={{ marginBottom: '1rem' }}>Loading categories…</div>
+          <div className="ct-banner ct-banner-info" style={{ marginBottom: '1.5rem' }}>📋 Loading categories…</div>
         )}
 
         <form onSubmit={handleSubmit}>
           <div className="ct-card">
 
-            {/* ── Category & Priority ── */}
+            {/* Category & Priority */}
             <div className="ct-card-section">
-              <div className="ct-section-label">Ticket details</div>
+              <div className="ct-section-label">Ticket Details</div>
               <div className="ct-row">
                 <div className="ct-field" style={{ marginBottom: 0 }}>
                   <label className="ct-label">Category<span className="ct-required">*</span></label>
@@ -669,10 +709,12 @@ function CreateTicket() {
                     value={formData.category}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setFormData(prev => ({ ...prev, category: val, onBehalf: val === 'Password Reset' ? 'Self' : prev.onBehalf, onBehalfEmail: val === 'Password Reset' ? prev.onBehalfEmail : '', alternativeEmail: val === 'Password Reset' ? prev.alternativeEmail : '', subCategory: '', ...(val !== 'Operational & Finance' ? { subQuery: '', otherSubQueryText: '' } : {}) }));
+                      setFormData(prev => ({ ...prev, category: val, onBehalf: 'Self', onBehalfEmail: '', alternativeEmail: '', subCategory: '' }));
                       setDynamicOnBehalfSelection('Self'); setDynamicOnBehalfEmail('');
                       setDynamicOnBehalfSelectedUser(null); setDynamicOnBehalfSearchResults([]);
                       setVerifyStatus('idle'); setVerifiedName(''); setVerifyError('');
+                      setOtherSubCategoryText('');
+                      setAttachments([]);
                     }}
                     required
                   >
@@ -693,45 +735,73 @@ function CreateTicket() {
               </div>
             </div>
 
-            {/* ── Dynamic sub-category ── */}
-            {selectedCategoryConfig?.features?.subCategories?.enabled && (
+            {/* Sub-Category Selection */}
+            {selectedCategoryConfig?.subCategories?.length > 0 && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && selectedCategoryConfig?.type !== 'ADMIN_ACCESS' && (
               <div className="ct-card-section">
-                <div className="ct-section-label">Sub-category</div>
+                <div className="ct-section-label">Sub-Category</div>
                 <div className="ct-field">
                   <label className="ct-label">
-                    Sub-category{selectedCategoryConfig.features.subCategories.required && <span className="ct-required">*</span>}
+                    Select Sub-Category<span className="ct-required">*</span>
                   </label>
                   <select
                     className="ct-select"
                     value={formData.subCategory}
-                    onChange={(e) => { setFormData(prev => ({ ...prev, subCategory: e.target.value })); if (e.target.value !== 'Other') setOtherSubCategoryText(''); }}
-                    required={selectedCategoryConfig.features.subCategories.required}
+                    onChange={(e) => { 
+                      setFormData(prev => ({ ...prev, subCategory: e.target.value })); 
+                      if (e.target.value !== 'Other') setOtherSubCategoryText('');
+                      // Reset attachments when sub-category changes
+                      setAttachments([]);
+                    }}
+                    required
                   >
                     <option value="">Select sub-category</option>
-                    {selectedCategoryConfig.features.subCategories.list?.map(sub => (
-                      <option key={sub} value={sub}>{sub}</option>
+                    {selectedCategoryConfig.subCategories.map(sub => (
+                      <option key={sub.name} value={sub.name}>{sub.name}</option>
                     ))}
                   </select>
                   {formData.subCategory === 'Other' && (
                     <input type="text" className="ct-input" style={{ marginTop: 8 }} value={otherSubCategoryText} onChange={(e) => setOtherSubCategoryText(e.target.value)} placeholder="Describe the issue" required />
                   )}
                 </div>
+
+                {/* Show feature info for selected sub-category */}
+                {selectedSubCategory && (
+                  <div className="ct-banner ct-banner-info" style={{ marginTop: '1rem' }}>
+                    <div>📋 Selected: <strong>{selectedSubCategory.name}</strong></div>
+                    {selectedSubCategory.onBehalf?.enabled && (
+                      <div style={{ marginTop: '8px' }}>👥 On-Behalf submissions {selectedSubCategory.onBehalf.required && <span className="ct-required">(Required)</span>}</div>
+                    )}
+                    {selectedSubCategory.attachments?.enabled && (
+                      <div>📎 Attachments {selectedSubCategory.attachments.required && <span className="ct-required">(Required)</span>}</div>
+                    )}
+                    {selectedSubCategory.approval?.requireApproval && (
+                      <div>✓ Approval Required for this sub-category</div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* ── Dynamic on-behalf (non-password) ── */}
-            {selectedCategoryConfig?.features?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && (
+            {/* On-Behalf Section - Shows only if selected sub-category has onBehalf enabled */}
+            {selectedSubCategory?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && selectedCategoryConfig?.type !== 'ADMIN_ACCESS' && (
               <div className="ct-card-section">
-                <div className="ct-section-label">On behalf of</div>
+                <div className="ct-section-label">On Behalf Of</div>
                 <div className="ct-field">
                   <label className="ct-label">
-                    Who is this ticket for?{selectedCategoryConfig.features.onBehalf.required && <span className="ct-required">*</span>}
+                    Who is this ticket for?{selectedSubCategory.onBehalf.required && <span className="ct-required">*</span>}
                   </label>
                   <select
                     className="ct-select"
                     value={dynamicOnBehalfSelection}
-                    onChange={(e) => { setDynamicOnBehalfSelection(e.target.value); if (e.target.value === 'Self') { setDynamicOnBehalfEmail(''); setDynamicOnBehalfSelectedUser(null); setDynamicOnBehalfSearchResults([]); } }}
-                    required={selectedCategoryConfig.features.onBehalf.required}
+                    onChange={(e) => { 
+                      setDynamicOnBehalfSelection(e.target.value); 
+                      if (e.target.value === 'Self') { 
+                        setDynamicOnBehalfEmail(''); 
+                        setDynamicOnBehalfSelectedUser(null); 
+                        setDynamicOnBehalfSearchResults([]); 
+                      } 
+                    }}
+                    required={selectedSubCategory.onBehalf.required}
                   >
                     <option value="Self">Self</option>
                     <option value="Other">Someone else</option>
@@ -748,7 +818,7 @@ function CreateTicket() {
                         onChange={(e) => { setDynamicOnBehalfEmail(e.target.value); handleDynamicOnBehalfSearch(e.target.value); }}
                         placeholder="Type email or name…"
                       />
-                      {dynamicOnBehalfSearching && <div className="ct-hint">Searching…</div>}
+                      {dynamicOnBehalfSearching && <div className="ct-hint">🔍 Searching…</div>}
                       {dynamicOnBehalfSearchResults.length > 0 && (
                         <div className="ct-search-results">
                           {dynamicOnBehalfSearchResults.map(user => (
@@ -762,9 +832,9 @@ function CreateTicket() {
                     </div>
                     {dynamicOnBehalfSelectedUser && (
                       <div className="ct-selected-user">
-                        <strong>Selected user</strong>
-                        <div style={{ fontWeight: 600, color: '#111827' }}>{dynamicOnBehalfSelectedUser.displayName}</div>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>{dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName}</div>
+                        <strong>✓ Selected user</strong>
+                        <div style={{ fontWeight: 600, color: '#f3f4f6' }}>{dynamicOnBehalfSelectedUser.displayName}</div>
+                        <div style={{ fontSize: 12, color: '#9ca3af' }}>{dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName}</div>
                       </div>
                     )}
                   </div>
@@ -772,10 +842,10 @@ function CreateTicket() {
               </div>
             )}
 
-            {/* ── Password reset on-behalf ── */}
+            {/* Password Reset Section */}
             {selectedCategoryConfig?.type === 'PASSWORD_RESET' && (
               <div className="ct-card-section">
-                <div className="ct-section-label">Password reset</div>
+                <div className="ct-section-label">Password Reset</div>
                 <div className="ct-row">
                   <div className="ct-field" style={{ marginBottom: 0 }}>
                     <label className="ct-label">On behalf of<span className="ct-required">*</span></label>
@@ -799,11 +869,11 @@ function CreateTicket() {
                         </button>
                       </div>
                       <div className={`ct-verify-status ct-verify-${verifyStatus}`}>
-                        {verifyStatus === 'idle' && 'Click Verify to confirm the user exists'}
-                        {verifyStatus === 'verifying' && 'Verifying…'}
-                        {verifyStatus === 'verified' && `Verified: ${verifiedName}`}
-                        {verifyStatus === 'notfound' && 'User not found in directory'}
-                        {verifyStatus === 'error' && verifyError}
+                        {verifyStatus === 'idle' && 'ⓘ Click Verify to confirm the user exists'}
+                        {verifyStatus === 'verifying' && '⟳ Verifying…'}
+                        {verifyStatus === 'verified' && `✓ Verified: ${verifiedName}`}
+                        {verifyStatus === 'notfound' && '✕ User not found in directory'}
+                        {verifyStatus === 'error' && `✕ ${verifyError}`}
                       </div>
                     </div>
                   )}
@@ -813,30 +883,30 @@ function CreateTicket() {
                   <div className="ct-field" style={{ marginTop: 16 }}>
                     <label className="ct-label">Delivery email<span className="ct-required">*</span></label>
                     <input type="email" className="ct-input" placeholder="Email to receive the reset password" value={formData.alternativeEmail} onChange={(e) => setFormData({ ...formData, alternativeEmail: e.target.value })} required />
-                    <div className="ct-hint">The new password will be sent to this address</div>
+                    <div className="ct-hint">📧 The new password will be sent to this address</div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* ── Admin access warning ── */}
-            {formData.category === 'Admin Access' && (
+            {/* Admin Access Warning */}
+            {selectedCategoryConfig?.type === 'ADMIN_ACCESS' && (
               <div className="ct-card-section">
                 {groupsLoading ? (
-                  <div className="ct-banner ct-banner-info">Checking your access…</div>
+                  <div className="ct-banner ct-banner-info">⟳ Checking your access…</div>
                 ) : isDeviceAdmin ? (
                   <div className="ct-banner ct-banner-error">
-                    <strong>Already has admin access.</strong> Creating an Admin Access ticket is not allowed since you already have device admin access.
+                    <strong>⚠ Already has admin access.</strong> Creating an Admin Access ticket is not allowed since you already have device admin access.
                   </div>
                 ) : (
                   <div className="ct-banner ct-banner-info">
-                    Submit this request for approval from the IT team.
+                    ⓘ Submit this request for approval from the IT team.
                   </div>
                 )}
               </div>
             )}
 
-            {/* ── Description ── */}
+            {/* Description */}
             <div className="ct-card-section">
               <div className="ct-section-label">Description</div>
               <div className="ct-field">
@@ -851,11 +921,11 @@ function CreateTicket() {
               </div>
             </div>
 
-            {/* ── Attachments ── */}
-            {selectedCategoryConfig?.features?.attachments?.enabled && (
+            {/* Attachments Section - Shows only if selected sub-category has attachments enabled */}
+            {selectedSubCategory?.attachments?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && selectedCategoryConfig?.type !== 'ADMIN_ACCESS' && (
               <div className="ct-card-section">
                 <div className="ct-section-label">
-                  Attachments{selectedCategoryConfig.features.attachments.required && <span className="ct-required" style={{ fontSize: 11 }}>*</span>}
+                  Attachments{selectedSubCategory.attachments.required && <span className="ct-required" style={{ fontSize: 11 }}>*</span>}
                 </div>
 
                 <div
@@ -880,7 +950,7 @@ function CreateTicket() {
                         <div key={idx} className="ct-att-item">
                           <button type="button" className="ct-att-remove" onClick={() => handleRemoveAttachment(idx)}>✕</button>
                           <div className="ct-att-preview">
-                            {att.preview ? <img src={att.preview} alt={att.file.name} /> : <span className="ct-att-type-icon">.{fileTypeLabel(att.file.type, att.file.name)}</span>}
+                            {att.preview ? <img src={att.preview} alt={att.file.name} /> : <span className="ct-att-type-icon">.{att.file.name.split('.').pop()?.toLowerCase()}</span>}
                           </div>
                           <div className="ct-att-name">{att.file.name}</div>
                           <div className="ct-att-size">{formatBytes(att.file.size)}</div>
@@ -890,36 +960,36 @@ function CreateTicket() {
                               <div className="ct-progress-text">{att.progress}%</div>
                             </div>
                           )}
-                          {att.uploaded && <span className="ct-att-badge ct-att-badge-ok">Uploaded</span>}
-                          {att.error && <span className="ct-att-badge ct-att-badge-err">{att.error}</span>}
+                          {att.uploaded && <span className="ct-att-badge ct-att-badge-ok">✓ Uploaded</span>}
+                          {att.error && <span className="ct-att-badge ct-att-badge-err">✕ {att.error}</span>}
                         </div>
                       ))}
                     </div>
-                    <div style={{ marginTop: 10 }}>
+                    <div style={{ marginTop: 12 }}>
                       <button type="button" className="ct-btn ct-btn-sm ct-btn-ghost" onClick={handleClearAllAttachments}>Clear all</button>
                     </div>
                   </>
                 )}
 
-                <div className="ct-hint" style={{ marginTop: 8 }}>
-                  {selectedCategoryConfig.features.attachments.required ? 'Attachments are required for this category.' : 'Attach supporting documents if needed.'}
+                <div className="ct-hint" style={{ marginTop: 10 }}>
+                  {selectedSubCategory.attachments.required ? '✓ Attachments are required for this sub-category.' : '📎 Attach supporting documents if needed.'}
                 </div>
               </div>
             )}
 
-            {/* ── Actions ── */}
+            {/* Actions */}
             <div className="ct-form-actions">
               <button type="submit" className="ct-btn ct-btn-lg ct-btn-submit" disabled={loading || disableCreate} style={{ flex: 1 }}>
-                {loading ? 'Creating…' : 'Create Ticket'}
+                {loading ? '⟳ Creating…' : '+ Create Ticket'}
               </button>
               <button type="button" className="ct-btn ct-btn-lg ct-btn-secondary" onClick={() => navigate('/')}>
-                Cancel
+                ✕ Cancel
               </button>
             </div>
           </div>
         </form>
 
-        {/* ── Modal ── */}
+        {/* Modal */}
         {modal.open && (
           <div className="ct-overlay">
             <div className="ct-modal">
@@ -928,7 +998,7 @@ function CreateTicket() {
               <div className="ct-modal-actions">
                 <button className={`ct-btn ct-btn-md ${modal.type === 'error' ? 'ct-btn-danger' : modal.type === 'success' ? 'ct-btn-success' : 'ct-btn-primary'}`} onClick={handleCloseModal}>OK</button>
                 {modal.type === 'success' && createdTicketId && (
-                  <button className="ct-btn ct-btn-md ct-btn-secondary" onClick={handleViewTicket}>View ticket</button>
+                  <button className="ct-btn ct-btn-md ct-btn-secondary" onClick={handleViewTicket}>View Ticket</button>
                 )}
               </div>
             </div>

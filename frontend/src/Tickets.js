@@ -245,20 +245,20 @@ function Tickets() {
   };
 
   const statusMeta = (status) => {
-    if (!status) return { label: '—', color: '#9ca3af', bg: '#f3f4f6' };
+    if (!status) return { label: '—', color: '#9ca3af', bg: 'rgba(255,255,255,0.1)' };
     const s = status.toLowerCase();
-    if (s === 'open' || s === 'pending') return { label: status, color: '#92400e', bg: '#fef3c7' };
-    if (s === 'waiting for approval') return { label: status, color: '#1e3a8a', bg: '#dbeafe' };
-    if (s === 'closed') return { label: status, color: '#065f46', bg: '#d1fae5' };
-    return { label: status, color: '#374151', bg: '#f3f4f6' };
+    if (s === 'open' || s === 'pending') return { label: status, color: '#fcd34d', bg: 'rgba(245, 158, 11, 0.2)' };
+    if (s === 'waiting for approval') return { label: status, color: '#93c5fd', bg: 'rgba(59, 130, 246, 0.2)' };
+    if (s === 'closed') return { label: status, color: '#86efac', bg: 'rgba(16, 185, 129, 0.2)' };
+    return { label: status, color: '#d1d5db', bg: 'rgba(255,255,255,0.1)' };
   };
 
   const priorityMeta = (priority) => {
-    if (!priority) return { color: '#6b7280' };
+    if (!priority) return { color: '#9ca3af' };
     const p = priority.toLowerCase();
-    if (p === 'high') return { color: '#ef4444' };
-    if (p === 'medium') return { color: '#f59e0b' };
-    return { color: '#10b981' };
+    if (p === 'high') return { color: '#f87171' };
+    if (p === 'medium') return { color: '#fbbf24' };
+    return { color: '#86efac' };
   };
 
   const sectionTitle = () => {
@@ -272,7 +272,6 @@ function Tickets() {
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  // Show the filter name as the main title when a status filter is active
   const mainTitle = statusFilter === 'all' ? 'All Tickets' : sectionTitle();
 
   // Skeleton row for table
@@ -317,9 +316,9 @@ function Tickets() {
           {displayedTickets.map(ticket => {
             const sm = statusMeta(ticket.status);
             let priorityStyle = {};
-            if (ticket.priority === 'High') priorityStyle = { background: '#fee2e2', color: '#b91c1c' };
-            else if (ticket.priority === 'Medium') priorityStyle = { background: '#fef3c7', color: '#92400e' };
-            else if (ticket.priority === 'Low') priorityStyle = { background: '#d1fae5', color: '#065f46' };
+            if (ticket.priority === 'High') priorityStyle = { background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' };
+            else if (ticket.priority === 'Medium') priorityStyle = { background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' };
+            else if (ticket.priority === 'Low') priorityStyle = { background: 'rgba(16, 185, 129, 0.2)', color: '#86efac' };
             
             return (
               <tr 
@@ -528,33 +527,44 @@ function Tickets() {
   return (
     <div className="tk-root">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { 
+          box-sizing: border-box; 
+          margin: 0; 
+          padding: 0; 
+        }
+
+        body {
+          margin: 0;
+          padding: 0;
+          background: #0f172a;
+        }
 
         .tk-root {
           min-height: 100vh;
-          background: #f4f4f0;
-          font-family: 'DM Sans', sans-serif;
-          color: #111827;
+          width: 100%;
+          background: linear-gradient(135deg, #0f172a 0%, #1a1f35 100%);
+          font-family: 'Inter', sans-serif;
+          color: #f3f4f6;
         }
 
         /* ── Skeleton ── */
         @keyframes pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.45; }
+          50% { opacity: 0.5; }
         }
         .skel {
-          background: #ddd9d0;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
           animation: pulse 1.6s ease-in-out infinite;
-          border-radius: 4px;
         }
 
         /* ── Body ── */
         .tk-body {
-          max-width: 1280px;
+          max-width: 1400px;
           margin: 0 auto;
-          padding: 2.5rem 2rem 4rem;
+          padding: 2rem;
         }
 
         /* ── Header ── */
@@ -562,154 +572,152 @@ function Tickets() {
           display: flex;
           align-items: flex-end;
           justify-content: space-between;
-          margin-bottom: 1rem;
-          padding-bottom: 1.5rem;
-          border-bottom: 1px solid #d9d5cc;
+          margin-bottom: 2.5rem;
+          padding: 2rem;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 20px;
+          backdrop-filter: blur(10px);
         }
 
         .tk-date {
           font-size: 11px;
-          font-weight: 500;
+          font-weight: 600;
           letter-spacing: 0.1em;
           text-transform: uppercase;
           color: #9ca3af;
-          margin-bottom: 6px;
+          margin-bottom: 8px;
         }
 
         .tk-page-title {
-          font-size: 26px;
-          font-weight: 600;
-          color: #111827;
+          font-size: 32px;
+          font-weight: 700;
+          color: #f3f4f6;
           letter-spacing: -0.02em;
+          line-height: 1.2;
         }
 
         .tk-header-actions {
           display: flex;
-          gap: 10px;
+          gap: 12px;
           align-items: center;
         }
 
         .hd-btn {
           display: inline-flex;
           align-items: center;
-          gap: 7px;
-          padding: 9px 18px;
-          border-radius: 6px;
-          font-size: 13px;
-          font-weight: 500;
-          font-family: 'DM Sans', sans-serif;
+          gap: 8px;
+          padding: 10px 20px;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          font-family: 'Inter', sans-serif;
           cursor: pointer;
           text-decoration: none;
-          transition: background 0.15s, transform 0.1s;
+          transition: all 0.2s ease;
           border: none;
         }
-        .hd-btn-primary { background: #111827; color: #fff; }
-        .hd-btn-primary:hover { background: #1f2937; transform: translateY(-1px); }
-        .hd-btn-secondary { background: #fff; color: #111827; border: 1px solid #d9d5cc; }
-        .hd-btn-secondary:hover { background: #f9f8f6; transform: translateY(-1px); }
+        .hd-btn-primary { 
+          background: #3b82f6; 
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .hd-btn-primary:hover { 
+          background: #2563eb;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        }
+        .hd-btn-secondary { 
+          background: rgba(255, 255, 255, 0.1); 
+          color: #e5e7eb; 
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .hd-btn-secondary:hover { 
+          background: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.3);
+          transform: translateY(-2px);
+        }
 
-        /* ── Filters row - LEFT ONLY ── */
+        /* ── Filters row ── */
         .tk-filters-row-wrap {
-          margin-bottom: 1rem;
+          margin-bottom: 1.5rem;
           display: flex;
           flex-wrap: wrap;
           align-items: center;
-          justify-content: flex-start;
+          justify-content: space-between;
           gap: 12px;
         }
 
         .tk-filters-left {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 12px;
           flex-wrap: wrap;
-        }
-
-        .tk-filters-row {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          align-items: center;
+          margin-left: auto;
         }
 
         .tk-filter-btn {
-          padding: 7px 14px;
-          background: #fafaf8;
-          border: 1px solid #d9d5cc;
-          border-radius: 6px;
+          padding: 8px 16px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
           font-size: 13px;
-          font-weight: 500;
-          font-family: 'DM Sans', sans-serif;
-          color: #374151;
+          font-weight: 600;
+          font-family: 'Inter', sans-serif;
+          color: #d1d5db;
           cursor: pointer;
-          transition: border-color 0.15s, background 0.15s;
-        }
-        .tk-filter-btn:hover { border-color: #111827; background: #f4f4f0; }
-        .tk-filter-btn.active { border-color: #111827; background: #111827; color: #fff; }
-
-        .tk-view-btn {
-          padding: 7px 14px;
-          background: #fafaf8;
-          border: 1px solid #d9d5cc;
-          border-radius: 6px;
-          font-size: 13px;
-          font-weight: 500;
-          font-family: 'DM Sans', sans-serif;
-          color: #374151;
-          cursor: pointer;
-          transition: border-color 0.15s, background 0.15s;
+          transition: all 0.2s ease;
           display: flex;
           align-items: center;
           gap: 6px;
-          white-space: nowrap;
-          position: relative;
         }
-        .tk-view-btn:hover { border-color: #111827; background: #f4f4f0; }
-        .tk-view-btn.active { border-color: #111827; background: #111827; color: #fff; }
-        .tk-view-btn img {
-          width: 16px;
-          height: 16px;
-          opacity: 0.7;
+        .tk-filter-btn:hover { 
+          border-color: #3b82f6;
+          background: rgba(59, 130, 246, 0.1);
+          color: #93c5fd;
         }
-        .tk-view-btn.active img {
-          filter: brightness(0) invert(1);
+        .tk-filter-btn.active { 
+          border-color: #3b82f6;
+          background: rgba(59, 130, 246, 0.2);
+          color: #93c5fd;
         }
 
         .tk-clear-btn {
-          padding: 7px 14px;
-          background: transparent;
-          border: 1px solid #fca5a5;
-          border-radius: 6px;
+          padding: 8px 16px;
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          border-radius: 8px;
           font-size: 13px;
-          font-weight: 500;
-          font-family: 'DM Sans', sans-serif;
-          color: #ef4444;
+          font-weight: 600;
+          font-family: 'Inter', sans-serif;
+          color: #fca5a5;
           cursor: pointer;
-          transition: background 0.15s;
-          white-space: nowrap;
+          transition: all 0.2s ease;
         }
-        .tk-clear-btn:hover { background: #fee2e2; }
+        .tk-clear-btn:hover { 
+          background: rgba(239, 68, 68, 0.2);
+          border-color: rgba(239, 68, 68, 0.5);
+        }
 
         .tk-chips {
           display: flex;
           flex-wrap: wrap;
-          gap: 6px;
-          width: 100%;
-          margin-top: 8px;
-          justify-content: flex-start;
+          gap: 8px;
+          margin-bottom: 1.5rem;
+          justify-content: flex-end;
         }
 
         .tk-chip {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: 4px 10px;
-          background: #f4f4f0;
-          border: 1px solid #d9d5cc;
+          gap: 8px;
+          padding: 6px 12px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 20px;
           font-size: 12px;
           font-weight: 500;
-          color: #374151;
+          color: #d1d5db;
         }
         .tk-chip-x {
           background: none;
@@ -722,15 +730,66 @@ function Tickets() {
           display: flex;
           align-items: center;
         }
-        .tk-chip-x:hover { color: #ef4444; }
+        .tk-chip-x:hover { color: #f87171; }
+
+        /* ── Toggle switch ── */
+        .hd-switch {
+          position: relative;
+          width: 44px;
+          height: 24px;
+          flex-shrink: 0;
+        }
+        .hd-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .hd-switch-track {
+          position: absolute;
+          inset: 0;
+          background: #374151;
+          border-radius: 24px;
+          transition: background 0.2s;
+          cursor: pointer;
+        }
+        .hd-switch input:checked + .hd-switch-track { background: #3b82f6; }
+        .hd-switch-track::after {
+          content: '';
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 18px;
+          height: 18px;
+          background: white;
+          border-radius: 50%;
+          transition: transform 0.2s;
+        }
+        .hd-switch input:checked + .hd-switch-track::after { transform: translateX(20px); }
+
+        .tk-toggle-wrap {
+          margin-bottom: 1.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem 1.5rem;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(10px);
+        }
+
+        .tk-toggle-label {
+          font-size: 14px;
+          font-weight: 500;
+          color: #d1d5db;
+          cursor: pointer;
+          user-select: none;
+        }
 
         /* ── Controls (search) ── */
         .tk-controls {
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
           padding: 1.25rem 1.5rem;
           margin-bottom: 1.5rem;
+          backdrop-filter: blur(10px);
         }
 
         .tk-search-wrap {
@@ -739,7 +798,7 @@ function Tickets() {
 
         .tk-search-icon {
           position: absolute;
-          left: 12px;
+          left: 14px;
           top: 50%;
           transform: translateY(-50%);
           color: #9ca3af;
@@ -748,30 +807,30 @@ function Tickets() {
 
         .tk-search {
           width: 100%;
-          padding: 10px 14px 10px 38px;
-          border: 1px solid #d9d5cc;
-          border-radius: 7px;
+          padding: 12px 16px 12px 42px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
           font-size: 14px;
-          font-family: 'DM Sans', sans-serif;
-          background: #fafaf8;
-          color: #111827;
-          transition: border-color 0.15s, box-shadow 0.15s;
+          font-family: 'Inter', sans-serif;
+          background: rgba(255, 255, 255, 0.05);
+          color: #f3f4f6;
+          transition: all 0.2s ease;
         }
         .tk-search:focus {
           outline: none;
-          border-color: #111827;
-          background: #fff;
-          box-shadow: 0 0 0 3px rgba(17,24,39,0.07);
+          border-color: #3b82f6;
+          background: rgba(255, 255, 255, 0.08);
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
-        .tk-search::placeholder { color: #9ca3af; }
+        .tk-search::placeholder { color: #6b7280; }
 
         /* ── Dropdown ── */
         .tk-dropdown {
           position: absolute;
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 8px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+          background: #1f2937;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
           z-index: 10000;
           padding: 0.5rem;
           max-height: 320px;
@@ -787,99 +846,58 @@ function Tickets() {
         .tk-dd-item {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          border-radius: 5px;
+          gap: 10px;
+          padding: 10px 14px;
+          border-radius: 8px;
           cursor: pointer;
           font-size: 13px;
           font-weight: 500;
-          color: #374151;
-          transition: background 0.15s;
+          color: #d1d5db;
+          transition: all 0.15s;
         }
-        .tk-dd-item:hover { background: #f4f4f0; }
-        .tk-dd-item.active { background: #f4f4f0; color: #111827; font-weight: 600; }
-        .tk-dd-item input { cursor: pointer; accent-color: #111827; }
+        .tk-dd-item:hover { background: rgba(255, 255, 255, 0.1); }
+        .tk-dd-item.active { background: rgba(59, 130, 246, 0.2); color: #93c5fd; font-weight: 600; }
+        .tk-dd-item input { cursor: pointer; accent-color: #3b82f6; }
 
         .tk-dd-actions {
           display: flex;
-          gap: 6px;
+          gap: 8px;
           margin-top: 8px;
           padding-top: 8px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
         .tk-dd-apply {
-          flex: 1; padding: 7px; background: #111827; color: #fff;
-          border: none; border-radius: 5px; font-size: 13px;
-          font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer;
+          flex: 1; padding: 8px; background: #3b82f6; color: #fff;
+          border: none; border-radius: 8px; font-size: 13px;
+          font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer;
+          transition: all 0.2s;
         }
+        .tk-dd-apply:hover { background: #2563eb; }
         .tk-dd-close {
-          flex: 1; padding: 7px; background: #f4f4f0; color: #374151;
-          border: none; border-radius: 5px; font-size: 13px;
-          font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer;
+          flex: 1; padding: 8px; background: rgba(255, 255, 255, 0.1); color: #d1d5db;
+          border: none; border-radius: 8px; font-size: 13px;
+          font-weight: 500; font-family: 'Inter', sans-serif; cursor: pointer;
+          transition: all 0.2s;
         }
+        .tk-dd-close:hover { background: rgba(255, 255, 255, 0.15); }
 
-        /* ── Toggle switch ── */
-        .hd-switch {
-          position: relative;
-          width: 36px;
-          height: 20px;
-          flex-shrink: 0;
-        }
-        .hd-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-        .hd-switch-track {
-          position: absolute;
-          inset: 0;
-          background: #d1d5db;
-          border-radius: 20px;
-          transition: background 0.2s;
-          cursor: pointer;
-        }
-        .hd-switch input:checked + .hd-switch-track { background: #111827; }
-        .hd-switch-track::after {
-          content: '';
-          position: absolute;
-          top: 3px;
-          left: 3px;
-          width: 14px;
-          height: 14px;
-          background: white;
-          border-radius: 50%;
-          transition: transform 0.2s;
-        }
-        .hd-switch input:checked + .hd-switch-track::after { transform: translateX(16px); }
-
-        .tk-toggle-wrap {
-          margin-bottom: 1rem;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .tk-toggle-label {
-          font-size: 13px;
-          font-weight: 500;
-          color: #374151;
-          cursor: pointer;
-          user-select: none;
-        }
-
-        /* ── Section heading - Count badge on LEFT, View button on RIGHT ── */
+        /* ── Section heading ── */
         .tk-section-head {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          margin-bottom: 1rem;
+          margin-bottom: 1.5rem;
         }
 
         .tk-count-badge {
-          font-size: 12px;
-          font-weight: 500;
-          font-family: 'DM Mono', monospace;
-          color: #6b7280;
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          padding: 3px 10px;
+          font-size: 13px;
+          font-weight: 600;
+          font-family: 'Inter', monospace;
+          color: #93c5fd;
+          background: rgba(59, 130, 246, 0.2);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          padding: 6px 16px;
           border-radius: 20px;
         }
 
@@ -888,47 +906,74 @@ function Tickets() {
           margin-left: auto;
         }
 
+        .tk-view-btn {
+          padding: 8px 16px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          font-family: 'Inter', sans-serif;
+          color: #d1d5db;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .tk-view-btn:hover { 
+          border-color: #3b82f6;
+          background: rgba(59, 130, 246, 0.1);
+          color: #93c5fd;
+        }
+        .tk-view-btn img {
+          width: 16px;
+          height: 16px;
+          opacity: 0.6;
+        }
+
         /* ── Table View ── */
         .tk-table-container {
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
           overflow: hidden;
           margin-bottom: 1.5rem;
+          backdrop-filter: blur(10px);
         }
 
         .tk-table {
           width: 100%;
           border-collapse: collapse;
-          font-family: 'DM Sans', sans-serif;
+          font-family: 'Inter', sans-serif;
         }
 
         .tk-table th {
           text-align: left;
           padding: 1rem 1.25rem;
-          background: #f9f8f6;
-          font-size: 12px;
-          font-weight: 600;
-          color: #374151;
-          letter-spacing: 0.04em;
+          background: rgba(255, 255, 255, 0.03);
+          font-size: 11px;
+          font-weight: 700;
+          color: #9ca3af;
+          letter-spacing: 0.1em;
           text-transform: uppercase;
-          border-bottom: 2px solid #d9d5cc;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .tk-table td {
           padding: 1rem 1.25rem;
           font-size: 13px;
-          color: #111827;
-          border-bottom: 1px solid #d9d5cc;
+          color: #e5e7eb;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .tk-table tbody tr {
           cursor: pointer;
-          transition: background 0.15s;
+          transition: background 0.2s;
         }
 
         .tk-table tbody tr:hover {
-          background: #fafaf8;
+          background: rgba(255, 255, 255, 0.05);
         }
 
         .tk-table tbody tr:last-child td {
@@ -937,7 +982,7 @@ function Tickets() {
 
         .tk-status-badge {
           display: inline-block;
-          padding: 4px 10px;
+          padding: 4px 12px;
           border-radius: 20px;
           font-size: 11px;
           font-weight: 600;
@@ -947,16 +992,16 @@ function Tickets() {
 
         .tk-priority-badge {
           display: inline-block;
-          padding: 4px 10px;
+          padding: 4px 12px;
           border-radius: 20px;
           font-size: 11px;
           font-weight: 600;
         }
 
         .tk-ticket-number {
-          font-family: 'DM Mono', monospace;
-          font-weight: 600;
-          color: #111827;
+          font-family: 'Inter', monospace;
+          font-weight: 700;
+          color: #60a5fa;
         }
 
         .tk-description-cell {
@@ -964,29 +1009,32 @@ function Tickets() {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          color: #6b7280;
+          color: #9ca3af;
         }
 
         /* ── List View ── */
         .tk-list-container {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 12px;
           margin-bottom: 1.5rem;
         }
 
         .tk-list-item {
           display: flex;
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
           overflow: hidden;
           cursor: pointer;
-          transition: all 0.15s;
+          transition: all 0.2s;
+          backdrop-filter: blur(10px);
         }
         .tk-list-item:hover {
-          border-color: #111827;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+          border-color: #3b82f6;
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+          transform: translateY(-2px);
+          background: rgba(59, 130, 246, 0.05);
         }
 
         .tk-list-item-accent {
@@ -1008,20 +1056,20 @@ function Tickets() {
         }
 
         .tk-list-item-number {
-          font-family: 'DM Mono', monospace;
-          font-weight: 600;
+          font-family: 'Inter', monospace;
+          font-weight: 700;
           font-size: 13px;
-          color: #6b7280;
+          color: #60a5fa;
         }
 
         .tk-list-item-category {
-          font-weight: 600;
+          font-weight: 700;
           font-size: 14px;
-          color: #111827;
+          color: #f3f4f6;
         }
 
         .tk-list-item-status {
-          padding: 2px 8px;
+          padding: 2px 10px;
           border-radius: 20px;
           font-size: 10px;
           font-weight: 600;
@@ -1030,7 +1078,7 @@ function Tickets() {
 
         .tk-list-item-description {
           font-size: 13px;
-          color: #6b7280;
+          color: #d1d5db;
           margin-bottom: 10px;
           line-height: 1.5;
         }
@@ -1045,23 +1093,25 @@ function Tickets() {
         /* ── Tiles View ── */
         .tk-tiles-container {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 16px;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 1.5rem;
           margin-bottom: 1.5rem;
         }
 
         .tk-tile {
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
           padding: 1.25rem;
           cursor: pointer;
-          transition: all 0.15s;
+          transition: all 0.2s;
+          backdrop-filter: blur(10px);
         }
         .tk-tile:hover {
-          border-color: #111827;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+          border-color: #3b82f6;
+          transform: translateY(-4px);
+          box-shadow: 0 8px 24px rgba(59, 130, 246, 0.2);
+          background: rgba(59, 130, 246, 0.05);
         }
 
         .tk-tile-header {
@@ -1070,21 +1120,21 @@ function Tickets() {
           justify-content: space-between;
           margin-bottom: 12px;
           padding-bottom: 8px;
-          border-bottom: 1px solid #d9d5cc;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
           border-left: 3px solid transparent;
           padding-left: 8px;
           margin-left: -8px;
         }
 
         .tk-tile-number {
-          font-family: 'DM Mono', monospace;
-          font-weight: 600;
+          font-family: 'Inter', monospace;
+          font-weight: 700;
           font-size: 13px;
-          color: #6b7280;
+          color: #60a5fa;
         }
 
         .tk-tile-status {
-          padding: 2px 8px;
+          padding: 2px 10px;
           border-radius: 20px;
           font-size: 10px;
           font-weight: 600;
@@ -1092,15 +1142,15 @@ function Tickets() {
         }
 
         .tk-tile-category {
-          font-weight: 600;
+          font-weight: 700;
           font-size: 15px;
-          color: #111827;
+          color: #f3f4f6;
           margin-bottom: 8px;
         }
 
         .tk-tile-description {
           font-size: 12px;
-          color: #6b7280;
+          color: #d1d5db;
           margin-bottom: 16px;
           line-height: 1.5;
         }
@@ -1111,33 +1161,35 @@ function Tickets() {
           justify-content: space-between;
           font-size: 11px;
           color: #9ca3af;
-          border-top: 1px solid #d9d5cc;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
           padding-top: 12px;
         }
 
         .tk-tile-priority {
-          font-weight: 600;
+          font-weight: 700;
         }
 
         /* ── Content View ── */
         .tk-content-container {
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 1.5rem;
           margin-bottom: 1.5rem;
         }
 
         .tk-content-item {
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
           padding: 1.5rem;
           cursor: pointer;
-          transition: all 0.15s;
+          transition: all 0.2s;
+          backdrop-filter: blur(10px);
         }
         .tk-content-item:hover {
-          border-color: #111827;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+          border-color: #3b82f6;
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+          background: rgba(59, 130, 246, 0.05);
         }
 
         .tk-content-header {
@@ -1146,25 +1198,25 @@ function Tickets() {
           justify-content: space-between;
           margin-bottom: 16px;
           padding-bottom: 12px;
-          border-bottom: 1px solid #d9d5cc;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .tk-content-number {
-          font-family: 'DM Mono', monospace;
-          font-weight: 600;
+          font-family: 'Inter', monospace;
+          font-weight: 700;
           font-size: 14px;
-          color: #6b7280;
+          color: #60a5fa;
           margin-right: 12px;
         }
 
         .tk-content-category {
-          font-weight: 600;
+          font-weight: 700;
           font-size: 16px;
-          color: #111827;
+          color: #f3f4f6;
         }
 
         .tk-content-status {
-          padding: 4px 12px;
+          padding: 4px 14px;
           border-radius: 20px;
           font-size: 11px;
           font-weight: 600;
@@ -1173,7 +1225,7 @@ function Tickets() {
 
         .tk-content-description {
           font-size: 14px;
-          color: #374151;
+          color: #d1d5db;
           margin-bottom: 20px;
           line-height: 1.6;
           padding: 0 4px;
@@ -1183,18 +1235,18 @@ function Tickets() {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
           gap: 12px;
-          background: #fafaf8;
-          border: 1px solid #d9d5cc;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
           padding: 1rem 1.25rem;
         }
 
         .tk-content-meta-item {
           font-size: 13px;
-          color: #6b7280;
+          color: #d1d5db;
         }
         .tk-content-meta-item strong {
-          color: #374151;
+          color: #f3f4f6;
           font-weight: 600;
           margin-right: 6px;
         }
@@ -1202,21 +1254,21 @@ function Tickets() {
         /* ── Empty ── */
         .tk-empty {
           text-align: center;
-          padding: 5rem 2rem;
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
+          padding: 4rem 2rem;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
           color: #9ca3af;
         }
         .tk-empty-icon {
-          font-size: 40px;
+          font-size: 48px;
           margin-bottom: 1rem;
-          opacity: 0.4;
+          opacity: 0.5;
         }
         .tk-empty h3 {
-          font-size: 15px;
+          font-size: 16px;
           font-weight: 600;
-          color: #6b7280;
+          color: #d1d5db;
           margin-bottom: 4px;
         }
         .tk-empty p { font-size: 13px; }
@@ -1231,28 +1283,32 @@ function Tickets() {
         }
 
         .tk-load-btn {
-          padding: 9px 24px;
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 6px;
+          padding: 10px 28px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
           font-size: 13px;
-          font-weight: 500;
-          font-family: 'DM Sans', sans-serif;
-          color: #374151;
+          font-weight: 600;
+          font-family: 'Inter', sans-serif;
+          color: #60a5fa;
           cursor: pointer;
-          transition: border-color 0.15s, background 0.15s;
+          transition: all 0.2s ease;
           display: inline-flex;
           align-items: center;
           gap: 8px;
         }
-        .tk-load-btn:hover:not(:disabled) { border-color: #111827; background: #fafaf8; }
+        .tk-load-btn:hover:not(:disabled) { 
+          border-color: #3b82f6;
+          background: rgba(59, 130, 246, 0.15);
+          transform: translateY(-2px);
+        }
         .tk-load-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         @keyframes spin { to { transform: rotate(360deg); } }
         .tk-spinner {
           width: 14px; height: 14px;
-          border: 2px solid #d9d5cc;
-          border-top-color: #374151;
+          border: 2px solid rgba(255, 255, 255, 0.1);
+          border-top-color: #3b82f6;
           border-radius: 50%;
           animation: spin 0.8s linear infinite;
         }
@@ -1260,10 +1316,16 @@ function Tickets() {
         .tk-showing {
           font-size: 12px;
           color: #9ca3af;
-          font-family: 'DM Mono', monospace;
+          font-family: 'Inter', monospace;
         }
 
         /* ── Responsive ── */
+        @media (max-width: 1024px) {
+          .tk-body {
+            padding: 1.5rem;
+          }
+        }
+
         @media (max-width: 768px) {
           .tk-table th:nth-child(5),
           .tk-table td:nth-child(5) {
@@ -1275,12 +1337,11 @@ function Tickets() {
         }
 
         @media (max-width: 640px) {
-          .tk-body { padding: 1.5rem 1rem 3rem; }
-          .tk-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+          .tk-body { padding: 1rem; }
+          .tk-header { flex-direction: column; align-items: flex-start; gap: 1rem; padding: 1.5rem; }
           .tk-header-actions { width: 100%; }
           .hd-btn { flex: 1; justify-content: center; }
           .tk-filters-left { width: 100%; }
-          .tk-clear-btn { flex-shrink: 0; }
           
           .tk-table th:nth-child(3),
           .tk-table td:nth-child(3),
@@ -1302,51 +1363,38 @@ function Tickets() {
             <div className="tk-date">{today}</div>
             <div className="tk-page-title">{mainTitle}</div>
           </div>
-          <div className="tk-header-actions">
-            <Link to="/create" className="hd-btn hd-btn-primary">
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              New Ticket
-            </Link>
-            <Link to="/" className="hd-btn hd-btn-secondary">
-              ← Dashboard
-            </Link>
-          </div>
         </div>
 
-        {/* Filters Row - Category, User, Clear only (LEFT SIDE) */}
+        {/* Filters Row */}
         <div className="tk-filters-row-wrap">
           <div className="tk-filters-left">
-            <div className="tk-filters-row">
+            <button
+              ref={categoryBtnRef}
+              onClick={() => openDropdown('category')}
+              className={`tk-filter-btn${appliedCategories.length > 0 ? ' active' : ''}`}
+            >
+              📂 Category {appliedCategories.length > 0 ? `(${appliedCategories.length})` : ''} ▾
+            </button>
+
+            {authority === 'admin' && (
               <button
-                ref={categoryBtnRef}
-                onClick={() => openDropdown('category')}
-                className={`tk-filter-btn${appliedCategories.length > 0 ? ' active' : ''}`}
+                ref={userBtnRef}
+                onClick={() => openDropdown('user')}
+                className={`tk-filter-btn${appliedUsers.length > 0 ? ' active' : ''}`}
               >
-                Category{appliedCategories.length > 0 ? ` (${appliedCategories.length})` : ''} ▾
+                👤 User {appliedUsers.length > 0 ? `(${appliedUsers.length})` : ''} ▾
               </button>
+            )}
 
-              {authority === 'admin' && (
-                <button
-                  ref={userBtnRef}
-                  onClick={() => openDropdown('user')}
-                  className={`tk-filter-btn${appliedUsers.length > 0 ? ' active' : ''}`}
-                >
-                  User{appliedUsers.length > 0 ? ` (${appliedUsers.length})` : ''} ▾
-                </button>
-              )}
-
-              {(appliedCategories.length > 0 || appliedUsers.length > 0 || statusFilter !== 'all') && (
-                <button className="tk-clear-btn" onClick={clearAllFilters}>
-                  Clear filters
-                </button>
-              )}
-            </div>
+            {(appliedCategories.length > 0 || appliedUsers.length > 0 || statusFilter !== 'all') && (
+              <button className="tk-clear-btn" onClick={clearAllFilters}>
+                ✕ Clear all
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Chips - below filters */}
+        {/* Chips */}
         {(appliedCategories.length > 0 || appliedUsers.length > 0) && (
           <div className="tk-chips">
             {appliedCategories.map(cat => (
@@ -1367,6 +1415,7 @@ function Tickets() {
         {/* Admin toggle */}
         {authority === 'admin' && !loading && (
           <div className="tk-toggle-wrap">
+            <label className="tk-toggle-label">Show my tickets only</label>
             <label className="hd-switch">
               <input
                 type="checkbox"
@@ -1376,20 +1425,19 @@ function Tickets() {
               />
               <span className="hd-switch-track" />
             </label>
-            <label htmlFor="myTicketsToggle" className="tk-toggle-label">My tickets only</label>
           </div>
         )}
 
         {/* Controls (search) */}
         <div className="tk-controls">
           <div className="tk-search-wrap">
-            <svg className="tk-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="tk-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" strokeLinecap="round" />
             </svg>
             <input
               className="tk-search"
               type="text"
-              placeholder="Search by number, category, or description…"
+              placeholder="🔍 Search by ticket number, category, or description..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
@@ -1420,7 +1468,7 @@ function Tickets() {
           </div>
         )}
 
-        {/* Section heading - Count badge on LEFT, View button on RIGHT */}
+        {/* Section heading */}
         <div className="tk-section-head">
           {!loading && (
             <div className="tk-count-badge">
@@ -1452,25 +1500,25 @@ function Tickets() {
                   className={`tk-dd-item ${viewMode === 'table' ? 'active' : ''}`}
                   onClick={() => { setViewMode('table'); setViewDropdownOpen(false); }}
                 >
-                  <span>📊</span> Table View
+                  <span>📊</span> Table
                 </div>
                 <div
                   className={`tk-dd-item ${viewMode === 'list' ? 'active' : ''}`}
                   onClick={() => { setViewMode('list'); setViewDropdownOpen(false); }}
                 >
-                  <span>📝</span> List View
+                  <span>📝</span> List
                 </div>
                 <div
                   className={`tk-dd-item ${viewMode === 'tiles' ? 'active' : ''}`}
                   onClick={() => { setViewMode('tiles'); setViewDropdownOpen(false); }}
                 >
-                  <span>🔲</span> Tiles View
+                  <span>🔲</span> Tiles
                 </div>
                 <div
                   className={`tk-dd-item ${viewMode === 'content' ? 'active' : ''}`}
                   onClick={() => { setViewMode('content'); setViewDropdownOpen(false); }}
                 >
-                  <span>📄</span> Content View
+                  <span>📄</span> Content
                 </div>
               </div>
             )}
@@ -1490,15 +1538,15 @@ function Tickets() {
                 disabled={loadingMore}
               >
                 {loadingMore ? (
-                  <><div className="tk-spinner" /> Loading…</>
+                  <><div className="tk-spinner" /> Loading more…</>
                 ) : (
-                  <>Load more · {displayedTickets.length} of {totalFilteredCount}</>
+                  <>⬇️ Load more · {displayedTickets.length} of {totalFilteredCount}</>
                 )}
               </button>
             )}
             {!hasMore && displayedTickets.length > 0 && (
               <div className="tk-showing">
-                {displayedTickets.length} of {totalFilteredCount} tickets
+                ✓ Showing {displayedTickets.length} of {totalFilteredCount} tickets
               </div>
             )}
           </div>

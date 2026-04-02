@@ -1,6 +1,5 @@
-// TicketDetails.js — Redesigned to match Home.js / Tickets.js / Dashboard.js design system
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 import DownloadIcon from './Download.png';
@@ -42,6 +41,24 @@ function TicketDetails() {
   const [activeAttachment, setActiveAttachment] = useState(null);
   const [attachmentList, setAttachmentList] = useState([]);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+
+  // ── Status update state ──
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [statusNote, setStatusNote] = useState('');
+  const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
+  const [statusUpdateSuccess, setStatusUpdateSuccess] = useState('');
+  const [statusUpdateError, setStatusUpdateError] = useState('');
+
+  const TICKET_STATUSES = [
+    'Open',
+    'In Progress',
+    'Waiting for approval',
+    'Approved',
+    'Rejected',
+    'On Hold',
+    'Resolved',
+    'Closed',
+  ];
 
   useEffect(() => {
     const fetchAuthority = async () => {
@@ -87,6 +104,7 @@ function TicketDetails() {
       try {
         const res = await axios.get(`${backendBase}/tickets/${id}`);
         setTicket(res.data);
+        setSelectedStatus(res.data.status || '');
         try {
           const all = await axios.get(`${backendBase}/api/categories`);
           setCategoryMeta(all.data.find(c => c.name?.toLowerCase() === res.data.category?.toLowerCase()) || null);
@@ -122,10 +140,17 @@ function TicketDetails() {
     const acct = accounts[0] || {};
     const possibleEmails = [acct.username, acct.upn, acct.preferred_username, acct.email].filter(Boolean);
     const loggedEmail = (possibleEmails.find(e => typeof e === 'string') || '').toLowerCase().trim();
-    const heads = (categoryMeta.categoryHeads || []).map(h => (h.email || '').toLowerCase().trim()).filter(Boolean);
-    const isHead = loggedEmail && heads.includes(loggedEmail);
-    setIsCategoryHead(!!isHead);
-    setShowApprovalModal(isHead && ticket.status === 'Waiting for approval');
+    const approvers = (ticket.approvers || [])
+        .map(a => (a.email || a).toLowerCase().trim());
+
+      const isApprover = loggedEmail && approvers.includes(loggedEmail.toLowerCase().trim());
+
+      setIsCategoryHead(!!isApprover);
+      setShowApprovalModal(
+        isApprover && ticket.status?.toLowerCase() === 'waiting for approval'
+      );
+      console.log("APPROVERS:", approvers);
+      console.log("LOGGED USER:", loggedEmail);
   }, [accounts, ticket, categoryMeta]);
 
   const formatDate = (dateString) => {
@@ -139,11 +164,38 @@ function TicketDetails() {
     try { navigator.clipboard.writeText(text); alert('Password copied to clipboard'); } catch (e) {}
   };
 
+  // ── Status update handler ──
+  const handleStatusUpdate = async () => {
+    if (!selectedStatus || selectedStatus === ticket.status) {
+      setStatusUpdateError('Please select a different status to update.');
+      return;
+    }
+    setStatusUpdateLoading(true);
+    setStatusUpdateError('');
+    setStatusUpdateSuccess('');
+    try {
+      await axios.put(`${backendBase}/tickets/${id}/status`, {
+        status: selectedStatus,
+        note: statusNote.trim(),
+        updatedBy: accounts[0]?.name || accounts[0]?.username,
+        updatedByEmail: accounts[0]?.username,
+      });
+      setTicket(prev => ({ ...prev, status: selectedStatus }));
+      setStatusNote('');
+      setStatusUpdateSuccess(`Status updated to "${selectedStatus}". Notifications sent.`);
+      setTimeout(() => setStatusUpdateSuccess(''), 5000);
+    } catch (err) {
+      setStatusUpdateError('Failed to update: ' + (err?.response?.data?.message || err.message || 'Unknown error'));
+    } finally {
+      setStatusUpdateLoading(false);
+    }
+  };
+
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
       if (!ticket || ticket.status !== 'Waiting for approval') { alert('Approval is not allowed for this ticket.'); return; }
-      const res = await axios.post(`${backendBase}/tickets/${id}/approve`, { approvedBy: accounts[0]?.name || accounts[0]?.username, note: adminNote });
+      const res = await axios.post(`${backendBase}/tickets/${id}/approve`, { approvedBy: getUserEmail(), note: adminNote });
       setShowApprovalModal(false);
       if (res.data?.newPassword) { setReturnedPassword(res.data.newPassword); setShowPasswordPopup(true); }
       else setTimeout(() => navigate('/', { state: { refresh: true } }), 200);
@@ -156,7 +208,7 @@ function TicketDetails() {
     setRejectLoading(true);
     try {
       if (!ticket) throw new Error('Ticket missing');
-      await axios.post(`${backendBase}/tickets/${id}/reject`, { rejectedBy: accounts[0]?.name || accounts[0]?.username, reason: adminNote });
+      await axios.post(`${backendBase}/tickets/${id}/reject`, { rejectedBy: getUserEmail(), reason: adminNote });
       setShowApprovalModal(false); setAdminNote('');
       setTimeout(() => navigate('/', { state: { refresh: true } }), 200);
     } catch (err) {
@@ -172,9 +224,9 @@ function TicketDetails() {
   const confirmCloseTicket = async () => {
     setLoading(true);
     try {
-      await axios.put(`${backendBase}/tickets/${id}/close`, { closeReason: closeReason.trim(), closedBy: accounts[0]?.name || accounts[0]?.username });
+      await axios.put(`${backendBase}/tickets/${id}/close`, { closeReason: closeReason.trim(), closedBy: getUserEmail(), closedByName: accounts[0]?.name  });
       setConfirmModal(false); setShowReasonInput(false); setCloseReason(''); setCloseError('');
-      setTimeout(() => navigate('/', { state: { refresh: true } }), 200);
+      setTimeout(() => navigate('/tickets', { state: { refresh: true } }), 200);
     } catch (err) { setCloseError('Failed to close ticket. Please try again.'); }
     finally { setLoading(false); }
   };
@@ -189,9 +241,9 @@ function TicketDetails() {
   const confirmreopenTicket = async () => {
     setLoading(true);
     try {
-      await axios.put(`${backendBase}/tickets/${id}/revive`, { revivedBy: accounts[0]?.name || accounts[0]?.username || 'User', reviveReason: reopenReason.trim() });
+      await axios.put(`${backendBase}/tickets/${id}/revive`, { revivedBy: getUserEmail(), revivedBy: getUserEmail(),  reviveReason: reopenReason.trim() });
       setConfirmreopenModal(false); setShowreopenReasonInput(false); setreopenReason(''); setreopenError('');
-      setTimeout(() => navigate('/', { state: { refresh: true } }), 200);
+      setTimeout(() => navigate('/tickets', { state: { refresh: true } }), 200);
     } catch (err) { setreopenError('Failed to reopen ticket. Please try again.'); }
     finally { setLoading(false); }
   };
@@ -208,6 +260,17 @@ function TicketDetails() {
     setActiveAttachment({ ...attachment });
     setAttachmentModalOpen(true);
   };
+
+  const getUserEmail = () => {
+  const acct = accounts[0] || {};
+  return (
+    acct.username ||
+    acct.preferred_username ||
+    acct.email ||
+    acct.upn ||
+    ""
+  ).toLowerCase().trim();
+};
 
   const downloadAttachment = async (attachment) => {
     if (!attachment || !attachment.fileUrl) return;
@@ -237,26 +300,30 @@ function TicketDetails() {
   };
 
   const accentColor = (ticket) => {
-    if (!ticket) return '#1d4ed8';
+    if (!ticket) return '#3b82f6';
     if (ticket.status === 'Closed') return '#ef4444';
     if (ticket.status === 'Approved') return '#10b981';
     if (ticket.status === 'Waiting for approval') return '#f59e0b';
-    return '#1d4ed8';
+    return '#3b82f6';
   };
 
   const statusPill = (status) => {
-    if (!status) return { bg: '#f3f4f6', color: '#374151' };
-    if (status === 'Closed') return { bg: '#fee2e2', color: '#b91c1c' };
-    if (status === 'Approved') return { bg: '#d1fae5', color: '#065f46' };
-    if (status === 'Waiting for approval') return { bg: '#fef3c7', color: '#92400e' };
-    return { bg: '#dbeafe', color: '#1e3a8a' };
+    if (!status) return { bg: 'rgba(255,255,255,0.1)', color: '#d1d5db' };
+    if (status === 'Closed') return { bg: 'rgba(239, 68, 68, 0.2)', color: '#f87171' };
+    if (status === 'Approved') return { bg: 'rgba(16, 185, 129, 0.2)', color: '#86efac' };
+    if (status === 'Waiting for approval') return { bg: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' };
+    if (status === 'In Progress') return { bg: 'rgba(139, 92, 246, 0.2)', color: '#c4b5fd' };
+    if (status === 'On Hold') return { bg: 'rgba(107, 114, 128, 0.2)', color: '#d1d5db' };
+    if (status === 'Resolved') return { bg: 'rgba(16, 185, 129, 0.15)', color: '#6ee7b7' };
+    if (status === 'Rejected') return { bg: 'rgba(239, 68, 68, 0.15)', color: '#fca5a5' };
+    return { bg: 'rgba(59, 130, 246, 0.2)', color: '#93c5fd' };
   };
 
   const priorityMeta = (p) => {
-    if (!p) return { color: '#6b7280', bg: '#f3f4f6' };
-    if (p === 'High') return { color: '#ef4444', bg: '#fee2e2' };
-    if (p === 'Medium') return { color: '#f59e0b', bg: '#fef3c7' };
-    return { color: '#10b981', bg: '#d1fae5' };
+    if (!p) return { color: '#9ca3af', bg: 'rgba(255,255,255,0.1)' };
+    if (p === 'High') return { color: '#f87171', bg: 'rgba(239, 68, 68, 0.2)' };
+    if (p === 'Medium') return { color: '#fbbf24', bg: 'rgba(245, 158, 11, 0.2)' };
+    return { color: '#86efac', bg: 'rgba(16, 185, 129, 0.2)' };
   };
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -266,36 +333,29 @@ function TicketDetails() {
     return (
       <div className="td-root">
         <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
           * { box-sizing: border-box; margin: 0; padding: 0; }
-          .td-root { min-height: 100vh; background: #f4f4f0; font-family: 'DM Sans', sans-serif; }
-          @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.45} }
-          .skel { background: #ddd9d0; animation: pulse 1.6s ease-in-out infinite; border-radius: 4px; }
+          .td-root { min-height: 100vh; background: linear-gradient(135deg, #0f172a 0%, #1a1f35 100%); font-family: 'Inter', sans-serif; }
+          @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.5} }
+          .skel { background: rgba(255, 255, 255, 0.1); animation: pulse 1.6s ease-in-out infinite; border-radius: 6px; }
         `}</style>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '2.5rem 2rem 4rem' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid #d9d5cc' }}>
-            <div>
-              <div className="skel" style={{ width: 160, height: 11, marginBottom: 8 }} />
-              <div className="skel" style={{ width: 240, height: 28 }} />
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <div className="skel" style={{ width: 120, height: 38, borderRadius: 6 }} />
-              <div className="skel" style={{ width: 120, height: 38, borderRadius: 6 }} />
+        <div style={{ maxWidth: 1000, margin: '0 auto', padding: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <button onClick={() => navigate(-1)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', padding: '8px 12px', color: '#d1d5db', cursor: 'pointer', font: '600 13px Inter' }}>← Back</button>
+              <div className="skel" style={{ width: 200, height: 28 }} />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.5rem' }}>
             <div>
-              <div style={{ background: '#fff', border: '1px solid #d9d5cc', borderRadius: 10, overflow: 'hidden', marginBottom: 24 }}>
-                <div style={{ width: 3, background: '#e5e7eb', position: 'absolute' }} />
-                <div style={{ padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {[1,2,3,4].map(i => <div key={i} className="skel" style={{ height: 14, width: `${60 + i * 8}%` }} />)}
-                </div>
+              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+                {[1,2,3,4].map(i => <div key={i} className="skel" style={{ height: 14, width: `${60 + i * 8}%`, marginBottom: 12 }} />)}
               </div>
-              <div style={{ background: '#fff', border: '1px solid #d9d5cc', borderRadius: 10, padding: '1.5rem 1.75rem' }}>
-                {[1,2,3].map(i => <div key={i} className="skel" style={{ height: 60, borderRadius: 6, marginBottom: 12 }} />)}
+              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1.5rem' }}>
+                {[1,2,3].map(i => <div key={i} className="skel" style={{ height: 60, borderRadius: 8, marginBottom: 12 }} />)}
               </div>
             </div>
-            <div style={{ background: '#fff', border: '1px solid #d9d5cc', borderRadius: 10, padding: '1.5rem', height: 'fit-content' }}>
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1.5rem', height: 'fit-content' }}>
               {[1,2,3,4].map(i => <div key={i} className="skel" style={{ height: 14, width: `${40 + i * 10}%`, marginBottom: 14 }} />)}
             </div>
           </div>
@@ -305,8 +365,10 @@ function TicketDetails() {
   }
 
   if (!ticket) return (
-    <div style={{ minHeight: '100vh', background: '#f4f4f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Sans, sans-serif', fontSize: 16, color: '#6b7280', fontWeight: 500 }}>
-      Ticket not found
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1a1f35 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', fontSize: 16, color: '#9ca3af', fontWeight: 500, flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ fontSize: 44, marginBottom: '0.5rem' }}>📭</div>
+      <div>Ticket not found</div>
+      <button onClick={() => navigate('/tickets')} style={{ marginTop: '1rem', background: '#3b82f6', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px' }}>← Back to Tickets</button>
     </div>
   );
 
@@ -329,29 +391,34 @@ function TicketDetails() {
     const a = attachmentList[0];
     const isPdf = isPdfType(a.fileType, a.fileUrl);
     return (
-      <div style={{ marginTop: inline ? 16 : 0, paddingTop: inline ? 16 : 0, borderTop: inline ? '1px solid #e5e7eb' : 'none' }}>
-        <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10 }}>
+      <div style={{ marginTop: inline ? 16 : 0, paddingTop: inline ? 16 : 0, borderTop: inline ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <img src={AttachmentIcon} alt="attachment" style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'cover' }} />
           {attachmentList.length > 1 ? `Attachments (${attachmentList.length})` : 'Attachment'}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {attachmentList.length === 1 ? (
             <>
               <button onClick={() => isPdf ? downloadAttachment(a) : openAttachmentViewer(a)} className="td-btn td-btn-sm td-btn-secondary">
-                {isPdf ? 'Download PDF' : 'View file'}
+                {isPdf ? (
+                  <><img src={DownloadIcon} alt="download" style={{ width: 13, height: 13, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} /> Download PDF</>
+                ) : '👁️ View'}
               </button>
               {!isPdf && (
                 <button onClick={() => downloadAttachment(a)} className="td-btn td-btn-sm td-btn-ghost">
+                  <img src={DownloadIcon} alt="download" style={{ width: 13, height: 13, objectFit: 'contain', filter: 'brightness(0) invert(0.7)' }} />
                   Download
                 </button>
               )}
-              <span style={{ fontSize: 12, color: '#9ca3af', alignSelf: 'center' }}>{a.fileName}</span>
+              <span style={{ fontSize: 12, color: '#9ca3af', alignSelf: 'center', marginLeft: 'auto' }}>{a.fileName}</span>
             </>
           ) : (
             <>
               <button onClick={() => { setActiveAttachment(attachmentList[0]); setAttachmentModalOpen(true); }} className="td-btn td-btn-sm td-btn-secondary">
-                View all
+                👁️ View all
               </button>
               <button onClick={downloadAllAttachments} className="td-btn td-btn-sm td-btn-ghost">
+                <img src={DownloadIcon} alt="download" style={{ width: 13, height: 13, objectFit: 'contain', filter: 'brightness(0) invert(0.7)' }} />
                 Download ZIP
               </button>
             </>
@@ -367,9 +434,12 @@ function TicketDetails() {
     const isPdf = isPdfType(att.fileType, att.fileUrl);
     return (
       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>Attachment:</span>
+        <img src={AttachmentIcon} alt="attachment" style={{ width: 13, height: 13, borderRadius: 2, objectFit: 'cover' }} />
+        <span style={{ fontSize: 12, color: '#d1d5db', fontWeight: 500 }}>Attachment:</span>
         <button onClick={() => isPdf ? downloadAttachment(att) : openAttachmentViewer(att)} className="td-btn td-btn-sm td-btn-secondary">
-          {isPdf ? 'Download PDF' : 'View'}
+          {isPdf
+            ? <><img src={DownloadIcon} alt="download" style={{ width: 12, height: 12, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} /> Download</>
+            : '👁️ View'}
         </button>
         <span style={{ fontSize: 12, color: '#9ca3af' }}>{att.fileName}</span>
       </div>
@@ -377,546 +447,457 @@ function TicketDetails() {
   };
 
   const historyEventMeta = (action) => {
-    if (action === 'created') return { label: 'Ticket created', accent: '#f59e0b', bg: '#fffbeb' };
-    if (action === 'closed') return { label: 'Ticket closed', accent: '#ef4444', bg: '#fef2f2' };
-    if (action === 'reopend' || action === 'reopened') return { label: 'Ticket reopened', accent: '#10b981', bg: '#f0fdf4' };
-    if (action === 'approved') return { label: 'Ticket approved', accent: '#10b981', bg: '#f0fdf4' };
-    if (action === 'rejected') return { label: 'Ticket rejected', accent: '#ef4444', bg: '#fef2f2' };
-    return { label: action, accent: '#6b7280', bg: '#f9fafb' };
+    if (action === 'created') return { label: '✎ Ticket created', accent: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' };
+    if (action === 'closed') return { label: '✕ Ticket closed', accent: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' };
+    if (action === 'reopend' || action === 'reopened') return { label: '↻ Ticket reopened', accent: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' };
+    if (action === 'approved') return { label: '✓ Ticket approved', accent: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' };
+    if (action === 'rejected') return { label: '✕ Ticket rejected', accent: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' };
+    if (action === 'status_updated') return { label: '↺ Status updated', accent: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' };
+    return { label: action, accent: '#9ca3af', bg: 'rgba(255,255,255,0.05)' };
   };
 
   return (
     <div className="td-root">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         .td-root {
           min-height: 100vh;
-          background: #f4f4f0;
-          font-family: 'DM Sans', sans-serif;
-          color: #111827;
+          background: linear-gradient(135deg, #0f172a 0%, #1a1f35 100%);
+          font-family: 'Inter', sans-serif;
+          color: #f3f4f6;
         }
 
-        .td-body {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 2.5rem 2rem 4rem;
-        }
+        .td-body { max-width: 1000px; margin: 0 auto; padding: 2rem; }
 
-        /* ── Header ── */
-        .td-header {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          margin-bottom: 2.5rem;
-          padding-bottom: 1.5rem;
-          border-bottom: 1px solid #d9d5cc;
-        }
-        .td-date {
-          font-size: 11px; font-weight: 500;
-          letter-spacing: 0.1em; text-transform: uppercase;
-          color: #9ca3af; margin-bottom: 6px;
-        }
-        .td-page-title {
-          font-size: 26px; font-weight: 600;
-          color: #111827; letter-spacing: -0.02em;
-        }
-        .td-header-actions { display: flex; gap: 10px; align-items: center; }
+        .td-topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
 
-        /* ── Buttons ── */
-        .hd-btn {
-          display: inline-flex; align-items: center; gap: 7px;
-          padding: 9px 18px; border-radius: 6px; font-size: 13px;
-          font-weight: 500; font-family: 'DM Sans', sans-serif;
-          cursor: pointer; text-decoration: none;
-          transition: background 0.15s, transform 0.1s; border: none;
-        }
-        .hd-btn-primary { background: #111827; color: #fff; }
-        .hd-btn-primary:hover { background: #1f2937; transform: translateY(-1px); }
-        .hd-btn-secondary { background: #fff; color: #111827; border: 1px solid #d9d5cc; }
-        .hd-btn-secondary:hover { background: #f9f8f6; transform: translateY(-1px); }
+        .td-back-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: #d1d5db; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; font-family: 'Inter', sans-serif; }
+        .td-back-btn:hover { background: rgba(255,255,255,0.12); color: #f3f4f6; }
 
-        .td-btn {
-          display: inline-flex; align-items: center; gap: 6px;
-          border-radius: 6px; font-size: 13px; font-weight: 500;
-          font-family: 'DM Sans', sans-serif; cursor: pointer;
-          border: none; transition: background 0.15s, transform 0.1s;
-          text-decoration: none;
-        }
-        .td-btn-sm { padding: 7px 14px; }
+        .td-title-section { display: flex; flex-direction: column; gap: 4px; }
+        .td-ticket-title { font-size: 20px; font-weight: 700; color: #f3f4f6; letter-spacing: -0.01em; }
+        .td-ticket-subtitle { font-size: 12px; color: #9ca3af; font-weight: 500; }
+
+        .td-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; margin-bottom: 2rem; }
+
+        .td-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; backdrop-filter: blur(10px); overflow: hidden; }
+
+        .td-ticket-header { padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; gap: 1.25rem; align-items: flex-start; }
+        .td-accent-bar { width: 4px; height: 100%; border-radius: 2px; flex-shrink: 0; min-height: 60px; }
+        .td-header-content h2 { font-size: 16px; font-weight: 700; color: #f3f4f6; margin-bottom: 8px; letter-spacing: -0.01em; }
+        .td-header-content p { font-size: 12px; color: #9ca3af; font-weight: 500; margin-bottom: 10px; }
+
+        .td-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+        .td-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
+        .td-pill-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+        .td-approval-banner { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px; padding: 1.25rem; margin: 0 1.5rem 1.5rem; text-align: center; }
+        .td-approval-banner h3 { font-size: 13px; font-weight: 700; color: #fbbf24; margin-bottom: 10px; }
+
+        .td-section { padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .td-section:last-child { border-bottom: none; }
+        .td-section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 12px; }
+        .td-section-content { font-size: 13px; color: #d1d5db; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+
+        .td-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: rgba(255,255,255,0.05); }
+        .td-meta-item { background: rgba(255,255,255,0.03); padding: 1.25rem 1.5rem; }
+        .td-meta-item:nth-child(2n) { background: rgba(255,255,255,0.05); }
+        .td-meta-key { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+        .td-meta-value { font-size: 14px; font-weight: 600; color: #f3f4f6; font-family: 'Inter', monospace; }
+
+        .td-sidebar { display: flex; flex-direction: column; gap: 1.5rem; }
+        .td-sidebar-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; backdrop-filter: blur(10px); overflow: hidden; height: fit-content; }
+        .td-sidebar-section { padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .td-sidebar-section:last-child { border-bottom: none; }
+        .td-sidebar-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 12px; }
+
+        .td-info-group { display: flex; flex-direction: column; gap: 12px; }
+        .td-info-item { display: flex; flex-direction: column; gap: 4px; }
+        .td-info-key { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+        .td-info-value { font-size: 13px; font-weight: 600; color: #f3f4f6; }
+
+        .td-actions { display: flex; flex-direction: column; gap: 8px; }
+
+        .td-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; white-space: nowrap; }
+        .td-btn-sm { padding: 7px 14px; font-size: 12px; }
         .td-btn-md { padding: 9px 18px; }
-        .td-btn-lg { padding: 11px 22px; font-size: 14px; }
-
-        .td-btn-primary { background: #111827; color: #fff; }
-        .td-btn-primary:hover { background: #1f2937; transform: translateY(-1px); }
-        .td-btn-secondary { background: #fff; color: #374151; border: 1px solid #d9d5cc; }
-        .td-btn-secondary:hover { background: #f9f8f6; }
-        .td-btn-ghost { background: transparent; color: #6b7280; border: 1px solid #e5e7eb; }
-        .td-btn-ghost:hover { background: #f4f4f0; color: #374151; }
+        .td-btn-lg { padding: 11px 22px; font-size: 14px; width: 100%; }
+        .td-btn-primary { background: #3b82f6; color: #fff; box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+        .td-btn-primary:hover { background: #2563eb; transform: translateY(-2px); }
+        .td-btn-secondary { background: rgba(255,255,255,0.1); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.2); }
+        .td-btn-secondary:hover { background: rgba(255,255,255,0.15); }
+        .td-btn-ghost { background: transparent; color: #9ca3af; border: 1px solid rgba(255,255,255,0.1); }
+        .td-btn-ghost:hover { background: rgba(255,255,255,0.05); color: #d1d5db; }
         .td-btn-danger { background: #ef4444; color: #fff; }
-        .td-btn-danger:hover { background: #dc2626; transform: translateY(-1px); }
+        .td-btn-danger:hover { background: #dc2626; transform: translateY(-2px); }
         .td-btn-success { background: #10b981; color: #fff; }
-        .td-btn-success:hover { background: #059669; transform: translateY(-1px); }
+        .td-btn-success:hover { background: #059669; transform: translateY(-2px); }
         .td-btn-warn { background: #f59e0b; color: #fff; }
-        .td-btn-warn:hover { background: #d97706; transform: translateY(-1px); }
-        .td-btn-muted { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
-        .td-btn-muted:hover { background: #e5e7eb; }
+        .td-btn-warn:hover { background: #d97706; transform: translateY(-2px); }
+        .td-btn-muted { background: rgba(255,255,255,0.08); color: #d1d5db; border: 1px solid rgba(255,255,255,0.1); }
+        .td-btn-muted:hover { background: rgba(255,255,255,0.12); }
         .td-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
 
-        /* ── Main Layout ── */
-        .td-layout {
-          display: grid;
-          grid-template-columns: 1fr 300px;
-          gap: 1px;
-          background: #d9d5cc;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
-          overflow: hidden;
-          margin-bottom: 24px;
-        }
-
-        .td-main-col { background: #fff; }
-        .td-side-col { background: #fff; }
-
-        /* ── Ticket header strip ── */
-        .td-ticket-strip {
-          padding: 1.5rem 1.75rem;
-          border-bottom: 1px solid #f3f4f6;
-          display: flex;
-          gap: 1rem;
-          align-items: flex-start;
-        }
-
-        .td-accent-bar {
-          width: 3px;
-          border-radius: 2px;
-          align-self: stretch;
-          flex-shrink: 0;
-          min-height: 60px;
-        }
-
-        .td-ticket-id {
-          font-size: 11px; font-weight: 600;
-          font-family: 'DM Mono', monospace;
-          color: #9ca3af; letter-spacing: 0.06em;
-          margin-bottom: 3px;
-        }
-        .td-ticket-cat {
-          font-size: 20px; font-weight: 600;
-          color: #111827; letter-spacing: -0.02em;
-          margin-bottom: 10px;
-        }
-
-        .td-pills { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-        .td-pill {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 3px 10px; border-radius: 20px;
-          font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
-          white-space: nowrap;
-        }
-        .td-pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-
-        /* ── Description block ── */
-        .td-description {
-          padding: 1.5rem 1.75rem;
-          border-bottom: 1px solid #f3f4f6;
-        }
-        .td-block-label {
-          font-size: 11px; font-weight: 500;
-          letter-spacing: 0.08em; text-transform: uppercase;
-          color: #9ca3af; margin-bottom: 10px;
-        }
-        .td-desc-text {
-          font-size: 14px; color: #374151; line-height: 1.7;
-          white-space: pre-wrap;
-        }
-
-        /* ── Meta grid ── */
-        .td-meta-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1px;
-          background: #f3f4f6;
-          border-top: 1px solid #f3f4f6;
-        }
-        .td-meta-cell {
-          background: #fff;
-          padding: 1rem 1.75rem;
-        }
-        .td-meta-key {
-          font-size: 11px; font-weight: 500;
-          text-transform: uppercase; letter-spacing: 0.08em;
-          color: #9ca3af; margin-bottom: 4px;
-        }
-        .td-meta-val {
-          font-size: 14px; font-weight: 600;
-          color: #111827; font-family: 'DM Sans', sans-serif;
-        }
-        .td-meta-val-mono {
-          font-family: 'DM Mono', monospace;
-          font-size: 13px;
-        }
-
-        /* ── Sidebar ── */
-        .td-sidebar-section {
-          padding: 1.25rem 1.5rem;
-          border-bottom: 1px solid #f3f4f6;
-        }
-        .td-sidebar-section:last-child { border-bottom: none; }
-
-        /* ── Approval banner ── */
-        .td-approval-banner {
-          background: #fffbeb;
-          border: 1px solid #fcd34d;
-          border-radius: 8px;
-          padding: 1.25rem;
-          margin: 1.5rem 1.75rem;
-          text-align: center;
-        }
-
-        /* ── History ── */
-        .td-history {
-          background: #fff;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
-          overflow: hidden;
-        }
-
-        .td-history-header {
-          padding: 1.25rem 1.75rem;
-          border-bottom: 1px solid #f3f4f6;
-          font-size: 12px;
-          font-weight: 500;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: #6b7280;
-        }
-
-        .td-history-event {
-          display: flex;
-          gap: 0;
-          border-bottom: 1px solid #f3f4f6;
-        }
+        .td-history { margin-top: 2rem; }
+        .td-history-header { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px 12px 0 0; padding: 1.25rem 1.5rem; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; display: flex; align-items: center; gap: 8px; }
+        .td-history-list { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-top: none; border-radius: 0 0 12px 12px; overflow: hidden; }
+        .td-history-event { display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 1.25rem 1.5rem; }
         .td-history-event:last-child { border-bottom: none; }
+        .td-history-event:nth-child(even) { background: rgba(255,255,255,0.02); }
+        .td-history-accent { width: 3px; border-radius: 2px; flex-shrink: 0; margin-right: 12px; }
+        .td-history-content { flex: 1; }
+        .td-history-action { font-size: 13px; font-weight: 700; color: #f3f4f6; margin-bottom: 4px; }
+        .td-history-meta { font-size: 11px; color: #9ca3af; font-family: 'Inter', monospace; margin-bottom: 8px; }
+        .td-history-reason { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 8px 12px; font-size: 12px; color: #d1d5db; margin-top: 8px; }
 
-        .td-history-accent { width: 3px; flex-shrink: 0; align-self: stretch; }
-        .td-history-body { padding: 1.1rem 1.5rem; flex: 1; }
-        .td-history-action {
-          font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 3px;
-        }
-        .td-history-by {
-          font-size: 12px; color: #9ca3af; margin-bottom: 8px;
-          font-family: 'DM Mono', monospace;
-        }
-        .td-history-reason {
-          font-size: 13px; color: #374151;
-          background: #fafaf8; border: 1px solid #e5e7eb;
-          border-radius: 5px; padding: 8px 12px; margin-top: 8px;
-        }
+        /* ── Status Update Card ── */
+        .td-su-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; overflow: hidden; backdrop-filter: blur(10px); }
+        .td-su-header { padding: 1rem 1.25rem; background: rgba(37,99,235,0.1); border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; }
+        .td-su-header-title { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #93c5fd; }
+        .td-su-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
 
-        .td-current-status {
-          padding: 1.25rem 1.75rem;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          background: #fafaf8;
-        }
-        .td-current-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .td-su-flow-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; }
+        .td-su-flow-item { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+        .td-su-flow-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #4b5563; }
+        .td-su-flow-arrow { font-size: 16px; color: #374151; flex-shrink: 0; }
 
-        /* ── Modals ── */
+        .td-su-select-wrap { position: relative; }
+        .td-su-select { width: 100%; padding: 10px 34px 10px 12px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f3f4f6; font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; appearance: none; -webkit-appearance: none; transition: all 0.2s; outline: none; }
+        .td-su-select:focus { border-color: #3b82f6; background: rgba(59,130,246,0.1); box-shadow: 0 0 0 3px rgba(59,130,246,0.14); }
+        .td-su-select option { background: #1e293b; color: #f3f4f6; font-weight: 500; }
+        .td-su-select-arrow { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6b7280; font-size: 10px; }
+
+        .td-su-note { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #f3f4f6; font-size: 13px; font-family: 'Inter', sans-serif; resize: none; transition: all 0.2s; outline: none; line-height: 1.5; }
+        .td-su-note:focus { border-color: #3b82f6; background: rgba(59,130,246,0.07); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+        .td-su-note::placeholder { color: #374151; }
+
+        .td-su-btn { width: 100%; padding: 11px 16px; background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%); border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; font-family: 'Inter', sans-serif; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: 0.01em; }
+        .td-su-btn:hover:not(:disabled) { background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,99,235,0.4); }
+        .td-su-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+        @keyframes suFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .td-su-success { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; font-size: 12px; color: #6ee7b7; font-weight: 500; animation: suFadeIn 0.3s ease; line-height: 1.5; }
+        .td-su-error { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px; font-size: 12px; color: #fca5a5; font-weight: 500; line-height: 1.5; }
+        .td-su-mail-note { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 11px; color: #374151; padding: 4px 0 2px; }
+
+        @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        .td-overlay {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.5);
-          display: flex; justify-content: center; align-items: center;
-          z-index: 9999;
-          animation: fadeIn 0.15s;
-          backdrop-filter: blur(3px);
-        }
-
-        .td-modal {
-          background: #fff;
-          border-radius: 10px;
-          padding: 2rem;
-          width: 92%; max-width: 560px;
-          animation: slideUp 0.2s;
-          max-height: 90vh; overflow-y: auto;
-        }
-
+        .td-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 9999; animation: fadeIn 0.15s; backdrop-filter: blur(5px); padding: 1rem; }
+        .td-modal { background: #1f2937; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 2rem; width: 100%; max-width: 560px; animation: slideUp 0.2s; max-height: 90vh; overflow-y: auto; }
         .td-modal-wide { max-width: 900px; }
-
-        .td-modal-title {
-          font-size: 18px; font-weight: 600; color: #111827;
-          margin-bottom: 6px; letter-spacing: -0.01em;
-        }
-        .td-modal-sub {
-          font-size: 13px; color: #6b7280; margin-bottom: 1.5rem;
-          line-height: 1.5;
-        }
-
-        .td-textarea {
-          width: 100%; padding: 10px 14px;
-          border: 1px solid #d9d5cc; border-radius: 7px;
-          font-size: 14px; font-family: 'DM Sans', sans-serif;
-          background: #fafaf8; color: #111827;
-          resize: vertical; min-height: 100px;
-          transition: border-color 0.15s, box-shadow 0.15s;
-          margin-bottom: 4px;
-        }
-        .td-textarea:focus {
-          outline: none; border-color: #111827; background: #fff;
-          box-shadow: 0 0 0 3px rgba(17,24,39,0.07);
-        }
-
-        .td-error { font-size: 12px; color: #ef4444; font-weight: 500; margin-top: 4px; margin-bottom: 10px; }
-
+        .td-modal-title { font-size: 18px; font-weight: 700; color: #f3f4f6; margin-bottom: 6px; letter-spacing: -0.01em; }
+        .td-modal-subtitle { font-size: 13px; color: #d1d5db; margin-bottom: 1.5rem; line-height: 1.6; }
+        .td-textarea { width: 100%; padding: 10px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 13px; font-family: 'Inter', sans-serif; background: rgba(255,255,255,0.05); color: #f3f4f6; resize: vertical; min-height: 100px; transition: all 0.2s; margin-bottom: 4px; }
+        .td-textarea:focus { outline: none; border-color: #3b82f6; background: rgba(255,255,255,0.08); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+        .td-textarea::placeholder { color: #6b7280; }
+        .td-error { font-size: 12px; color: #f87171; font-weight: 600; margin-top: 4px; margin-bottom: 10px; }
         .td-modal-actions { display: flex; gap: 10px; margin-top: 1.5rem; flex-wrap: wrap; }
+        .td-modal-actions .td-btn { flex: 1; }
+        .td-approval-grid { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 8px; }
+        .td-approval-row { display: flex; gap: 12px; font-size: 13px; align-items: flex-start; }
+        .td-approval-key { font-weight: 600; color: #9ca3af; width: 140px; flex-shrink: 0; }
+        .td-approval-value { color: #d1d5db; flex: 1; }
+        .td-password-box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1.5rem; font-family: 'Inter', monospace; font-size: 18px; font-weight: 700; color: #60a5fa; word-break: break-all; text-align: center; letter-spacing: 0.08em; margin: 1.5rem 0; }
 
-        /* ── Approval detail grid ── */
-        .td-approval-grid {
-          background: #fafaf8; border: 1px solid #e5e7eb;
-          border-radius: 8px; padding: 1.25rem;
-          margin-bottom: 1.25rem;
-        }
-        .td-approval-row {
-          display: flex; gap: 8px;
-          font-size: 13px; margin-bottom: 8px;
-          align-items: flex-start;
-        }
-        .td-approval-row:last-child { margin-bottom: 0; }
-        .td-approval-key { font-weight: 600; color: #6b7280; width: 120px; flex-shrink: 0; }
-        .td-approval-val { color: #111827; }
-
-        /* ── Password popup ── */
-        .td-password-box {
-          background: #f4f4f0; border: 1px solid #d9d5cc;
-          border-radius: 8px; padding: 1.25rem;
-          font-family: 'DM Mono', monospace;
-          font-size: 18px; font-weight: 500;
-          color: #111827; word-break: break-all;
-          margin: 1rem 0 1.5rem; text-align: center;
-          letter-spacing: 0.05em;
-        }
-
-        /* ── Attachment viewer ── */
-        .td-att-content {
-          min-height: 200px; max-height: 65vh;
-          display: flex; justify-content: center; align-items: center;
-          background: #f4f4f0; border: 1px solid #d9d5cc;
-          border-radius: 8px; padding: 1rem;
-          overflow: auto; flex-direction: column;
-        }
+        .td-att-content { min-height: 300px; max-height: 65vh; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1rem; overflow: auto; flex-direction: column; }
         .td-att-img { max-width: 100%; max-height: 62vh; object-fit: contain; border-radius: 6px; }
-        .td-att-list { display: flex; gap: 8px; overflow-x: auto; padding-top: 12px; }
-        .td-att-thumb {
-          padding: 8px; background: #fff;
-          border: 1px solid #d9d5cc; border-radius: 7px;
-          cursor: pointer; min-width: 130px; display: flex;
-          gap: 8px; align-items: center; flex-shrink: 0;
-          transition: border-color 0.15s;
-        }
-        .td-att-thumb:hover { border-color: #111827; }
-        .td-att-thumb img { width: 52px; height: 52px; object-fit: cover; border-radius: 5px; }
-        .td-att-thumb-name { font-size: 12px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .td-att-list { display: flex; gap: 8px; overflow-x: auto; padding-top: 12px; padding-bottom: 4px; }
+        .td-att-thumb { padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; cursor: pointer; min-width: 130px; display: flex; gap: 8px; align-items: center; flex-shrink: 0; transition: all 0.2s; }
+        .td-att-thumb:hover { border-color: #3b82f6; background: rgba(59,130,246,0.1); }
+        .td-att-thumb img { width: 52px; height: 52px; object-fit: cover; border-radius: 6px; }
+        .td-att-thumb-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .td-att-thumb-name { font-size: 12px; font-weight: 600; color: #f3f4f6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .td-att-thumb-type { font-size: 11px; color: #9ca3af; }
 
-        /* ── Responsive ── */
-        @media (max-width: 900px) {
-          .td-layout { grid-template-columns: 1fr; }
-          .td-side-col { border-top: 1px solid #d9d5cc; }
-        }
-        @media (max-width: 640px) {
-          .td-body { padding: 1.5rem 1rem 3rem; }
-          .td-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
-          .td-header-actions { width: 100%; }
-          .hd-btn { flex: 1; justify-content: center; }
-          .td-meta-grid { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 900px) { .td-layout { grid-template-columns: 1fr; } .td-meta-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 640px) { .td-body { padding: 1rem; } .td-topbar { flex-direction: column; align-items: flex-start; gap: 12px; } .td-modal { padding: 1.5rem; } .td-btn-lg { padding: 9px 14px; font-size: 12px; } .td-approval-key { width: 100%; } .td-approval-row { flex-direction: column; gap: 4px; } }
       `}</style>
 
       <div className="td-body">
-        {/* ── Header ── */}
-        <div className="td-header">
-          <div>
-            <div className="td-date">{today}</div>
-            <div className="td-page-title">Ticket Details</div>
-          </div>
-          <div className="td-header-actions">
-            <Link to="/create" className="hd-btn hd-btn-primary">
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              New Ticket
-            </Link>
-            <button onClick={() => navigate('/tickets')} className="hd-btn hd-btn-secondary">
-              ← All Tickets
-            </button>
+        {/* ── Top bar ── */}
+        <div className="td-topbar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button className="td-back-btn" onClick={() => navigate(-1)}>← Back</button>
+            <div className="td-title-section">
+              <div className="td-ticket-title">#{ticket.ticketNumber}</div>
+              <div className="td-ticket-subtitle">{ticket.category}</div>
+            </div>
           </div>
         </div>
 
         {/* ── Main layout ── */}
         <div className="td-layout">
-          {/* LEFT: main content */}
-          <div className="td-main-col">
-            {/* Ticket strip */}
-            <div className="td-ticket-strip">
-              <div className="td-accent-bar" style={{ background: ac }} />
-              <div style={{ flex: 1 }}>
-                <div className="td-ticket-id">TICKET #{ticket.ticketNumber}</div>
-                <div className="td-ticket-cat">{ticket.category}</div>
-                {ticket.category === 'Operational & Finance' && ticket.subQuery && (
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                    <span style={{ fontWeight: 600 }}>Sub-category:</span> {ticket.subQuery}
-                    {ticket.subQuery === 'Other' && ticket.otherSubQueryText && <span> — {ticket.otherSubQueryText}</span>}
+          {/* LEFT */}
+          <div>
+            <div className="td-card" style={{ marginBottom: '1.5rem' }}>
+              <div className="td-ticket-header">
+                <div className="td-accent-bar" style={{ background: ac }} />
+                <div className="td-header-content" style={{ flex: 1 }}>
+                  <h2>{ticket.category}</h2>
+                  <p>{ticket.description?.substring(0, 100)}...</p>
+                  <div className="td-pills">
+                    <span className="td-pill" style={{ background: sp.bg, color: sp.color }}>
+                      <span className="td-pill-dot" style={{ background: sp.color }} />
+                      {ticket.status}
+                    </span>
+                    <span className="td-pill" style={{ background: pm.bg, color: pm.color }}>
+                      ⚡ {ticket.priority}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {needsApprovalBanner && (
+                <div className="td-approval-banner">
+                  <h3>⚠️ Waiting for your approval</h3>
+                  <button onClick={() => setShowApprovalModal(true)} className="td-btn td-btn-md td-btn-warn">
+                    Review & take action
+                  </button>
+                </div>
+              )}
+
+              <div className="td-section">
+                <div className="td-section-title">📝 Description</div>
+                <div className="td-section-content">{ticket.description}</div>
+                {renderAttachmentBlock(true)}
+              </div>
+
+              <div className="td-meta-grid">
+                <div className="td-meta-item">
+                  <div className="td-meta-key">📅 Created</div>
+                  <div className="td-meta-value">{formatDate(ticket.createdAt)}</div>
+                </div>
+                <div className="td-meta-item">
+                  <div className="td-meta-key">👤 Submitted by</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="td-meta-value">{ticket.userName}</div>
+                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>{ticket.userEmail}</div>
+                  </div>
+                </div>
+                {ticket.closedAt && (
+                  <div className="td-meta-item">
+                    <div className="td-meta-key">✕ Closed</div>
+                    <div className="td-meta-value">{formatDate(ticket.closedAt)}</div>
                   </div>
                 )}
-                <div className="td-pills">
-                  <span className="td-pill" style={{ background: sp.bg, color: sp.color }}>
-                    <span className="td-pill-dot" style={{ background: sp.color }} />
-                    {ticket.status}
-                  </span>
-                  <span className="td-pill" style={{ background: pm.bg, color: pm.color }}>
-                    {ticket.priority} Priority
-                  </span>
+                {ticket.assignedTo && (
+                  <div className="td-meta-item">
+                    <div className="td-meta-key">🎯 Assigned</div>
+                    <div className="td-meta-value">{ticket.assignedTo}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* History */}
+            <div className="td-history">
+              <div className="td-history-header">
+                <img src={HistoryIcon} alt="history" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />
+                History
+              </div>
+              <div className="td-history-list">
+                {historyEvents.map((event, idx) => {
+                  const hm = historyEventMeta(event.action);
+                  const isOpsFin = ticket.category === 'Operational & Finance';
+                  return (
+                    <div key={idx} className="td-history-event">
+                      <div className="td-history-accent" style={{ background: hm.accent }} />
+                      <div className="td-history-content">
+                        <div className="td-history-action">{hm.label}</div>
+                        <div className="td-history-meta">
+                          {formatDate(event.at)} · {event.by || 'Unknown'}
+                          {event.action === 'created' && (ticket.onBehalf || (event.by !== ticket.userName)) && (
+                            <span style={{ color: '#fbbf24', marginLeft: '6px' }}>on behalf of {ticket.onBehalf || ticket.userName}</span>
+                          )}
+                        </div>
+                        {isOpsFin && event.subQuery && (
+                          <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 6 }}>
+                            Sub: <strong>{event.subQuery}</strong>
+                            {event.subQuery === 'Other' && event.otherSubQueryText && <span> — {event.otherSubQueryText}</span>}
+                          </div>
+                        )}
+                        {event.reason && <div className="td-history-reason">{event.reason}</div>}
+                        {event.action === 'status_updated' && event.newStatus && (
+                          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, color: '#6b7280' }}>Changed to</span>
+                            <span className="td-pill" style={{ ...statusPill(event.newStatus), fontSize: 10, padding: '2px 8px' }}>
+                              {event.newStatus}
+                            </span>
+                          </div>
+                        )}
+                        {renderHistoryAttachment(event)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Sidebar */}
+          <div className="td-sidebar">
+            {/* Info card */}
+            <div className="td-sidebar-card">
+              <div className="td-sidebar-section">
+                <div className="td-sidebar-label">ℹ️ Ticket Info</div>
+                <div className="td-info-group">
+                  <div className="td-info-item">
+                    <div className="td-info-key">Status</div>
+                    <span className="td-pill" style={{ background: sp.bg, color: sp.color, width: 'fit-content' }}>
+                      <span className="td-pill-dot" style={{ background: sp.color }} />
+                      {ticket.status}
+                    </span>
+                  </div>
+                  <div className="td-info-item">
+                    <div className="td-info-key">Priority</div>
+                    <span className="td-pill" style={{ background: pm.bg, color: pm.color, width: 'fit-content' }}>
+                      ⚡ {ticket.priority}
+                    </span>
+                  </div>
+                  <div className="td-info-item">
+                    <div className="td-info-key">Ticket Number</div>
+                    <div className="td-info-value">#{ticket.ticketNumber}</div>
+                  </div>
+                  {ticket.onBehalf && (
+                    <div className="td-info-item">
+                      <div className="td-info-key">On Behalf Of</div>
+                      <div className="td-info-value">{ticket.onBehalf}</div>
+                      {ticket.onBehalfEmail && <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{ticket.onBehalfEmail}</div>}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Approval banner */}
-            {needsApprovalBanner && (
-              <div className="td-approval-banner">
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 6 }}>
-                  Waiting for your approval — {ticket.category}
+            {/* ── Admin Status Update Card ── */}
+            {authority === 'admin' && (
+              <div className="td-su-card">
+                <div className="td-su-header">
+                  <span className="td-su-header-title">⚙️ Update Ticket Status</span>
                 </div>
-                <button onClick={() => setShowApprovalModal(true)} className="td-btn td-btn-md td-btn-warn">
-                  Review & take action
-                </button>
+                <div className="td-su-body">
+
+                  {/* Current → New status row */}
+                  <div className="td-su-flow-row">
+                    <div className="td-su-flow-item">
+                      <span className="td-su-flow-label">Current</span>
+                      <span className="td-pill" style={{ background: sp.bg, color: sp.color, fontSize: 11 }}>
+                        <span className="td-pill-dot" style={{ background: sp.color }} />
+                        {ticket.status}
+                      </span>
+                    </div>
+                    <span className="td-su-flow-arrow">→</span>
+                    <div className="td-su-flow-item">
+                      <span className="td-su-flow-label">Change to</span>
+                      {selectedStatus && selectedStatus !== ticket.status ? (
+                        <span className="td-pill" style={{ background: statusPill(selectedStatus).bg, color: statusPill(selectedStatus).color, fontSize: 11 }}>
+                          <span className="td-pill-dot" style={{ background: statusPill(selectedStatus).color }} />
+                          {selectedStatus}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#4b5563', fontStyle: 'italic' }}>select below</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status select */}
+                  <div className="td-su-select-wrap">
+                    <select
+                      className="td-su-select"
+                      value={selectedStatus}
+                      onChange={(e) => {
+                        setSelectedStatus(e.target.value);
+                        setStatusUpdateError('');
+                        setStatusUpdateSuccess('');
+                      }}
+                    >
+                      {TICKET_STATUSES.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <span className="td-su-select-arrow">▼</span>
+                  </div>
+
+                  {/* Note textarea */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Note to requester <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+                    </div>
+                    <textarea
+                      className="td-su-note"
+                      placeholder="e.g. We are looking into your request and will update you shortly…"
+                      value={statusNote}
+                      onChange={(e) => setStatusNote(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Feedback */}
+                  {statusUpdateSuccess && (
+                    <div className="td-su-success">
+                      <span style={{ flexShrink: 0, fontSize: 14 }}>✓</span>
+                      <span>{statusUpdateSuccess}</span>
+                    </div>
+                  )}
+                  {statusUpdateError && (
+                    <div className="td-su-error">
+                      <span style={{ flexShrink: 0, fontSize: 14 }}>⚠</span>
+                      <span>{statusUpdateError}</span>
+                    </div>
+                  )}
+
+                  {/* Update button — uses DownloadIcon correctly as the "send/push" action icon */}
+                  <button
+                    className="td-su-btn"
+                    onClick={handleStatusUpdate}
+                    disabled={statusUpdateLoading || !selectedStatus || selectedStatus === ticket.status}
+                  >
+                    {statusUpdateLoading ? (
+                      <>
+                        <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: 15 }}>⟳</span>
+                        Updating & sending mail…
+                      </>
+                    ) : (
+                      <>
+                        <img src={DownloadIcon} alt="send" style={{ width: 15, height: 15, objectFit: 'contain', filter: 'brightness(0) invert(1)', transform: 'rotate(180deg)' }} />
+                        Update & Notify
+                      </>
+                    )}
+                  </button>
+
+                  <div className="td-su-mail-note">
+                    <span style={{ fontSize: 13, marginRight: 4 }}>✉️</span>
+                    Mail sent to submitter + CC on every update
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Description */}
-            <div className="td-description">
-              <div className="td-block-label">Description</div>
-              <div className="td-desc-text">{ticket.description}</div>
-              {renderAttachmentBlock(true)}
-            </div>
-
-            {/* Meta grid */}
-            <div className="td-meta-grid">
-              <div className="td-meta-cell">
-                <div className="td-meta-key">Created</div>
-                <div className="td-meta-val td-meta-val-mono">{formatDate(ticket.createdAt)}</div>
-              </div>
-              <div className="td-meta-cell">
-                <div className="td-meta-key">Submitted by</div>
-                <div className="td-meta-val">{ticket.userName}</div>
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>{ticket.userEmail}</div>
-              </div>
-              {ticket.closedAt && (
-                <div className="td-meta-cell">
-                  <div className="td-meta-key">Closed</div>
-                  <div className="td-meta-val td-meta-val-mono">{formatDate(ticket.closedAt)}</div>
-                </div>
-              )}
-              {ticket.assignedTo && (
-                <div className="td-meta-cell">
-                  <div className="td-meta-key">Assigned to</div>
-                  <div className="td-meta-val">{ticket.assignedTo}</div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* RIGHT: sidebar */}
-          <div className="td-side-col">
-            {/* Actions */}
+            {/* Actions card */}
             {(authority === 'admin' && ticket.status !== 'Closed') || ticket.status === 'Closed' ? (
-              <div className="td-sidebar-section">
-                <div className="td-block-label" style={{ marginBottom: 12 }}>Actions</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {authority === 'admin' && ticket.status !== 'Closed' && (
-                    <button onClick={() => setShowReasonInput(true)} className="td-btn td-btn-md td-btn-danger" style={{ width: '100%', justifyContent: 'center' }}>
-                      Close ticket
-                    </button>
-                  )}
-                  {ticket.status === 'Closed' && (
-                    <button onClick={() => setShowreopenReasonInput(true)} className="td-btn td-btn-md td-btn-success" style={{ width: '100%', justifyContent: 'center' }}>
-                      Reopen ticket
-                    </button>
-                  )}
+              <div className="td-sidebar-card">
+                <div className="td-sidebar-section">
+                  <div className="td-sidebar-label">⚙️ Actions</div>
+                  <div className="td-actions">
+                    {authority === 'admin' && ticket.status !== 'Closed' && (
+                      <button onClick={() => setShowReasonInput(true)} className="td-btn td-btn-lg td-btn-danger">
+                        ✕ Close Ticket
+                      </button>
+                    )}
+                    {ticket.status === 'Closed' && (
+                      <button onClick={() => setShowreopenReasonInput(true)} className="td-btn td-btn-lg td-btn-success">
+                        ↻ Reopen Ticket
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : null}
-
-            {/* Quick info */}
-            <div className="td-sidebar-section">
-              <div className="td-block-label" style={{ marginBottom: 12 }}>Ticket info</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Status</div>
-                  <span className="td-pill" style={{ background: sp.bg, color: sp.color }}>
-                    <span className="td-pill-dot" style={{ background: sp.color }} />
-                    {ticket.status}
-                  </span>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Priority</div>
-                  <span className="td-pill" style={{ background: pm.bg, color: pm.color }}>{ticket.priority}</span>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Ticket #</div>
-                  <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 500, color: '#111827' }}>{ticket.ticketNumber}</span>
-                </div>
-                {ticket.onBehalf && (
-                  <div>
-                    <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>On behalf of</div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>{ticket.onBehalf}</div>
-                    {ticket.onBehalfEmail && <div style={{ fontSize: 12, color: '#9ca3af' }}>{ticket.onBehalfEmail}</div>}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── History ── */}
-        <div className="td-history">
-          <div className="td-history-header">Ticket history</div>
-          {historyEvents.map((event, idx) => {
-            const hm = historyEventMeta(event.action);
-            const isOpsFin = ticket.category === 'Operational & Finance';
-            return (
-              <div key={idx} className="td-history-event">
-                <div className="td-history-accent" style={{ background: hm.accent }} />
-                <div className="td-history-body" style={{ background: idx % 2 === 0 ? '#fff' : '#fafaf8' }}>
-                  <div className="td-history-action">{hm.label}</div>
-                  <div className="td-history-by">
-                    {formatDate(event.at)} · {event.by || 'Unknown'}
-                    {event.action === 'created' && (ticket.onBehalf || (event.by !== ticket.userName)) && (
-                      <span style={{ color: '#f59e0b' }}> · on behalf of {ticket.onBehalf || ticket.userName}{ticket.onBehalfEmail ? ` (${ticket.onBehalfEmail})` : ''}</span>
-                    )}
-                  </div>
-                  {isOpsFin && event.subQuery && (
-                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
-                      Sub-category: <strong>{event.subQuery}</strong>
-                      {event.subQuery === 'Other' && event.otherSubQueryText && <span> — {event.otherSubQueryText}</span>}
-                    </div>
-                  )}
-                  {event.reason && (
-                    <div className="td-history-reason">{event.reason}</div>
-                  )}
-                  {renderHistoryAttachment(event)}
-                </div>
-              </div>
-            );
-          })}
-          <div className="td-current-status">
-            <div className="td-current-dot" style={{ background: sp.color }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Current status:</span>
-            <span className="td-pill" style={{ background: sp.bg, color: sp.color }}>{ticket.status}</span>
           </div>
         </div>
       </div>
@@ -925,39 +906,35 @@ function TicketDetails() {
       {showApprovalModal && isCategoryHead && (
         <div className="td-overlay">
           <div className="td-modal td-modal-wide" onClick={e => e.stopPropagation()}>
-            <div className="td-modal-title">Approval required — {ticket.category}</div>
-            <div className="td-modal-sub">You are the category head. Review the ticket and take action.</div>
+            <div className="td-modal-title">Approval required</div>
+            <div className="td-modal-subtitle">Review the ticket details and take action as the category head.</div>
             <div className="td-approval-grid">
               {[
                 ['Ticket #', ticket.ticketNumber],
-                ['Created by', `${ticket.userName} (${ticket.userEmail})`],
+                ['Category', ticket.category],
+                ['Created by', ticket.userName],
+                ['Email', ticket.userEmail],
                 ['Priority', ticket.priority],
-                ['On behalf of', ticket.onBehalf || 'Self'],
+                ['On behalf', ticket.onBehalf || 'Self'],
                 ticket.onBehalfEmail && ['On behalf email', ticket.onBehalfEmail],
                 ticket.deliveryEmail && ['Delivery email', ticket.deliveryEmail],
                 ['Created on', formatDate(ticket.createdAt)],
-                ticket.category === 'Operational & Finance' && ticket.subQuery && ['Sub-category', ticket.subQuery],
               ].filter(Boolean).map(([k, v]) => (
                 <div key={k} className="td-approval-row">
                   <span className="td-approval-key">{k}</span>
-                  <span className="td-approval-val">{v}</span>
+                  <span className="td-approval-value">{v}</span>
                 </div>
               ))}
-              <div className="td-approval-row" style={{ flexDirection: 'column' }}>
-                <span className="td-approval-key" style={{ width: 'auto', marginBottom: 6 }}>Description</span>
-                <div style={{ fontSize: 13, color: '#374151', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '10px 12px', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ticket.description}</div>
-              </div>
-              {hasAttachment && <div style={{ marginTop: 8 }}>{renderAttachmentBlock()}</div>}
             </div>
             <textarea className="td-textarea" placeholder="Optional note to requester…" value={adminNote} onChange={e => setAdminNote(e.target.value)} rows={3} />
             <div className="td-modal-actions">
-              <button onClick={handleApprove} disabled={approveLoading} className="td-btn td-btn-lg td-btn-success">
-                {approveLoading ? 'Approving…' : '✓ Approve'}
+              <button onClick={handleApprove} disabled={approveLoading} className="td-btn td-btn-md td-btn-success">
+                {approveLoading ? '⟳ Approving…' : '✓ Approve'}
               </button>
-              <button onClick={handleReject} disabled={rejectLoading} className="td-btn td-btn-lg td-btn-danger">
-                {rejectLoading ? 'Rejecting…' : '✕ Reject'}
+              <button onClick={handleReject} disabled={rejectLoading} className="td-btn td-btn-md td-btn-danger">
+                {rejectLoading ? '⟳ Rejecting…' : '✕ Reject'}
               </button>
-              <button onClick={() => { setShowApprovalModal(false); setAdminNote(''); }} className="td-btn td-btn-lg td-btn-muted">
+              <button onClick={() => { setShowApprovalModal(false); setAdminNote(''); }} className="td-btn td-btn-md td-btn-muted">
                 Dismiss
               </button>
             </div>
@@ -969,16 +946,12 @@ function TicketDetails() {
       {showPasswordPopup && (
         <div className="td-overlay">
           <div className="td-modal" onClick={e => e.stopPropagation()}>
-            <div className="td-modal-title" style={{ color: '#10b981' }}>Password reset successful</div>
-            <div className="td-modal-sub">The new temporary password is shown below. Copy and share as needed.</div>
+            <div className="td-modal-title" style={{ color: '#86efac' }}>✓ Password Reset Successful</div>
+            <div className="td-modal-subtitle">The new temporary password is shown below. Copy and share as needed.</div>
             <div className="td-password-box">{returnedPassword}</div>
             <div className="td-modal-actions">
-              <button onClick={() => copyToClipboard(returnedPassword)} className="td-btn td-btn-lg td-btn-secondary">
-                Copy to clipboard
-              </button>
-              <button onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }} className="td-btn td-btn-lg td-btn-success">
-                Done
-              </button>
+              <button onClick={() => copyToClipboard(returnedPassword)} className="td-btn td-btn-md td-btn-secondary">📋 Copy</button>
+              <button onClick={() => { setShowPasswordPopup(false); navigate('/', { state: { refresh: true } }); }} className="td-btn td-btn-md td-btn-success">Done</button>
             </div>
           </div>
         </div>
@@ -988,13 +961,13 @@ function TicketDetails() {
       {showReasonInput && (
         <div className="td-overlay" onClick={cancelClose}>
           <div className="td-modal" onClick={e => e.stopPropagation()}>
-            <div className="td-modal-title">Close ticket #{ticket.ticketNumber}</div>
-            <div className="td-modal-sub">Provide a reason for closing this ticket.</div>
+            <div className="td-modal-title">Close Ticket</div>
+            <div className="td-modal-subtitle">Provide a reason for closing this ticket.</div>
             <textarea className="td-textarea" rows={5} placeholder="Why is this ticket being closed?" value={closeReason} onChange={e => setCloseReason(e.target.value)} autoFocus />
             {closeError && <div className="td-error">{closeError}</div>}
             <div className="td-modal-actions">
-              <button onClick={handleSubmitReason} className="td-btn td-btn-lg td-btn-danger">Continue</button>
-              <button onClick={cancelClose} className="td-btn td-btn-lg td-btn-muted">Cancel</button>
+              <button onClick={handleSubmitReason} className="td-btn td-btn-md td-btn-danger">Continue</button>
+              <button onClick={cancelClose} className="td-btn td-btn-md td-btn-muted">Cancel</button>
             </div>
           </div>
         </div>
@@ -1003,13 +976,13 @@ function TicketDetails() {
       {confirmModal && (
         <div className="td-overlay" onClick={cancelClose}>
           <div className="td-modal" onClick={e => e.stopPropagation()}>
-            <div className="td-modal-title">Confirm close ticket?</div>
-            <div className="td-modal-sub">This will permanently mark the ticket as closed.</div>
+            <div className="td-modal-title">Confirm Close</div>
+            <div className="td-modal-subtitle">This will permanently mark the ticket as closed. This action cannot be undone.</div>
             <div className="td-modal-actions">
-              <button onClick={confirmCloseTicket} disabled={loading} className="td-btn td-btn-lg td-btn-danger">
-                {loading ? 'Closing…' : 'Yes, close it'}
+              <button onClick={confirmCloseTicket} disabled={loading} className="td-btn td-btn-md td-btn-danger">
+                {loading ? '⟳ Closing…' : 'Yes, close it'}
               </button>
-              <button onClick={cancelClose} className="td-btn td-btn-lg td-btn-muted">Cancel</button>
+              <button onClick={cancelClose} className="td-btn td-btn-md td-btn-muted">Cancel</button>
             </div>
           </div>
         </div>
@@ -1019,13 +992,13 @@ function TicketDetails() {
       {showreopenReasonInput && (
         <div className="td-overlay" onClick={cancelreopen}>
           <div className="td-modal" onClick={e => e.stopPropagation()}>
-            <div className="td-modal-title">Reopen ticket #{ticket.ticketNumber}</div>
-            <div className="td-modal-sub">Explain why this ticket needs to be reopened.</div>
+            <div className="td-modal-title">Reopen Ticket</div>
+            <div className="td-modal-subtitle">Explain why this ticket needs to be reopened.</div>
             <textarea className="td-textarea" rows={5} placeholder="Why is this ticket being reopened?" value={reopenReason} onChange={e => setreopenReason(e.target.value)} autoFocus />
             {reopenError && <div className="td-error">{reopenError}</div>}
             <div className="td-modal-actions">
-              <button onClick={handleSubmitreopenReason} className="td-btn td-btn-lg td-btn-success">Continue</button>
-              <button onClick={cancelreopen} className="td-btn td-btn-lg td-btn-muted">Cancel</button>
+              <button onClick={handleSubmitreopenReason} className="td-btn td-btn-md td-btn-success">Continue</button>
+              <button onClick={cancelreopen} className="td-btn td-btn-md td-btn-muted">Cancel</button>
             </div>
           </div>
         </div>
@@ -1034,13 +1007,13 @@ function TicketDetails() {
       {confirmreopenModal && (
         <div className="td-overlay" onClick={cancelreopen}>
           <div className="td-modal" onClick={e => e.stopPropagation()}>
-            <div className="td-modal-title">Confirm reopen ticket?</div>
-            <div className="td-modal-sub">The ticket will be reopened and require attention.</div>
+            <div className="td-modal-title">Confirm Reopen</div>
+            <div className="td-modal-subtitle">The ticket will be reopened and moved back to active status.</div>
             <div className="td-modal-actions">
-              <button onClick={confirmreopenTicket} disabled={loading} className="td-btn td-btn-lg td-btn-success">
-                {loading ? 'Reopening…' : 'Yes, reopen it'}
+              <button onClick={confirmreopenTicket} disabled={loading} className="td-btn td-btn-md td-btn-success">
+                {loading ? '⟳ Reopening…' : 'Yes, reopen it'}
               </button>
-              <button onClick={cancelreopen} className="td-btn td-btn-lg td-btn-muted">Cancel</button>
+              <button onClick={cancelreopen} className="td-btn td-btn-md td-btn-muted">Cancel</button>
             </div>
           </div>
         </div>
@@ -1050,8 +1023,8 @@ function TicketDetails() {
       {attachmentModalOpen && activeAttachment && (
         <div className="td-overlay" onClick={() => setAttachmentModalOpen(false)}>
           <div className="td-modal td-modal-wide" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #e5e7eb' }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>{activeAttachment.fileName || 'Attachment'}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#f3f4f6' }}>📄 {activeAttachment.fileName || 'Attachment'}</div>
               <button onClick={() => setAttachmentModalOpen(false)} className="td-btn td-btn-sm td-btn-muted">✕</button>
             </div>
             <div className="td-att-content">
@@ -1059,19 +1032,25 @@ function TicketDetails() {
                 <img src={imagePreviewUrl} alt={activeAttachment.fileName} className="td-att-img" />
               ) : isPdfType(activeAttachment.fileType, activeAttachment.fileUrl) ? (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>PDF files are downloaded directly.</div>
-                  <button onClick={() => downloadAttachment(activeAttachment)} className="td-btn td-btn-md td-btn-primary">Download PDF</button>
+                  <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: '1rem' }}>PDF files are downloaded directly.</div>
+                  <button onClick={() => downloadAttachment(activeAttachment)} className="td-btn td-btn-md td-btn-primary">
+                    <img src={DownloadIcon} alt="download" style={{ width: 14, height: 14, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+                    Download PDF
+                  </button>
                 </div>
               ) : (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>This file type cannot be previewed.</div>
-                  <a href={activeAttachment.fileUrl} target="_blank" rel="noopener noreferrer" className="td-btn td-btn-md td-btn-primary" style={{ textDecoration: 'none' }}>Open file</a>
+                  <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: '1rem' }}>This file type cannot be previewed.</div>
+                  <a href={activeAttachment.fileUrl} target="_blank" rel="noopener noreferrer" className="td-btn td-btn-md td-btn-primary" style={{ textDecoration: 'none' }}>📂 Open file</a>
                 </div>
               )}
             </div>
             {isImageType(activeAttachment.fileType) && (
-              <div style={{ marginTop: 12 }}>
-                <button onClick={() => downloadAttachment(activeAttachment)} className="td-btn td-btn-sm td-btn-ghost">Download image</button>
+              <div style={{ marginTop: '1rem' }}>
+                <button onClick={() => downloadAttachment(activeAttachment)} className="td-btn td-btn-sm td-btn-ghost">
+                  <img src={DownloadIcon} alt="download" style={{ width: 13, height: 13, objectFit: 'contain', filter: 'brightness(0) invert(0.7)' }} />
+                  Download
+                </button>
               </div>
             )}
             {attachmentList.length > 1 && (
@@ -1081,11 +1060,11 @@ function TicketDetails() {
                     {isImageType(a.fileType) ? (
                       <img src={a.fileUrl} alt={a.fileName} />
                     ) : (
-                      <div style={{ width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', borderRadius: 5, fontSize: 11, fontWeight: 700, color: '#374151' }}>
+                      <div style={{ width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 11, fontWeight: 700, color: '#d1d5db' }}>
                         {a.fileName?.split('.').pop()?.toUpperCase() || 'FILE'}
                       </div>
                     )}
-                    <div>
+                    <div className="td-att-thumb-info">
                       <div className="td-att-thumb-name">{a.fileName}</div>
                       <div className="td-att-thumb-type">{a.fileType || ''}</div>
                     </div>

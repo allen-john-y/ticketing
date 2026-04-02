@@ -113,7 +113,6 @@ function Home() {
   const mediumPriority = filteredTickets.filter(t => t.priority === 'Medium' && t.status !== 'Closed');
   const lowPriority = filteredTickets.filter(t => t.priority === 'Low' && t.status !== 'Closed');
 
-  // Format large numbers to be compact
   const formatNumber = (num) => {
     if (num >= 1000000) {
       return (num / 1000000).toFixed(1) + 'M';
@@ -124,7 +123,6 @@ function Home() {
     return num.toString();
   };
 
-  // Animated Counter with number formatting
   const AnimatedCounter = ({ value, duration = 900, isLoading }) => {
     const [count, setCount] = useState(0);
 
@@ -147,7 +145,6 @@ function Home() {
     return <span>{formatNumber(count)}</span>;
   };
 
-  // Pie Chart with number formatting
   const PieChart = ({ data, colors, size = 160, isLoading }) => {
     const [animatedData, setAnimatedData] = useState(data.map(d => ({ ...d, value: 0 })));
     const dataString = useMemo(() => JSON.stringify(data), [data]);
@@ -176,7 +173,7 @@ function Home() {
 
     const total = animatedData.reduce((sum, d) => sum + d.value, 0);
     if (total === 0) return (
-      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '13px', fontWeight: '500', letterSpacing: '0.02em' }}>
+      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280', fontSize: '13px', fontWeight: '500' }}>
         No data
       </div>
     );
@@ -211,18 +208,17 @@ function Home() {
       return <path key={i} d={path} fill={colors[i]} />;
     });
 
-    // Format the total number for display
     const formattedTotal = formatNumber(Math.round(total));
 
     return (
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         {segments}
-        <circle cx={cx} cy={cy} r={innerR - 1} fill="white" />
+        <circle cx={cx} cy={cy} r={innerR - 1} fill="#1f2937" />
         <text 
           x={cx} 
           y={cy - 6} 
           textAnchor="middle" 
-          fill="#111827" 
+          fill="#f3f4f6" 
           fontSize={formattedTotal.length > 4 ? "16" : "20"} 
           fontWeight="700" 
           fontFamily="inherit"
@@ -239,7 +235,7 @@ function Home() {
     { label: 'Waiting for approval', value: inProgressTickets.length },
     { label: 'Closed', value: closedTickets.length }
   ];
-  const statusColors = ['#f59e0b', '#1d4ed8', '#10b981'];
+  const statusColors = ['#f59e0b', '#3b82f6', '#10b981'];
 
   const priorityData = [
     { label: 'High', value: highPriority.length },
@@ -253,78 +249,126 @@ function Home() {
   return (
     <div className="hd-root">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { 
+          box-sizing: border-box; 
+          margin: 0; 
+          padding: 0; 
+        }
+
+        body {
+          margin: 0;
+          padding: 0;
+          background: #0f172a;
+        }
 
         .hd-root {
           min-height: 100vh;
-          background: #f4f4f0;
-          font-family: 'DM Sans', sans-serif;
-          color: #111827;
+          width: 100%;
+          background: linear-gradient(135deg, #0f172a 0%, #1a1f35 100%);
+          font-family: 'Inter', sans-serif;
+          color: #f3f4f6;
         }
 
         /* ── Skeleton ── */
         @keyframes pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.45; }
+          50% { opacity: 0.5; }
         }
         .skel {
-          background: #ddd9d0;
-          border-radius: 4px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
           animation: pulse 1.6s ease-in-out infinite;
         }
         .skel-num {
           display: inline-block;
           width: 48px;
-          height: 30px;
-          background: #ddd9d0;
-          border-radius: 4px;
+          height: 32px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 6px;
           animation: pulse 1.6s ease-in-out infinite;
           vertical-align: middle;
         }
         .skel-circle {
-          background: #ddd9d0;
+          background: rgba(255, 255, 255, 0.1);
           animation: pulse 1.6s ease-in-out infinite;
         }
         .skel-text {
-          background: #ddd9d0;
-          border-radius: 3px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 6px;
           animation: pulse 1.6s ease-in-out infinite;
         }
 
         /* ── Layout ── */
-        .hd-body {
-          max-width: 1280px;
+        .hd-container {
+          max-width: 1400px;
           margin: 0 auto;
-          padding: 2.5rem 2rem 4rem;
+          padding: 2rem;
         }
 
         /* ── Header ── */
         .hd-header {
           display: flex;
-          align-items: flex-end;
+          align-items: center;
           justify-content: space-between;
           margin-bottom: 2.5rem;
-          padding-bottom: 1.5rem;
-          border-bottom: 1px solid #d9d5cc;
+          padding: 2rem;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 24px;
+          backdrop-filter: blur(10px);
         }
 
-        .hd-header-left {}
+        .hd-header-left {
+          display: flex;
+          align-items: center;
+          gap: 1.5rem;
+        }
+
+        .hd-profile-photo {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #3b82f6, #1f2937);
+          border: 2px solid rgba(59, 130, 246, 0.3);
+          object-fit: cover;
+          flex-shrink: 0;
+        }
+
+        .hd-profile-placeholder {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #3b82f6, #1f2937);
+          border: 2px solid rgba(59, 130, 246, 0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+          font-weight: 700;
+          color: #3b82f6;
+          flex-shrink: 0;
+        }
+
+        .hd-greeting-wrap {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
 
         .hd-date {
-          font-size: 11px;
-          font-weight: 500;
-          letter-spacing: 0.1em;
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0.05em;
           text-transform: uppercase;
           color: #9ca3af;
-          margin-bottom: 6px;
         }
 
         .hd-greeting {
-          font-size: 26px;
-          font-weight: 600;
-          color: #111827;
+          font-size: 24px;
+          font-weight: 700;
+          color: #f3f4f6;
           letter-spacing: -0.02em;
           line-height: 1.2;
         }
@@ -334,50 +378,19 @@ function Home() {
           height: 32px;
         }
 
-        .hd-header-actions {
+        .hd-admin-badge {
           display: flex;
-          gap: 10px;
           align-items: center;
-        }
-
-        .hd-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          padding: 9px 18px;
-          border-radius: 6px;
-          font-size: 13px;
-          font-weight: 500;
-          font-family: 'DM Sans', sans-serif;
-          cursor: pointer;
-          text-decoration: none;
-          transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
-          border: none;
-        }
-
-        .hd-btn-primary {
-          background: #000260;
-          color: #fff;
-        }
-        .hd-btn-primary:hover {
-          background: #1f2937;
-          transform: translateY(-1px);
-        }
-
-        .hd-btn-secondary {
-          background: #fff;
-          color: #111827;
-          border: 1px solid #d9d5cc;
-        }
-        .hd-btn-secondary:hover {
-          background: #f9f8f6;
-          transform: translateY(-1px);
-        }
-
-        .hd-btn-skel {
-          width: 120px;
-          height: 38px;
-          border-radius: 6px;
+          gap: 8px;
+          padding: 0.5rem 1rem;
+          background: rgba(59, 130, 246, 0.1);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #60a5fa;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         /* ── Admin toggle ── */
@@ -385,133 +398,190 @@ function Home() {
           margin-bottom: 2rem;
           display: flex;
           align-items: center;
-          gap: 10px;
+          justify-content: space-between;
+          padding: 1.25rem 1.5rem;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 16px;
+          backdrop-filter: blur(10px);
         }
 
         .hd-toggle-label {
-          font-size: 13px;
+          font-size: 14px;
           font-weight: 500;
-          color: #374151;
+          color: #e5e7eb;
           cursor: pointer;
           user-select: none;
         }
 
-        /* Custom toggle switch */
         .hd-switch {
           position: relative;
-          width: 36px;
-          height: 20px;
+          width: 44px;
+          height: 24px;
           flex-shrink: 0;
         }
         .hd-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
         .hd-switch-track {
           position: absolute;
           inset: 0;
-          background: #d1d5db;
-          border-radius: 20px;
+          background: #374151;
+          border-radius: 24px;
           transition: background 0.2s;
           cursor: pointer;
         }
-        .hd-switch input:checked + .hd-switch-track { background: #111827; }
+        .hd-switch input:checked + .hd-switch-track { background: #3b82f6; }
         .hd-switch-track::after {
           content: '';
           position: absolute;
           top: 3px;
           left: 3px;
-          width: 14px;
-          height: 14px;
+          width: 18px;
+          height: 18px;
           background: white;
           border-radius: 50%;
           transition: transform 0.2s;
         }
-        .hd-switch input:checked + .hd-switch-track::after { transform: translateX(16px); }
+        .hd-switch input:checked + .hd-switch-track::after { transform: translateX(20px); }
 
         /* ── Stat Cards ── */
         .hd-stats {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 1px;
-          background: #d9d5cc;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
-          overflow: hidden;
-          margin-bottom: 1.5rem;
+          gap: 1.5rem;
+          margin-bottom: 2rem;
         }
 
         .hd-stat {
-          background: #fff;
-          padding: 1.5rem 1.75rem;
+          background: rgba(255, 255, 255, 0.05);
+          padding: 1.75rem;
+          border-radius: 20px;
           cursor: pointer;
-          transition: background 0.15s;
+          transition: all 0.3s ease;
           position: relative;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(10px);
         }
 
-        .hd-stat:hover { background: #fafaf8; }
+        .hd-stat::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+          transition: left 0.5s;
+        }
+
+        .hd-stat:hover::before {
+          left: 100%;
+        }
+
+        .hd-stat-open {
+          border: 2px solid rgba(245, 158, 11, 0.3);
+        }
+        .hd-stat-open:hover {
+          background: rgba(245, 158, 11, 0.1);
+          border-color: rgba(245, 158, 11, 0.6);
+          box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+          transform: translateY(-4px);
+        }
+
+        .hd-stat-awaiting {
+          border: 2px solid rgba(59, 130, 246, 0.3);
+        }
+        .hd-stat-awaiting:hover {
+          background: rgba(59, 130, 246, 0.1);
+          border-color: rgba(59, 130, 246, 0.6);
+          box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+          transform: translateY(-4px);
+        }
+
+        .hd-stat-closed {
+          border: 2px solid rgba(16, 185, 129, 0.3);
+        }
+        .hd-stat-closed:hover {
+          background: rgba(16, 185, 129, 0.1);
+          border-color: rgba(16, 185, 129, 0.6);
+          box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+          transform: translateY(-4px);
+        }
+
+        .hd-stat-high {
+          border: 2px solid rgba(239, 68, 68, 0.3);
+        }
+        .hd-stat-high:hover {
+          background: rgba(239, 68, 68, 0.1);
+          border-color: rgba(239, 68, 68, 0.6);
+          box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+          transform: translateY(-4px);
+        }
 
         .hd-stat-accent {
-          width: 28px;
-          height: 3px;
+          width: 36px;
+          height: 4px;
           border-radius: 2px;
-          margin-bottom: 1rem;
+          margin-bottom: 1.25rem;
         }
 
         .hd-stat-val {
-          font-size: 34px;
-          font-weight: 600;
-          color: #111827;
+          font-size: 42px;
+          font-weight: 800;
+          color: #f3f4f6;
           letter-spacing: -0.03em;
           line-height: 1;
-          font-family: 'DM Mono', monospace;
-          margin-bottom: 6px;
+          font-family: 'Inter', monospace;
+          margin-bottom: 12px;
         }
 
         .hd-stat-label {
-          font-size: 12px;
-          font-weight: 500;
-          color: #6b7280;
-          letter-spacing: 0.04em;
+          font-size: 13px;
+          font-weight: 600;
+          color: #9ca3af;
+          letter-spacing: 0.03em;
           text-transform: uppercase;
         }
 
         .hd-stat-skel-val {
-          width: 52px;
-          height: 34px;
-          margin-bottom: 6px;
+          width: 60px;
+          height: 42px;
+          margin-bottom: 8px;
         }
         .hd-stat-skel-label {
-          width: 80px;
-          height: 11px;
+          width: 90px;
+          height: 13px;
         }
         .hd-stat-skel-accent {
-          width: 28px;
-          height: 3px;
+          width: 36px;
+          height: 4px;
           border-radius: 2px;
-          margin-bottom: 1rem;
+          margin-bottom: 1.25rem;
         }
 
         /* ── Charts ── */
         .hd-charts {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 1px;
-          background: #d9d5cc;
-          border: 1px solid #d9d5cc;
-          border-radius: 10px;
-          overflow: hidden;
+          gap: 1.5rem;
         }
 
         .hd-chart {
-          background: #fff;
-          padding: 1.75rem 2rem;
+          background: rgba(255, 255, 255, 0.05);
+          padding: 2rem;
+          border-radius: 20px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+          backdrop-filter: blur(10px);
         }
 
         .hd-chart-title {
-          font-size: 12px;
-          font-weight: 500;
-          color: #6b7280;
-          letter-spacing: 0.08em;
+          font-size: 13px;
+          font-weight: 700;
+          color: #9ca3af;
+          letter-spacing: 0.05em;
           text-transform: uppercase;
-          margin-bottom: 1.5rem;
+          margin-bottom: 1.75rem;
         }
 
         .hd-chart-inner {
@@ -520,104 +590,150 @@ function Home() {
           gap: 2rem;
         }
 
-        .hd-legend { flex: 1; }
+        .hd-legend { 
+          flex: 1;
+          background: rgba(255, 255, 255, 0.03);
+          padding: 0.5rem;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
 
         .hd-legend-row {
           display: flex;
           align-items: center;
-          gap: 10px;
-          padding: 8px 0;
-          border-bottom: 1px solid #f3f4f6;
+          gap: 12px;
+          padding: 12px 8px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
         .hd-legend-row:last-child { border-bottom: none; }
 
         .hd-legend-dot {
-          width: 8px;
-          height: 8px;
+          width: 12px;
+          height: 12px;
           border-radius: 50%;
           flex-shrink: 0;
         }
 
         .hd-legend-name {
-          font-size: 13px;
-          color: #374151;
+          font-size: 14px;
+          color: #d1d5db;
           flex: 1;
+          font-weight: 500;
         }
 
         .hd-legend-count {
-          font-size: 15px;
-          font-weight: 600;
-          font-family: 'DM Mono', monospace;
-          color: #111827;
+          font-size: 18px;
+          font-weight: 800;
+          font-family: 'Inter', monospace;
+          color: #f3f4f6;
         }
 
         .hd-chart-skel-title {
-          width: 140px;
-          height: 11px;
-          margin-bottom: 1.5rem;
+          width: 150px;
+          height: 13px;
+          margin-bottom: 1.75rem;
         }
 
         /* ── Responsive ── */
-        @media (max-width: 900px) {
+        @media (max-width: 1024px) {
+          .hd-container {
+            padding: 1.5rem;
+          }
           .hd-stats {
-            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+          }
+          .hd-stat-val {
+            font-size: 36px;
+          }
+          .hd-header {
+            flex-direction: column;
+            text-align: center;
+            gap: 1rem;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .hd-stats {
+            grid-template-columns: repeat(2, 1fr);
           }
           .hd-charts {
             grid-template-columns: 1fr;
           }
-        }
-
-        @media (max-width: 600px) {
-          .hd-body { padding: 1.5rem 1rem 3rem; }
-          .hd-stats { grid-template-columns: 1fr; }
           .hd-header {
             flex-direction: column;
-            align-items: flex-start;
+            text-align: center;
+            padding: 1.5rem;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .hd-container {
+            padding: 1rem;
+          }
+          .hd-stats {
+            grid-template-columns: 1fr;
+          }
+          .hd-header {
+            flex-direction: column;
+            align-items: center;
             gap: 1rem;
           }
-          .hd-header-actions { width: 100%; }
-          .hd-btn { flex: 1; justify-content: center; }
-          .hd-chart-inner { flex-direction: column; }
+          .hd-chart-inner { 
+            flex-direction: column;
+            text-align: center;
+          }
+          .hd-legend {
+            width: 100%;
+          }
+          .hd-stat {
+            padding: 1.25rem;
+          }
+          .hd-stat-val {
+            font-size: 32px;
+          }
         }
       `}</style>
 
-      <div className="hd-body">
+      <div className="hd-container">
         {/* Header */}
         <div className="hd-header">
           <div className="hd-header-left">
-            <div className="hd-date">{today}</div>
-            {isLoading ? (
-              <div className="skel hd-greeting-skel" />
-            ) : (
-              <div className="hd-greeting">Good to see you, {userName}</div>
-            )}
-          </div>
-
-          <div className="hd-header-actions">
             {isLoading ? (
               <>
-                <div className="skel hd-btn-skel" />
-                <div className="skel hd-btn-skel" />
+                <div className="skel" style={{ width: 56, height: 56, borderRadius: '50%' }} />
+                <div className="skel hd-greeting-skel" />
               </>
             ) : (
               <>
-                <Link to="/create" className="hd-btn hd-btn-primary">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  New Ticket
-                </Link>
-                <Link to="/tickets" className="hd-btn hd-btn-secondary">
-                  All Tickets
-                </Link>
+                {profilePhoto ? (
+                  <img src={profilePhoto} alt="Profile" className="hd-profile-photo" />
+                ) : (
+                  <div className="hd-profile-placeholder">
+                    {userName
+                      .split(' ')
+                      .slice(0, 2)
+                      .map(name => name.charAt(0).toUpperCase())
+                      .join('')}
+                  </div>
+                )}
+                <div className="hd-greeting-wrap">
+                  <div className="hd-date">{today}</div>
+                  <div className="hd-greeting">Welcome back, {userName}</div>
+                </div>
               </>
             )}
           </div>
+          {!isLoading && authority === 'admin' && (
+            <div className="hd-admin-badge">
+              ⚙️ Admin
+            </div>
+          )}
         </div>
 
         {/* Admin toggle */}
         {!isLoading && authority === 'admin' && (
           <div className="hd-toggle-wrap">
+            <label className="hd-toggle-label">Show my tickets only</label>
             <label className="hd-switch">
               <input
                 type="checkbox"
@@ -627,45 +743,52 @@ function Home() {
               />
               <span className="hd-switch-track" />
             </label>
-            <label htmlFor="myTicketsToggle" className="hd-toggle-label">
-              My tickets only
-            </label>
           </div>
         )}
 
-        {/* Stats */}
+        {/* Stats with colored borders */}
         <div className="hd-stats">
           {isLoading ? (
-            [
-              { color: '#f59e0b' },
-              { color: '#1d4ed8' },
-              { color: '#10b981' },
-              { color: '#ef4444' }
-            ].map((s, i) => (
-              <div className="hd-stat" key={i} style={{ cursor: 'default' }}>
-                <div className="skel hd-stat-skel-accent" style={{ background: s.color, opacity: 0.25 }} />
+            <>
+              <div className="hd-stat" style={{ cursor: 'default', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div className="skel hd-stat-skel-accent" style={{ background: 'rgba(245, 158, 11, 0.3)' }} />
                 <div className="skel hd-stat-skel-val" />
                 <div className="skel hd-stat-skel-label" />
               </div>
-            ))
+              <div className="hd-stat" style={{ cursor: 'default', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div className="skel hd-stat-skel-accent" style={{ background: 'rgba(59, 130, 246, 0.3)' }} />
+                <div className="skel hd-stat-skel-val" />
+                <div className="skel hd-stat-skel-label" />
+              </div>
+              <div className="hd-stat" style={{ cursor: 'default', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div className="skel hd-stat-skel-accent" style={{ background: 'rgba(16, 185, 129, 0.3)' }} />
+                <div className="skel hd-stat-skel-val" />
+                <div className="skel hd-stat-skel-label" />
+              </div>
+              <div className="hd-stat" style={{ cursor: 'default', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div className="skel hd-stat-skel-accent" style={{ background: 'rgba(239, 68, 68, 0.3)' }} />
+                <div className="skel hd-stat-skel-val" />
+                <div className="skel hd-stat-skel-label" />
+              </div>
+            </>
           ) : (
             <>
-              <div className="hd-stat" onClick={() => navigate('/tickets', { state: { filter: 'open' } })}>
+              <div className="hd-stat hd-stat-open" onClick={() => navigate('/tickets', { state: { filter: 'open' } })}>
                 <div className="hd-stat-accent" style={{ background: '#f59e0b' }} />
                 <div className="hd-stat-val"><AnimatedCounter value={openTickets.length} isLoading={isLoading} /></div>
-                <div className="hd-stat-label">Open</div>
+                <div className="hd-stat-label">Open Tickets</div>
               </div>
-              <div className="hd-stat" onClick={() => navigate('/tickets', { state: { filter: 'progress' } })}>
-                <div className="hd-stat-accent" style={{ background: '#1d4ed8' }} />
+              <div className="hd-stat hd-stat-awaiting" onClick={() => navigate('/tickets', { state: { filter: 'progress' } })}>
+                <div className="hd-stat-accent" style={{ background: '#3b82f6' }} />
                 <div className="hd-stat-val"><AnimatedCounter value={inProgressTickets.length} isLoading={isLoading} /></div>
                 <div className="hd-stat-label">Awaiting Approval</div>
               </div>
-              <div className="hd-stat" onClick={() => navigate('/dashboard')}>
+              <div className="hd-stat hd-stat-closed" onClick={() => navigate('/dashboard')}>
                 <div className="hd-stat-accent" style={{ background: '#10b981' }} />
                 <div className="hd-stat-val"><AnimatedCounter value={closedTickets.length} isLoading={isLoading} /></div>
-                <div className="hd-stat-label">Closed</div>
+                <div className="hd-stat-label">Closed Tickets</div>
               </div>
-              <div className="hd-stat" onClick={() => navigate('/tickets', { state: { filter: 'high' } })}>
+              <div className="hd-stat hd-stat-high" onClick={() => navigate('/tickets', { state: { filter: 'high' } })}>
                 <div className="hd-stat-accent" style={{ background: '#ef4444' }} />
                 <div className="hd-stat-val"><AnimatedCounter value={highPriority.length} isLoading={isLoading} /></div>
                 <div className="hd-stat-label">High Priority</div>
@@ -678,28 +801,41 @@ function Home() {
         <div className="hd-charts">
           {isLoading ? (
             <>
-              {[0, 1].map(i => (
-                <div className="hd-chart" key={i}>
-                  <div className="skel hd-chart-skel-title" />
-                  <div className="hd-chart-inner">
-                    <div className="skel-circle" style={{ width: 160, height: 160, borderRadius: '50%', flexShrink: 0 }} />
-                    <div className="hd-legend" style={{ flex: 1 }}>
-                      {[80, 60, 70].map((w, j) => (
-                        <div className="hd-legend-row" key={j}>
-                          <div className="skel" style={{ width: 8, height: 8, borderRadius: '50%' }} />
-                          <div className="skel" style={{ flex: 1, height: 12, borderRadius: 3 }} />
-                          <div className="skel" style={{ width: 24, height: 16, borderRadius: 3 }} />
-                        </div>
-                      ))}
-                    </div>
+              <div className="hd-chart">
+                <div className="skel hd-chart-skel-title" />
+                <div className="hd-chart-inner">
+                  <div className="skel-circle" style={{ width: 160, height: 160, borderRadius: '50%', flexShrink: 0 }} />
+                  <div className="hd-legend">
+                    {[1, 2, 3].map((_, j) => (
+                      <div className="hd-legend-row" key={j}>
+                        <div className="skel" style={{ width: 12, height: 12, borderRadius: '50%' }} />
+                        <div className="skel" style={{ flex: 1, height: 14, borderRadius: 4 }} />
+                        <div className="skel" style={{ width: 32, height: 20, borderRadius: 4 }} />
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+              </div>
+              <div className="hd-chart">
+                <div className="skel hd-chart-skel-title" />
+                <div className="hd-chart-inner">
+                  <div className="skel-circle" style={{ width: 160, height: 160, borderRadius: '50%', flexShrink: 0 }} />
+                  <div className="hd-legend">
+                    {[1, 2, 3].map((_, j) => (
+                      <div className="hd-legend-row" key={j}>
+                        <div className="skel" style={{ width: 12, height: 12, borderRadius: '50%' }} />
+                        <div className="skel" style={{ flex: 1, height: 14, borderRadius: 4 }} />
+                        <div className="skel" style={{ width: 32, height: 20, borderRadius: 4 }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </>
           ) : (
             <>
               <div className="hd-chart">
-                <div className="hd-chart-title">Status distribution</div>
+                <div className="hd-chart-title">Status Distribution</div>
                 <div className="hd-chart-inner">
                   <PieChart data={statusData} colors={statusColors} size={160} isLoading={isLoading} />
                   <div className="hd-legend">
@@ -717,14 +853,14 @@ function Home() {
               </div>
 
               <div className="hd-chart">
-                <div className="hd-chart-title">Priority breakdown — open only</div>
+                <div className="hd-chart-title">Priority Breakdown</div>
                 <div className="hd-chart-inner">
                   <PieChart data={priorityData} colors={priorityColors} size={160} isLoading={isLoading} />
                   <div className="hd-legend">
                     {priorityData.map((item, idx) => (
                       <div key={idx} className="hd-legend-row">
                         <div className="hd-legend-dot" style={{ background: priorityColors[idx] }} />
-                        <span className="hd-legend-name">{item.label}</span>
+                        <span className="hd-legend-name">{item.label} Priority</span>
                         <span className="hd-legend-count">
                           <AnimatedCounter value={item.value} isLoading={isLoading} />
                         </span>
