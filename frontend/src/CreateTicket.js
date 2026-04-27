@@ -39,7 +39,6 @@ function CreateTicket() {
   const [selectedCategoryConfig, setSelectedCategoryConfig] = useState(null);
   const [otherSubCategoryText, setOtherSubCategoryText] = useState('');
 
-  // Dynamic on-behalf for non-password categories
   const [dynamicOnBehalfSelection, setDynamicOnBehalfSelection] = useState('Self');
   const [dynamicOnBehalfEmail, setDynamicOnBehalfEmail] = useState('');
   const [dynamicOnBehalfSearchResults, setDynamicOnBehalfSearchResults] = useState([]);
@@ -69,12 +68,18 @@ function CreateTicket() {
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
+  // ── Assignment Group ──────────────────────────────────────────
+  const [selectedGroup, setSelectedGroup]   = useState(null);
+  const [selectedMember, setSelectedMember] = useState(null);
+
   const fileInputRef = useRef(null);
   const attachmentsRef = useRef(attachments);
   useEffect(() => { attachmentsRef.current = attachments; }, [attachments]);
-  useEffect(() => { return () => { attachmentsRef.current.forEach(a => { if (a.preview) try { URL.revokeObjectURL(a.preview); } catch (e) {} }); }; }, []);
+  useEffect(() => {
+    return () => { attachmentsRef.current.forEach(a => { if (a.preview) try { URL.revokeObjectURL(a.preview); } catch (e) {} }); };
+  }, []);
 
-  // Fetch categories from backend
+  // Fetch categories
   useEffect(() => {
     let mounted = true;
     const fetchCategories = async () => {
@@ -115,7 +120,7 @@ function CreateTicket() {
     return () => { mounted = false; };
   }, [instance, accounts]);
 
-  // Check if user is device admin
+  // Check device admin
   useEffect(() => {
     if (!accounts || !accounts[0]) return;
     const fetchGroups = async () => {
@@ -131,40 +136,46 @@ function CreateTicket() {
     fetchGroups();
   }, [instance, accounts]);
 
-  // Set selected category config when category changes
+  // Set selected category config
   useEffect(() => {
     if (formData.category && categoriesConfig.length > 0) {
-      const config = categoriesConfig.find(c => c.name === formData.category) || null;
+      const config = categoriesConfig.find(c =>
+        (c.categoryName || c.name) === formData.category
+      ) || null;
       setSelectedCategoryConfig(config);
-      // Reset sub-category when category changes
       setFormData(prev => ({ ...prev, subCategory: '' }));
       setOtherSubCategoryText('');
       setAttachments([]);
       setDynamicOnBehalfSelection('Self');
       setDynamicOnBehalfSelectedUser(null);
+      setSelectedGroup(null);
+      setSelectedMember(null);
     } else {
       setSelectedCategoryConfig(null);
     }
   }, [formData.category, categoriesConfig]);
 
-  // Get the selected sub-category object
+  // Reset member when group changes
+  useEffect(() => { setSelectedMember(null); }, [selectedGroup]);
+
   const getSelectedSubCategory = () => {
     if (!selectedCategoryConfig?.subCategories) return null;
     return selectedCategoryConfig.subCategories.find(
       sc => sc.name.toLowerCase() === formData.subCategory?.toLowerCase()
     );
   };
-
   const selectedSubCategory = getSelectedSubCategory();
 
-  // Check if sub-category requires approval
   const requiresApproval = () => {
     if (selectedCategoryConfig?.type === 'PASSWORD_RESET') return true;
     if (selectedCategoryConfig?.type === 'ADMIN_ACCESS') return true;
     return selectedSubCategory?.approval?.requireApproval === true;
   };
 
-  // Dynamic on-behalf search
+  // Assignment groups from selected category
+  const assignmentGroups    = selectedCategoryConfig?.assignmentGroups || [];
+  const hasAssignmentGroups = assignmentGroups.length > 0;
+
   const handleDynamicOnBehalfSearch = async (searchText) => {
     if (!searchText || searchText.trim().length < 2) { setDynamicOnBehalfSearchResults([]); return; }
     setDynamicOnBehalfSearching(true);
@@ -182,7 +193,6 @@ function CreateTicket() {
     setDynamicOnBehalfSearchResults([]);
   };
 
-  // Password reset verification
   const handleVerifyOther = async () => {
     const email = (formData.onBehalfEmail || '').trim();
     setVerifyError(''); setVerifiedName(''); setVerifyStatus('idle');
@@ -202,19 +212,16 @@ function CreateTicket() {
     }
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setCreatedTicketId(null);
 
-    // Check Admin Access restriction
     if (formData.category === 'Admin Access' && isDeviceAdmin) {
       setModal({ open: true, title: 'Cannot create request', message: 'You already have admin access to the device.', type: 'error' });
       setLoading(false); return;
     }
 
-    // Validate sub-category selection
     if (selectedCategoryConfig?.subCategories?.length > 0) {
       if (!formData.subCategory) {
         setModal({ open: true, title: 'Validation', message: 'Please select a sub-category.', type: 'error' });
@@ -226,7 +233,6 @@ function CreateTicket() {
       }
     }
 
-    // Validate On-Behalf for non-password categories based on selected sub-category
     if (selectedSubCategory?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET') {
       if (selectedSubCategory.onBehalf.required && !dynamicOnBehalfSelection) {
         setModal({ open: true, title: 'Validation', message: 'Please select who this ticket is for.', type: 'error' });
@@ -238,13 +244,11 @@ function CreateTicket() {
       }
     }
 
-    // Validate Attachments based on selected sub-category
     if (selectedSubCategory?.attachments?.enabled && selectedSubCategory.attachments.required && attachments.length === 0) {
       setModal({ open: true, title: 'Validation', message: 'Please attach at least one file for this sub-category.', type: 'error' });
       setLoading(false); return;
     }
 
-    // Validate Password Reset
     if (selectedCategoryConfig?.type === 'PASSWORD_RESET') {
       if (formData.onBehalf === 'Other') {
         if (!formData.onBehalfEmail.trim()) {
@@ -268,19 +272,16 @@ function CreateTicket() {
       let latestName = displayName, latestEmail = displayEmail;
       try {
         const userRes = await axios.get('https://graph.microsoft.com/v1.0/me', { headers: { Authorization: `Bearer ${token.accessToken}` } });
-        latestName = userRes.data.displayName || latestName || 'User';
+        latestName  = userRes.data.displayName || latestName || 'User';
         latestEmail = (userRes.data.mail && userRes.data.mail.trim()) || (userRes.data.userPrincipalName && userRes.data.userPrincipalName.trim()) || latestEmail || '';
       } catch (_) {}
 
-      // Upload attachments if any
+      // Upload attachments
       let attachmentsMeta = [];
       if (attachments && attachments.length > 0) {
         for (let i = 0; i < attachments.length; i++) {
           const att = attachments[i];
-          if (att.uploaded) {
-            attachmentsMeta.push(att.serverResponse);
-            continue;
-          }
+          if (att.uploaded) { attachmentsMeta.push(att.serverResponse); continue; }
           setAttachments(prev => { const c = [...prev]; c[i] = { ...c[i], uploading: true, progress: 0, error: null }; return c; });
           try {
             const form = new FormData();
@@ -300,30 +301,37 @@ function CreateTicket() {
         }
       }
 
-      // Determine ticket user info for on-behalf
-      let ticketUserName = latestName;
+      let ticketUserName  = latestName;
       let ticketUserEmail = latestEmail;
-
       if (selectedSubCategory?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && dynamicOnBehalfSelection === 'Other' && dynamicOnBehalfSelectedUser) {
-        ticketUserName = dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail;
+        ticketUserName  = dynamicOnBehalfSelectedUser.displayName || dynamicOnBehalfSelectedUser.mail;
         ticketUserEmail = dynamicOnBehalfSelectedUser.mail || dynamicOnBehalfSelectedUser.userPrincipalName;
       }
 
-      // Build ticket data
       const ticketData = {
-        category: formData.category,
+        category:    formData.category,
         description: formData.description,
-        priority: formData.priority,
-        userId: accounts[0]?.localAccountId,
-        userName: ticketUserName,
-        userEmail: ticketUserEmail,
+        priority:    formData.priority,
+        userId:      accounts[0]?.localAccountId,
+        userName:    ticketUserName,
+        userEmail:   ticketUserEmail,
         subCategory: formData.subCategory === 'Other' ? otherSubCategoryText : formData.subCategory,
         ...(selectedCategoryConfig?.type === 'PASSWORD_RESET' && {
-          onBehalf: formData.onBehalf,
+          onBehalf:      formData.onBehalf,
           onBehalfEmail: formData.onBehalf === 'Other' ? formData.onBehalfEmail.trim() : latestEmail,
           deliveryEmail: formData.alternativeEmail.trim(),
         }),
         ...(attachmentsMeta.length > 0 && { attachments: attachmentsMeta }),
+        // ✅ Assignment group payload
+        ...(selectedMember && selectedGroup && {
+          assignedGroup: {
+            groupId:     selectedGroup._id   || '',
+            groupName:   selectedGroup.name,
+            memberId:    selectedMember.id   || '',
+            memberName:  selectedMember.name,
+            memberEmail: selectedMember.mail,
+          },
+        }),
       };
 
       const response = await axios.post(`${backendBase}/tickets`, ticketData, { headers: { Authorization: `Bearer ${token.accessToken}` } });
@@ -336,7 +344,9 @@ function CreateTicket() {
           ? 'Password reset ticket created. If approved, the new password will be sent to the delivery email.'
           : requiresApproval()
             ? 'Ticket created and waiting for approval.'
-            : 'Ticket created successfully.';
+            : selectedMember
+              ? `Ticket created and assigned to ${selectedMember.name}.`
+              : 'Ticket created successfully.';
 
       setModal({ open: true, title: 'Ticket created', message: successMessage, type: 'success' });
     } catch (error) {
@@ -356,22 +366,13 @@ function CreateTicket() {
   };
 
   const disableCreate = formData.category === 'Admin Access' && isDeviceAdmin;
-
-  const formatBytes = (bytes) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024, sizes = ['B','KB','MB','GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const isImageType = (t) => t && t.startsWith('image/');
+  const formatBytes   = (bytes) => { if (bytes === 0) return '0 B'; const k = 1024, sizes = ['B','KB','MB','GB']; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]; };
+  const isImageType   = (t) => t && t.startsWith('image/');
 
   const handleFilesSelected = (fileList) => {
     const incoming = Array.from(fileList || []);
     if (!incoming.length) return;
-    if (attachments.length + incoming.length > MAX_FILES) {
-      setModal({ open: true, title: 'Too many files', message: `You can attach up to ${MAX_FILES} files.`, type: 'error' }); return;
-    }
+    if (attachments.length + incoming.length > MAX_FILES) { setModal({ open: true, title: 'Too many files', message: `You can attach up to ${MAX_FILES} files.`, type: 'error' }); return; }
     const validated = [];
     for (const file of incoming) {
       if (file.size > MAX_FILE_SIZE) { setModal({ open: true, title: 'File too large', message: `${file.name} exceeds ${formatBytes(MAX_FILE_SIZE)}.`, type: 'error' }); continue; }
@@ -399,275 +400,96 @@ function CreateTicket() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        .ct-root {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #0f172a 0%, #1a1f35 100%);
-          font-family: 'Inter', sans-serif;
-          color: #f3f4f6;
-        }
-
-        .ct-body {
-          max-width: 860px;
-          margin: 0 auto;
-          padding: 2.5rem 2rem 4rem;
-        }
-
-        .ct-header {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          margin-bottom: 2.5rem;
-          padding: 2rem;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 20px;
-          backdrop-filter: blur(10px);
-        }
-        .ct-date {
-          font-size: 11px; font-weight: 500;
-          letter-spacing: 0.1em; text-transform: uppercase;
-          color: #9ca3af; margin-bottom: 6px;
-        }
-        .ct-page-title {
-          font-size: 28px; font-weight: 700;
-          color: #f3f4f6; letter-spacing: -0.02em;
-        }
+        .ct-root { min-height: 100vh; background: linear-gradient(135deg, #0f172a 0%, #1a1f35 100%); font-family: 'Inter', sans-serif; color: #f3f4f6; }
+        .ct-body { max-width: 860px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
+        .ct-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 2.5rem; padding: 2rem; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 20px; backdrop-filter: blur(10px); }
+        .ct-date { font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 6px; }
+        .ct-page-title { font-size: 28px; font-weight: 700; color: #f3f4f6; letter-spacing: -0.02em; }
         .ct-header-actions { display: flex; gap: 10px; }
-
-        .ct-btn {
-          display: inline-flex; align-items: center; gap: 7px;
-          border-radius: 8px; font-size: 13px; font-weight: 600;
-          font-family: 'Inter', sans-serif; cursor: pointer;
-          border: none; transition: all 0.2s;
-          text-decoration: none; white-space: nowrap;
-        }
-        .ct-btn-sm  { padding: 6px 12px; font-size: 12px; }
-        .ct-btn-md  { padding: 9px 18px; }
-        .ct-btn-lg  { padding: 11px 22px; font-size: 14px; }
-        .ct-btn-full { width: 100%; justify-content: center; }
-
-        .ct-btn-primary { background: #3b82f6; color: #fff; }
-        .ct-btn-primary:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
-        .ct-btn-secondary { background: rgba(255, 255, 255, 0.1); color: #e5e7eb; border: 1px solid rgba(255, 255, 255, 0.2); }
-        .ct-btn-secondary:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.3); transform: translateY(-2px); }
-        .ct-btn-ghost { background: transparent; color: #9ca3af; border: 1px solid rgba(255, 255, 255, 0.1); }
-        .ct-btn-ghost:hover { background: rgba(255, 255, 255, 0.05); color: #d1d5db; }
-        .ct-btn-danger { background: #ef4444; color: #fff; }
-        .ct-btn-danger:hover:not(:disabled) { background: #dc2626; transform: translateY(-2px); }
-        .ct-btn-success { background: #10b981; color: #fff; }
-        .ct-btn-success:hover:not(:disabled) { background: #059669; transform: translateY(-2px); }
-        .ct-btn-submit { background: #3b82f6; color: #fff; font-size: 14px; font-weight: 600; }
-        .ct-btn-submit:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .ct-btn { display: inline-flex; align-items: center; gap: 7px; border-radius: 8px; font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; white-space: nowrap; }
+        .ct-btn-sm { padding: 6px 12px; font-size: 12px; } .ct-btn-md { padding: 9px 18px; } .ct-btn-lg { padding: 11px 22px; font-size: 14px; }
+        .ct-btn-primary { background: #3b82f6; color: #fff; } .ct-btn-primary:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59,130,246,.3); }
+        .ct-btn-secondary { background: rgba(255,255,255,.1); color: #e5e7eb; border: 1px solid rgba(255,255,255,.2); } .ct-btn-secondary:hover { background: rgba(255,255,255,.15); transform: translateY(-2px); }
+        .ct-btn-ghost { background: transparent; color: #9ca3af; border: 1px solid rgba(255,255,255,.1); } .ct-btn-ghost:hover { background: rgba(255,255,255,.05); color: #d1d5db; }
+        .ct-btn-danger { background: #ef4444; color: #fff; } .ct-btn-danger:hover:not(:disabled) { background: #dc2626; transform: translateY(-2px); }
+        .ct-btn-success { background: #10b981; color: #fff; } .ct-btn-success:hover:not(:disabled) { background: #059669; transform: translateY(-2px); }
+        .ct-btn-submit { background: #3b82f6; color: #fff; font-size: 14px; font-weight: 600; } .ct-btn-submit:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59,130,246,.3); }
         .ct-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
-
-        .ct-card {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 16px;
-          overflow: hidden;
-          backdrop-filter: blur(10px);
-        }
-
-        .ct-card-section {
-          padding: 1.75rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .ct-card-section:last-child { border-bottom: none; }
-
-        .ct-section-label {
-          font-size: 11px; font-weight: 600;
-          letter-spacing: 0.1em; text-transform: uppercase;
-          color: #9ca3af; margin-bottom: 1.25rem;
-        }
-
-        .ct-field { display: flex; flex-direction: column; margin-bottom: 1.25rem; }
-        .ct-field:last-child { margin-bottom: 0; }
-
-        .ct-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1rem;
-          margin-bottom: 1.25rem;
-        }
-        .ct-row:last-child { margin-bottom: 0; }
-
-        .ct-label {
-          font-size: 12px; font-weight: 600;
-          color: #d1d5db; margin-bottom: 8px;
-          letter-spacing: 0.01em;
-        }
+        .ct-card { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 16px; overflow: hidden; backdrop-filter: blur(10px); }
+        .ct-card-section { padding: 1.75rem; border-bottom: 1px solid rgba(255,255,255,.05); } .ct-card-section:last-child { border-bottom: none; }
+        .ct-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #9ca3af; margin-bottom: 1.25rem; }
+        .ct-field { display: flex; flex-direction: column; margin-bottom: 1.25rem; } .ct-field:last-child { margin-bottom: 0; }
+        .ct-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; } .ct-row:last-child { margin-bottom: 0; }
+        .ct-label { font-size: 12px; font-weight: 600; color: #d1d5db; margin-bottom: 8px; letter-spacing: 0.01em; }
         .ct-required { color: #f87171; margin-left: 3px; }
-
-        .ct-input, .ct-select, .ct-textarea {
-          width: 100%; padding: 10px 14px;
-          border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;
-          font-size: 14px; font-family: 'Inter', sans-serif;
-          background: rgba(255, 255, 255, 0.05); color: #f3f4f6;
-          transition: all 0.2s;
-        }
-        .ct-input option, .ct-select option {
-          background: #1f2937;
-          color: #f3f4f6;
-        }
-        .ct-input:focus, .ct-select:focus, .ct-textarea:focus {
-          outline: none; border-color: #3b82f6; background: rgba(255, 255, 255, 0.08);
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
+        .ct-input, .ct-select, .ct-textarea { width: 100%; padding: 10px 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; font-size: 14px; font-family: 'Inter', sans-serif; background: rgba(255,255,255,.05); color: #f3f4f6; transition: all 0.2s; }
+        .ct-input option, .ct-select option { background: #1f2937; color: #f3f4f6; }
+        .ct-input:focus, .ct-select:focus, .ct-textarea:focus { outline: none; border-color: #3b82f6; background: rgba(255,255,255,.08); box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
         .ct-input::placeholder, .ct-textarea::placeholder { color: #6b7280; }
         .ct-textarea { min-height: 130px; resize: vertical; }
-
-        .ct-hint {
-          font-size: 11px; color: #9ca3af;
-          margin-top: 6px; line-height: 1.4;
-        }
-
-        .ct-banner {
-          padding: 12px 14px;
-          border-radius: 8px;
-          font-size: 13px;
-          line-height: 1.5;
-          margin-bottom: 1rem;
-        }
+        .ct-hint { font-size: 11px; color: #9ca3af; margin-top: 6px; line-height: 1.4; }
+        .ct-banner { padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; margin-bottom: 1rem; }
         .ct-banner:last-child { margin-bottom: 0; }
-        .ct-banner-warn  { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; }
-        .ct-banner-info  { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; }
-        .ct-banner-error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
-
+        .ct-banner-warn    { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); color: #fcd34d; }
+        .ct-banner-info    { background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.3); color: #93c5fd; }
+        .ct-banner-error   { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+        .ct-banner-success { background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3); color: #86efac; }
         .ct-search-wrap { position: relative; }
-        .ct-search-results {
-          position: absolute; top: 100%; left: 0; right: 0;
-          background: #1f2937; border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 8px; margin-top: 4px;
-          max-height: 180px; overflow-y: auto;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-          z-index: 1000;
-        }
-        .ct-search-item {
-          padding: 10px 12px; cursor: pointer;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          transition: background 0.1s;
-        }
-        .ct-search-item:last-child { border-bottom: none; }
-        .ct-search-item:hover { background: rgba(255, 255, 255, 0.1); }
-        .ct-search-name { font-size: 13px; font-weight: 600; color: #f3f4f6; }
-        .ct-search-email { font-size: 12px; color: #9ca3af; margin-top: 1px; }
-
-        .ct-selected-user {
-          margin-top: 10px; padding: 12px;
-          background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);
-          border-radius: 8px; font-size: 13px;
-        }
+        .ct-search-results { position: absolute; top: 100%; left: 0; right: 0; background: #1f2937; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; margin-top: 4px; max-height: 180px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 1000; }
+        .ct-search-item { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.05); transition: background 0.1s; } .ct-search-item:last-child { border-bottom: none; } .ct-search-item:hover { background: rgba(255,255,255,.1); }
+        .ct-search-name { font-size: 13px; font-weight: 600; color: #f3f4f6; } .ct-search-email { font-size: 12px; color: #9ca3af; margin-top: 1px; }
+        .ct-selected-user { margin-top: 10px; padding: 12px; background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3); border-radius: 8px; font-size: 13px; }
         .ct-selected-user strong { color: #86efac; display: block; font-size: 12px; margin-bottom: 4px; }
+        .ct-verify-row { display: flex; gap: 8px; align-items: flex-start; } .ct-verify-row .ct-input { flex: 1; }
+        .ct-verify-status { font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-top: 8px; }
+        .ct-verify-idle      { background: rgba(255,255,255,.05); color: #9ca3af; }
+        .ct-verify-verifying { background: rgba(59,130,246,.1); color: #93c5fd; }
+        .ct-verify-verified  { background: rgba(16,185,129,.1); color: #86efac; }
+        .ct-verify-notfound, .ct-verify-error { background: rgba(239,68,68,.1); color: #fca5a5; }
 
-        .ct-verify-row { display: flex; gap: 8px; align-items: flex-start; }
-        .ct-verify-row .ct-input { flex: 1; }
-        .ct-verify-status {
-          font-size: 12px; padding: 8px 12px;
-          border-radius: 6px; margin-top: 8px;
-        }
-        .ct-verify-idle     { background: rgba(255, 255, 255, 0.05); color: #9ca3af; }
-        .ct-verify-verifying{ background: rgba(59, 130, 246, 0.1); color: #93c5fd; }
-        .ct-verify-verified { background: rgba(16, 185, 129, 0.1); color: #86efac; }
-        .ct-verify-notfound,
-        .ct-verify-error    { background: rgba(239, 68, 68, 0.1); color: #fca5a5; }
+        /* ── Assignment Group ── */
+        .ct-ag-group-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.25rem; }
+        .ct-ag-group-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; cursor: pointer; transition: all 0.15s; }
+        .ct-ag-group-card:hover { border-color: rgba(59,130,246,.5); background: rgba(59,130,246,.07); }
+        .ct-ag-group-card.active { border-color: #3b82f6; background: rgba(59,130,246,.12); }
+        .ct-ag-group-icon { width: 36px; height: 36px; border-radius: 8px; background: rgba(99,102,241,.2); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .ct-ag-group-name  { font-size: 13px; font-weight: 600; color: #f3f4f6; }
+        .ct-ag-group-count { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+        .ct-ag-group-check { margin-left: auto; width: 20px; height: 20px; border-radius: 50%; background: #3b82f6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .ct-ag-member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 8px; }
+        .ct-ag-member-card { padding: 10px 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 9px; cursor: pointer; transition: all 0.15s; }
+        .ct-ag-member-card:hover { border-color: rgba(16,185,129,.5); background: rgba(16,185,129,.07); }
+        .ct-ag-member-card.active { border-color: #10b981; background: rgba(16,185,129,.12); }
+        .ct-ag-member-av { width: 28px; height: 28px; border-radius: 6px; background: rgba(99,102,241,.25); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #a5b4fc; margin-bottom: 6px; }
+        .ct-ag-member-name  { font-size: 12px; font-weight: 600; color: #f3f4f6; }
+        .ct-ag-member-email { font-size: 10px; color: #9ca3af; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        .ct-dropzone {
-          border: 2px dashed rgba(255, 255, 255, 0.2);
-          border-radius: 10px; padding: 2.5rem 2rem;
-          text-align: center; cursor: pointer;
-          transition: all 0.2s;
-          background: rgba(255, 255, 255, 0.02);
-        }
-        .ct-dropzone:hover, .ct-dropzone.dragging {
-          border-color: #3b82f6; background: rgba(59, 130, 246, 0.05);
-        }
-        .ct-dropzone-icon { margin-bottom: 12px; }
-        .ct-dropzone-icon img { width: 40px; height: 40px; object-fit: contain; opacity: 0.6; }
-        .ct-dropzone-title { font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px; }
-        .ct-dropzone-hint  { font-size: 12px; color: #9ca3af; }
-
-        .ct-att-list {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-          gap: 12px; margin-top: 16px;
-        }
-        .ct-att-item {
-          border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;
-          padding: 10px; background: rgba(255, 255, 255, 0.03); position: relative;
-        }
-        .ct-att-preview {
-          width: 100%; height: 100px; border-radius: 6px;
-          overflow: hidden; margin-bottom: 8px;
-          background: rgba(255, 255, 255, 0.05);
-          display: flex; align-items: center; justify-content: center;
-        }
+        .ct-dropzone { border: 2px dashed rgba(255,255,255,.2); border-radius: 10px; padding: 2.5rem 2rem; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,.02); }
+        .ct-dropzone:hover, .ct-dropzone.dragging { border-color: #3b82f6; background: rgba(59,130,246,.05); }
+        .ct-dropzone-icon { margin-bottom: 12px; } .ct-dropzone-icon img { width: 40px; height: 40px; object-fit: contain; opacity: 0.6; }
+        .ct-dropzone-title { font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px; } .ct-dropzone-hint { font-size: 12px; color: #9ca3af; }
+        .ct-att-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 12px; margin-top: 16px; }
+        .ct-att-item { border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 10px; background: rgba(255,255,255,.03); position: relative; }
+        .ct-att-preview { width: 100%; height: 100px; border-radius: 6px; overflow: hidden; margin-bottom: 8px; background: rgba(255,255,255,.05); display: flex; align-items: center; justify-content: center; }
         .ct-att-preview img { width: 100%; height: 100%; object-fit: cover; }
-        .ct-att-type-icon {
-          font-size: 13px; font-weight: 700; color: #9ca3af;
-          font-family: 'Inter', monospace;
-        }
+        .ct-att-type-icon { font-size: 13px; font-weight: 700; color: #9ca3af; font-family: 'Inter', monospace; }
         .ct-att-name { font-size: 12px; font-weight: 600; color: #f3f4f6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
         .ct-att-size { font-size: 11px; color: #9ca3af; }
-        .ct-att-remove {
-          position: absolute; top: 6px; right: 6px;
-          width: 24px; height: 24px; border-radius: 50%;
-          background: #ef4444; color: #fff; border: none;
-          cursor: pointer; font-size: 12px;
-          display: flex; align-items: center; justify-content: center;
-          transition: all 0.2s;
-        }
+        .ct-att-remove { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: #ef4444; color: #fff; border: none; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
         .ct-att-remove:hover { background: #dc2626; transform: scale(1.1); }
-
-        .ct-progress { margin-top: 6px; }
-        .ct-progress-bar { height: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
-        .ct-progress-fill { height: 100%; background: #3b82f6; transition: width 0.3s; }
-        .ct-progress-text { font-size: 10px; color: #9ca3af; margin-top: 3px; }
-
-        .ct-att-badge {
-          font-size: 11px; padding: 4px 8px;
-          border-radius: 4px; margin-top: 5px;
-          display: inline-block; font-weight: 600;
-        }
-        .ct-att-badge-ok    { background: rgba(16, 185, 129, 0.2); color: #86efac; }
-        .ct-att-badge-err   { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-
-        .ct-form-actions {
-          padding: 1.75rem;
-          display: flex; gap: 12px;
-          background: rgba(255, 255, 255, 0.02);
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
-          border-radius: 0 0 16px 16px;
-        }
-
+        .ct-progress { margin-top: 6px; } .ct-progress-bar { height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
+        .ct-progress-fill { height: 100%; background: #3b82f6; transition: width 0.3s; } .ct-progress-text { font-size: 10px; color: #9ca3af; margin-top: 3px; }
+        .ct-att-badge { font-size: 11px; padding: 4px 8px; border-radius: 4px; margin-top: 5px; display: inline-block; font-weight: 600; }
+        .ct-att-badge-ok { background: rgba(16,185,129,.2); color: #86efac; } .ct-att-badge-err { background: rgba(239,68,68,.2); color: #fca5a5; }
+        .ct-form-actions { padding: 1.75rem; display: flex; gap: 12px; background: rgba(255,255,255,.02); border-top: 1px solid rgba(255,255,255,.05); border-radius: 0 0 16px 16px; }
         @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        .ct-overlay {
-          position: fixed; inset: 0;
-          background: rgba(0, 0, 0, 0.6);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 9999; animation: fadeIn 0.15s;
-          backdrop-filter: blur(5px); padding: 1rem;
-        }
-        .ct-modal {
-          background: #1f2937; border-radius: 12px;
-          padding: 2rem; width: 100%; max-width: 440px;
-          animation: slideUp 0.2s; border: 1px solid rgba(255, 255, 255, 0.1);
-        }
+        .ct-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 9999; animation: fadeIn 0.15s; backdrop-filter: blur(5px); padding: 1rem; }
+        .ct-modal { background: #1f2937; border-radius: 12px; padding: 2rem; width: 100%; max-width: 440px; animation: slideUp 0.2s; border: 1px solid rgba(255,255,255,.1); }
         .ct-modal-title { font-size: 18px; font-weight: 700; color: #f3f4f6; margin-bottom: 6px; }
-        .ct-modal-sub   { font-size: 13px; color: #d1d5db; margin-bottom: 1.5rem; line-height: 1.6; }
+        .ct-modal-sub { font-size: 13px; color: #d1d5db; margin-bottom: 1.5rem; line-height: 1.6; }
         .ct-modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
-
-        .ct-password-box {
-          background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 8px; padding: 1.25rem;
-          font-family: 'Inter', monospace; font-size: 16px;
-          font-weight: 600; color: #f3f4f6;
-          word-break: break-all; text-align: center;
-          margin-bottom: 1.5rem; letter-spacing: 0.05em;
-        }
-
+        .ct-password-box { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 1.25rem; font-family: 'Inter', monospace; font-size: 16px; font-weight: 600; color: #f3f4f6; word-break: break-all; text-align: center; margin-bottom: 1.5rem; letter-spacing: 0.05em; }
         @media (max-width: 640px) {
           .ct-body { padding: 1.5rem 1rem 3rem; }
           .ct-header { flex-direction: column; align-items: flex-start; gap: 1rem; padding: 1.5rem; }
@@ -675,6 +497,7 @@ function CreateTicket() {
           .ct-btn { flex: 1; justify-content: center; }
           .ct-row { grid-template-columns: 1fr; }
           .ct-att-list { grid-template-columns: 1fr 1fr; }
+          .ct-ag-member-grid { grid-template-columns: 1fr 1fr; }
         }
       `}</style>
 
@@ -685,15 +508,11 @@ function CreateTicket() {
             <div className="ct-page-title">Create Ticket</div>
           </div>
           <div className="ct-header-actions">
-            <button onClick={() => navigate('/')} className="ct-btn ct-btn-md ct-btn-secondary">
-              ← Dashboard
-            </button>
+            <button onClick={() => navigate('/')} className="ct-btn ct-btn-md ct-btn-secondary" type="button">← Dashboard</button>
           </div>
         </div>
 
-        {loadingCategories && (
-          <div className="ct-banner ct-banner-info" style={{ marginBottom: '1.5rem' }}>📋 Loading categories…</div>
-        )}
+        {loadingCategories && <div className="ct-banner ct-banner-info" style={{ marginBottom: '1.5rem' }}>📋 Loading categories…</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="ct-card">
@@ -704,23 +523,10 @@ function CreateTicket() {
               <div className="ct-row">
                 <div className="ct-field" style={{ marginBottom: 0 }}>
                   <label className="ct-label">Category<span className="ct-required">*</span></label>
-                  <select
-                    className="ct-select"
-                    value={formData.category}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFormData(prev => ({ ...prev, category: val, onBehalf: 'Self', onBehalfEmail: '', alternativeEmail: '', subCategory: '' }));
-                      setDynamicOnBehalfSelection('Self'); setDynamicOnBehalfEmail('');
-                      setDynamicOnBehalfSelectedUser(null); setDynamicOnBehalfSearchResults([]);
-                      setVerifyStatus('idle'); setVerifiedName(''); setVerifyError('');
-                      setOtherSubCategoryText('');
-                      setAttachments([]);
-                    }}
-                    required
-                  >
+                  <select className="ct-select" value={formData.category} onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, category: val, onBehalf: 'Self', onBehalfEmail: '', alternativeEmail: '', subCategory: '' })); setDynamicOnBehalfSelection('Self'); setDynamicOnBehalfEmail(''); setDynamicOnBehalfSelectedUser(null); setDynamicOnBehalfSearchResults([]); setVerifyStatus('idle'); setVerifiedName(''); setVerifyError(''); setOtherSubCategoryText(''); setAttachments([]); }} required>
                     <option value="">Select category</option>
                     {categoriesConfig.map(cat => (
-                      <option key={cat.id || cat.name} value={cat.name}>{cat.name}</option>
+                      <option key={cat.id || cat.name} value={cat.categoryName || cat.name}>{cat.categoryName || cat.name}</option>
                     ))}
                   </select>
                 </div>
@@ -735,25 +541,13 @@ function CreateTicket() {
               </div>
             </div>
 
-            {/* Sub-Category Selection */}
+            {/* Sub-Category */}
             {selectedCategoryConfig?.subCategories?.length > 0 && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && selectedCategoryConfig?.type !== 'ADMIN_ACCESS' && (
               <div className="ct-card-section">
                 <div className="ct-section-label">Sub-Category</div>
                 <div className="ct-field">
-                  <label className="ct-label">
-                    Select Sub-Category<span className="ct-required">*</span>
-                  </label>
-                  <select
-                    className="ct-select"
-                    value={formData.subCategory}
-                    onChange={(e) => { 
-                      setFormData(prev => ({ ...prev, subCategory: e.target.value })); 
-                      if (e.target.value !== 'Other') setOtherSubCategoryText('');
-                      // Reset attachments when sub-category changes
-                      setAttachments([]);
-                    }}
-                    required
-                  >
+                  <label className="ct-label">Select Sub-Category<span className="ct-required">*</span></label>
+                  <select className="ct-select" value={formData.subCategory} onChange={(e) => { setFormData(prev => ({ ...prev, subCategory: e.target.value })); if (e.target.value !== 'Other') setOtherSubCategoryText(''); setAttachments([]); }} required>
                     <option value="">Select sub-category</option>
                     {selectedCategoryConfig.subCategories.map(sub => (
                       <option key={sub.name} value={sub.name}>{sub.name}</option>
@@ -763,61 +557,33 @@ function CreateTicket() {
                     <input type="text" className="ct-input" style={{ marginTop: 8 }} value={otherSubCategoryText} onChange={(e) => setOtherSubCategoryText(e.target.value)} placeholder="Describe the issue" required />
                   )}
                 </div>
-
-                {/* Show feature info for selected sub-category */}
                 {selectedSubCategory && (
                   <div className="ct-banner ct-banner-info" style={{ marginTop: '1rem' }}>
                     <div>📋 Selected: <strong>{selectedSubCategory.name}</strong></div>
-                    {selectedSubCategory.onBehalf?.enabled && (
-                      <div style={{ marginTop: '8px' }}>👥 On-Behalf submissions {selectedSubCategory.onBehalf.required && <span className="ct-required">(Required)</span>}</div>
-                    )}
-                    {selectedSubCategory.attachments?.enabled && (
-                      <div>📎 Attachments {selectedSubCategory.attachments.required && <span className="ct-required">(Required)</span>}</div>
-                    )}
-                    {selectedSubCategory.approval?.requireApproval && (
-                      <div>✓ Approval Required for this sub-category</div>
-                    )}
+                    {selectedSubCategory.onBehalf?.enabled    && <div style={{ marginTop: 8 }}>👥 On-Behalf submissions {selectedSubCategory.onBehalf.required && <span className="ct-required">(Required)</span>}</div>}
+                    {selectedSubCategory.attachments?.enabled && <div>📎 Attachments {selectedSubCategory.attachments.required && <span className="ct-required">(Required)</span>}</div>}
+                    {selectedSubCategory.approval?.requireApproval && <div>✓ Approval Required for this sub-category</div>}
                   </div>
                 )}
               </div>
             )}
 
-            {/* On-Behalf Section - Shows only if selected sub-category has onBehalf enabled */}
+            {/* On-Behalf */}
             {selectedSubCategory?.onBehalf?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && selectedCategoryConfig?.type !== 'ADMIN_ACCESS' && (
               <div className="ct-card-section">
                 <div className="ct-section-label">On Behalf Of</div>
                 <div className="ct-field">
-                  <label className="ct-label">
-                    Who is this ticket for?{selectedSubCategory.onBehalf.required && <span className="ct-required">*</span>}
-                  </label>
-                  <select
-                    className="ct-select"
-                    value={dynamicOnBehalfSelection}
-                    onChange={(e) => { 
-                      setDynamicOnBehalfSelection(e.target.value); 
-                      if (e.target.value === 'Self') { 
-                        setDynamicOnBehalfEmail(''); 
-                        setDynamicOnBehalfSelectedUser(null); 
-                        setDynamicOnBehalfSearchResults([]); 
-                      } 
-                    }}
-                    required={selectedSubCategory.onBehalf.required}
-                  >
+                  <label className="ct-label">Who is this ticket for?{selectedSubCategory.onBehalf.required && <span className="ct-required">*</span>}</label>
+                  <select className="ct-select" value={dynamicOnBehalfSelection} onChange={(e) => { setDynamicOnBehalfSelection(e.target.value); if (e.target.value === 'Self') { setDynamicOnBehalfEmail(''); setDynamicOnBehalfSelectedUser(null); setDynamicOnBehalfSearchResults([]); } }} required={selectedSubCategory.onBehalf.required}>
                     <option value="Self">Self</option>
                     <option value="Other">Someone else</option>
                   </select>
                 </div>
-
                 {dynamicOnBehalfSelection === 'Other' && (
                   <div className="ct-field">
                     <label className="ct-label">Search user</label>
                     <div className="ct-search-wrap">
-                      <input
-                        type="text" className="ct-input"
-                        value={dynamicOnBehalfEmail}
-                        onChange={(e) => { setDynamicOnBehalfEmail(e.target.value); handleDynamicOnBehalfSearch(e.target.value); }}
-                        placeholder="Type email or name…"
-                      />
+                      <input type="text" className="ct-input" value={dynamicOnBehalfEmail} onChange={(e) => { setDynamicOnBehalfEmail(e.target.value); handleDynamicOnBehalfSearch(e.target.value); }} placeholder="Type email or name…" />
                       {dynamicOnBehalfSearching && <div className="ct-hint">🔍 Searching…</div>}
                       {dynamicOnBehalfSearchResults.length > 0 && (
                         <div className="ct-search-results">
@@ -842,43 +608,35 @@ function CreateTicket() {
               </div>
             )}
 
-            {/* Password Reset Section */}
+            {/* Password Reset */}
             {selectedCategoryConfig?.type === 'PASSWORD_RESET' && (
               <div className="ct-card-section">
                 <div className="ct-section-label">Password Reset</div>
                 <div className="ct-row">
                   <div className="ct-field" style={{ marginBottom: 0 }}>
                     <label className="ct-label">On behalf of<span className="ct-required">*</span></label>
-                    <select
-                      className="ct-select"
-                      value={formData.onBehalf}
-                      onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, onBehalf: val, ...(val === 'Self' ? { onBehalfEmail: '' } : {}) })); setVerifyStatus('idle'); setVerifiedName(''); setVerifyError(''); }}
-                    >
+                    <select className="ct-select" value={formData.onBehalf} onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, onBehalf: val, ...(val === 'Self' ? { onBehalfEmail: '' } : {}) })); setVerifyStatus('idle'); setVerifiedName(''); setVerifyError(''); }}>
                       <option value="Self">Self</option>
                       <option value="Other">Someone else</option>
                     </select>
                   </div>
-
                   {formData.onBehalf === 'Other' && (
                     <div className="ct-field" style={{ marginBottom: 0 }}>
                       <label className="ct-label">Target user email<span className="ct-required">*</span></label>
                       <div className="ct-verify-row">
                         <input type="text" className="ct-input" placeholder="Company email" value={formData.onBehalfEmail} onChange={(e) => setFormData({ ...formData, onBehalfEmail: e.target.value })} required />
-                        <button type="button" className="ct-btn ct-btn-md ct-btn-primary" onClick={handleVerifyOther} disabled={verifyStatus === 'verifying'}>
-                          {verifyStatus === 'verifying' ? 'Checking…' : 'Verify'}
-                        </button>
+                        <button type="button" className="ct-btn ct-btn-md ct-btn-primary" onClick={handleVerifyOther} disabled={verifyStatus === 'verifying'}>{verifyStatus === 'verifying' ? 'Checking…' : 'Verify'}</button>
                       </div>
                       <div className={`ct-verify-status ct-verify-${verifyStatus}`}>
-                        {verifyStatus === 'idle' && 'ⓘ Click Verify to confirm the user exists'}
+                        {verifyStatus === 'idle'      && 'ⓘ Click Verify to confirm the user exists'}
                         {verifyStatus === 'verifying' && '⟳ Verifying…'}
-                        {verifyStatus === 'verified' && `✓ Verified: ${verifiedName}`}
-                        {verifyStatus === 'notfound' && '✕ User not found in directory'}
-                        {verifyStatus === 'error' && `✕ ${verifyError}`}
+                        {verifyStatus === 'verified'  && `✓ Verified: ${verifiedName}`}
+                        {verifyStatus === 'notfound'  && '✕ User not found in directory'}
+                        {verifyStatus === 'error'     && `✕ ${verifyError}`}
                       </div>
                     </div>
                   )}
                 </div>
-
                 {((formData.onBehalf === 'Other' && verifyStatus === 'verified') || formData.onBehalf === 'Self') && (
                   <div className="ct-field" style={{ marginTop: 16 }}>
                     <label className="ct-label">Delivery email<span className="ct-required">*</span></label>
@@ -892,74 +650,35 @@ function CreateTicket() {
             {/* Admin Access Warning */}
             {selectedCategoryConfig?.type === 'ADMIN_ACCESS' && (
               <div className="ct-card-section">
-                {groupsLoading ? (
-                  <div className="ct-banner ct-banner-info">⟳ Checking your access…</div>
-                ) : isDeviceAdmin ? (
-                  <div className="ct-banner ct-banner-error">
-                    <strong>⚠ Already has admin access.</strong> Creating an Admin Access ticket is not allowed since you already have device admin access.
-                  </div>
-                ) : (
-                  <div className="ct-banner ct-banner-info">
-                    ⓘ Submit this request for approval from the IT team.
-                  </div>
-                )}
+                {groupsLoading
+                  ? <div className="ct-banner ct-banner-info">⟳ Checking your access…</div>
+                  : isDeviceAdmin
+                    ? <div className="ct-banner ct-banner-error"><strong>⚠ Already has admin access.</strong> Creating an Admin Access ticket is not allowed since you already have device admin access.</div>
+                    : <div className="ct-banner ct-banner-info">ⓘ Submit this request for approval from the IT team.</div>
+                }
               </div>
             )}
 
-            {/* Description */}
-            <div className="ct-card-section">
-              <div className="ct-section-label">Description</div>
-              <div className="ct-field">
-                <label className="ct-label">Describe your issue<span className="ct-required">*</span></label>
-                <textarea
-                  className="ct-textarea"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Provide as much detail as possible…"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Attachments Section - Shows only if selected sub-category has attachments enabled */}
+            {/* Attachments */}
             {selectedSubCategory?.attachments?.enabled && selectedCategoryConfig?.type !== 'PASSWORD_RESET' && selectedCategoryConfig?.type !== 'ADMIN_ACCESS' && (
               <div className="ct-card-section">
-                <div className="ct-section-label">
-                  Attachments{selectedSubCategory.attachments.required && <span className="ct-required" style={{ fontSize: 11 }}>*</span>}
-                </div>
-
-                <div
-                  className={`ct-dropzone${isDragging ? ' dragging' : ''}`}
-                  onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFilesSelected(e.dataTransfer?.files); }}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                >
-                  <div className="ct-dropzone-icon">
-                    <img src={attachmentIcon} alt="Attach" />
-                  </div>
+                <div className="ct-section-label">Attachments{selectedSubCategory.attachments.required && <span className="ct-required" style={{ fontSize: 11 }}>*</span>}</div>
+                <div className={`ct-dropzone${isDragging ? ' dragging' : ''}`} onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFilesSelected(e.dataTransfer?.files); }} onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setIsDragging(true); }} onDragLeave={() => setIsDragging(false)} onClick={() => fileInputRef.current && fileInputRef.current.click()}>
+                  <div className="ct-dropzone-icon"><img src={attachmentIcon} alt="Attach" /></div>
                   <div className="ct-dropzone-title">Drag & drop or click to browse</div>
                   <div className="ct-dropzone-hint">Max {formatBytes(MAX_FILE_SIZE)} per file · up to {MAX_FILES} files</div>
                   <input ref={fileInputRef} type="file" multiple onChange={(e) => handleFilesSelected(e.target.files)} style={{ display: 'none' }} />
                 </div>
-
                 {attachments.length > 0 && (
                   <>
                     <div className="ct-att-list">
                       {attachments.map((att, idx) => (
                         <div key={idx} className="ct-att-item">
                           <button type="button" className="ct-att-remove" onClick={() => handleRemoveAttachment(idx)}>✕</button>
-                          <div className="ct-att-preview">
-                            {att.preview ? <img src={att.preview} alt={att.file.name} /> : <span className="ct-att-type-icon">.{att.file.name.split('.').pop()?.toLowerCase()}</span>}
-                          </div>
+                          <div className="ct-att-preview">{att.preview ? <img src={att.preview} alt={att.file.name} /> : <span className="ct-att-type-icon">.{att.file.name.split('.').pop()?.toLowerCase()}</span>}</div>
                           <div className="ct-att-name">{att.file.name}</div>
                           <div className="ct-att-size">{formatBytes(att.file.size)}</div>
-                          {att.uploading && (
-                            <div className="ct-progress">
-                              <div className="ct-progress-bar"><div className="ct-progress-fill" style={{ width: `${att.progress}%` }} /></div>
-                              <div className="ct-progress-text">{att.progress}%</div>
-                            </div>
-                          )}
+                          {att.uploading && <div className="ct-progress"><div className="ct-progress-bar"><div className="ct-progress-fill" style={{ width: `${att.progress}%` }} /></div><div className="ct-progress-text">{att.progress}%</div></div>}
                           {att.uploaded && <span className="ct-att-badge ct-att-badge-ok">✓ Uploaded</span>}
                           {att.error && <span className="ct-att-badge ct-att-badge-err">✕ {att.error}</span>}
                         </div>
@@ -970,21 +689,87 @@ function CreateTicket() {
                     </div>
                   </>
                 )}
-
                 <div className="ct-hint" style={{ marginTop: 10 }}>
                   {selectedSubCategory.attachments.required ? '✓ Attachments are required for this sub-category.' : '📎 Attach supporting documents if needed.'}
                 </div>
               </div>
             )}
 
+            {/* ── Assignment Group — only if category has groups ── */}
+            {formData.category && hasAssignmentGroups && (
+              <div className="ct-card-section">
+                <div className="ct-section-label">Assignment Group</div>
+
+                {/* Pick group */}
+                <div className="ct-field">
+                  <label className="ct-label">Select a group</label>
+                  <div className="ct-ag-group-list">
+                    {assignmentGroups.map((grp, i) => {
+                      const isActive = selectedGroup?.name === grp.name;
+                      return (
+                        <div key={grp._id || i} className={`ct-ag-group-card${isActive ? ' active' : ''}`} onClick={() => setSelectedGroup(grp)}>
+                          <div className="ct-ag-group-icon">🏷️</div>
+                          <div>
+                            <div className="ct-ag-group-name">{grp.name}</div>
+                            <div className="ct-ag-group-count">{grp.members?.length || 0} member{grp.members?.length !== 1 ? 's' : ''}</div>
+                          </div>
+                          {isActive && (
+                            <div className="ct-ag-group-check">
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5L3.5 7L8.5 2.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Pick member from selected group */}
+                {selectedGroup && (selectedGroup.members || []).length > 0 && (
+                  <div className="ct-field">
+                    <label className="ct-label">Assign to a member</label>
+                    <div className="ct-ag-member-grid">
+                      {selectedGroup.members.map((m, i) => {
+                        const isActive = selectedMember?.id === m.id || selectedMember?.mail === m.mail;
+                        return (
+                          <div key={m.id || i} className={`ct-ag-member-card${isActive ? ' active' : ''}`} onClick={() => setSelectedMember(m)}>
+                            <div className="ct-ag-member-av">{(m.name || '?').charAt(0).toUpperCase()}</div>
+                            <div className="ct-ag-member-name">{m.name}</div>
+                            <div className="ct-ag-member-email">{m.mail}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {selectedGroup && (!selectedGroup.members || selectedGroup.members.length === 0) && (
+                  <div className="ct-banner ct-banner-warn">⚠ This group has no members configured.</div>
+                )}
+
+                {selectedMember && (
+                  <div className="ct-banner ct-banner-success" style={{ marginTop: 0 }}>
+                    ✓ Will be assigned to <strong>{selectedMember.name}</strong> ({selectedMember.mail})
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Description */}
+            <div className="ct-card-section">
+              <div className="ct-section-label">Description</div>
+              <div className="ct-field">
+                <label className="ct-label">Describe your issue<span className="ct-required">*</span></label>
+                <textarea className="ct-textarea" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Provide as much detail as possible…" required />
+              </div>
+            </div>
+
             {/* Actions */}
             <div className="ct-form-actions">
               <button type="submit" className="ct-btn ct-btn-lg ct-btn-submit" disabled={loading || disableCreate} style={{ flex: 1 }}>
                 {loading ? '⟳ Creating…' : '+ Create Ticket'}
               </button>
-              <button type="button" className="ct-btn ct-btn-lg ct-btn-secondary" onClick={() => navigate('/')}>
-                ✕ Cancel
-              </button>
+              <button type="button" className="ct-btn ct-btn-lg ct-btn-secondary" onClick={() => navigate('/')}>✕ Cancel</button>
             </div>
           </div>
         </form>

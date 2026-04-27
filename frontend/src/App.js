@@ -6,17 +6,22 @@ import { useLocation } from 'react-router-dom';
 import Login from './Login';
 import Home from './Home';
 import Tickets from './Tickets';
+import Requests from './Requests';
+import Incidents from './Incidents';
 import CreateTicket from './CreateTicket';
+import CreateRequest from './CreateRequest';
+import CreateIncident from './CreateIncident';
 import TicketDetails from './TicketDetails';
+import IncidentDetails from './IncidentDetails';
+import RequestDetails from './RequestDetails';
 import Dashboard from './Dashboard';
 import Settings from './SettingsPages/Settings';
+import CreateKB from './SettingsPages/CreateKB';
+import CreateKBForm from './SettingsPages/CreateKBForm';
+import KBListView from './KBListView';
+import KBView from './KBView';
 import logo from './sandeza.jpg';
 import gearIcon from './GearIcon.jpg';
-import AddAdmin from './SettingsPages/AddAdmin';
-import RemoveAdmin from './SettingsPages/RemoveAdmin';
-import AddField from './SettingsPages/AddField';
-import EditField from './SettingsPages/EditField';
-import RemoveField from './SettingsPages/RemoveField';
 
 const HELP_DESK_GROUP_ID = process.env.REACT_APP_HELP_DESK_GROUP_ID;
 
@@ -201,7 +206,7 @@ function Header({ logout }) {
     fetchFullProfile();
   };
 
-  // Generate initials from first and last name (e.g., "Test User" → "TU")
+  // Generate initials from first and last name
   const initials = (accounts?.[0]?.name || accounts?.[0]?.username || 'U')
     .split(' ')
     .slice(0, 2)
@@ -261,6 +266,7 @@ function Header({ logout }) {
           display: flex;
           gap: 0.75rem;
           margin-right: 0.5rem;
+          flex-wrap: wrap;
         }
 
         /* Action Buttons Styling */
@@ -280,7 +286,41 @@ function Header({ logout }) {
           overflow: hidden;
         }
 
-        /* New Ticket Button */
+        /* New Incident Button */
+        .btn-new-incident {
+          background: white;
+          color: #dc2626;
+          border: 2px solid #dc2626;
+        }
+
+        .btn-new-incident:hover {
+          background: #fef2f2;
+          transform: translateY(-2px);
+          box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
+        }
+
+        .btn-new-incident:active {
+          transform: translateY(0);
+        }
+
+        /* New Request Button - Service Request */
+        .btn-new-request {
+          background: white;
+          color: #3b82f6;
+          border: 2px solid #3b82f6;
+        }
+
+        .btn-new-request:hover {
+          background: #eff6ff;
+          transform: translateY(-2px);
+          box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        }
+
+        .btn-new-request:active {
+          transform: translateY(0);
+        }
+
+        /* New Ticket Button - Legacy/Create */
         .btn-new-ticket {
           background: white;
           color: #e98404;
@@ -314,11 +354,62 @@ function Header({ logout }) {
           transform: translateY(0);
         }
 
+        /* All Requests Button */
+        .btn-all-requests {
+          background: white;
+          color: #3b82f6;
+          border: 2px solid #3b82f6;
+        }
+
+        .btn-all-requests:hover {
+          background: #eff6ff;
+          transform: translateY(-2px);
+          box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        }
+
+        .btn-all-requests:active {
+          transform: translateY(0);
+        }
+
+        /* All Incidents Button */
+        .btn-all-incidents {
+          background: white;
+          color: #dc2626;
+          border: 2px solid #dc2626;
+        }
+
+        .btn-all-incidents:hover {
+          background: #fef2f2;
+          transform: translateY(-2px);
+          box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
+        }
+
+        .btn-all-incidents:active {
+          transform: translateY(0);
+        }
+
+        /* KB Articles Button */
+        .btn-kb {
+          background: white;
+          color: #8b5cf6;
+          border: 2px solid #8b5cf6;
+        }
+
+        .btn-kb:hover {
+          background: #f5f3ff;
+          transform: translateY(-2px);
+          box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+        }
+
+        .btn-kb:active {
+          transform: translateY(0);
+        }
+
         /* Indicator Dot */
         .btn-indicator {
           width: 8px;
           height: 8px;
-          background: #e98404;
+          background: currentColor;
           border-radius: 50%;
           display: inline-block;
           animation: pulse 1.5s ease-in-out infinite;
@@ -333,22 +424,6 @@ function Header({ logout }) {
             opacity: 0.6;
             transform: scale(1.2);
           }
-        }
-
-        /* Alternative: Indicator Badge */
-        .btn-badge {
-          position: absolute;
-          top: -4px;
-          right: -4px;
-          background: #e98404;
-          color: white;
-          font-size: 10px;
-          font-weight: bold;
-          padding: 2px 6px;
-          border-radius: 12px;
-          min-width: 18px;
-          text-align: center;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
 
         .settings-btn {
@@ -409,7 +484,7 @@ function Header({ logout }) {
         .btn-logout { background: #ef4444; color: white; }
         .btn-logout:hover { background: #dc2626; }
 
-        /* Shared modal styles used by SettingsPages components */
+        /* Shared modal styles */
         .modal-overlay {
           position: fixed; inset: 0; background: rgba(0,0,0,0.5);
           z-index: 9999; backdrop-filter: blur(3px); animation: fadeIn 0.15s;
@@ -438,61 +513,6 @@ function Header({ logout }) {
           justify-content: center; border-radius: 4px; transition: all 0.15s;
         }
         .modal-close:hover { background: #f9f8f6; color: #374151; }
-        .modal-subtitle { font-size: 13px; color: #6b7280; margin-bottom: 1.5rem; line-height: 1.5; }
-
-        .form-group { margin-bottom: 1.25rem; }
-        .form-label {
-          display: block; font-weight: 600; font-size: 12px; color: #374151;
-          margin-bottom: 0.5rem; letter-spacing: 0.02em;
-        }
-        .form-input {
-          width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #d9d5cc;
-          border-radius: 6px; font-size: 13px; font-family: 'DM Sans', sans-serif;
-          background: #fafaf8; color: #111827; transition: all 0.15s;
-        }
-        .form-input:focus {
-          outline: none; border-color: #111827; background: white;
-          box-shadow: 0 0 0 3px rgba(17,24,39,0.07);
-        }
-
-        .btn {
-          padding: 0.6rem 1.2rem; border-radius: 6px; font-weight: 500;
-          font-size: 13px; cursor: pointer; transition: all 0.15s; border: none;
-          font-family: 'DM Sans', sans-serif;
-        }
-        .btn-primary { background: #111827; color: white; }
-        .btn-primary:hover:not(:disabled) { background: #1f2937; transform: translateY(-1px); }
-        .btn-primary:disabled { background: #d1d5db; cursor: not-allowed; }
-        .btn-danger { background: #ef4444; color: white; }
-        .btn-danger:hover:not(:disabled) { background: #dc2626; transform: translateY(-1px); }
-        .btn-secondary { background: white; color: #374151; border: 1px solid #d9d5cc; }
-        .btn-secondary:hover { background: #f9f8f6; transform: translateY(-1px); }
-        .btn-success { background: #10b981; color: white; }
-        .btn-success:hover:not(:disabled) { background: #059669; transform: translateY(-1px); }
-
-        .message { padding: 0.75rem 1rem; border-radius: 6px; font-size: 13px; font-weight: 500; margin-top: 1rem; }
-        .message-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-        .message-error   { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-
-        .user-list {
-          max-height: 300px; overflow-y: auto; margin-bottom: 1rem;
-          border: 1px solid #d9d5cc; border-radius: 6px; background: white;
-        }
-        .user-item {
-          padding: 0.75rem 1rem; border-bottom: 1px solid #d9d5cc;
-          cursor: pointer; transition: all 0.15s;
-        }
-        .user-item:last-child { border-bottom: none; }
-        .user-item:hover { background: #f9f8f6; }
-        .user-item.selected        { background: #eff6ff; border-left: 3px solid #111827; }
-        .user-item.danger-selected { background: #fee2e2; border-left: 3px solid #ef4444; }
-        .user-name  { font-weight: 600; font-size: 13px; margin-bottom: 2px; color: #111827; }
-        .user-email { font-size: 11px; color: #6b7280; }
-
-        .modal-footer {
-          display: flex; justify-content: flex-end; gap: 0.75rem;
-          margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid #d9d5cc;
-        }
 
         .page-content { padding: 0; }
 
@@ -508,9 +528,6 @@ function Header({ logout }) {
           }
           .action-btn span {
             display: none;
-          }
-          .action-btn .btn-indicator {
-            margin-right: 0;
           }
         }
       `}</style>
@@ -537,16 +554,40 @@ function Header({ logout }) {
               <div className="header-right">
                 {/* Action Buttons with Indicators */}
                 <div className="header-actions">
-                 <button
+                  {/* New Incident */}
+                  <button
+                    onClick={() => navigate('/create-incident')}
+                    className="action-btn btn-new-incident"
+                  >
+                    {location.pathname === '/create-incident' && (
+                      <span className="btn-indicator"></span>
+                    )}
+                    <span>🚨 New Incident</span>
+                  </button>
+
+                  {/* New Service Request */}
+                  <button
+                    onClick={() => navigate('/create-request')}
+                    className="action-btn btn-new-request"
+                  >
+                    {location.pathname === '/create-request' && (
+                      <span className="btn-indicator"></span>
+                    )}
+                    <span>📋 New Request</span>
+                  </button>
+
+                  {/* Legacy Create Ticket */}
+                  <button
                     onClick={() => navigate('/create')}
                     className="action-btn btn-new-ticket"
                   >
                     {location.pathname === '/create' && (
                       <span className="btn-indicator"></span>
                     )}
-                    <span>New Ticket</span>
+                    <span>🎫 Create Ticket</span>
                   </button>
 
+                  {/* All Tickets */}
                   <button
                     onClick={() => navigate('/tickets')}
                     className="action-btn btn-all-tickets"
@@ -554,8 +595,43 @@ function Header({ logout }) {
                     {location.pathname === '/tickets' && (
                       <span className="btn-indicator"></span>
                     )}
-                    <span>All Tickets</span>
+                    <span>📊 All Tickets</span>
                   </button>
+
+                  {/* All Requests - NEW */}
+                  <button
+                    onClick={() => navigate('/requests')}
+                    className="action-btn btn-all-requests"
+                  >
+                    {location.pathname === '/requests' && (
+                      <span className="btn-indicator"></span>
+                    )}
+                    <span>📋 All Requests</span>
+                  </button>
+
+                  {/* All Incidents - NEW */}
+                  <button
+                    onClick={() => navigate('/incidents')}
+                    className="action-btn btn-all-incidents"
+                  >
+                    {location.pathname === '/incidents' && (
+                      <span className="btn-indicator"></span>
+                    )}
+                    <span>🚨 All Incidents</span>
+                  </button>
+
+                  {/* KB Articles */}
+                  <button
+                    onClick={() => navigate('/kb')}
+                    className="action-btn btn-kb"
+                  >
+                    {location.pathname === '/kb' && (
+                      <span className="btn-indicator"></span>
+                    )}
+                    <span>📚 Knowledge Base</span>
+                  </button>
+
+                  {/* Create KB Article button removed - moved to Settings page */}
                 </div>
 
                 {/* Gear icon — navigates to /settings page */}
@@ -622,22 +698,22 @@ function Header({ logout }) {
             {/* Page routes */}
             <div className="page-content">
               <Routes>
-                <Route path="/"           element={<Home />} />
-                <Route path="/tickets"    element={<Tickets />} />
-                <Route path="/create"     element={<CreateTicket />} />
-                <Route path="/ticket/:id" element={<TicketDetails />} />
-                <Route path="/dashboard"  element={<Dashboard />} />
-                <Route path="/settings/"   element={<Settings />} />
-
-
-                {/* SETTINGS NESTED ROUTES */}
-                <Route path="/settings" element={<Settings />}>
-                  <Route path="add-admin" element={<AddAdmin />} />
-                  <Route path="remove-admin" element={<RemoveAdmin />} />
-                  <Route path="add-field" element={<AddField />} />
-                  <Route path="edit-field" element={<EditField />} />
-                  <Route path="remove-field" element={<RemoveField />} />
-                </Route>
+                <Route path="/"                 element={<Home />} />
+                <Route path="/tickets"          element={<Tickets />} />
+                <Route path="/requests"         element={<Requests />} />
+                <Route path="/incidents"        element={<Incidents />} />
+                <Route path="/create"           element={<CreateTicket />} />
+                <Route path="/create-request"   element={<CreateRequest />} />
+                <Route path="/create-incident"  element={<CreateIncident />} />
+                <Route path="/ticket/:id"       element={<TicketDetails />} />
+                <Route path="/incidents/:id"    element={<IncidentDetails />} />
+                <Route path="/requests/:id"     element={<RequestDetails />} />
+                <Route path="/dashboard"        element={<Dashboard />} />
+                <Route path="/settings/*"       element={<Settings />} />
+                <Route path="/settings/create-kb" element={<CreateKB />} />
+                <Route path="/settings/create-kb/new" element={<CreateKBForm />} />
+                <Route path="/kb"               element={<KBListView />} />
+                <Route path="/kb/:id"           element={<KBView />} />
               </Routes>
             </div>
           </div>

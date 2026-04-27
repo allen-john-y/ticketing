@@ -1,3 +1,4 @@
+// RemoveAdmin.js - Redesigned to match Home.js styling
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
@@ -67,7 +68,6 @@ export default function RemoveAdmin() {
     };
     
     fetchMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const confirmRemoveUser = async () => {
@@ -93,7 +93,6 @@ export default function RemoveAdmin() {
       if (res.ok || res.status === 204) {
         setRemoveMessage(`${selectedMember.displayName} has been removed from Helpdesk_Admin`);
         
-        // Fire and forget notification
         fetch(`${backendBase}/api/notify-admin-removed`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -125,99 +124,496 @@ export default function RemoveAdmin() {
     }
   };
 
+  const sharedCSS = `
+    @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Lato:wght@300;400;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy: #002060;
+      --navy2: #003090;
+      --orange: #e98404;
+      --orange2: #f5a623;
+      --white: #ffffff;
+      --bg: #f5f7fa;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --light: #f8fafc;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .ra-page {
+      min-height: 100vh;
+      width: 100%;
+      background: var(--bg);
+      font-family: 'Lato', sans-serif;
+      color: var(--text);
+    }
+
+    /* Hero Section */
+    .ra-hero {
+      background: var(--navy);
+      position: relative;
+      overflow: hidden;
+      padding: 48px 48px 44px;
+    }
+    .ra-hero::after {
+      content: '';
+      position: absolute;
+      right: -60px; top: -60px;
+      width: 420px; height: 420px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(233,132,4,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .ra-hero-inner {
+      position: relative; z-index: 2;
+      max-width: 1320px; margin: 0 auto;
+      animation: fadeUp 0.55s ease both;
+    }
+    .ra-hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--orange);
+      margin-bottom: 14px;
+    }
+    .ra-hero-eyebrow-line {
+      width: 28px; height: 2px; background: var(--orange); border-radius: 2px;
+    }
+    .ra-hero h1 {
+      font-family: 'Sora', sans-serif;
+      font-size: clamp(28px, 3vw, 36px);
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.15;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+    .ra-hero h1 em {
+      font-style: normal;
+      color: #ef4444;
+    }
+    .ra-hero-sub {
+      font-size: 15px; color: rgba(255,255,255,0.62);
+      font-weight: 400; line-height: 1.6;
+    }
+
+    /* Content Area */
+    .ra-content {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 32px 48px 56px;
+    }
+
+    .ra-back-btn {
+      background: none; border: none;
+      font-size: 14px; font-weight: 600;
+      color: var(--navy); cursor: pointer;
+      padding: 0; margin-bottom: 24px; display: inline-flex;
+      align-items: center; gap: 6px;
+      font-family: 'Sora', sans-serif;
+    }
+    .ra-back-btn:hover { color: var(--orange); }
+
+    /* Stats Row */
+    .ra-stats-row {
+      display: flex; gap: 24px;
+      margin-bottom: 28px;
+      animation: fadeUp 0.45s 0.05s ease both;
+    }
+
+    .ra-stat-card {
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      padding: 24px 32px;
+      display: flex; align-items: center; gap: 20px;
+      flex: 1;
+    }
+
+    .ra-stat-icon {
+      width: 48px; height: 48px; border-radius: 14px;
+      background: rgba(239,68,68,0.08);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+    }
+
+    .ra-stat-content {
+      display: flex; flex-direction: column;
+    }
+
+    .ra-stat-value {
+      font-family: 'Sora', sans-serif;
+      font-size: 32px; font-weight: 800;
+      color: var(--navy);
+      line-height: 1;
+      letter-spacing: -0.03em;
+      margin-bottom: 4px;
+    }
+
+    .ra-stat-label {
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* Users Card */
+    .ra-users-card {
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      margin-bottom: 24px;
+      animation: fadeUp 0.45s 0.1s ease both;
+    }
+
+    .ra-users-header {
+      padding: 20px 28px;
+      background: var(--light);
+      border-bottom: 1.5px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .ra-users-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 15px; font-weight: 700;
+      color: var(--navy);
+      letter-spacing: 0.03em;
+    }
+
+    .ra-users-badge {
+      padding: 4px 14px;
+      background: #ef4444;
+      border-radius: 20px;
+      font-size: 12px; font-weight: 700;
+      color: white;
+    }
+
+    .ra-user-grid {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .ra-user-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px;
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .ra-user-card:hover {
+      border-color: var(--navy);
+      box-shadow: 0 4px 12px rgba(0,32,96,0.08);
+    }
+    .ra-user-card.selected {
+      background: #fee2e2;
+      border-color: #ef4444;
+    }
+
+    .ra-user-avatar {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: var(--navy);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+    .ra-user-card.selected .ra-user-avatar {
+      background: #ef4444;
+    }
+
+    .ra-user-info {
+      flex: 1; min-width: 0;
+    }
+
+    .ra-user-name {
+      font-size: 15px; font-weight: 700;
+      color: var(--text);
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .ra-user-email {
+      font-size: 12px; color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .ra-selected-indicator {
+      color: #ef4444;
+      flex-shrink: 0;
+    }
+
+    /* Loading */
+    .ra-loading {
+      text-align: center; padding: 60px;
+    }
+    .ra-spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 3px solid var(--border);
+      border-top-color: var(--navy);
+      animation: spin 0.9s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    /* Error */
+    .ra-error {
+      text-align: center; padding: 60px;
+    }
+    .ra-error-icon {
+      font-size: 48px; margin-bottom: 16px;
+    }
+    .ra-error-text {
+      color: #ef4444;
+      font-size: 14px; font-weight: 500;
+      margin-bottom: 16px;
+    }
+    .ra-retry-btn {
+      padding: 10px 24px;
+      background: #ef4444;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px; font-weight: 600;
+      color: white;
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+    }
+
+    /* Empty */
+    .ra-empty {
+      text-align: center; padding: 60px;
+    }
+    .ra-empty-icon {
+      font-size: 48px; margin-bottom: 16px;
+    }
+    .ra-empty-text {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* Success Message */
+    .ra-success-message {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 24px;
+      background: #d1fae5;
+      border: 1.5px solid #10b981;
+      border-radius: 16px;
+      color: #065f46;
+      font-size: 14px; font-weight: 600;
+      margin-bottom: 24px;
+      animation: fadeUp 0.3s ease;
+    }
+
+    /* Action Bar */
+    .ra-action-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 0 48px 32px 48px;
+      background: linear-gradient(to top, var(--bg) 0%, var(--bg) 60%, transparent 100%);
+      animation: fadeUp 0.45s 0.2s ease both;
+      pointer-events: none;
+    }
+
+    .ra-action-bar-inner {
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      padding: 20px 28px;
+      box-shadow: 0 8px 32px rgba(0,32,96,0.12);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 24px;
+      max-width: 1320px;
+      margin: 0 auto;
+      pointer-events: auto;
+    }
+
+    .ra-selected-info {
+      display: flex; align-items: center; gap: 10px;
+      flex: 1; flex-wrap: wrap;
+      font-size: 14px;
+    }
+
+    .ra-selected-label {
+      color: var(--muted);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .ra-selected-name {
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .ra-no-selection {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .ra-action-buttons {
+      display: flex; gap: 12px;
+    }
+
+    .ra-btn-cancel {
+      padding: 14px 28px;
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      font-size: 15px; font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.2s;
+    }
+    .ra-btn-cancel:hover {
+      border-color: var(--navy);
+      color: var(--navy);
+    }
+
+    .ra-btn-remove {
+      padding: 14px 32px;
+      background: #ef4444;
+      border: none;
+      border-radius: 14px;
+      font-size: 15px; font-weight: 700;
+      color: white;
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.3s;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 4px 12px rgba(239,68,68,0.2);
+    }
+    .ra-btn-remove:hover:not(:disabled) {
+      background: #dc2626;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(239,68,68,0.25);
+    }
+    .ra-btn-remove:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .ra-btn-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @media (max-width: 768px) {
+      .ra-hero { padding: 40px 24px; }
+      .ra-content { padding: 24px 20px 140px; }
+      .ra-stats-row { flex-direction: column; }
+      .ra-user-grid { grid-template-columns: 1fr; }
+      .ra-action-bar { padding: 0 20px 24px 20px; }
+      .ra-action-bar-inner { flex-direction: column; }
+      .ra-action-buttons { width: 100%; }
+      .ra-btn-cancel, .ra-btn-remove { flex: 1; justify-content: center; }
+    }
+  `;
+
   return (
-    <div style={styles.page}>
-      {/* Header with navigation */}
-      <div style={styles.header}>
-        <div style={styles.headerContent}>
-          <button onClick={() => navigate('/settings')} style={styles.backButton}>
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{ marginRight: '4px' }}>
-              <path d="M12 16L6 10L12 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Back to Settings
-          </button>
-          <div style={styles.headerTitle}>
-            <h1 style={styles.title}>Remove Admin User</h1>
-            <p style={styles.subtitle}>
-              Manage administrator access by removing users from the Helpdesk_Admin group
-            </p>
+    <div className="ra-page">
+      <style>{sharedCSS}</style>
+
+      {/* Hero Section */}
+      <div className="ra-hero">
+        <div className="ra-hero-inner">
+          <div className="ra-hero-eyebrow">
+            <div className="ra-hero-eyebrow-line" />
+            Admin Management
           </div>
+          <h1>Remove <em>Admin User</em></h1>
+          <p className="ra-hero-sub">Manage administrator access by removing users from the Helpdesk_Admin group</p>
         </div>
       </div>
 
-      {/* Main content */}
-      <div style={styles.content}>
-        {/* Stats card */}
-        <div style={styles.statsCard}>
-          <div style={styles.statItem}>
-            <span style={styles.statLabel}>Total Admins</span>
-            <span style={styles.statValue}>{groupMembers.length}</span>
+      {/* Content */}
+      <div className="ra-content">
+        <button className="ra-back-btn" onClick={() => navigate('/settings')}>
+          ← Back to Settings
+        </button>
+
+        {/* Stats */}
+        <div className="ra-stats-row">
+          <div className="ra-stat-card">
+            <div className="ra-stat-icon">👥</div>
+            <div className="ra-stat-content">
+              <div className="ra-stat-value">{groupMembers.length}</div>
+              <div className="ra-stat-label">Total Admins</div>
+            </div>
           </div>
-          <div style={styles.statDivider} />
-          <div style={styles.statItem}>
-            <span style={styles.statLabel}>Selected</span>
-            <span style={styles.statValue}>{selectedMember ? 1 : 0}</span>
+          <div className="ra-stat-card">
+            <div className="ra-stat-icon" style={{ background: 'rgba(239,68,68,0.08)' }}>🎯</div>
+            <div className="ra-stat-content">
+              <div className="ra-stat-value">{selectedMember ? 1 : 0}</div>
+              <div className="ra-stat-label">Selected</div>
+            </div>
           </div>
         </div>
 
-        {/* Users list card */}
-        <div style={styles.listCard}>
-          <div style={styles.listHeader}>
-            <h2 style={styles.listTitle}>Administrators</h2>
-            <span style={styles.listBadge}>{groupMembers.length} users</span>
+        {/* Users List */}
+        <div className="ra-users-card">
+          <div className="ra-users-header">
+            <span className="ra-users-title">👤 Administrators</span>
+            <span className="ra-users-badge">{groupMembers.length} users</span>
           </div>
 
           {membersLoading ? (
-            <div style={styles.loadingState}>
-              <div style={styles.spinner}></div>
-              <p style={styles.loadingText}>Loading administrators...</p>
+            <div className="ra-loading">
+              <div className="ra-spinner" />
+              <p style={{ color: '#64748b', fontSize: 14 }}>Loading administrators...</p>
             </div>
           ) : removeError ? (
-            <div style={styles.errorState}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <p style={styles.errorText}>{removeError}</p>
-              <button 
-                onClick={() => window.location.reload()} 
-                style={styles.retryButton}
-              >
+            <div className="ra-error">
+              <div className="ra-error-icon">⚠️</div>
+              <p className="ra-error-text">{removeError}</p>
+              <button className="ra-retry-btn" onClick={() => window.location.reload()}>
                 Retry
               </button>
             </div>
           ) : groupMembers.length === 0 ? (
-            <div style={styles.emptyState}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              <p style={styles.emptyText}>No administrators found</p>
+            <div className="ra-empty">
+              <div className="ra-empty-icon">👤</div>
+              <p className="ra-empty-text">No administrators found</p>
             </div>
           ) : (
-            <div style={styles.userGrid}>
+            <div className="ra-user-grid">
               {groupMembers.map(m => (
                 <div
                   key={m.id}
+                  className={`ra-user-card ${selectedMember?.id === m.id ? 'selected' : ''}`}
                   onClick={() => setSelectedMember(m)}
-                  style={{
-                    ...styles.userCard,
-                    ...(selectedMember?.id === m.id ? styles.userCardSelected : {}),
-                    ...(selectedMember?.id === m.id ? styles.userCardDangerSelected : {})
-                  }}
                 >
-                  <div style={styles.userAvatar}>
+                  <div className="ra-user-avatar">
                     {m.displayName.charAt(0).toUpperCase()}
                   </div>
-                  <div style={styles.userInfo}>
-                    <div style={styles.userName}>{m.displayName}</div>
-                    <div style={styles.userEmail}>{m.mail || m.userPrincipalName}</div>
+                  <div className="ra-user-info">
+                    <div className="ra-user-name">{m.displayName}</div>
+                    <div className="ra-user-email">{m.mail || m.userPrincipalName}</div>
                   </div>
                   {selectedMember?.id === m.id && (
-                    <div style={styles.selectedBadge}>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="6" fill="#ef4444" stroke="white" strokeWidth="2"/>
+                    <div className="ra-selected-indicator">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <circle cx="10" cy="10" r="8" fill="#ef4444" stroke="white" strokeWidth="2"/>
                       </svg>
                     </div>
                   )}
@@ -227,381 +623,52 @@ export default function RemoveAdmin() {
           )}
         </div>
 
-        {/* Messages */}
+        {/* Success Message */}
         {removeMessage && (
-          <div style={styles.successMessage}>
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-              <path d="M6 10L9 13L14 7" strokeWidth="2" strokeLinecap="round"/>
+          <div className="ra-success-message">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="9" fill="#10b981" opacity="0.3"/>
+              <path d="M5 10l3 3 5-5" stroke="#065f46" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             <span>{removeMessage}</span>
           </div>
         )}
+      </div>
 
-        {/* Action bar */}
-        <div style={styles.actionBar}>
-          <div style={styles.actionBarContent}>
-            <div style={styles.selectedInfo}>
-              {selectedMember ? (
+      {/* Action Bar - Fixed to bottom */}
+      <div className="ra-action-bar">
+        <div className="ra-action-bar-inner">
+          <div className="ra-selected-info">
+            {selectedMember ? (
+              <>
+                <span className="ra-selected-label">Selected:</span>
+                <span className="ra-selected-name">{selectedMember.displayName}</span>
+              </>
+            ) : (
+              <span className="ra-no-selection">No user selected</span>
+            )}
+          </div>
+          <div className="ra-action-buttons">
+            <button className="ra-btn-cancel" onClick={() => navigate('/settings')}>
+              Cancel
+            </button>
+            <button
+              className="ra-btn-remove"
+              onClick={confirmRemoveUser}
+              disabled={removeLoading || !selectedMember}
+            >
+              {removeLoading ? (
                 <>
-                  <span style={styles.selectedLabel}>Selected:</span>
-                  <span style={styles.selectedName}>{selectedMember.displayName}</span>
+                  <span className="ra-btn-spinner" />
+                  Removing...
                 </>
               ) : (
-                <span style={styles.noSelection}>No user selected</span>
+                'Remove Admin Access'
               )}
-            </div>
-            <div style={styles.actionButtons}>
-              <button
-                onClick={() => navigate('/settings')}
-                style={styles.cancelButton}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmRemoveUser}
-                disabled={removeLoading || !selectedMember}
-                style={{
-                  ...styles.removeButton,
-                  ...(removeLoading || !selectedMember ? styles.removeButtonDisabled : {})
-                }}
-              >
-                {removeLoading ? (
-                  <>
-                    <span style={styles.buttonSpinner}></span>
-                    Removing...
-                  </>
-                ) : (
-                  'Remove Admin Access'
-                )}
-              </button>
-            </div>
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: '100vh',
-    background: '#f3f4f6',
-    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-  },
-  header: {
-    background: 'white',
-    borderBottom: '1px solid #e5e7eb',
-    padding: '1.5rem 2rem',
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
-  },
-  headerContent: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-  },
-  backButton: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: '0.5rem 1rem',
-    background: '#f9fafb',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#4b5563',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    marginBottom: '1.5rem',
-  },
-  headerTitle: {
-    maxWidth: '800px',
-  },
-  title: {
-    fontSize: '2rem',
-    fontWeight: '600',
-    color: '#111827',
-    margin: '0 0 0.5rem 0',
-    letterSpacing: '-0.02em',
-  },
-  subtitle: {
-    fontSize: '1rem',
-    color: '#6b7280',
-    margin: 0,
-    lineHeight: '1.6',
-  },
-  content: {
-    maxWidth: '1200px',
-    margin: '2rem auto',
-    padding: '0 2rem',
-  },
-  statsCard: {
-    background: 'white',
-    borderRadius: '12px',
-    border: '1px solid #e5e7eb',
-    padding: '1.5rem 2rem',
-    marginBottom: '2rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '2rem',
-  },
-  statItem: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: '0.75rem',
-  },
-  statLabel: {
-    fontSize: '0.875rem',
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  statValue: {
-    fontSize: '1.5rem',
-    fontWeight: '600',
-    color: '#111827',
-  },
-  statDivider: {
-    width: '1px',
-    height: '2rem',
-    background: '#e5e7eb',
-  },
-  listCard: {
-    background: 'white',
-    borderRadius: '12px',
-    border: '1px solid #e5e7eb',
-    overflow: 'hidden',
-    marginBottom: '2rem',
-  },
-  listHeader: {
-    padding: '1.5rem 2rem',
-    borderBottom: '1px solid #e5e7eb',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    background: '#fafafa',
-  },
-  listTitle: {
-    fontSize: '1.125rem',
-    fontWeight: '600',
-    color: '#111827',
-    margin: 0,
-  },
-  listBadge: {
-    padding: '0.25rem 0.75rem',
-    background: '#f3f4f6',
-    borderRadius: '100px',
-    fontSize: '0.875rem',
-    fontWeight: '500',
-    color: '#4b5563',
-  },
-  userGrid: {
-    padding: '1.5rem',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-    gap: '1rem',
-  },
-  userCard: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem',
-    padding: '1rem',
-    background: 'white',
-    border: '1px solid #e5e7eb',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    position: 'relative',
-  },
-  userCardSelected: {
-    background: '#fef2f2',
-    borderColor: '#ef4444',
-    transform: 'translateY(-2px)',
-    boxShadow: '0 4px 12px rgba(239,68,68,0.1)',
-  },
-  userCardDangerSelected: {
-    borderLeft: '4px solid #ef4444',
-  },
-  userAvatar: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '8px',
-    background: '#f3f4f6',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#4b5563',
-    border: '1px solid #e5e7eb',
-  },
-  userInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  userName: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: '4px',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  userEmail: {
-    fontSize: '12px',
-    color: '#6b7280',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  selectedBadge: {
-    marginLeft: 'auto',
-  },
-  loadingState: {
-    padding: '4rem 2rem',
-    textAlign: 'center',
-  },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: '3px solid #f3f4f6',
-    borderTop: '3px solid #111827',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-    margin: '0 auto 1rem',
-  },
-  loadingText: {
-    color: '#6b7280',
-    fontSize: '14px',
-    margin: 0,
-  },
-  errorState: {
-    padding: '4rem 2rem',
-    textAlign: 'center',
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: '14px',
-    margin: '1rem 0',
-  },
-  retryButton: {
-    padding: '0.5rem 1rem',
-    background: '#ef4444',
-    border: 'none',
-    borderRadius: '6px',
-    color: 'white',
-    fontSize: '13px',
-    fontWeight: '500',
-    cursor: 'pointer',
-  },
-  emptyState: {
-    padding: '4rem 2rem',
-    textAlign: 'center',
-  },
-  emptyText: {
-    color: '#9ca3af',
-    fontSize: '14px',
-    margin: '1rem 0 0',
-  },
-  successMessage: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    padding: '1rem 1.5rem',
-    background: '#d1fae5',
-    border: '1px solid #a7f3d0',
-    borderRadius: '10px',
-    color: '#065f46',
-    fontSize: '14px',
-    fontWeight: '500',
-    marginBottom: '2rem',
-  },
-  actionBar: {
-    position: 'sticky',
-    bottom: '2rem',
-    zIndex: 20,
-  },
-  actionBarContent: {
-    background: 'white',
-    border: '1px solid #e5e7eb',
-    borderRadius: '12px',
-    padding: '1rem 1.5rem',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backdropFilter: 'blur(8px)',
-    background: 'rgba(255,255,255,0.95)',
-  },
-  selectedInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  selectedLabel: {
-    fontSize: '14px',
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  selectedName: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#111827',
-  },
-  noSelection: {
-    fontSize: '14px',
-    color: '#9ca3af',
-    fontStyle: 'italic',
-  },
-  actionButtons: {
-    display: 'flex',
-    gap: '1rem',
-  },
-  cancelButton: {
-    padding: '0.625rem 1.25rem',
-    background: 'white',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#4b5563',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-  },
-  removeButton: {
-    padding: '0.625rem 1.5rem',
-    background: '#ef4444',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: 'white',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  removeButtonDisabled: {
-    background: '#fca5a5',
-    cursor: 'not-allowed',
-  },
-  buttonSpinner: {
-    width: '16px',
-    height: '16px',
-    border: '2px solid rgba(255,255,255,0.3)',
-    borderTop: '2px solid white',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-  },
-};
-
-// Add keyframes animation
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-`;
-document.head.appendChild(style);
