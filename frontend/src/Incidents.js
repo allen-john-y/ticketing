@@ -134,7 +134,8 @@ export default function Incidents() {
         i.category?.name?.toLowerCase().includes(q) ||
         i.raisedBy?.name?.toLowerCase().includes(q) ||
         i.raisedBy?.mail?.toLowerCase().includes(q) ||
-        i.assignedMember?.memberName?.toLowerCase().includes(q)
+        i.assignmentGroup?.groupName?.toLowerCase().includes(q) ||  // ✅ Search by group name
+        i.assignmentGroup?.members?.some(m => m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)) // ✅ Search by member name
       );
     }
 
@@ -501,13 +502,35 @@ export default function Incidents() {
       font-size: 11px; color: var(--muted);
     }
 
-    .inc-assigned-avatar {
+    /* ✅ NEW: Assignment Group styling */
+    .inc-group-cell {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .inc-group-avatar {
       width: 32px; height: 32px; border-radius: 10px;
-      background: rgba(16,185,129,0.1);
+      background: rgba(59,130,246,0.1);
       display: flex; align-items: center; justify-content: center;
       font-size: 13px; font-weight: 700;
-      color: '#10b981';
+      color: #3b82f6;
       flex-shrink: 0;
+    }
+    .inc-group-info {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .inc-group-name {
+      font-size: 13px; font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .inc-group-members {
+      font-size: 10px; color: var(--muted);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .inc-group-member-count {
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
     }
 
     .inc-unassigned {
@@ -675,7 +698,7 @@ export default function Incidents() {
               <h1>All <em>Incidents</em></h1>
               <p className="inc-hero-sub">{today} — Track and manage incidents across the helpdesk</p>
             </div>
-            <button className="inc-new-btn" onClick={() => navigate('/raise-incident')}>
+            <button className="inc-new-btn" onClick={() => navigate('/create-incident')}>
               🚨 Report Incident
             </button>
           </div>
@@ -708,7 +731,7 @@ export default function Incidents() {
             <span className="inc-search-icon">🔍</span>
             <input
               className="inc-search-input"
-              placeholder="Search by number, title, user…"
+              placeholder="Search by number, title, group, member…"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -767,7 +790,7 @@ export default function Incidents() {
             <table className="inc-table">
               <thead>
                 <tr className="inc-thead-row">
-                  {['Incident #', 'Title', 'Category', 'Priority', 'Raised By', 'Assigned To', 'Status', 'Created'].map(h => (
+                  {['Incident #', 'Title', 'Category', 'Priority', 'Raised By', 'Assigned Group', 'Status', 'Created'].map(h => (
                     <th key={h} className="inc-th">{h}</th>
                   ))}
                 </tr>
@@ -821,33 +844,36 @@ export default function Incidents() {
                           </div>
                         </div>
                       </td>
+                      {/* ✅ UPDATED: Show Assignment Group instead of individual member */}
                       <td className="inc-td">
-                        {inc.assignedMember?.memberName ? (
-                          <div className="inc-user-cell">
-                            <div className="inc-assigned-avatar">
-                              {inc.assignedMember.memberName.charAt(0).toUpperCase()}
+                        {inc.assignmentGroup?.groupName ? (
+                          <div className="inc-group-cell">
+                            <div className="inc-group-avatar">
+                              {inc.assignmentGroup.groupName.charAt(0).toUpperCase()}
                             </div>
-                            <div className="inc-user-info">
-                              <div className="inc-user-name">{inc.assignedMember.memberName}</div>
-                              {inc.assignmentGroup?.groupName && (
-                                <div className="inc-user-email">{inc.assignmentGroup.groupName}</div>
-                              )}
+                            <div className="inc-group-info">
+                              <div className="inc-group-name">{inc.assignmentGroup.groupName}</div>
+                              <div className="inc-group-members">
+                                <span className="inc-group-member-count">
+                                  {inc.assignmentGroup.members?.length || 0} members
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ) : (
                           <span className="inc-unassigned">Unassigned</span>
                         )}
-                      </td>
+                       </td>
                       <td className="inc-td">
                         <StatusBadge status={inc.status} />
-                      </td>
+                       </td>
                       <td className="inc-td">
                         <div className="inc-date-cell">
                           <span className="inc-date-main">{formatDate(inc.createdAt)}</span>
                           <span className="inc-date-rel">{formatRelative(inc.createdAt)}</span>
                         </div>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   ))
                 )}
               </tbody>

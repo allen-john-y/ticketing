@@ -1,7 +1,7 @@
 // Requests.js - Fixed to show Assignment Group instead of individual person
 import React, { useState, useEffect, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
@@ -89,6 +89,7 @@ function formatRelative(iso) {
 export default function Requests() {
   const { accounts } = useMsal();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,7 +97,9 @@ export default function Requests() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(
+  location.state?.filterStatus || 'all'
+);
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
@@ -612,7 +615,7 @@ export default function Requests() {
     /* New Request Button */
     .req-new-btn {
       padding: 14px 28px;
-      background: var(--navy);
+      background: #e98404;
       border: none;
       border-radius: 14px;
       font-size: 15px; font-weight: 700;
@@ -623,7 +626,7 @@ export default function Requests() {
       box-shadow: 0 4px 12px rgba(0,32,96,0.2);
     }
     .req-new-btn:hover {
-      background: var(--navy2);
+      background: #e98404;
       transform: translateY(-2px);
       box-shadow: 0 8px 20px rgba(0,32,96,0.25);
     }

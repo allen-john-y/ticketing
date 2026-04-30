@@ -66,15 +66,6 @@ const settingsOptions = [
     accentBg: 'rgba(99, 102, 241, 0.08)',
   },
   {
-    id: 'add-incident',
-    path: 'add-incident',
-    title: 'Add Incident Type',
-    description: 'Create and manage incident types and workflows.',
-    icon: '🚨',
-    accent: '#f43f5e',
-    accentBg: 'rgba(244, 63, 94, 0.08)',
-  },
-  {
     id: 'assignment-groups',
     path: 'assignment-groups',
     title: 'Assignment Groups',

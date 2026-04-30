@@ -5,10 +5,8 @@ import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-route
 import { useLocation } from 'react-router-dom';
 import Login from './Login';
 import Home from './Home';
-import Tickets from './Tickets';
 import Requests from './Requests';
-import Incidents from './Incidents';
-import CreateTicket from './CreateTicket';
+import Incidents from './Incidents'
 import CreateRequest from './CreateRequest';
 import CreateIncident from './CreateIncident';
 import TicketDetails from './TicketDetails';
@@ -576,28 +574,6 @@ function Header({ logout }) {
                     <span>📋 New Request</span>
                   </button>
 
-                  {/* Legacy Create Ticket */}
-                  <button
-                    onClick={() => navigate('/create')}
-                    className="action-btn btn-new-ticket"
-                  >
-                    {location.pathname === '/create' && (
-                      <span className="btn-indicator"></span>
-                    )}
-                    <span>🎫 Create Ticket</span>
-                  </button>
-
-                  {/* All Tickets */}
-                  <button
-                    onClick={() => navigate('/tickets')}
-                    className="action-btn btn-all-tickets"
-                  >
-                    {location.pathname === '/tickets' && (
-                      <span className="btn-indicator"></span>
-                    )}
-                    <span>📊 All Tickets</span>
-                  </button>
-
                   {/* All Requests - NEW */}
                   <button
                     onClick={() => navigate('/requests')}
@@ -699,13 +675,10 @@ function Header({ logout }) {
             <div className="page-content">
               <Routes>
                 <Route path="/"                 element={<Home />} />
-                <Route path="/tickets"          element={<Tickets />} />
                 <Route path="/requests"         element={<Requests />} />
                 <Route path="/incidents"        element={<Incidents />} />
-                <Route path="/create"           element={<CreateTicket />} />
                 <Route path="/create-request"   element={<CreateRequest />} />
                 <Route path="/create-incident"  element={<CreateIncident />} />
-                <Route path="/ticket/:id"       element={<TicketDetails />} />
                 <Route path="/incidents/:id"    element={<IncidentDetails />} />
                 <Route path="/requests/:id"     element={<RequestDetails />} />
                 <Route path="/dashboard"        element={<Dashboard />} />

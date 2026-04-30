@@ -133,37 +133,38 @@ function CreateIncident() {
     return getSubCategoriesForCategory().length > 0;
   };
 
+  // ✅ FIXED: Return FULL assignment group with ALL members
   const getAssignmentDetails = () => {
     const category = getSelectedCategoryData();
     console.log('📂 Category:', category?.categoryName);
     
-    if (!category) return { assignmentGroup: null, assignedMember: null };
+    if (!category) return { assignmentGroup: null };
     
     if (!selectedSubCategory) {
       console.log('⚠️ No sub-category selected yet');
-      return { assignmentGroup: null, assignedMember: null };
+      return { assignmentGroup: null };
     }
     
     const subCategory = category.subCategories?.find(s => s.name === selectedSubCategory);
     console.log('📄 SubCategory:', subCategory?.name);
     console.log('🏷️ SubCategory.assignmentGroups:', subCategory?.assignmentGroups);
     
-    if (!subCategory) return { assignmentGroup: null, assignedMember: null };
+    if (!subCategory) return { assignmentGroup: null };
     
     const assignmentGroups = subCategory.assignmentGroups || [];
     const assignmentGroup = assignmentGroups.length > 0 ? assignmentGroups[0] : null;
     
     console.log('✅ Found assignment group:', assignmentGroup);
+    console.log('   Members count:', assignmentGroup?.members?.length);
     
-    const assignedMember = assignmentGroup?.members?.[0] 
-      ? {
-          memberId: assignmentGroup.members[0].id || assignmentGroup.members[0]._id,
-          memberName: assignmentGroup.members[0].name,
-          memberEmail: assignmentGroup.members[0].mail || assignmentGroup.members[0].email
-        }
-      : null;
-
-    return { assignmentGroup, assignedMember };
+    // ✅ Return the FULL GROUP with ALL members
+    return { 
+      assignmentGroup: assignmentGroup ? {
+        groupId: assignmentGroup._id || assignmentGroup.id,
+        groupName: assignmentGroup.name,
+        members: assignmentGroup.members || []  // ← ALL members of the group
+      } : null
+    };
   };
 
   const searchUsers = async (query) => {
@@ -242,6 +243,7 @@ function CreateIncident() {
     setAttachments(prev => prev.filter(a => a.id !== id));
   };
 
+  // ✅ FIXED: Submit with GROUP assignment (no assignedMember)
   const handleSubmit = async () => {
     if (!title.trim()) {
       showToast('Title is required', 'error');
@@ -274,10 +276,17 @@ function CreateIncident() {
     }
 
     const category = getSelectedCategoryData();
-    const { assignmentGroup, assignedMember } = getAssignmentDetails();
+    const { assignmentGroup } = getAssignmentDetails();
+
+    // ✅ Validate assignment group exists
+    if (!assignmentGroup || !assignmentGroup.groupName) {
+      showToast('No assignment group configured for this sub-category', 'error');
+      return;
+    }
 
     setSubmitting(true);
     try {
+      // ✅ CORRECT PAYLOAD - NO assignedMember, only assignmentGroup with members
       const payload = {
         title: title.trim(),
         description: description.trim(),
@@ -286,11 +295,13 @@ function CreateIncident() {
           name: category.categoryName
         },
         subCategory: hasSubCategories() ? selectedSubCategory : null,
-        assignmentGroup: assignmentGroup ? {
-          groupId: assignmentGroup._id || assignmentGroup.id || assignmentGroup.groupId,
-          groupName: assignmentGroup.name,
-        } : {},
-        assignedMember: assignedMember || {},
+        // ✅ SEND THE FULL GROUP with ALL members
+        assignmentGroup: {
+          groupId: assignmentGroup.groupId,
+          groupName: assignmentGroup.groupName,
+          members: assignmentGroup.members  // ← ALL members of the group
+        },
+        // ❌ NO assignedMember field
         raisedBy: {
           id: currentUser.localAccountId || '',
           name: currentUser.name || '',
@@ -304,11 +315,16 @@ function CreateIncident() {
         attachments: attachments
       };
 
+      console.log('🚀 Submitting incident with GROUP:', {
+        groupName: payload.assignmentGroup.groupName,
+        membersCount: payload.assignmentGroup.members?.length
+      });
+
       const res = await axios.post(`${BACKEND}/api/incidents`, payload);
       showToast(`Incident ${res.data.incidentNumber} created successfully`, 'success');
       
       resetForm();
-      navigate('/tickets');
+      navigate('/incidents');
     } catch (err) {
       console.error('Submit failed:', err);
       showToast(err?.response?.data?.message || 'Failed to create incident', 'error');
@@ -331,7 +347,7 @@ function CreateIncident() {
 
   const handleCancel = () => {
     resetForm();
-    navigate('/tickets');
+    navigate('/incidents');
   };
 
   const sharedCSS = `
@@ -343,7 +359,7 @@ function CreateIncident() {
       --navy:   #002060;
       --navy2:  #003090;
       --orange: #e98404;
-      --orange2:#f5a623;
+      --orange2: #f5a623;
       --white:  #ffffff;
       --bg:     #f5f7fa;
       --border: #e2e8f0;
@@ -953,21 +969,27 @@ function CreateIncident() {
                 </div>
               )}
 
-              {/* Assignment Preview */}
+              {/* ✅ UPDATED: Assignment Preview - Shows GROUP not individual */}
               <div className="ci-form-group">
-                <label className="ci-form-label">Assignment</label>
+                <label className="ci-form-label">Assignment Group</label>
                 <div className="ci-info-banner">
                   {(() => {
-                    const { assignmentGroup, assignedMember } = getAssignmentDetails();
+                    const { assignmentGroup } = getAssignmentDetails();
                     if (!assignmentGroup) return 'No assignment group configured for selected sub-category.';
                     return (
                       <div>
                         <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                          {assignmentGroup.name || assignmentGroup.groupName || 'Assignment Group'}
+                          🏢 {assignmentGroup.groupName}
                         </div>
                         <div style={{ color: '#64748b', marginTop: 6 }}>
-                          {assignedMember ? `Assigned to ${assignedMember.memberName}` : `${assignmentGroup.members?.length || 0} member(s)`}
+                          📋 {assignmentGroup.members?.length || 0} member(s) will handle this incident
                         </div>
+                        {assignmentGroup.members?.length > 0 && (
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: 8 }}>
+                            👥 {assignmentGroup.members.slice(0, 3).map(m => m.name).join(', ')}
+                            {assignmentGroup.members.length > 3 && ` +${assignmentGroup.members.length - 3} more`}
+                          </div>
+                        )}
                       </div>
                     );
                   })()}

@@ -425,7 +425,7 @@ function AssignmentGroups() {
 
     .ag-btn-primary {
       padding: 12px 24px;
-      background: var(--navy);
+      background: #e98404;
       border: none;
       border-radius: 14px;
       font-size: 14px; font-weight: 700;

@@ -1,16 +1,13 @@
-// server.js (FULL UPDATED - WITH CATEGORY NOTIFICATIONS)
+// server.js (FULL UPDATED - WITH COMPLETE EMAIL NOTIFICATIONS)
 // ---------------------- Imports -------------------------
 const express = require("express");
-const router = express.Router();
 const mongoose = require("mongoose");
 const cors = require("cors");
-const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const fetch = require("node-fetch");
 const https = require("https");
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");
 const crypto = require("crypto");
 const axios = require("axios");
 const archiver = require("archiver");
@@ -38,7 +35,7 @@ app.use(
       if (allowed.includes(cleanOrigin)) {
         return callback(null, true);
       }
-      console.log("❌ Blocked by CORS:", cleanOrigin, "Allowed:", allowed);
+      console.log("❌ Blocked by CORS:", cleanOrigin);
       return callback(null, false);
     },
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
@@ -72,7 +69,6 @@ const connectDB = async () => {
 };
 connectDB();
 
-
 // -------- Category Config Schema --------
 const categoryConfigSchema = new mongoose.Schema(
   {
@@ -87,21 +83,16 @@ const categoryConfigSchema = new mongoose.Schema(
       mailNickname: { type: String },
     },
 
-    // ── Sub-categories ────────────────────────────────────────────
     subCategories: [
       {
         name: { type: String, required: true },
         description: { type: String, default: "" },
-        
-        // ✅ ADD THESE - Per sub-category DL
         distributionList: {
           id: { type: String },
           name: { type: String },
           mail: { type: String },
           mailNickname: { type: String },
         },
-        
-        // ✅ ADD THESE - Per sub-category Assignment Groups
         assignmentGroups: [
           {
             name: { type: String },
@@ -114,11 +105,8 @@ const categoryConfigSchema = new mongoose.Schema(
             ],
           },
         ],
-        
-        // ✅ ADD THESE - Per sub-category DL members/owners
         dlGroupMembers: [{ id: String, email: String, displayName: String }],
         dlGroupOwners: [{ id: String, email: String, displayName: String }],
-        
         onBehalf: {
           enabled: { type: Boolean, default: false },
           required: { type: Boolean, default: false },
@@ -136,7 +124,6 @@ const categoryConfigSchema = new mongoose.Schema(
       },
     ],
 
-    // These stay at category level for backward compatibility
     assignmentGroups: [
       {
         name: { type: String, required: true },
@@ -153,9 +140,7 @@ const categoryConfigSchema = new mongoose.Schema(
   { timestamps: true }
 );
  
-// Unique on categoryName only — DL uniqueness dropped
 categoryConfigSchema.index({ categoryName: 1 }, { unique: true });
- 
 const CategoryConfig = mongoose.model("CategoryConfig", categoryConfigSchema);
 
 // ===================== AZURE HELPERS =====================
@@ -178,27 +163,6 @@ const getGraphToken = async () => {
   console.log("✅ [MAIL] Token received");
   return data.access_token;
 };
-// Helper: Fetch group members from Azure AD
-const fetchGroupMembers = async (groupId) => {
-  try {
-    const token = await getAccessToken();
-    const url = `https://graph.microsoft.com/v1.0/groups/${groupId}/members?$select=id,mail,displayName`;
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    const data = await response.json();
-    
-    if (data.value && data.value.length > 0) {
-      return data.value.map(member => ({
-        id: member.id,
-        name: member.displayName || '',
-        email: member.mail || member.userPrincipalName || ''
-      }));
-    }
-    return [];
-  } catch (err) {
-    console.error('❌ Failed to fetch group members:', err.message);
-    return [];
-  }
-};
 
 const getAccessToken = async () => {
   const url = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
@@ -213,7 +177,7 @@ const getAccessToken = async () => {
   return data.access_token;
 };
 
-// ===================== EMAIL HELPERS =====================
+// ===================== EMAIL HELPER FUNCTIONS =====================
 
 const htmlField = (label, value) => {
   return `<tr><td style="padding:6px 0; font-weight:600; color:#0f172a; width:160px;">${label}</td><td style="padding:6px 0; color:#374151;">${value || '—'}</td></tr>`;
@@ -225,8 +189,8 @@ const buildHtmlEmail = ({ title, subtitle, statusColor = '#0369a1', fields = [],
     <tr>
       <td colspan="2" style="padding-top:16px; text-align:center;">
         <a href="${actionLink}" style="display:inline-block; background:${statusColor}; color:white; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:700;">${actionText || 'Open Ticket'}</a>
-      </td>
-    </tr>` : '';
+       </td>
+    <td>` : '';
 
   return `
   <html>
@@ -239,7 +203,7 @@ const buildHtmlEmail = ({ title, subtitle, statusColor = '#0369a1', fields = [],
               <td style="padding:18px 24px;">
                 <h1 style="margin:0; font-size:20px; font-weight:800;">${title}</h1>
                 ${subtitle ? `<div style="opacity:0.95; margin-top:6px;">${subtitle}</div>` : ''}
-              </td>
+               </td>
             </tr>
             <tr>
               <td style="padding:18px 24px;">
@@ -251,15 +215,15 @@ const buildHtmlEmail = ({ title, subtitle, statusColor = '#0369a1', fields = [],
                   ${actionButton}
                 </table>
                 <p style="margin:18px 0 0; color:#6b7280; font-size:13px;">This is an auto-generated email. Do not reply.</p>
-              </td>
+               </td>
             </tr>
             <tr>
               <td style="padding:12px 24px; background:#f8fafc; font-size:12px; color:#9ca3af; text-align:center;">
                 Sandeza Helpdesk · IT Support
-              </td>
+               </td>
             </tr>
           </table>
-        </td>
+         </td>
       </tr>
     </table>
   </body>
@@ -267,28 +231,37 @@ const buildHtmlEmail = ({ title, subtitle, statusColor = '#0369a1', fields = [],
   `;
 };
 
-const sendEmail = async (to, subject, bodyHtml, cc) => {
+const sendEmail = async (to, subject, bodyHtml) => {
+  if (!to || (Array.isArray(to) && to.length === 0)) {
+    console.log("⚠️ [MAIL] No recipients provided, skipping");
+    return false;
+  }
+  
   try {
+    const addresses = Array.isArray(to) ? to : [to];
+    const validAddresses = addresses.filter(addr => addr && addr.trim());
+    
+    if (validAddresses.length === 0) {
+      console.log("⚠️ [MAIL] No valid email addresses");
+      return false;
+    }
+    
     console.log(`\n📧 [MAIL] Preparing email...`);
-    console.log("To:", to);
-    console.log("CC:", cc);
+    console.log("To:", validAddresses.join(", "));
     console.log("Subject:", subject);
 
     const token = await getGraphToken();
 
-    const normalize = (addr) => {
-      if (!addr) return [];
-      if (Array.isArray(addr))
-        return addr.map((a) => ({ emailAddress: { address: a } }));
-      return [{ emailAddress: { address: addr } }];
+    const normalize = (addrList) => {
+      const emails = Array.isArray(addrList) ? addrList : [addrList];
+      return emails.filter(Boolean).map(addr => ({ emailAddress: { address: addr.trim() } }));
     };
 
     const mailBody = {
       message: {
         subject,
         body: { contentType: "HTML", content: bodyHtml.trim() },
-        toRecipients: normalize(to),
-        ccRecipients: normalize(cc),
+        toRecipients: normalize(validAddresses),
       },
       saveToSentItems: "true",
     };
@@ -307,14 +280,12 @@ const sendEmail = async (to, subject, bodyHtml, cc) => {
       }
     );
 
-    await res.text();
-    console.log("🔍 [MAIL] Graph Response Status:", res.status);
-
     if (res.status === 202) {
-      console.log(`✅ [MAIL] Email sent SUCCESSFULLY to: ${Array.isArray(to) ? to.join(", ") : to}`);
+      console.log(`✅ [MAIL] Email sent SUCCESSFULLY to: ${validAddresses.join(", ")}`);
       return true;
     } else {
-      console.log("❌ [MAIL] Email FAILED");
+      const errorText = await res.text();
+      console.log("❌ [MAIL] Email FAILED:", res.status, errorText);
       return false;
     }
   } catch (err) {
@@ -323,110 +294,138 @@ const sendEmail = async (to, subject, bodyHtml, cc) => {
   }
 };
 
-// ===================== CATEGORY NOTIFICATION HELPERS =====================
+// ===================== RECIPIENT COLLECTION HELPERS =====================
 
-// Collect all unique other-approvers across all subcategories
-const collectOtherApprovers = (subCategories = []) => {
-  const seen = new Set();
-  const result = [];
-  for (const sub of subCategories) {
-    for (const approver of sub.approval?.otherApprovers || []) {
-      const email = (approver.email || '').toLowerCase().trim();
-      if (email && !seen.has(email)) {
-        seen.add(email);
-        result.push({ email, name: approver.name || email });
+// Get DL Members from Category by category ID
+const getDLMembersFromCategory = async (categoryId) => {
+  try {
+    if (!categoryId) return [];
+    const category = await CategoryConfig.findById(categoryId);
+    if (!category) return [];
+    const members = category.dlGroupMembers || [];
+    return members.map(m => m.email).filter(Boolean);
+  } catch (err) {
+    console.error("❌ Failed to get DL members from category:", err.message);
+    return [];
+  }
+};
+
+// Get Assignment Group Members from Category
+const getAssignmentGroupMembersFromCategory = async (categoryId) => {
+  try {
+    if (!categoryId) return [];
+    const category = await CategoryConfig.findById(categoryId);
+    if (!category) return [];
+    const assignmentGroups = category.assignmentGroups || [];
+    const allMembers = [];
+    for (const group of assignmentGroups) {
+      if (group.members && Array.isArray(group.members)) {
+        for (const member of group.members) {
+          const email = member.mail || member.email;
+          if (email && !allMembers.includes(email)) {
+            allMembers.push(email);
+          }
+        }
       }
     }
+    return allMembers;
+  } catch (err) {
+    console.error("❌ Failed to get assignment group members from category:", err.message);
+    return [];
   }
-  return result;
 };
 
-// Get unique emails from dlGroupMembers or dlGroupOwners arrays
-const pluckEmails = (arr = []) =>
-  [...new Set(arr.map(x => (x.email || '')).filter(Boolean))];
-
-// Human-readable subcategory feature summary for email body
-const subCatSummaryText = (subCategories = []) => {
-  return subCategories.map((sub, i) => {
-    const features = [];
-    if (sub.onBehalf?.enabled)
-      features.push(`On-Behalf${sub.onBehalf.required ? ' (required)' : ''}`);
-    if (sub.attachments?.enabled)
-      features.push(`Attachments${sub.attachments.required ? ' (required)' : ''}`);
-    if (sub.approval?.requireApproval) {
-      const who = sub.approval.reportingManager ? 'Reporting Manager'
-        : sub.approval.requireAll              ? 'DL Group Members'
-        : sub.approval.otherApprovers?.length  ? `Custom (${sub.approval.otherApprovers.length} approver${sub.approval.otherApprovers.length > 1 ? 's' : ''})`
-        : 'Not configured';
-      features.push(`Approval → ${who}`);
+// Get all recipients for an Incident
+const getAllIncidentRecipients = async (incident) => {
+  const recipients = new Set();
+  
+  // Requester
+  if (incident.raisedBy?.mail) recipients.add(incident.raisedBy.mail);
+  
+  // Assigned Member
+  if (incident.assignedMember?.memberEmail) recipients.add(incident.assignedMember.memberEmail);
+  
+  // Group Members (from assignmentGroup)
+  if (incident.assignmentGroup?.members && Array.isArray(incident.assignmentGroup.members)) {
+    for (const member of incident.assignmentGroup.members) {
+      const email = member.email || member.mail;
+      if (email) recipients.add(email);
     }
-    const featureLine = features.length
-      ? `  Features: ${features.join(', ')}`
-      : '  No optional features';
-    return `${i + 1}. ${sub.name}\n${featureLine}`;
-  }).join('\n\n');
+  }
+  
+  // DL Members (from category)
+  const dlMembers = await getDLMembersFromCategory(incident.category?.id);
+  for (const email of dlMembers) recipients.add(email);
+  
+  return Array.from(recipients).filter(Boolean);
 };
 
-// Diff two subcategory arrays — returns array of human-readable change strings
-const diffSubCategories = (oldSubs = [], newSubs = []) => {
+// Get all recipients for a Request
+const getAllRequestRecipients = async (request) => {
+  const recipients = new Set();
+  
+  // Requester
+  if (request.raisedBy?.mail) recipients.add(request.raisedBy.mail);
+  
+  // Assigned Member
+  if (request.assignedMember?.memberEmail) recipients.add(request.assignedMember.memberEmail);
+  
+  // Group Members (from assignmentGroup)
+  if (request.assignmentGroup?.members && Array.isArray(request.assignmentGroup.members)) {
+    for (const member of request.assignmentGroup.members) {
+      const email = member.email || member.mail;
+      if (email) recipients.add(email);
+    }
+  }
+  
+  // DL Members (from service or category)
+  if (request.service?.id) {
+    try {
+      const service = await Service.findById(request.service.id);
+      if (service && service.dlGroupMembers) {
+        for (const member of service.dlGroupMembers) {
+          if (member.email) recipients.add(member.email);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to get DL members from service:", err.message);
+    }
+  }
+  
+  return Array.from(recipients).filter(Boolean);
+};
+
+// Generate diff for Assignment Group updates
+const getAssignmentGroupDiff = (oldGroup, newGroup) => {
   const changes = [];
-  const oldByName = Object.fromEntries(oldSubs.map(s => [s.name.toLowerCase(), s]));
-  const newByName = Object.fromEntries(newSubs.map(s => [s.name.toLowerCase(), s]));
-
-  // Added
-  for (const sub of newSubs) {
-    if (!oldByName[sub.name.toLowerCase()])
-      changes.push(`+ Sub-category added: "${sub.name}"`);
+  
+  // Name change
+  if (oldGroup.name !== newGroup.name) {
+    changes.push(`• Group name changed from "${oldGroup.name}" to "${newGroup.name}"`);
   }
-
-  // Removed
-  for (const sub of oldSubs) {
-    if (!newByName[sub.name.toLowerCase()])
-      changes.push(`- Sub-category removed: "${sub.name}"`);
+  
+  // Description change
+  if (oldGroup.description !== newGroup.description) {
+    changes.push(`• Description was updated`);
   }
-
-  // Modified
-  for (const newSub of newSubs) {
-    const oldSub = oldByName[newSub.name.toLowerCase()];
-    if (!oldSub) continue;
-
-    const subChanges = [];
-
-    // Attachments
-    const oA = oldSub.attachments || {}, nA = newSub.attachments || {};
-    if (oA.enabled !== nA.enabled)
-      subChanges.push(nA.enabled ? 'Attachments enabled' : 'Attachments disabled');
-    else if (nA.enabled && oA.required !== nA.required)
-      subChanges.push(nA.required ? 'Attachments set to required' : 'Attachments set to optional');
-
-    // On-Behalf
-    const oO = oldSub.onBehalf || {}, nO = newSub.onBehalf || {};
-    if (oO.enabled !== nO.enabled)
-      subChanges.push(nO.enabled ? 'On-Behalf enabled' : 'On-Behalf disabled');
-    else if (nO.enabled && oO.required !== nO.required)
-      subChanges.push(nO.required ? 'On-Behalf set to required' : 'On-Behalf set to optional');
-
-    // Approval
-    const oAp = oldSub.approval || {}, nAp = newSub.approval || {};
-    if (oAp.requireApproval !== nAp.requireApproval)
-      subChanges.push(nAp.requireApproval ? 'Approval requirement enabled' : 'Approval requirement removed');
-    if (nAp.requireApproval && oAp.requireApproval) {
-      if (oAp.reportingManager !== nAp.reportingManager)
-        subChanges.push(nAp.reportingManager ? 'Reporting Manager approval added' : 'Reporting Manager approval removed');
-      if (oAp.requireAll !== nAp.requireAll)
-        subChanges.push(nAp.requireAll ? 'DL Members approval added' : 'DL Members approval removed');
-      const oldCount = (oAp.otherApprovers || []).length;
-      const newCount = (nAp.otherApprovers || []).length;
-      if (oldCount !== newCount)
-        subChanges.push(`Custom approvers changed (${oldCount} → ${newCount})`);
-    }
-
-    if (subChanges.length > 0) {
-      changes.push(`✎ "${newSub.name}" changed:`);
-      subChanges.forEach(c => changes.push(`   • ${c}`));
-    }
+  
+  // Members added/removed
+  const oldMemberEmails = new Set((oldGroup.members || []).map(m => (m.email || m.mail || '').toLowerCase()));
+  const newMemberEmails = new Set((newGroup.members || []).map(m => (m.email || m.mail || '').toLowerCase()));
+  
+  const addedMembers = [...newMemberEmails].filter(email => !oldMemberEmails.has(email));
+  const removedMembers = [...oldMemberEmails].filter(email => !newMemberEmails.has(email));
+  
+  for (const email of addedMembers) {
+    const member = (newGroup.members || []).find(m => (m.email || m.mail || '').toLowerCase() === email);
+    changes.push(`• ${member?.name || email} was ADDED as a member`);
   }
-
+  
+  for (const email of removedMembers) {
+    const member = (oldGroup.members || []).find(m => (m.email || m.mail || '').toLowerCase() === email);
+    changes.push(`• ${member?.name || email} was REMOVED from members`);
+  }
+  
   return changes;
 };
 
@@ -461,8 +460,6 @@ const resetAzurePassword = async (userIdentifier) => {
   return newPassword;
 };
 
-const AZURE_DEVICE_ADMIN_GROUP_ID = process.env.AZURE_DEVICE_ADMIN_GROUP_ID;
-
 const addUserToGroup = async (groupId, userObjectId, retries = 2) => {
   console.log(`🔵 [ADD TO GROUP] Attempting to add user ${userObjectId} to group ${groupId}`);
   if (!groupId || !userObjectId) throw new Error("groupId and userObjectId are required");
@@ -470,7 +467,6 @@ const addUserToGroup = async (groupId, userObjectId, retries = 2) => {
   let lastError;
   for (let attempt = 1; attempt <= retries + 1; attempt++) {
     try {
-      console.log(`🔵 [ADD TO GROUP] Attempt ${attempt}/${retries + 1}`);
       const token = await getAccessToken();
       const url = `https://graph.microsoft.com/v1.0/groups/${groupId}/members/$ref`;
       const body = { "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userObjectId}` };
@@ -482,8 +478,6 @@ const addUserToGroup = async (groupId, userObjectId, retries = 2) => {
         agent: new https.Agent({ rejectUnauthorized: false }),
       });
 
-      console.log(`🔵 [ADD TO GROUP] Response status: ${res.status}`);
-
       if (res.status === 204 || res.status === 201) {
         console.log(`✅ [ADD TO GROUP] Successfully added user to group`);
         return true;
@@ -494,84 +488,44 @@ const addUserToGroup = async (groupId, userObjectId, retries = 2) => {
       try { errorData = JSON.parse(responseText); } catch (e) { errorData = { message: responseText }; }
       const errorMessage = (errorData?.error?.message || errorData?.message || '').toLowerCase();
 
-      if (errorMessage.includes('already exists') || errorMessage.includes('already a member') || errorMessage.includes('one or more added object references already exist')) {
-        console.log(`ℹ️ [ADD TO GROUP] User is already a member - treating as success`);
+      if (errorMessage.includes('already exists') || errorMessage.includes('already a member')) {
+        console.log(`ℹ️ [ADD TO GROUP] User is already a member`);
         return true;
       }
 
-      lastError = new Error(`Add to group failed (${res.status}): ${errorMessage || responseText}`);
-      if (res.status === 400 || res.status === 404) throw lastError;
-
+      lastError = new Error(`Add to group failed: ${errorMessage}`);
       if (attempt < retries + 1) {
-        const waitTime = attempt * 1000;
-        console.log(`⏳ [ADD TO GROUP] Retrying in ${waitTime}ms...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
       }
     } catch (err) {
-      console.error(`❌ [ADD TO GROUP] Attempt ${attempt} failed:`, err.message);
       lastError = err;
       if (attempt < retries + 1) {
-        const waitTime = attempt * 1000;
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
       }
     }
   }
-
-  console.error(`❌ [ADD TO GROUP] All ${retries + 1} attempts failed`);
-  throw lastError || new Error('Add to group failed after all retries');
+  throw lastError;
 };
 
 const getUserByUpn = async (upn) => {
   console.log(`🔍 [GET USER] Looking up user: ${upn}`);
   if (!upn) throw new Error('UPN is required');
 
-  try {
-    const token = await getAccessToken();
-    const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id,mail,displayName,userPrincipalName`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      agent: new https.Agent({ rejectUnauthorized: false }),
-    });
+  const token = await getAccessToken();
+  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id,mail,displayName,userPrincipalName`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    agent: new https.Agent({ rejectUnauthorized: false }),
+  });
 
-    if (res.status === 404) throw new Error(`User not found: ${upn}`);
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Graph lookup failed: ${text}`);
-    }
-
-    const data = await res.json();
-    return { id: data.id, mail: data.mail || data.userPrincipalName, displayName: data.displayName || null };
-  } catch (err) {
-    console.error(`❌ [GET USER] Error:`, err.message);
-    throw err;
+  if (res.status === 404) throw new Error(`User not found: ${upn}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Graph lookup failed: ${text}`);
   }
-};
-const getManagerEmail = async (userEmail) => {
-  try {
-    const token = await getAccessToken();
 
-    const res = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/manager?$select=mail,userPrincipalName,displayName`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    if (!res.ok) {
-      console.log("⚠️ Manager not found for:", userEmail);
-      return null;
-    }
-
-    const data = await res.json();
-
-    return data.mail || data.userPrincipalName || null;
-
-  } catch (err) {
-    console.error("❌ Error fetching manager:", err.message);
-    return null;
-  }
+  const data = await res.json();
+  return { id: data.id, mail: data.mail || data.userPrincipalName, displayName: data.displayName || null };
 };
 
 // ===================== UPLOAD HANDLER =====================
@@ -618,7 +572,6 @@ app.post("/verify-user", async (req, res) => {
     if (resp.status === 404) return res.json({ exists: false });
     if (!resp.ok) {
       const text = await resp.text();
-      console.error('❌ Graph verify error:', resp.status, text);
       return res.status(500).json({ message: 'Graph lookup failed' });
     }
 
@@ -634,7 +587,7 @@ app.post("/verify-user", async (req, res) => {
   }
 });
 
-// -------- Admin Notifications --------
+// -------- Admin Notifications (KEEP AS IS) --------
 app.post("/api/notify-admin-added", async (req, res) => {
   try {
     const { actor, target } = req.body || {};
@@ -656,32 +609,29 @@ app.post("/api/notify-admin-added", async (req, res) => {
         { label: "Added User", value: `${targetName} (${targetMail || '—'})` },
         { label: "When (IST)", value: nowIST },
       ],
-      description: `You have successfully added ${targetName} as a Helpdesk Admin.`,
       actionLink: process.env.PROD_URL,
       actionText: "Open Helpdesk"
     });
 
     const targetHtml = buildHtmlEmail({
       title: `You were added as Helpdesk Admin`,
-      subtitle: `You have been granted admin rights in Helpdesk`,
+      subtitle: `You have been granted admin rights`,
       statusColor: "#0ea5e9",
       fields: [
         { label: "Added By", value: actorName },
         { label: "When (IST)", value: nowIST },
-        { label: "Group", value: "Helpdesk_Admin" },
       ],
-      description: `You are added as new admin in Helpdesk portal by ${actorName}. If this was unexpected, please contact your IT department.`,
       actionLink: process.env.PROD_URL,
       actionText: "Open Helpdesk"
     });
 
-    const actorSend = actorMail ? await sendEmail(actorMail, `Admin Added — ${targetName} added to Helpdesk_Admin`, actorHtml) : false;
-    const targetSend = targetMail ? await sendEmail(targetMail, `You were added as Helpdesk Admin`, targetHtml) : false;
+    if (actorMail) await sendEmail(actorMail, `Admin Added — ${targetName} added to Helpdesk_Admin`, actorHtml);
+    if (targetMail) await sendEmail(targetMail, `You were added as Helpdesk Admin`, targetHtml);
 
-    return res.json({ message: "Notification attempted", actorNotified: !!actorSend, targetNotified: !!targetSend });
+    return res.json({ message: "Notification attempted" });
   } catch (err) {
     console.error("❌ notify-admin-added error:", err);
-    return res.status(500).json({ message: "Failed to send admin-added notifications", error: err.message });
+    return res.status(500).json({ message: "Failed to send notifications", error: err.message });
   }
 });
 
@@ -706,7 +656,6 @@ app.post("/api/notify-admin-removed", async (req, res) => {
         { label: "Removed User", value: `${targetName} (${targetMail || '—'})` },
         { label: "When (IST)", value: nowIST },
       ],
-      description: `You have successfully removed ${targetName} from Helpdesk Admins.`,
       actionLink: process.env.PROD_URL,
       actionText: "Open Helpdesk"
     });
@@ -718,51 +667,44 @@ app.post("/api/notify-admin-removed", async (req, res) => {
       fields: [
         { label: "Removed By", value: actorName },
         { label: "When (IST)", value: nowIST },
-        { label: "Group", value: "Helpdesk_Admin" },
       ],
-      description: `You are removed from admin in Helpdesk portal by ${actorName}. If this was unexpected, please contact your IT department.`,
       actionLink: process.env.PROD_URL,
       actionText: "Open Helpdesk"
     });
 
-    const actorSend = actorMail ? await sendEmail(actorMail, `Admin Removed — ${targetName} removed from Helpdesk_Admin`, actorHtml) : false;
-    const targetSend = targetMail ? await sendEmail(targetMail, `You were removed from Helpdesk Admins`, targetHtml,) : false;
+    if (actorMail) await sendEmail(actorMail, `Admin Removed — ${targetName} removed from Helpdesk_Admin`, actorHtml);
+    if (targetMail) await sendEmail(targetMail, `You were removed from Helpdesk Admins`, targetHtml);
 
-    return res.json({ message: "Notification attempted", actorNotified: !!actorSend, targetNotified: !!targetSend });
+    return res.json({ message: "Notification attempted" });
   } catch (err) {
     console.error("❌ notify-admin-removed error:", err);
-    return res.status(500).json({ message: "Failed to send admin-removed notifications", error: err.message });
+    return res.status(500).json({ message: "Failed to send notifications", error: err.message });
   }
 });
+
 // ===================== CATEGORY MANAGEMENT =====================
 
-// -------- GET /api/categories --------
+// GET /api/categories
 app.get("/api/categories", async (req, res) => {
   try {
-    // optional ?dlId=xxx filter
-    const filter = req.query.dlId
-      ? { "distributionList.id": req.query.dlId }
-      : {};
- 
+    const filter = req.query.dlId ? { "distributionList.id": req.query.dlId } : {};
     const categories = await CategoryConfig.find(filter).sort({ createdAt: -1 });
- 
     const transformed = categories.map(cat => ({
-      id:               cat._id.toString(),
-      categoryName:     cat.categoryName,
-      name:             cat.name,
-      type:             cat.type,
+      id: cat._id.toString(),
+      categoryName: cat.categoryName,
+      name: cat.name,
+      type: cat.type,
       distributionList: cat.distributionList || {},
-      subCategories:    cat.subCategories    || [],
+      subCategories: cat.subCategories || [],
       assignmentGroups: cat.assignmentGroups || [],
-      cc:               cat.cc               || [],
-      dlGroupMembers:   cat.dlGroupMembers   || [],
-      dlGroupOwners:    cat.dlGroupOwners    || [],
-      createdBy:        cat.createdBy        || {},
-      updatedBy:        cat.updatedBy        || {},
-      createdAt:        cat.createdAt,
-      updatedAt:        cat.updatedAt,
+      cc: cat.cc || [],
+      dlGroupMembers: cat.dlGroupMembers || [],
+      dlGroupOwners: cat.dlGroupOwners || [],
+      createdBy: cat.createdBy || {},
+      updatedBy: cat.updatedBy || {},
+      createdAt: cat.createdAt,
+      updatedAt: cat.updatedAt,
     }));
- 
     res.json(transformed);
   } catch (err) {
     console.error("❌ Get categories error:", err);
@@ -770,7 +712,7 @@ app.get("/api/categories", async (req, res) => {
   }
 });
 
-// -------- POST /api/categories --------
+// POST /api/categories (with Assignment Group Members notification)
 app.post("/api/categories", async (req, res) => {
   try {
     const {
@@ -789,275 +731,196 @@ app.post("/api/categories", async (req, res) => {
 
     if (isEditMode && existingCategoryId) {
       const existing = await CategoryConfig.findById(existingCategoryId);
+      if (!existing) return res.status(404).json({ message: "Category not found" });
 
-      if (!existing) {
-        return res.status(404).json({ message: "Category not found" });
-      }
+      const existingNames = new Set((existing.subCategories || []).map(s => s.name.toLowerCase().trim()));
+      const newSubs = subCategories.filter(sc => {
+        const name = sc.name?.toLowerCase().trim();
+        return name && !existingNames.has(name);
+      });
 
-      // Add only NEW subcategories
-      const existingNames = new Set(
-          (existing.subCategories || []).map(s => s.name.toLowerCase().trim())
-        );
-
-        const newSubs = subCategories.filter(sc => {
-          const name = sc.name?.toLowerCase().trim();
-          return name && !existingNames.has(name);
-        });
-
-      existing.subCategories = [
-        ...(existing.subCategories || []),
-        ...newSubs
-      ];
-
-      existing.assignmentGroups = [
-        ...(existing.assignmentGroups || []),
-        ...(assignmentGroups || [])
-      ];
-
+      existing.subCategories = [...(existing.subCategories || []), ...newSubs];
+      existing.assignmentGroups = [...(existing.assignmentGroups || []), ...(assignmentGroups || [])];
       await existing.save();
 
-      return res.json({
-        message: "Category updated successfully",
-        category: existing
-      });
+      return res.json({ message: "Category updated successfully", category: existing });
     }
  
-    // ── Validation ──────────────────────────────────────────────
-    if (!categoryName || !categoryName.trim())
-      return res.status(400).json({ message: "Category name is required" });
- 
-    if (!distributionList?.id)
-      return res.status(400).json({ message: "Distribution List ID is required" });
- 
-    if (!subCategories || subCategories.length === 0)
-      return res.status(400).json({ message: "At least one sub-category is required" });
- 
-    // Unique categoryName check
-    const nameExists = await CategoryConfig.findOne({
-      categoryName: { $regex: new RegExp(`^${categoryName.trim()}$`, "i") },
-    });
-    if (nameExists)
-      return res.status(400).json({ message: `Category "${categoryName.trim()}" already exists` });
- 
-    // Sub-category duplicate check within request
-    const subNames = subCategories.map(sc =>
-      (typeof sc === "string" ? sc : sc.name).toLowerCase().trim()
-    );
-    const dupsInReq = subNames.filter((n, i) => subNames.indexOf(n) !== i);
-    if (dupsInReq.length)
-      return res.status(400).json({ message: `Duplicate sub-category names: ${[...new Set(dupsInReq)].join(", ")}` });
- 
-    const finalSubs = subCategories.map(sc =>
-      typeof sc === "string" ? { name: sc } : sc
-    );
- 
-    // Validate assignment groups
+    if (!categoryName?.trim()) return res.status(400).json({ message: "Category name is required" });
+    if (!distributionList?.id) return res.status(400).json({ message: "Distribution List ID is required" });
+    if (!subCategories?.length) return res.status(400).json({ message: "At least one sub-category is required" });
+
+    const nameExists = await CategoryConfig.findOne({ categoryName: { $regex: new RegExp(`^${categoryName.trim()}$`, "i") } });
+    if (nameExists) return res.status(400).json({ message: `Category "${categoryName.trim()}" already exists` });
+
+    const finalSubs = subCategories.map(sc => typeof sc === "string" ? { name: sc } : sc);
     const finalGroups = (Array.isArray(assignmentGroups) ? assignmentGroups : []).map(g => ({
-      name:    g.name?.trim() || "Unnamed Group",
+      name: g.name?.trim() || "Unnamed Group",
       members: Array.isArray(g.members) ? g.members : [],
     }));
- 
-    // ── Create ───────────────────────────────────────────────────
+
     const category = await CategoryConfig.create({
-      categoryName:    categoryName.trim(),
-      name:            categoryName.trim(),
-      type:            "NORMAL",
+      categoryName: categoryName.trim(),
+      name: categoryName.trim(),
+      type: "NORMAL",
       distributionList: {
-        id:           distributionList.id,
-        name:         distributionList.name         || "",
-        mail:         distributionList.mail         || "",
+        id: distributionList.id,
+        name: distributionList.name || "",
+        mail: distributionList.mail || "",
         mailNickname: distributionList.mailNickname || "",
       },
-      subCategories:    finalSubs,
+      subCategories: finalSubs,
       assignmentGroups: finalGroups,
-      cc:               [],
-      dlGroupMembers:   Array.isArray(dlGroupMembers) ? dlGroupMembers : [],
-      dlGroupOwners:    Array.isArray(dlGroupOwners)  ? dlGroupOwners  : [],
-      createdBy:        createdBy || {},
+      cc: [],
+      dlGroupMembers: Array.isArray(dlGroupMembers) ? dlGroupMembers : [],
+      dlGroupOwners: Array.isArray(dlGroupOwners) ? dlGroupOwners : [],
+      createdBy: createdBy || {},
     });
- 
+
     console.log("✅ [CREATE CATEGORY] Saved:", categoryName.trim());
- 
-    res.status(201).json({
-      id:               category._id.toString(),
-      categoryName:     category.categoryName,
-      name:             category.name,
-      distributionList: category.distributionList,
-      subCategories:    category.subCategories,
-      assignmentGroups: category.assignmentGroups,
-      dlGroupMembers:   category.dlGroupMembers,
-      dlGroupOwners:    category.dlGroupOwners,
-      createdAt:        category.createdAt,
-    });
- 
-    // ── Background email notifications (unchanged logic) ─────────
+    res.status(201).json(category);
+
+    // Background email notifications
     setImmediate(async () => {
       try {
-        const prodUrl  = process.env.PROD_URL;
-        const dlName   = distributionList.name || categoryName.trim();
-        const nowIST   = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-        const subList  = subCatSummaryText(finalSubs);
- 
-        const memberEmails   = pluckEmails(dlGroupMembers);
-        const ownerEmails    = pluckEmails(dlGroupOwners);
-        const otherApprovers = collectOtherApprovers(finalSubs);
-        const creatorEmail   = createdBy?.mail || "";
- 
+        const prodUrl = process.env.PROD_URL;
+        const dlName = distributionList.name || categoryName.trim();
+        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        const subList = finalSubs.map((s, i) => `${i + 1}. ${s.name}`).join("\n");
+
+        const memberEmails = pluckEmails(dlGroupMembers);
+        const ownerEmails = pluckEmails(dlGroupOwners);
+        const creatorEmail = createdBy?.mail || "";
+        
+        // Get Assignment Group Members
+        const assignmentGroupEmails = [];
+        for (const group of finalGroups) {
+          if (group.members) {
+            for (const member of group.members) {
+              const email = member.mail || member.email;
+              if (email && !assignmentGroupEmails.includes(email)) {
+                assignmentGroupEmails.push(email);
+              }
+            }
+          }
+        }
+
         const commonFields = [
-          { label: "Category Name",     value: categoryName.trim() },
+          { label: "Category Name", value: categoryName.trim() },
           { label: "Distribution List", value: dlName },
-          { label: "DL Email",          value: distributionList.mail || "—" },
-          { label: "Sub-Categories",    value: finalSubs.length },
-          { label: "Created By",        value: createdBy?.name || createdBy?.mail || "Admin" },
-          { label: "Created At (IST)",  value: nowIST },
+          { label: "Created By", value: createdBy?.name || "Admin" },
+          { label: "Created At (IST)", value: nowIST },
         ];
- 
-        // 1. Creator
+
+        // Creator
         if (creatorEmail) {
           const html = buildHtmlEmail({
-            title:       `✅ Category Created: ${categoryName.trim()}`,
-            subtitle:    `You successfully created a new helpdesk category`,
+            title: `✅ Category Created: ${categoryName.trim()}`,
+            subtitle: `You successfully created a new category`,
             statusColor: "#002060",
-            fields:      commonFields,
-            description: `Sub-categories configured:\n\n${subList}`,
-            actionLink:  `${prodUrl}/settings`,
-            actionText:  "View Settings",
+            fields: commonFields,
+            description: `Sub-categories:\n\n${subList}`,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Settings",
           });
-          await sendEmail(creatorEmail, `[CATEGORY CREATED] ${categoryName.trim()} — Configuration Confirmed`, html);
+          await sendEmail(creatorEmail, `[CATEGORY CREATED] ${categoryName.trim()}`, html);
         }
- 
-        // 2. DL Members
+
+        // DL Members
         if (memberEmails.length > 0) {
           const html = buildHtmlEmail({
-            title:       `📋 New Category Created: ${categoryName.trim()}`,
-            subtitle:    `A new helpdesk category has been set up for your distribution list`,
+            title: `📋 New Category Created: ${categoryName.trim()}`,
+            subtitle: `A new category has been set up for your DL`,
             statusColor: "#0369a1",
-            fields:      [...commonFields, { label: "Your Role", value: "DL Group Member" }],
-            description: `You are a member of the "${dlName}" distribution list.\n\nSub-categories now available:\n\n${subList}\n\nTickets submitted under these categories will be routed to your group.`,
-            actionLink:  prodUrl,
-            actionText:  "Open Helpdesk",
+            fields: [...commonFields, { label: "Your Role", value: "DL Group Member" }],
+            description: `Sub-categories:\n\n${subList}`,
+            actionLink: prodUrl,
+            actionText: "Open Helpdesk",
           });
-          await sendEmail(memberEmails, `[CATEGORY CREATED] ${categoryName.trim()} — New Helpdesk Category for Your Group`, html);
+          await sendEmail(memberEmails, `[CATEGORY CREATED] ${categoryName.trim()}`, html);
         }
- 
-        // 3. DL Owners (skip those already in members)
+
+        // DL Owners
         const ownerOnlyEmails = ownerEmails.filter(e => !memberEmails.includes(e));
         if (ownerOnlyEmails.length > 0) {
           const html = buildHtmlEmail({
-            title:       `📋 New Category Created: ${categoryName.trim()}`,
-            subtitle:    `A new helpdesk category has been configured under your distribution list`,
+            title: `📋 New Category Created: ${categoryName.trim()}`,
+            subtitle: `A new category has been configured under your DL`,
             statusColor: "#059669",
-            fields:      [...commonFields, { label: "Your Role", value: "DL Group Owner" }],
-            description: `As an owner of "${dlName}", a new helpdesk category has been created.\n\nSub-categories:\n\n${subList}`,
-            actionLink:  `${prodUrl}/settings`,
-            actionText:  "View Settings",
+            fields: [...commonFields, { label: "Your Role", value: "DL Group Owner" }],
+            description: `Sub-categories:\n\n${subList}`,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Settings",
           });
-          await sendEmail(ownerOnlyEmails, `[CATEGORY CREATED] ${categoryName.trim()} — Category Created Under Your Group`, html);
+          await sendEmail(ownerOnlyEmails, `[CATEGORY CREATED] ${categoryName.trim()}`, html);
         }
- 
-        // 4. Other Approvers
-        for (const approver of otherApprovers) {
-          const theirSubs = finalSubs
-            .filter(s => s.approval?.otherApprovers?.some(a => (a.email || "").toLowerCase() === approver.email))
-            .map(s => s.name);
+
+        // ✅ NEW: Assignment Group Members
+        if (assignmentGroupEmails.length > 0) {
           const html = buildHtmlEmail({
-            title:       `🔔 You are an Approver for: ${categoryName.trim()}`,
-            subtitle:    `You have been designated as an approver for helpdesk tickets`,
+            title: `🔧 New Category Created: ${categoryName.trim()}`,
+            subtitle: `A new category has been assigned to your group`,
             statusColor: "#7c3aed",
-            fields: [
-              { label: "Category",          value: categoryName.trim() },
-              { label: "Distribution List", value: dlName },
-              { label: "Your Role",         value: "Custom Approver" },
-              { label: "Sub-Categories",    value: theirSubs.join(", ") },
-              { label: "Assigned By",       value: createdBy?.name || "Admin" },
-              { label: "Assigned At (IST)", value: nowIST },
-            ],
-            description: `You have been added as a custom approver for:\n\n${theirSubs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nUnder the "${categoryName.trim()}" category.`,
-            actionLink:  prodUrl,
-            actionText:  "Open Helpdesk",
+            fields: [...commonFields, { label: "Your Role", value: "Assignment Group Member" }],
+            description: `Your group will handle tickets for this category.\n\nSub-categories:\n\n${subList}`,
+            actionLink: prodUrl,
+            actionText: "Open Helpdesk",
           });
-          await sendEmail(approver.email, `[APPROVER ASSIGNED] ${categoryName.trim()} — You are a Designated Approver`, html);
+          await sendEmail(assignmentGroupEmails, `[CATEGORY ASSIGNED] ${categoryName.trim()}`, html);
         }
- 
+
         console.log(`✅ [CATEGORY] All CREATE notifications sent for: ${categoryName.trim()}`);
       } catch (mailErr) {
         console.error("❌ [CATEGORY] CREATE notification error:", mailErr.message);
       }
     });
- 
   } catch (err) {
     console.error("❌ [CREATE CATEGORY] Error:", err);
-    // Handle mongoose duplicate key error
-    if (err.code === 11000) {
-      return res.status(400).json({ message: "A category with this name already exists" });
-    }
+    if (err.code === 11000) return res.status(400).json({ message: "Category with this name already exists" });
     return res.status(500).json({ message: "Failed to create category", error: err.message });
   }
 });
 
-// -------- DELETE /api/categories/:id --------
+// Helper function for pluckEmails
+const pluckEmails = (arr = []) => [...new Set(arr.map(x => (x.email || x.mail || '')).filter(Boolean))];
+
+// DELETE /api/categories/:id
 app.delete("/api/categories/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    
     const category = await CategoryConfig.findById(id);
-    if (!category) {
-      return res.status(404).json({ message: "Category not found" });
-    }
+    if (!category) return res.status(404).json({ message: "Category not found" });
     
     const categoryName = category.categoryName;
     await CategoryConfig.findByIdAndDelete(id);
     
     console.log("✅ [DELETE CATEGORY] Deleted:", categoryName);
-    
-    res.json({ 
-      message: "Category deleted successfully", 
-      categoryName: categoryName 
-    });
-    
+    res.json({ message: "Category deleted successfully", categoryName });
   } catch (err) {
     console.error("❌ [DELETE CATEGORY] Error:", err);
     res.status(500).json({ message: "Failed to delete category", error: err.message });
   }
 });
 
-// -------- PUT /api/categories/:id --------
+// PUT /api/categories/:id (with Assignment Group Members notification)
 app.put("/api/categories/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      categoryName,
-      distributionList,
-      subCategories,
-      assignmentGroups,
-      dlGroupMembers,
-      dlGroupOwners,
-      updatedBy,
-    } = req.body;
+    const { categoryName, distributionList, subCategories, assignmentGroups, dlGroupMembers, dlGroupOwners, updatedBy } = req.body;
  
-    if (!categoryName?.trim())
-      return res.status(400).json({ message: "Category name is required" });
+    if (!categoryName?.trim()) return res.status(400).json({ message: "Category name is required" });
  
     const oldCategory = await CategoryConfig.findById(id);
-    if (!oldCategory)
-      return res.status(404).json({ message: "Category not found" });
+    if (!oldCategory) return res.status(404).json({ message: "Category not found" });
  
-    // ❌ COMPLETELY REMOVED - No DL change authorization check
-    // const mainDLChanged = distributionList?.id && oldCategory.distributionList?.id !== distributionList.id;
-    // if (mainDLChanged) { ... }
- 
-    // ── categoryName uniqueness (allow keeping same name) ────────
     const nameConflict = await CategoryConfig.findOne({
       categoryName: { $regex: new RegExp(`^${categoryName.trim()}$`, "i") },
       _id: { $ne: id },
     });
-    if (nameConflict)
-      return res.status(400).json({ message: `Category name "${categoryName.trim()}" is already taken` });
+    if (nameConflict) return res.status(400).json({ message: `Category name "${categoryName.trim()}" is already taken` });
  
-    // ── Process sub-categories ───────────────────────────────────
     const finalSubs = (subCategories || []).map(sc => {
       if (typeof sc === "string") return { name: sc };
-      
       return {
         name: sc.name,
         description: sc.description || "",
@@ -1065,14 +928,8 @@ app.put("/api/categories/:id", async (req, res) => {
         assignmentGroups: Array.isArray(sc.assignmentGroups) ? sc.assignmentGroups : [],
         dlGroupMembers: Array.isArray(sc.dlGroupMembers) ? sc.dlGroupMembers : [],
         dlGroupOwners: Array.isArray(sc.dlGroupOwners) ? sc.dlGroupOwners : [],
-        onBehalf: {
-          enabled: sc.onBehalf?.enabled || false,
-          required: sc.onBehalf?.required || false,
-        },
-        attachments: {
-          enabled: sc.attachments?.enabled || false,
-          required: sc.attachments?.required || false,
-        },
+        onBehalf: { enabled: sc.onBehalf?.enabled || false, required: sc.onBehalf?.required || false },
+        attachments: { enabled: sc.attachments?.enabled || false, required: sc.attachments?.required || false },
         approval: {
           requireApproval: sc.approval?.requireApproval || false,
           reportingManager: sc.approval?.reportingManager || false,
@@ -1082,14 +939,12 @@ app.put("/api/categories/:id", async (req, res) => {
       };
     });
  
-    // ── Assignment groups ────────────────────────────────────────
     const finalGroups = (Array.isArray(assignmentGroups) ? assignmentGroups : []).map(g => ({
-      name:      g.name?.trim() || "Unnamed Group",
-      members:   Array.isArray(g.members) ? g.members : [],
+      name: g.name?.trim() || "Unnamed Group",
+      members: Array.isArray(g.members) ? g.members : [],
       createdAt: g.createdAt || new Date(),
     }));
  
-    // ── Build update object ─────────────────────────────────────
     const updateData = {
       categoryName: categoryName.trim(),
       name: categoryName.trim(),
@@ -1110,118 +965,99 @@ app.put("/api/categories/:id", async (req, res) => {
       };
     }
  
-    // ── Save ─────────────────────────────────────────────────────
-    const updated = await CategoryConfig.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    );
- 
+    const updated = await CategoryConfig.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
     console.log("✅ [UPDATE CATEGORY] Saved:", categoryName.trim());
+    res.json(updated);
  
-    res.json({
-      id: updated._id.toString(),
-      categoryName: updated.categoryName,
-      name: updated.name,
-      distributionList: updated.distributionList,
-      subCategories: updated.subCategories,
-      assignmentGroups: updated.assignmentGroups,
-      dlGroupMembers: updated.dlGroupMembers,
-      dlGroupOwners: updated.dlGroupOwners,
-      updatedAt: updated.updatedAt,
-    });
- 
-    // ── Background email notifications ───────────────────────────
+    // Background email notifications with Assignment Group Members
     setImmediate(async () => {
       try {
-        const prodUrl      = process.env.PROD_URL;
-        const dlName       = distributionList?.name || categoryName.trim();
-        const nowIST       = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        const prodUrl = process.env.PROD_URL;
+        const dlName = distributionList?.name || categoryName.trim();
+        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
         const memberEmails = pluckEmails(dlGroupMembers);
-        const ownerEmails  = pluckEmails(dlGroupOwners);
-        const otherApprovers = collectOtherApprovers(finalSubs);
+        const ownerEmails = pluckEmails(dlGroupOwners);
         const updaterEmail = updatedBy?.mail || "";
+        
+        // Get Assignment Group Members from NEW groups
+        const assignmentGroupEmails = [];
+        for (const group of finalGroups) {
+          if (group.members) {
+            for (const member of group.members) {
+              const email = member.mail || member.email;
+              if (email && !assignmentGroupEmails.includes(email)) {
+                assignmentGroupEmails.push(email);
+              }
+            }
+          }
+        }
  
         const changeLines = diffSubCategories(oldCategory.subCategories || [], finalSubs);
-        const changeText  = changeLines.length > 0 ? changeLines.join("\n") : "Minor configuration updates were made.";
-        const newSubList  = subCatSummaryText(finalSubs);
+        const changeText = changeLines.length > 0 ? changeLines.join("\n") : "Minor configuration updates were made.";
+        const newSubList = finalSubs.map((s, i) => `${i + 1}. ${s.name}`).join("\n");
  
         const commonFields = [
-          { label: "Category Name",     value: categoryName.trim() },
+          { label: "Category Name", value: categoryName.trim() },
           { label: "Distribution List", value: dlName },
-          { label: "DL Email",          value: distributionList?.mail || "—" },
-          { label: "Updated By",        value: updatedBy?.name || updatedBy?.mail || "Admin" },
-          { label: "Updated At (IST)",  value: nowIST },
-          { label: "Sub-Categories",    value: finalSubs.length },
+          { label: "Updated By", value: updatedBy?.name || "Admin" },
+          { label: "Updated At (IST)", value: nowIST },
         ];
  
-        // 1. Updater
+        // Updater
         if (updaterEmail) {
           const html = buildHtmlEmail({
-            title:       `✅ Category Updated: ${categoryName.trim()}`,
-            subtitle:    `Your changes have been saved`,
+            title: `✅ Category Updated: ${categoryName.trim()}`,
+            subtitle: `Your changes have been saved`,
             statusColor: "#002060",
-            fields:      commonFields,
-            description: `What changed:\n\n${changeText}\n\nCurrent sub-category configuration:\n\n${newSubList}`,
-            actionLink:  `${prodUrl}/settings`,
-            actionText:  "View Settings",
+            fields: commonFields,
+            description: `What changed:\n\n${changeText}\n\nCurrent sub-categories:\n\n${newSubList}`,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Settings",
           });
-          await sendEmail(updaterEmail, `[CATEGORY UPDATED] ${categoryName.trim()} — Changes Saved`, html);
+          await sendEmail(updaterEmail, `[CATEGORY UPDATED] ${categoryName.trim()}`, html);
         }
  
-        // 2. DL Members
+        // DL Members
         if (memberEmails.length > 0) {
           const html = buildHtmlEmail({
-            title:       `🔄 Category Updated: ${categoryName.trim()}`,
-            subtitle:    `The helpdesk category for your distribution list has been updated`,
+            title: `🔄 Category Updated: ${categoryName.trim()}`,
+            subtitle: `The category for your DL has been updated`,
             statusColor: "#0369a1",
-            fields:      [...commonFields, { label: "Your Role", value: "DL Group Member" }],
-            description: `What changed:\n\n${changeText}\n\n---\n\nCurrent sub-category configuration:\n\n${newSubList}`,
-            actionLink:  prodUrl,
-            actionText:  "Open Helpdesk",
+            fields: [...commonFields, { label: "Your Role", value: "DL Group Member" }],
+            description: `What changed:\n\n${changeText}\n\nCurrent sub-categories:\n\n${newSubList}`,
+            actionLink: prodUrl,
+            actionText: "Open Helpdesk",
           });
-          await sendEmail(memberEmails, `[CATEGORY UPDATED] ${categoryName.trim()} — Configuration Changes`, html);
+          await sendEmail(memberEmails, `[CATEGORY UPDATED] ${categoryName.trim()}`, html);
         }
  
-        // 3. DL Owners (skip those already in members)
+        // DL Owners
         const ownerOnlyEmails = ownerEmails.filter(e => !memberEmails.includes(e));
         if (ownerOnlyEmails.length > 0) {
           const html = buildHtmlEmail({
-            title:       `🔄 Category Updated: ${categoryName.trim()}`,
-            subtitle:    `A category under your distribution list has been updated`,
+            title: `🔄 Category Updated: ${categoryName.trim()}`,
+            subtitle: `A category under your DL has been updated`,
             statusColor: "#059669",
-            fields:      [...commonFields, { label: "Your Role", value: "DL Group Owner" }],
-            description: `The category "${categoryName.trim()}" was updated.\n\nWhat changed:\n\n${changeText}\n\nCurrent sub-categories:\n\n${newSubList}`,
-            actionLink:  `${prodUrl}/settings`,
-            actionText:  "View Settings",
+            fields: [...commonFields, { label: "Your Role", value: "DL Group Owner" }],
+            description: `What changed:\n\n${changeText}\n\nCurrent sub-categories:\n\n${newSubList}`,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Settings",
           });
-          await sendEmail(ownerOnlyEmails, `[CATEGORY UPDATED] ${categoryName.trim()} — Changes to Your Group's Category`, html);
+          await sendEmail(ownerOnlyEmails, `[CATEGORY UPDATED] ${categoryName.trim()}`, html);
         }
  
-        // 4. Other Approvers
-        const oldApproverEmails = new Set(collectOtherApprovers(oldCategory.subCategories || []).map(a => a.email));
-        for (const approver of otherApprovers) {
-          const theirSubs = finalSubs
-            .filter(s => s.approval?.otherApprovers?.some(a => (a.email || "").toLowerCase() === approver.email))
-            .map(s => s.name);
-          const isNew = !oldApproverEmails.has(approver.email);
+        // ✅ NEW: Assignment Group Members
+        if (assignmentGroupEmails.length > 0) {
           const html = buildHtmlEmail({
-            title:       `🔄 Category Updated: ${categoryName.trim()}`,
-            subtitle:    isNew ? `You have been added as an approver` : `A category you approve for has been updated`,
+            title: `🔄 Category Updated: ${categoryName.trim()}`,
+            subtitle: `A category assigned to your group has been updated`,
             statusColor: "#7c3aed",
-            fields: [
-              { label: "Category",          value: categoryName.trim() },
-              { label: "Distribution List", value: dlName },
-              { label: "Your Role",         value: "Custom Approver" },
-              { label: "Sub-Categories",    value: theirSubs.join(", ") },
-              { label: "Updated By",        value: updatedBy?.name || "Admin" },
-              { label: "Updated At (IST)",  value: nowIST },
-            ],
-            description: `${isNew ? `You have been newly added as an approver for: ${theirSubs.join(", ")}` : `You remain a designated approver for: ${theirSubs.join(", ")}`}\n\nWhat changed:\n\n${changeText}`,
-            actionLink:  prodUrl,
-            actionText:  "Open Helpdesk",
+            fields: [...commonFields, { label: "Your Role", value: "Assignment Group Member" }],
+            description: `What changed:\n\n${changeText}\n\nCurrent sub-categories:\n\n${newSubList}`,
+            actionLink: prodUrl,
+            actionText: "Open Helpdesk",
           });
-          await sendEmail(approver.email, `[CATEGORY UPDATED] ${categoryName.trim()} — Approver Notification`, html);
+          await sendEmail(assignmentGroupEmails, `[CATEGORY UPDATED] ${categoryName.trim()} - Group Notification`, html);
         }
  
         console.log(`✅ [CATEGORY] All UPDATE notifications sent for: ${categoryName.trim()}`);
@@ -1229,43 +1065,950 @@ app.put("/api/categories/:id", async (req, res) => {
         console.error("❌ [CATEGORY] UPDATE notification error:", mailErr.message);
       }
     });
- 
   } catch (err) {
     console.error("❌ [UPDATE CATEGORY] Error:", err.message);
-    if (err.code === 11000)
-      return res.status(400).json({ message: "A category with this name already exists" });
+    if (err.code === 11000) return res.status(400).json({ message: "Category with this name already exists" });
     return res.status(500).json({ message: "Failed to update category" });
   }
 });
 
-// -------- Helper: Get Category Heads (DL MEMBERS) --------
-const getCategoryHeads = async (categoryName) => {
-  try {
-    const config = await CategoryConfig.findOne({
-      name: { $regex: new RegExp("^" + categoryName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") }
-    });
-    if (!config) return [];
-    return (config.dlGroupMembers || []).map(m => m.email).filter(Boolean);
-  } catch (err) {
-    console.error("❌ Error getting DL members:", err);
-    return [];
+// Helper for diffSubCategories
+const diffSubCategories = (oldSubs = [], newSubs = []) => {
+  const changes = [];
+  const oldByName = Object.fromEntries(oldSubs.map(s => [s.name.toLowerCase(), s]));
+  const newByName = Object.fromEntries(newSubs.map(s => [s.name.toLowerCase(), s]));
+
+  for (const sub of newSubs) {
+    if (!oldByName[sub.name.toLowerCase()])
+      changes.push(`+ Sub-category added: "${sub.name}"`);
   }
+  for (const sub of oldSubs) {
+    if (!newByName[sub.name.toLowerCase()])
+      changes.push(`- Sub-category removed: "${sub.name}"`);
+  }
+  return changes;
 };
-// ===================== PASSWORD RESET APPROVAL ROUTES =====================
 
-// POST /api/requests/:id/approve — Handles BOTH Password Reset AND Admin Access
-app.post("/api/requests/:id/approve", async (req, res) => {
+// ===================== SERVICE SCHEMA =====================
+const serviceSchema = new mongoose.Schema({
+  serviceName: { type: String, required: true, trim: true },
+  category: { id: String, name: String },
+  distributionList: { id: String, name: String, mail: String, mailNickname: String },
+  assignmentGroup: { groupId: String, groupName: String, members: [{ id: String, name: String, email: String, isManual: Boolean }] },
+  assignedMember: { memberId: String, memberName: String, memberEmail: String },
+  dlGroupMembers: [{ id: String, email: String, displayName: String }],
+  createdBy: { id: String, name: String, mail: String },
+}, { timestamps: true });
+
+const Service = mongoose.model('Service', serviceSchema);
+
+// ===================== SERVICE ROUTES =====================
+
+app.get('/api/services', async (req, res) => {
   try {
-    const { actorEmail, actorName, actorId, note } = req.body;
+    const services = await Service.find().sort({ createdAt: -1 });
+    res.json(services);
+  } catch (err) {
+    console.error('❌ Get services error:', err);
+    res.status(500).json({ message: 'Failed to fetch services' });
+  }
+});
 
-    if (!actorEmail) {
-      return res.status(400).json({ message: "Actor email is required" });
+app.post('/api/services', async (req, res) => {
+  try {
+    const { serviceName, category, distributionList, assignmentGroup, dlGroupMembers = [], createdBy } = req.body;
+
+    if (!serviceName?.trim()) return res.status(400).json({ message: 'Service name is required' });
+    if (!category?.name) return res.status(400).json({ message: 'Category is required' });
+    if (!distributionList?.id) return res.status(400).json({ message: 'Distribution List is required' });
+
+    const service = await Service.create({
+      serviceName: serviceName.trim(),
+      category,
+      distributionList,
+      assignmentGroup,
+      dlGroupMembers: Array.isArray(dlGroupMembers) ? dlGroupMembers : [],
+      createdBy: createdBy || {},
+    });
+
+    console.log('✅ [CREATE SERVICE] Saved:', serviceName.trim());
+    res.status(201).json(service);
+
+    // Email notifications (keep as is)
+    setImmediate(async () => {
+      try {
+        const prodUrl = process.env.PROD_URL;
+        const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        const commonFields = [
+          { label: 'Service Name', value: serviceName.trim() },
+          { label: 'Category', value: category.name },
+          { label: 'Created By', value: createdBy?.name || 'Admin' },
+          { label: 'Created At (IST)', value: nowIST },
+        ];
+
+        if (createdBy?.mail) {
+          const html = buildHtmlEmail({
+            title: `✅ Service Created: ${serviceName.trim()}`,
+            statusColor: '#002060',
+            fields: commonFields,
+            actionLink: `${prodUrl}/settings`,
+            actionText: 'View Settings',
+          });
+          await sendEmail(createdBy.mail, `[SERVICE CREATED] ${serviceName.trim()}`, html);
+        }
+
+        const dlEmails = [...new Set((dlGroupMembers || []).map(m => m.email).filter(Boolean))];
+        if (dlEmails.length > 0) {
+          const html = buildHtmlEmail({
+            title: `📋 New Service: ${serviceName.trim()}`,
+            statusColor: '#0369a1',
+            fields: [...commonFields, { label: 'Your Role', value: 'DL Group Member' }],
+            actionLink: prodUrl,
+            actionText: 'Open Helpdesk',
+          });
+          await sendEmail(dlEmails, `[SERVICE CREATED] ${serviceName.trim()}`, html);
+        }
+
+        const agEmails = [...new Set((assignmentGroup?.members || []).map(m => m.email || m.mail).filter(Boolean))];
+        if (agEmails.length > 0) {
+          const html = buildHtmlEmail({
+            title: `📢 New Service Assigned to Your Group`,
+            subtitle: `${serviceName.trim()} has been assigned to your group`,
+            statusColor: '#7c3aed',
+            fields: [...commonFields, { label: 'Your Role', value: 'Assignment Group Member' }],
+            actionLink: prodUrl,
+            actionText: 'Open Helpdesk',
+          });
+          await sendEmail(agEmails, `[GROUP ASSIGNED] ${serviceName.trim()}`, html);
+        }
+      } catch (mailErr) {
+        console.error('❌ [SERVICE] Notification error:', mailErr.message);
+      }
+    });
+  } catch (err) {
+    console.error('❌ [CREATE SERVICE] Error:', err);
+    return res.status(500).json({ message: 'Failed to create service', error: err.message });
+  }
+});
+
+app.get('/api/services/:id', async (req, res) => {
+  try {
+    const service = await Service.findById(req.params.id);
+    if (!service) return res.status(404).json({ message: "Service not found" });
+    res.json(service);
+  } catch (err) {
+    console.error("❌ Get service error:", err);
+    res.status(500).json({ message: "Failed to fetch service" });
+  }
+});
+
+app.put('/api/services/:id', async (req, res) => {
+  try {
+    const { serviceName, category, distributionList, assignmentGroup, assignedMember, dlGroupMembers } = req.body;
+    if (!serviceName?.trim()) return res.status(400).json({ message: "Service name is required" });
+
+    const updated = await Service.findByIdAndUpdate(req.params.id, {
+      serviceName: serviceName.trim(),
+      category,
+      distributionList,
+      assignmentGroup,
+      assignedMember,
+      dlGroupMembers: Array.isArray(dlGroupMembers) ? dlGroupMembers : [],
+    }, { new: true });
+
+    if (!updated) return res.status(404).json({ message: "Service not found" });
+    console.log("✅ [UPDATE SERVICE] Saved:", serviceName.trim());
+    res.json(updated);
+  } catch (err) {
+    console.error("❌ [UPDATE SERVICE] Error:", err);
+    res.status(500).json({ message: "Failed to update service" });
+  }
+});
+
+app.delete('/api/services/:id', async (req, res) => {
+  try {
+    const deleted = await Service.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Service not found" });
+    console.log("✅ [DELETE SERVICE] Deleted:", deleted.serviceName);
+    res.json({ message: "Service deleted successfully" });
+  } catch (err) {
+    console.error("❌ [DELETE SERVICE] Error:", err);
+    res.status(500).json({ message: "Failed to delete service" });
+  }
+});
+
+// ===================== REQUEST SCHEMA =====================
+const requestSchema = new mongoose.Schema({
+  requestNumber: { type: String, unique: true },
+  service: { id: String, name: String, categoryName: String },
+  assignmentGroup: { groupId: String, groupName: String, members: [{ id: String, name: String, email: String }] },
+  assignedMember: {
+    memberId: String,
+    memberName: String,
+    memberEmail: String
+  },
+  raisedBy: { id: String, name: String, mail: { type: String, required: true } },
+  onBehalf: {
+    enabled: { type: Boolean, default: false },
+    user: { id: String, name: String, mail: String }
+  },
+  description: { type: String, default: "" },
+  attachments: [{ id: String, driveId: String, fileName: String, fileType: String, url: String }],
+  approval: {
+    required: { type: Boolean, default: false },
+    status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
+    approvers: [{ id: String, name: String, email: String }],
+    approvedBy: { id: String, name: String, email: String },
+    approvedAt: Date,
+    comments: String,
+  },
+  status: { type: String, enum: ["open", "in_progress", "pending_approval", "resolved", "closed", "cancelled"], default: "open" },
+  priority: { type: String, enum: ["low", "medium", "high"], default: "medium" },
+  resolvedAt: Date,
+  closedAt: Date,
+  notes: String,
+  updatedBy: { id: String, name: String, mail: String },
+  history: [{ action: String, by: String, at: Date, newStatus: String, oldStatus: String, reason: String, notes: String }],
+}, { timestamps: true });
+
+requestSchema.pre("save", async function (next) {
+  if (!this.requestNumber) {
+    const count = await mongoose.model("Request").countDocuments();
+    this.requestNumber = `REQ-${String(count + 1).padStart(4, "0")}`;
+  }
+  next();
+});
+
+const Request = mongoose.model("Request", requestSchema);
+
+// ===================== INCIDENT SCHEMA =====================
+const incidentSchema = new mongoose.Schema({
+  incidentNumber: { type: String, unique: true },
+  title: { type: String, required: true, trim: true },
+  description: { type: String, required: true },
+  category: { id: String, name: String },
+  assignmentGroup: {
+    groupId: { type: String, required: true },
+    groupName: { type: String, required: true },
+    members: [{ id: String, name: String, email: String }]
+  },
+  // ✅ FIXED: assignedMember as sub-document (not nested type)
+  assignedMember: {
+    memberId: String,
+    memberName: String,
+    memberEmail: String
+  },
+  raisedBy: { id: String, name: String, mail: { type: String, required: true } },
+  priority: { type: String, enum: ["low", "medium", "high", "critical"], default: "medium" },
+  status: { type: String, enum: ["open", "in_progress", "resolved", "closed", "cancelled"], default: "open" },
+  attachments: [{ id: String, driveId: String, fileName: String, fileType: String, url: String }],
+  messages: [{
+    message: String,
+    sender: { id: String, name: String, email: String },
+    createdAt: { type: Date, default: Date.now },
+    readBy: [String]
+  }],
+  resolvedAt: Date,
+  closedAt: Date,
+  notes: String,
+  updatedBy: { id: String, name: String, mail: String },
+}, { timestamps: true });
+
+incidentSchema.pre("save", async function (next) {
+  if (!this.incidentNumber) {
+    const count = await mongoose.model("Incident").countDocuments();
+    this.incidentNumber = `INC-${String(count + 1).padStart(4, "0")}`;
+  }
+  next();
+});
+
+const Incident = mongoose.model("Incident", incidentSchema);
+
+// ===================== ASSIGNMENT GROUP SCHEMA =====================
+const assignmentGroupSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  description: { type: String },
+  members: [{ id: String, name: String, email: String, isManual: { type: Boolean, default: false } }],
+  manualMembers: [{ id: String, name: String, email: String }],
+  distributionList: { id: String, name: String, mail: String, members: [{ id: String, name: String, email: String }] },
+  createdBy: { id: String, name: String, email: String }
+}, { timestamps: true });
+
+const AssignmentGroup = mongoose.model('AssignmentGroup', assignmentGroupSchema);
+
+// ===================== ASSIGNMENT GROUP ROUTES (WITH EMAILS) =====================
+
+// GET /api/assignment-groups
+app.get('/api/assignment-groups', async (req, res) => {
+  try {
+    const groups = await AssignmentGroup.find().sort({ createdAt: -1 });
+    res.json(groups);
+  } catch (err) {
+    console.error('❌ Get assignment groups error:', err);
+    res.status(500).json({ message: 'Failed to fetch assignment groups' });
+  }
+});
+
+// GET /api/assignment-groups/:id
+app.get('/api/assignment-groups/:id', async (req, res) => {
+  try {
+    const group = await AssignmentGroup.findById(req.params.id);
+    if (!group) return res.status(404).json({ message: 'Assignment group not found' });
+    res.json(group);
+  } catch (err) {
+    console.error('❌ Get assignment group error:', err);
+    res.status(500).json({ message: 'Failed to fetch assignment group' });
+  }
+});
+
+// POST /api/assignment-groups - CREATE with notifications
+app.post('/api/assignment-groups', async (req, res) => {
+  try {
+    const { name, description, members, distributionList, manualMembers, createdBy } = req.body;
+
+    if (!name?.trim()) return res.status(400).json({ message: 'Group name is required' });
+    if (!members || members.length === 0) return res.status(400).json({ message: 'At least one member is required' });
+
+    const group = await AssignmentGroup.create({
+      name: name.trim(),
+      description: description || '',
+      members,
+      manualMembers: manualMembers || [],
+      distributionList: distributionList || null,
+      createdBy: createdBy || {}
+    });
+
+    console.log(`✅ Assignment group created: ${name}`);
+    res.status(201).json(group);
+
+    // Send notifications to all group members and creator
+    setImmediate(async () => {
+      try {
+        const prodUrl = process.env.PROD_URL;
+        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        const creatorEmail = createdBy?.email || createdBy?.mail || "";
+        
+        // Get all group member emails
+        const memberEmails = (members || []).map(m => m.email || m.mail).filter(Boolean);
+        
+        const commonFields = [
+          { label: "Group Name", value: name.trim() },
+          { label: "Description", value: description || "—" },
+          { label: "Total Members", value: members.length.toString() },
+          { label: "Created By", value: createdBy?.name || "Admin" },
+          { label: "Created At (IST)", value: nowIST },
+        ];
+
+        // Notify all group members
+        if (memberEmails.length > 0) {
+          const memberNames = members.map(m => `• ${m.name} (${m.email || m.mail})`).join("\n");
+          const html = buildHtmlEmail({
+            title: `🔧 You were added to Assignment Group: ${name.trim()}`,
+            subtitle: `You are now a member of this group`,
+            statusColor: "#7c3aed",
+            fields: commonFields,
+            description: `Group members:\n\n${memberNames}\n\nAs a member, you will receive notifications for incidents/requests assigned to this group.`,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Groups",
+          });
+          await sendEmail(memberEmails, `[ASSIGNMENT GROUP] Added to ${name.trim()}`, html);
+        }
+
+        // Notify creator
+        if (creatorEmail && !memberEmails.includes(creatorEmail)) {
+          const html = buildHtmlEmail({
+            title: `✅ Assignment Group Created: ${name.trim()}`,
+            subtitle: `You successfully created a new assignment group`,
+            statusColor: "#002060",
+            fields: commonFields,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Groups",
+          });
+          await sendEmail(creatorEmail, `[ASSIGNMENT GROUP] Created: ${name.trim()}`, html);
+        }
+
+        console.log(`✅ [ASSIGNMENT GROUP] CREATE notifications sent for: ${name}`);
+      } catch (mailErr) {
+        console.error("❌ [ASSIGNMENT GROUP] CREATE notification error:", mailErr.message);
+      }
+    });
+  } catch (err) {
+    console.error('❌ Create assignment group error:', err);
+    res.status(500).json({ message: 'Failed to create assignment group', error: err.message });
+  }
+});
+
+// PUT /api/assignment-groups/:id - UPDATE with diff notifications
+app.put('/api/assignment-groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, members, distributionList, manualMembers, updatedBy } = req.body;
+
+    if (!name?.trim()) return res.status(400).json({ message: 'Group name is required' });
+    if (!members || members.length === 0) return res.status(400).json({ message: 'At least one member is required' });
+
+    const oldGroup = await AssignmentGroup.findById(id);
+    if (!oldGroup) return res.status(404).json({ message: 'Assignment group not found' });
+
+    const changes = getAssignmentGroupDiff(oldGroup, { name, description, members });
+
+    const group = await AssignmentGroup.findByIdAndUpdate(id, {
+      name: name.trim(),
+      description: description || '',
+      members,
+      manualMembers: manualMembers || [],
+      distributionList: distributionList || null
+    }, { new: true, runValidators: true });
+
+    console.log(`✅ Assignment group updated: ${name}`);
+    res.json(group);
+
+    // Send notifications to all group members and updater with specific changes
+    setImmediate(async () => {
+      try {
+        if (changes.length === 0) {
+          console.log(`ℹ️ [ASSIGNMENT GROUP] No significant changes, skipping notifications`);
+          return;
+        }
+
+        const prodUrl = process.env.PROD_URL;
+        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        const updaterEmail = updatedBy?.email || updatedBy?.mail || "";
+        
+        // Get all current member emails
+        const memberEmails = (members || []).map(m => m.email || m.mail).filter(Boolean);
+        
+        const changeDescription = changes.join("\n");
+        
+        const commonFields = [
+          { label: "Group Name", value: name.trim() },
+          { label: "Updated By", value: updatedBy?.name || "Admin" },
+          { label: "Updated At (IST)", value: nowIST },
+          { label: "Total Members", value: members.length.toString() },
+        ];
+
+        // Notify all group members
+        if (memberEmails.length > 0) {
+          const html = buildHtmlEmail({
+            title: `🔄 Assignment Group Updated: ${name.trim()}`,
+            subtitle: `Changes were made to your group`,
+            statusColor: "#7c3aed",
+            fields: commonFields,
+            description: `What changed:\n\n${changeDescription}`,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Groups",
+          });
+          await sendEmail(memberEmails, `[ASSIGNMENT GROUP] Updated: ${name.trim()}`, html);
+        }
+
+        // Notify updater (creator/admin)
+        if (updaterEmail && !memberEmails.includes(updaterEmail)) {
+          const html = buildHtmlEmail({
+            title: `✅ Assignment Group Updated: ${name.trim()}`,
+            subtitle: `Your changes have been saved`,
+            statusColor: "#002060",
+            fields: commonFields,
+            description: `What changed:\n\n${changeDescription}`,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Groups",
+          });
+          await sendEmail(updaterEmail, `[ASSIGNMENT GROUP] Updated: ${name.trim()}`, html);
+        }
+
+        console.log(`✅ [ASSIGNMENT GROUP] UPDATE notifications sent for: ${name}`);
+      } catch (mailErr) {
+        console.error("❌ [ASSIGNMENT GROUP] UPDATE notification error:", mailErr.message);
+      }
+    });
+  } catch (err) {
+    console.error('❌ Update assignment group error:', err);
+    res.status(500).json({ message: 'Failed to update assignment group', error: err.message });
+  }
+});
+
+// DELETE /api/assignment-groups/:id - DELETE with notifications
+app.delete('/api/assignment-groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const group = await AssignmentGroup.findById(id);
+    if (!group) return res.status(404).json({ message: 'Assignment group not found' });
+
+    const groupName = group.name;
+    const memberEmails = (group.members || []).map(m => m.email || m.mail).filter(Boolean);
+    const deletedBy = req.body.deletedBy || {};
+
+    await AssignmentGroup.findByIdAndDelete(id);
+
+    console.log(`✅ Assignment group deleted: ${groupName}`);
+    res.json({ message: 'Assignment group deleted successfully', group: groupName });
+
+    // Send notifications to all group members
+    setImmediate(async () => {
+      try {
+        const prodUrl = process.env.PROD_URL;
+        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        const deleterEmail = deletedBy?.email || deletedBy?.mail || "";
+        
+        const commonFields = [
+          { label: "Group Name", value: groupName },
+          { label: "Deleted By", value: deletedBy?.name || "Admin" },
+          { label: "Deleted At (IST)", value: nowIST },
+        ];
+
+        // Notify all group members
+        if (memberEmails.length > 0) {
+          const html = buildHtmlEmail({
+            title: `🗑️ Assignment Group Deleted: ${groupName}`,
+            subtitle: `Your group has been removed`,
+            statusColor: "#dc2626",
+            fields: commonFields,
+            description: `The assignment group "${groupName}" has been deleted. You will no longer receive group notifications.`,
+            actionLink: prodUrl,
+            actionText: "Open Helpdesk",
+          });
+          await sendEmail(memberEmails, `[ASSIGNMENT GROUP] Deleted: ${groupName}`, html);
+        }
+
+        // Notify deleter
+        if (deleterEmail && !memberEmails.includes(deleterEmail)) {
+          const html = buildHtmlEmail({
+            title: `✅ Assignment Group Deleted: ${groupName}`,
+            subtitle: `You successfully deleted the group`,
+            statusColor: "#002060",
+            fields: commonFields,
+            actionLink: `${prodUrl}/settings`,
+            actionText: "View Groups",
+          });
+          await sendEmail(deleterEmail, `[ASSIGNMENT GROUP] Deleted: ${groupName}`, html);
+        }
+
+        console.log(`✅ [ASSIGNMENT GROUP] DELETE notifications sent for: ${groupName}`);
+      } catch (mailErr) {
+        console.error("❌ [ASSIGNMENT GROUP] DELETE notification error:", mailErr.message);
+      }
+    });
+  } catch (err) {
+    console.error('❌ Delete assignment group error:', err);
+    res.status(500).json({ message: 'Failed to delete assignment group', error: err.message });
+  }
+});
+
+// ===================== REQUEST ROUTES =====================
+
+// GET /api/requests
+app.get("/api/requests", async (req, res) => {
+  try {
+    const requests = await Request.find().sort({ createdAt: -1 });
+    res.json(requests);
+  } catch (err) {
+    console.error("❌ Get requests error:", err);
+    res.status(500).json({ message: "Failed to fetch requests" });
+  }
+});
+
+// GET /api/requests/mine
+app.get("/api/requests/mine", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+    const requests = await Request.find({ "raisedBy.mail": email }).sort({ createdAt: -1 });
+    res.json(requests);
+  } catch (err) {
+    console.error("❌ Get my requests error:", err);
+    res.status(500).json({ message: "Failed to fetch your requests" });
+  }
+});
+
+// GET /api/requests/:id
+app.get("/api/requests/:id", async (req, res) => {
+  try {
+    const request = await Request.findById(req.params.id);
+    if (!request) return res.status(404).json({ message: "Request not found" });
+    res.json(request);
+  } catch (err) {
+    console.error("❌ Get request error:", err);
+    res.status(500).json({ message: "Failed to fetch request" });
+  }
+});
+
+// POST /api/requests - CREATE with FULL email notifications
+app.post("/api/requests", async (req, res) => {
+  try {
+    const { service, assignmentGroup, assignedMember, raisedBy, onBehalf, description, attachments, approval, priority } = req.body;
+
+    if (!service?.id) return res.status(400).json({ message: "Service is required" });
+    if (!raisedBy?.mail) return res.status(400).json({ message: "Requester info is required" });
+
+    let finalAssignmentGroup = assignmentGroup || {};
+    
+    if (finalAssignmentGroup?.groupId) {
+      try {
+        const fullGroup = await AssignmentGroup.findById(finalAssignmentGroup.groupId).catch(() => null) ||
+          await AssignmentGroup.findOne({ name: finalAssignmentGroup.groupName });
+        if (fullGroup) {
+          finalAssignmentGroup = {
+            groupId: fullGroup._id.toString(),
+            groupName: fullGroup.name,
+            members: fullGroup.members || []
+          };
+        }
+      } catch (err) {
+        console.error(`❌ [CREATE REQUEST] Error fetching assignment group:`, err.message);
+      }
     }
+
+    let finalAssignedMember = assignedMember || {};
+    if ((!finalAssignedMember.memberEmail || !finalAssignedMember.memberId) && finalAssignmentGroup?.members?.length > 0) {
+      const firstMember = finalAssignmentGroup.members[0];
+      finalAssignedMember = {
+        memberId: firstMember.id || '',
+        memberName: firstMember.name || '',
+        memberEmail: firstMember.email || firstMember.mail || ''
+      };
+    }
+
+    const initialStatus = approval?.required ? "pending_approval" : "open";
+
+    const request = new Request({
+      service,
+      assignmentGroup: finalAssignmentGroup,
+      assignedMember: finalAssignedMember,
+      raisedBy,
+      onBehalf: onBehalf || { enabled: false },
+      description: description || "",
+      attachments: Array.isArray(attachments) ? attachments : [],
+      approval: approval || { required: false },
+      priority: priority || "medium",
+      status: initialStatus,
+      history: [{ action: 'created', by: raisedBy?.name || raisedBy?.mail || 'System', at: new Date() }]
+    });
+
+    await request.save();
+    console.log("✅ [CREATE REQUEST] Saved:", request.requestNumber);
+    res.status(201).json(request);
+
+    // Send email notifications to ALL recipients
+    setImmediate(async () => {
+      try {
+        const allRecipients = await getAllRequestRecipients(request);
+        const prodUrl = process.env.PROD_URL;
+        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        
+        const isPasswordReset = service?.name?.toLowerCase().includes("password reset");
+        const isAdminAccess = service?.name?.toLowerCase().includes("admin access") || service?.name?.toLowerCase().includes("device admin");
+        
+        let title = `📋 New Request: ${request.requestNumber}`;
+        let subtitle = `${service?.name || 'Request'} has been submitted`;
+        
+        if (isPasswordReset) title = `🔑 Password Reset Request: ${request.requestNumber}`;
+        if (isAdminAccess) title = `👑 Admin Access Request: ${request.requestNumber}`;
+        
+        const fields = [
+          { label: "Request No.", value: request.requestNumber },
+          { label: "Service", value: service?.name || "—" },
+          { label: "Requested By", value: `${raisedBy?.name || raisedBy?.mail}` },
+          { label: "Status", value: initialStatus.toUpperCase() },
+          { label: "Priority", value: priority || "medium" },
+          { label: "Submitted At", value: nowIST },
+        ];
+        
+        if (request.assignedMember?.memberName) {
+          fields.push({ label: "Assigned To", value: request.assignedMember.memberName });
+        }
+        
+        const html = buildHtmlEmail({
+          title,
+          subtitle,
+          statusColor: isPasswordReset ? "#d97706" : (isAdminAccess ? "#7c3aed" : "#0369a1"),
+          fields,
+          description: description || "No description provided",
+          actionLink: `${prodUrl}/requests/${request._id}`,
+          actionText: "View Request",
+        });
+        
+        await sendEmail(allRecipients, `${title}`, html);
+        console.log(`✅ [REQUEST] CREATE notifications sent to ${allRecipients.length} recipients`);
+      } catch (mailErr) {
+        console.error("❌ [REQUEST] CREATE notification error:", mailErr.message);
+      }
+    });
+  } catch (err) {
+    console.error("❌ [CREATE REQUEST] Error:", err);
+    res.status(500).json({ message: "Failed to create request", error: err.message });
+  }
+});
+
+// PATCH /api/requests/:id - UPDATE STATUS with FULL email notifications
+app.patch("/api/requests/:id", async (req, res) => {
+  try {
+    const { status, assignedMember, assignmentGroup, notes, updatedBy, priority } = req.body;
 
     const request = await Request.findById(req.params.id);
     if (!request) return res.status(404).json({ message: "Request not found" });
 
-    // Detect request type
+    const oldStatus = request.status;
+    const oldPriority = request.priority;
+
+    if (status) request.status = status;
+    if (priority) request.priority = priority;
+    if (assignedMember) request.assignedMember = assignedMember;
+    if (assignmentGroup) request.assignmentGroup = assignmentGroup;
+    if (notes) request.notes = notes;
+    if (updatedBy) request.updatedBy = updatedBy;
+
+    if (status === "resolved") request.resolvedAt = new Date();
+    if (status === "closed") request.closedAt = new Date();
+
+    if (status && status !== oldStatus) {
+      request.history = request.history || [];
+      request.history.push({
+        action: 'status_updated',
+        by: updatedBy?.name || updatedBy?.mail || 'System',
+        at: new Date(),
+        oldStatus,
+        newStatus: status,
+        notes: notes || `Status changed from ${oldStatus} to ${status}`
+      });
+    }
+
+    if (status === 'resolved' && oldStatus !== 'resolved') {
+      request.history.push({ action: 'resolved', by: updatedBy?.name || 'System', at: new Date() });
+    }
+    if (status === 'closed' && oldStatus !== 'closed') {
+      request.history.push({ action: 'closed', by: updatedBy?.name || 'System', at: new Date() });
+    }
+
+    await request.save();
+    console.log("✅ [UPDATE REQUEST]", request.requestNumber, "→", status || "updated");
+    res.json(request);
+
+    // Send status update notifications to ALL recipients
+    if (status && status !== oldStatus) {
+      setImmediate(async () => {
+        try {
+          const allRecipients = await getAllRequestRecipients(request);
+          const prodUrl = process.env.PROD_URL;
+          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          
+          const statusColors = {
+            open: "#0369a1", in_progress: "#d97706", pending_approval: "#7c3aed",
+            resolved: "#16a34a", closed: "#6b7280", cancelled: "#dc2626",
+          };
+          
+          const html = buildHtmlEmail({
+            title: `Request ${request.requestNumber} — Status Updated`,
+            subtitle: `Status changed to ${status.replace(/_/g, " ").toUpperCase()}`,
+            statusColor: statusColors[status] || "#002060",
+            fields: [
+              { label: "Request No.", value: request.requestNumber },
+              { label: "Service", value: request.service?.name },
+              { label: "New Status", value: status.replace(/_/g, " ").toUpperCase() },
+              { label: "Updated By", value: updatedBy?.name || "Admin" },
+              { label: "Updated At", value: nowIST },
+            ],
+            description: notes || "",
+            actionLink: `${prodUrl}/requests/${request._id}`,
+            actionText: "View Request",
+          });
+          
+          await sendEmail(allRecipients, `[REQUEST] ${request.requestNumber} — Status: ${status.toUpperCase()}`, html);
+          console.log(`✅ [REQUEST] STATUS UPDATE notifications sent to ${allRecipients.length} recipients`);
+        } catch (mailErr) {
+          console.error("❌ [REQUEST] Status notification error:", mailErr.message);
+        }
+      });
+    }
+  } catch (err) {
+    console.error("❌ [UPDATE REQUEST] Error:", err);
+    res.status(500).json({ message: "Failed to update request" });
+  }
+});
+
+// ===================== INCIDENT ROUTES =====================
+
+// GET /api/incidents
+app.get("/api/incidents", async (req, res) => {
+  try {
+    const incidents = await Incident.find().sort({ createdAt: -1 });
+    res.json(incidents);
+  } catch (err) {
+    console.error("❌ Get incidents error:", err);
+    res.status(500).json({ message: "Failed to fetch incidents" });
+  }
+});
+
+// GET /api/incidents/mine
+app.get("/api/incidents/mine", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+    const incidents = await Incident.find({ "raisedBy.mail": email }).sort({ createdAt: -1 });
+    res.json(incidents);
+  } catch (err) {
+    console.error("❌ Get my incidents error:", err);
+    res.status(500).json({ message: "Failed to fetch your incidents" });
+  }
+});
+
+// GET /api/incidents/:id
+app.get("/api/incidents/:id", async (req, res) => {
+  try {
+    const incident = await Incident.findById(req.params.id);
+    if (!incident) return res.status(404).json({ message: "Incident not found" });
+    res.json(incident);
+  } catch (err) {
+    console.error("❌ Get incident error:", err);
+    res.status(500).json({ message: "Failed to fetch incident" });
+  }
+});
+
+// POST /api/incidents - CREATE with FULL email notifications
+app.post("/api/incidents", async (req, res) => {
+  try {
+    const { title, description, category, assignmentGroup, assignedMember, raisedBy, priority, attachments } = req.body;
+
+    if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
+    if (!description?.trim()) return res.status(400).json({ message: "Description is required" });
+    if (!raisedBy?.mail) return res.status(400).json({ message: "Requester info is required" });
+
+    const incident = new Incident({
+      title: title.trim(),
+      description: description.trim(),
+      category: category || {},
+      assignmentGroup: assignmentGroup || {},
+      assignedMember: assignedMember || {},
+      raisedBy,
+      priority: priority || "medium",
+      attachments: Array.isArray(attachments) ? attachments : [],
+      status: "open",
+    });
+
+    await incident.save();
+    console.log("✅ [CREATE INCIDENT] Saved:", incident.incidentNumber);
+    res.status(201).json(incident);
+
+    // Send email notifications to ALL recipients
+    setImmediate(async () => {
+      try {
+        const allRecipients = await getAllIncidentRecipients(incident);
+        const prodUrl = process.env.PROD_URL;
+        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        
+        const priorityColors = {
+          low: "#16a34a", medium: "#0369a1", high: "#d97706", critical: "#dc2626",
+        };
+        
+        const fields = [
+          { label: "Incident No.", value: incident.incidentNumber },
+          { label: "Title", value: title.trim() },
+          { label: "Category", value: category?.name || "—" },
+          { label: "Priority", value: priority || "medium" },
+          { label: "Status", value: "Open" },
+          { label: "Raised By", value: `${raisedBy?.name || raisedBy?.mail}` },
+          { label: "Raised At", value: nowIST },
+        ];
+        
+        if (incident.assignedMember?.memberName) {
+          fields.push({ label: "Assigned To", value: incident.assignedMember.memberName });
+        }
+        
+        const html = buildHtmlEmail({
+          title: `🚨 Incident Raised: ${incident.incidentNumber}`,
+          subtitle: `A new incident has been logged`,
+          statusColor: priorityColors[priority] || "#0369a1",
+          fields,
+          description: description.trim(),
+          actionLink: `${prodUrl}/incidents/${incident._id}`,
+          actionText: "View Incident",
+        });
+        
+        await sendEmail(allRecipients, `[INCIDENT] ${incident.incidentNumber} — Logged`, html);
+        console.log(`✅ [INCIDENT] CREATE notifications sent to ${allRecipients.length} recipients`);
+      } catch (mailErr) {
+        console.error("❌ [INCIDENT] Notification error:", mailErr.message);
+      }
+    });
+  } catch (err) {
+    console.error("❌ [CREATE INCIDENT] Error:", err);
+    res.status(500).json({ message: "Failed to raise incident", error: err.message });
+  }
+});
+
+// PATCH /api/incidents/:id - UPDATE STATUS with FULL email notifications
+app.patch("/api/incidents/:id", async (req, res) => {
+  try {
+    const { status, assignedMember, assignmentGroup, notes, updatedBy, priority } = req.body;
+
+    const incident = await Incident.findById(req.params.id);
+    if (!incident) return res.status(404).json({ message: "Incident not found" });
+
+    if (status) incident.status = status;
+    if (priority) incident.priority = priority;
+    if (assignedMember) incident.assignedMember = assignedMember;
+    if (assignmentGroup) incident.assignmentGroup = assignmentGroup;
+    if (notes) incident.notes = notes;
+    if (updatedBy) incident.updatedBy = updatedBy;
+
+    if (status === "resolved") incident.resolvedAt = new Date();
+    if (status === "closed") incident.closedAt = new Date();
+
+    await incident.save();
+    console.log("✅ [UPDATE INCIDENT]", incident.incidentNumber, "→", status);
+    res.json(incident);
+
+    // Send status update notifications to ALL recipients
+    if (status) {
+      setImmediate(async () => {
+        try {
+          const allRecipients = await getAllIncidentRecipients(incident);
+          const prodUrl = process.env.PROD_URL;
+          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          
+          const statusColors = {
+            open: "#0369a1", in_progress: "#d97706", resolved: "#16a34a",
+            closed: "#6b7280", cancelled: "#dc2626",
+          };
+          
+          const html = buildHtmlEmail({
+            title: `Incident ${incident.incidentNumber} — Status Updated`,
+            subtitle: `Status changed to ${status.replace(/_/g, " ").toUpperCase()}`,
+            statusColor: statusColors[status] || "#002060",
+            fields: [
+              { label: "Incident No.", value: incident.incidentNumber },
+              { label: "Title", value: incident.title },
+              { label: "New Status", value: status.replace(/_/g, " ").toUpperCase() },
+              { label: "Updated By", value: updatedBy?.name || "Admin" },
+              { label: "Updated At", value: nowIST },
+            ],
+            description: notes || "",
+            actionLink: `${prodUrl}/incidents/${incident._id}`,
+            actionText: "View Incident",
+          });
+          
+          await sendEmail(allRecipients, `[INCIDENT] ${incident.incidentNumber} — Status: ${status.toUpperCase()}`, html);
+          console.log(`✅ [INCIDENT] STATUS UPDATE notifications sent to ${allRecipients.length} recipients`);
+        } catch (mailErr) {
+          console.error("❌ [INCIDENT] Status notification error:", mailErr.message);
+        }
+      });
+    }
+  } catch (err) {
+    console.error("❌ [UPDATE INCIDENT] Error:", err);
+    res.status(500).json({ message: "Failed to update incident" });
+  }
+});
+
+// ===================== APPROVAL/REJECTION ROUTES =====================
+
+// POST /api/requests/:id/approve
+app.post("/api/requests/:id/approve", async (req, res) => {
+  try {
+    const { actorEmail, actorName, actorId, note } = req.body;
+    if (!actorEmail) return res.status(400).json({ message: "Actor email is required" });
+
+    const request = await Request.findById(req.params.id);
+    if (!request) return res.status(404).json({ message: "Request not found" });
+
     const isPasswordReset = request.service?.name?.toLowerCase().includes("password reset");
     const isAdminAccess = request.service?.name?.toLowerCase().includes("admin access") ||
                           request.service?.name?.toLowerCase().includes("device admin");
@@ -1274,56 +2017,31 @@ app.post("/api/requests/:id/approve", async (req, res) => {
       return res.status(400).json({ message: "This action is only valid for password reset or admin access requests" });
     }
 
+    // Authorization check
     const actorEmailLower = (actorEmail || '').toLowerCase();
     const actorIdLower = (actorId || '').toLowerCase();
     const assignedEmail = (request.assignedMember?.memberEmail || '').toLowerCase();
     const assignedMemberId = (request.assignedMember?.memberId || '').toLowerCase();
 
-    const isAssignedMember =
-      (assignedEmail && actorEmailLower === assignedEmail) ||
-      (assignedMemberId && actorIdLower === assignedMemberId);
+    const isAssignedMember = (assignedEmail && actorEmailLower === assignedEmail) ||
+                             (assignedMemberId && actorIdLower === assignedMemberId);
 
-    // Get group members — use stored members first, fallback to live DB lookup
     let groupMembers = request.assignmentGroup?.members || [];
-    if (groupMembers.length === 0 && request.assignmentGroup?.groupId) {
-      try {
-        const fullGroup = await AssignmentGroup.findById(request.assignmentGroup.groupId).catch(() => null)
-          || await AssignmentGroup.findOne({ name: request.assignmentGroup.groupName });
-        if (fullGroup) groupMembers = fullGroup.members || [];
-      } catch (e) {
-        console.error('⚠️ [APPROVE] Group lookup failed:', e.message);
-      }
-    }
-
     const isInGroup = groupMembers.some(member => {
       const memberEmail = (member.email || member.mail || '').toLowerCase();
-      const memberId = (member.id || member.memberId || '').toLowerCase();
+      const memberId = (member.id || '').toLowerCase();
       return memberEmail === actorEmailLower || memberId === actorIdLower;
     });
 
-    const isAuthorized = isAssignedMember || isInGroup;
-
-    console.log('🔍 [APPROVE] Authorization check:', {
-      actorEmail: actorEmailLower,
-      actorId: actorIdLower,
-      isAssignedMember,
-      isInGroup,
-      isAuthorized,
-      groupMembersCount: groupMembers.length
-    });
-
-    if (!isAuthorized) {
-      return res.status(403).json({
-        message: "Only group members can approve this request",
-        debug: { actorEmail: actorEmailLower, isInGroup, isAssignedMember, groupMembersCount: groupMembers.length }
-      });
+    if (!isAssignedMember && !isInGroup) {
+      return res.status(403).json({ message: "Only group members can approve this request" });
     }
 
-    // ============================================================
-    // CASE 1: PASSWORD RESET
-    // ============================================================
+    let tempPassword = null;
+    let targetEmail = null;
+
     if (isPasswordReset) {
-      const targetEmail = request.onBehalf?.enabled && request.onBehalf?.user?.mail
+      targetEmail = request.onBehalf?.enabled && request.onBehalf?.user?.mail
         ? request.onBehalf.user.mail
         : request.raisedBy.mail;
 
@@ -1331,11 +2049,9 @@ app.post("/api/requests/:id/approve", async (req, res) => {
         return res.status(400).json({ message: "Cannot determine target user for password reset" });
       }
 
-      let tempPassword;
       try {
         tempPassword = await resetAzurePassword(targetEmail);
       } catch (azureErr) {
-        console.error("❌ Azure reset failed:", azureErr.message);
         return res.status(500).json({ message: "Azure password reset failed", error: azureErr.message });
       }
 
@@ -1344,76 +2060,52 @@ app.post("/api/requests/:id/approve", async (req, res) => {
         action: 'approved',
         by: actorName || actorEmail,
         at: new Date(),
-        notes: `Password reset approved by ${actorName || actorEmail}. Temporary password sent to ${targetEmail}`
+        notes: `Password reset approved by ${actorName || actorEmail}. Temporary password sent.`
       });
-
       request.status = "resolved";
       request.resolvedAt = new Date();
       request.updatedBy = { id: actorId || "", name: actorName || actorEmail, mail: actorEmail };
       request.notes = note || `Password reset approved by ${actorName || actorEmail}.`;
 
-      request.history.push({
-        action: 'resolved',
-        by: actorName || actorEmail,
-        at: new Date(),
-        notes: `Request resolved after password reset approval`
-      });
-
       await request.save();
       console.log(`✅ [APPROVE] Password reset approved for ${targetEmail} by ${actorEmail}`);
 
-      res.json({
-        message: "Password reset approved successfully",
-        requestNumber: request.requestNumber,
-        targetEmail,
-        tempPassword,
-      });
+      res.json({ message: "Password reset approved successfully", requestNumber: request.requestNumber, targetEmail, tempPassword });
 
+      // Send notifications to ALL recipients with password
       setImmediate(async () => {
         try {
-          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          const allRecipients = await getAllRequestRecipients(request);
           const prodUrl = process.env.PROD_URL;
-
-          const targetHtml = buildHtmlEmail({
-            title: `🔑 Your Password Has Been Reset`,
-            subtitle: `Your temporary password is ready`,
-            statusColor: "#002060",
-            fields: [
-              { label: "Request No.", value: request.requestNumber },
-              { label: "Temporary Password", value: `<strong style="font-size:16px;">${tempPassword}</strong>` },
-            ],
-            description: `Your password has been reset. You will be required to change it on your next sign-in.`,
-            actionLink: "https://myaccount.microsoft.com",
-            actionText: "Sign In & Change Password",
+          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          
+          const fields = [
+            { label: "Request No.", value: request.requestNumber },
+            { label: "Action", value: "APPROVED" },
+            { label: "Approved By", value: actorName || actorEmail },
+            { label: "Approved At", value: nowIST },
+            { label: "Temporary Password", value: `<strong style="font-size:16px; background:#fef3c7; padding:4px 8px; border-radius:4px;">${tempPassword}</strong>` },
+          ];
+          
+          const html = buildHtmlEmail({
+            title: `🔑 Password Reset Approved: ${request.requestNumber}`,
+            subtitle: `Temporary password has been generated`,
+            statusColor: "#16a34a",
+            fields,
+            description: `The password for ${targetEmail} has been reset. The temporary password is shown above. The user will be required to change it on next sign-in.`,
+            actionLink: `${prodUrl}/requests/${request._id}`,
+            actionText: "View Request",
           });
-          await sendEmail(targetEmail, `[PASSWORD RESET] ${request.requestNumber} — Your Temporary Password`, targetHtml);
-
-          await sendEmail(actorEmail, `[PASSWORD RESET] ${request.requestNumber} — Approved by You`,
-            buildHtmlEmail({
-              title: `✅ Password Reset Approved`,
-              subtitle: `Request ${request.requestNumber}`,
-              statusColor: "#059669",
-              fields: [
-                { label: "Reset For", value: targetEmail },
-                { label: "Approved At", value: nowIST },
-              ],
-              actionLink: `${prodUrl}/requests/${request._id}`,
-              actionText: "View Request",
-            })
-          );
+          
+          await sendEmail(allRecipients, `[PASSWORD RESET] ${request.requestNumber} — Approved`, html);
+          console.log(`✅ [PASSWORD RESET] APPROVE notifications sent to ${allRecipients.length} recipients`);
         } catch (mailErr) {
-          console.error("❌ Email error:", mailErr.message);
+          console.error("❌ [PASSWORD RESET] Email error:", mailErr.message);
         }
       });
-    }
-
-    // ============================================================
-    // CASE 2: ADMIN ACCESS
-    // ============================================================
+    } 
     else if (isAdminAccess) {
-      const targetEmail = request.raisedBy?.mail;
-      const targetName = request.raisedBy?.name || targetEmail;
-
+      targetEmail = request.raisedBy?.mail;
       if (!targetEmail) {
         return res.status(400).json({ message: "Cannot determine target user for admin access" });
       }
@@ -1422,9 +2114,7 @@ app.post("/api/requests/:id/approve", async (req, res) => {
       try {
         const userData = await getUserByUpn(targetEmail);
         userObjectId = userData.id;
-        console.log(`✅ Found user: ${targetName} (${userObjectId})`);
       } catch (userErr) {
-        console.error("❌ Failed to get user from Azure:", userErr.message);
         return res.status(500).json({ message: "Failed to verify user in Azure AD", error: userErr.message });
       }
 
@@ -1435,9 +2125,7 @@ app.post("/api/requests/:id/approve", async (req, res) => {
 
       try {
         await addUserToGroup(groupId, userObjectId);
-        console.log(`✅ User ${targetEmail} added to Device Admin Group`);
       } catch (groupErr) {
-        console.error("❌ Failed to add user to group:", groupErr.message);
         return res.status(500).json({ message: "Failed to add user to admin group", error: groupErr.message });
       }
 
@@ -1448,85 +2136,59 @@ app.post("/api/requests/:id/approve", async (req, res) => {
         at: new Date(),
         notes: `Admin access approved by ${actorName || actorEmail}. User added to Device Admin Group.`
       });
-
       request.status = "resolved";
       request.resolvedAt = new Date();
       request.updatedBy = { id: actorId || "", name: actorName || actorEmail, mail: actorEmail };
-      request.notes = note || `Admin access approved by ${actorName || actorEmail}. User added to Device Admin Group.`;
-
-      request.history.push({
-        action: 'resolved',
-        by: actorName || actorEmail,
-        at: new Date(),
-        notes: `Request resolved after admin access granted`
-      });
+      request.notes = note || `Admin access approved by ${actorName || actorEmail}.`;
 
       await request.save();
       console.log(`✅ [APPROVE] Admin access approved for ${targetEmail} by ${actorEmail}`);
 
-      res.json({
-        message: "Admin access approved successfully",
-        requestNumber: request.requestNumber,
-        targetEmail,
-        groupId,
-      });
+      res.json({ message: "Admin access approved successfully", requestNumber: request.requestNumber, targetEmail, groupId });
 
+      // Send notifications to ALL recipients
       setImmediate(async () => {
         try {
-          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          const allRecipients = await getAllRequestRecipients(request);
           const prodUrl = process.env.PROD_URL;
-
-          const requesterHtml = buildHtmlEmail({
-            title: `✅ Admin Access Granted`,
-            subtitle: `Your request ${request.requestNumber} has been approved`,
+          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          
+          const fields = [
+            { label: "Request No.", value: request.requestNumber },
+            { label: "Action", value: "APPROVED" },
+            { label: "Approved By", value: actorName || actorEmail },
+            { label: "Approved At", value: nowIST },
+            { label: "User Granted Access", value: `${request.raisedBy?.name || ''} (${targetEmail})` },
+          ];
+          
+          const html = buildHtmlEmail({
+            title: `👑 Admin Access Approved: ${request.requestNumber}`,
+            subtitle: `User has been granted Device Administrator access`,
             statusColor: "#16a34a",
-            fields: [
-              { label: "Request No.", value: request.requestNumber },
-              { label: "Access Type", value: "Device Administrator" },
-              { label: "Approved By", value: actorName || actorEmail },
-              { label: "Approved At", value: nowIST },
-            ],
-            description: `You have been granted Device Administrator access. You now have administrative privileges on Azure AD joined devices.`,
+            fields,
+            description: `${request.raisedBy?.name || targetEmail} has been granted Device Administrator privileges.`,
             actionLink: `${prodUrl}/requests/${request._id}`,
             actionText: "View Request",
           });
-          await sendEmail(targetEmail, `[ADMIN ACCESS] ${request.requestNumber} — Access Granted`, requesterHtml);
-
-          const approverHtml = buildHtmlEmail({
-            title: `✅ Admin Access Approved`,
-            subtitle: `Request ${request.requestNumber}`,
-            statusColor: "#059669",
-            fields: [
-              { label: "Request No.", value: request.requestNumber },
-              { label: "User Granted Access", value: `${targetName} (${targetEmail})` },
-              { label: "Approved At", value: nowIST },
-            ],
-            description: `You have successfully granted Device Admin access to ${targetName}.`,
-            actionLink: `${prodUrl}/requests/${request._id}`,
-            actionText: "View Request",
-          });
-          await sendEmail(actorEmail, `[ADMIN ACCESS] ${request.requestNumber} — Approved by You`, approverHtml);
+          
+          await sendEmail(allRecipients, `[ADMIN ACCESS] ${request.requestNumber} — Approved`, html);
+          console.log(`✅ [ADMIN ACCESS] APPROVE notifications sent to ${allRecipients.length} recipients`);
         } catch (mailErr) {
-          console.error("❌ Email error:", mailErr.message);
+          console.error("❌ [ADMIN ACCESS] Email error:", mailErr.message);
         }
       });
     }
-
   } catch (err) {
     console.error("❌ [APPROVE] Error:", err);
     res.status(500).json({ message: "Approval failed", error: err.message });
   }
 });
 
-
-// POST /api/requests/:id/reject — Handles BOTH Password Reset AND Admin Access
+// POST /api/requests/:id/reject
 app.post("/api/requests/:id/reject", async (req, res) => {
   try {
     const { actorEmail, actorName, actorId, reason, note } = req.body;
-
-    if (!actorEmail) {
-      return res.status(400).json({ message: "Actor email is required" });
-    }
+    if (!actorEmail) return res.status(400).json({ message: "Actor email is required" });
 
     const request = await Request.findById(req.params.id);
     if (!request) return res.status(404).json({ message: "Request not found" });
@@ -1539,45 +2201,23 @@ app.post("/api/requests/:id/reject", async (req, res) => {
       return res.status(400).json({ message: "This action is only valid for password reset or admin access requests" });
     }
 
+    // Authorization check
     const actorEmailLower = (actorEmail || '').toLowerCase();
     const actorIdLower = (actorId || '').toLowerCase();
     const assignedEmail = (request.assignedMember?.memberEmail || '').toLowerCase();
     const assignedMemberId = (request.assignedMember?.memberId || '').toLowerCase();
 
-    const isAssignedMember =
-      (assignedEmail && actorEmailLower === assignedEmail) ||
-      (assignedMemberId && actorIdLower === assignedMemberId);
+    const isAssignedMember = (assignedEmail && actorEmailLower === assignedEmail) ||
+                             (assignedMemberId && actorIdLower === assignedMemberId);
 
-    // Get group members — use stored members first, fallback to live DB lookup
     let groupMembers = request.assignmentGroup?.members || [];
-    if (groupMembers.length === 0 && request.assignmentGroup?.groupId) {
-      try {
-        const fullGroup = await AssignmentGroup.findById(request.assignmentGroup.groupId).catch(() => null)
-          || await AssignmentGroup.findOne({ name: request.assignmentGroup.groupName });
-        if (fullGroup) groupMembers = fullGroup.members || [];
-      } catch (e) {
-        console.error('⚠️ [REJECT] Group lookup failed:', e.message);
-      }
-    }
-
     const isInGroup = groupMembers.some(member => {
       const memberEmail = (member.email || member.mail || '').toLowerCase();
-      const memberId = (member.id || member.memberId || '').toLowerCase();
+      const memberId = (member.id || '').toLowerCase();
       return memberEmail === actorEmailLower || memberId === actorIdLower;
     });
 
-    const isAuthorized = isAssignedMember || isInGroup;
-
-    console.log('🔍 [REJECT] Authorization check:', {
-      actorEmail: actorEmailLower,
-      actorId: actorIdLower,
-      isAssignedMember,
-      isInGroup,
-      isAuthorized,
-      groupMembersCount: groupMembers.length
-    });
-
-    if (!isAuthorized) {
+    if (!isAssignedMember && !isInGroup) {
       return res.status(403).json({ message: "Only group members can reject this request" });
     }
 
@@ -1591,7 +2231,6 @@ app.post("/api/requests/:id/reject", async (req, res) => {
       reason: reason,
       notes: `${requestType} rejected by ${actorName || actorEmail}. Reason: ${reason || 'No reason provided'}`
     });
-
     request.status = "cancelled";
     request.updatedBy = { id: actorId || "", name: actorName || actorEmail, mail: actorEmail };
     request.notes = note || (reason ? `Rejected. Reason: ${reason}` : `Rejected by ${actorName || actorEmail}`);
@@ -1599,117 +2238,75 @@ app.post("/api/requests/:id/reject", async (req, res) => {
     await request.save();
     console.log(`✅ [REJECT] ${requestType} rejected for ${request.requestNumber} by ${actorEmail}`);
 
-    res.json({
-      message: `${requestType} request rejected`,
-      requestNumber: request.requestNumber,
-    });
+    res.json({ message: `${requestType} request rejected`, requestNumber: request.requestNumber });
 
+    // Send notifications to ALL recipients
     setImmediate(async () => {
       try {
-        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        const allRecipients = await getAllRequestRecipients(request);
         const prodUrl = process.env.PROD_URL;
-        const requesterEmail = request.raisedBy.mail;
-
+        const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        
         const title = isPasswordReset
-          ? `❌ Password Reset Request Rejected`
-          : `❌ Admin Access Request Rejected`;
-
-        const subject = isPasswordReset
-          ? `[PASSWORD RESET] ${request.requestNumber} — Request Rejected`
-          : `[ADMIN ACCESS] ${request.requestNumber} — Request Rejected`;
-
-        if (requesterEmail) {
-          const html = buildHtmlEmail({
-            title: title,
-            subtitle: `Your request ${request.requestNumber} has been rejected`,
-            statusColor: "#dc2626",
-            fields: [
-              { label: "Request No.", value: request.requestNumber },
-              { label: "Request Type", value: isPasswordReset ? "Password Reset" : "Admin Access" },
-              { label: "Rejected By", value: actorName || actorEmail },
-              { label: "Rejected At", value: nowIST },
-              ...(reason ? [{ label: "Reason", value: reason }] : []),
-            ],
-            description: reason || `Your ${requestType} request was rejected. Please contact IT support if you need further assistance.`,
-            actionLink: `${prodUrl}/requests/${request._id}`,
-            actionText: "View Request",
-          });
-          await sendEmail(requesterEmail, subject, html);
-        }
-
-        await sendEmail(actorEmail, `${subject} — Rejected by You`,
-          buildHtmlEmail({
-            title: `${isPasswordReset ? 'Password Reset' : 'Admin Access'} Rejected`,
-            subtitle: `Request ${request.requestNumber}`,
-            statusColor: "#6b7280",
-            fields: [
-              { label: "Requested By", value: request.raisedBy?.name || request.raisedBy?.mail },
-              { label: "Request Type", value: isPasswordReset ? "Password Reset" : "Admin Access" },
-              ...(reason ? [{ label: "Reason Given", value: reason }] : []),
-            ],
-            actionLink: `${prodUrl}/requests/${request._id}`,
-            actionText: "View Request",
-          })
-        );
+          ? `❌ Password Reset Request Rejected: ${request.requestNumber}`
+          : `❌ Admin Access Request Rejected: ${request.requestNumber}`;
+        
+        const fields = [
+          { label: "Request No.", value: request.requestNumber },
+          { label: "Action", value: "REJECTED" },
+          { label: "Rejected By", value: actorName || actorEmail },
+          { label: "Rejected At", value: nowIST },
+        ];
+        
+        if (reason) fields.push({ label: "Reason", value: reason });
+        
+        const html = buildHtmlEmail({
+          title,
+          subtitle: `Request has been rejected`,
+          statusColor: "#dc2626",
+          fields,
+          description: reason || `Your ${requestType} request was rejected. Please contact IT support if you need further assistance.`,
+          actionLink: `${prodUrl}/requests/${request._id}`,
+          actionText: "View Request",
+        });
+        
+        await sendEmail(allRecipients, `${title}`, html);
+        console.log(`✅ [REJECT] notifications sent to ${allRecipients.length} recipients`);
       } catch (mailErr) {
-        console.error("❌ Email error:", mailErr.message);
+        console.error("❌ [REJECT] Email error:", mailErr.message);
       }
     });
-
   } catch (err) {
     console.error("❌ [REJECT] Error:", err);
     res.status(500).json({ message: "Rejection failed", error: err.message });
   }
 });
+
 // ===================== ATTACHMENT ROUTES =====================
+// (Keep existing attachment routes - no changes needed)
 
 async function fetchItemStream(token, itemId, driveId) {
   const attempts = [];
-
   if (driveId) {
-    attempts.push({
-      label: `drives/${driveId}/items/${itemId}`,
-      url: `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/content`
-    });
+    attempts.push({ label: `drives/${driveId}/items/${itemId}`, url: `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/content` });
   }
-
   if (process.env.SHAREPOINT_SITE && process.env.SHAREPOINT_SITE_NAME) {
     try {
       const siteHost = process.env.SHAREPOINT_SITE;
       const siteName = process.env.SHAREPOINT_SITE_NAME;
-      const siteRes = await axios.get(
-        `https://graph.microsoft.com/v1.0/sites/${siteHost}:/sites/${siteName}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const siteRes = await axios.get(`https://graph.microsoft.com/v1.0/sites/${siteHost}:/sites/${siteName}`, { headers: { Authorization: `Bearer ${token}` } });
       const siteId = siteRes.data.id;
-      attempts.push({
-        label: `sites/${siteId}/drive/items/${itemId}`,
-        url: `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${itemId}/content`
-      });
-    } catch (e) {
-      console.warn('⚠️ Could not resolve site id:', e.message || e);
-    }
+      attempts.push({ label: `sites/${siteId}/drive/items/${itemId}`, url: `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${itemId}/content` });
+    } catch (e) { console.warn('⚠️ Could not resolve site id:', e.message); }
   }
-
-  attempts.push({
-    label: `drive/items/${itemId}`,
-    url: `https://graph.microsoft.com/v1.0/drive/items/${itemId}/content`
-  });
+  attempts.push({ label: `drive/items/${itemId}`, url: `https://graph.microsoft.com/v1.0/drive/items/${itemId}/content` });
 
   for (const att of attempts) {
     try {
-      const resp = await axios.get(att.url, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: 'stream',
-        validateStatus: status => status >= 200 && status < 400
-      });
+      const resp = await axios.get(att.url, { headers: { Authorization: `Bearer ${token}` }, responseType: 'stream', validateStatus: status => status >= 200 && status < 400 });
       return { stream: resp.data, contentType: resp.headers['content-type'], contentDisposition: resp.headers['content-disposition'], used: att.label };
-    } catch (err) {
-      const errMsg = err?.response?.data ? JSON.stringify(err.response.data) : err.message || err;
-      console.warn(`⚠️ Attempt failed for ${att.label}:`, errMsg);
-    }
+    } catch (err) { console.warn(`⚠️ Attempt failed for ${att.label}:`, err.message); }
   }
-
   throw new Error('All attempts to fetch item failed');
 }
 
@@ -1731,27 +2328,21 @@ app.get("/attachments/zip", async (req, res) => {
 
     const archive = archiver('zip', { zlib: { level: 1 } });
     archive.on('warning', (err) => { console.warn('⚠️ Archive warning:', err); });
-    archive.on('error', (err) => { console.error('❌ Archiver fatal error:', err); try { archive.abort(); } catch(e){} if (!res.headersSent) res.status(500).send('ZIP creation failed'); });
+    archive.on('error', (err) => { console.error('❌ Archiver fatal error:', err); if (!res.headersSent) res.status(500).send('ZIP creation failed'); });
     res.on('close', () => { try { archive.abort(); } catch(e){} });
     archive.pipe(res);
 
     const limit = pLimit(2);
-    const fetchPromises = ids.map((id, i) =>
-      limit(async () => {
-        try {
-          const driveId = driveIds.length > i ? driveIds[i] : null;
-          const fetched = await Promise.race([
-            fetchItemStream(token, id, driveId),
-            new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${id}`)), 15000))
-          ]);
-          let filename = id.slice(-10);
-          const dispMatch = /filename\*?=(?:UTF-8'')?["']?([^;"']+)/i.exec(fetched.contentDisposition || '');
-          if (dispMatch && dispMatch[1]) { try { filename = decodeURIComponent(dispMatch[1]); } catch (e) { filename = dispMatch[1]; } }
-          archive.append(fetched.stream, { name: filename });
-        } catch (err) { console.warn(`⚠️ Skip ${id}:`, err.message); }
-      })
-    );
-
+    const fetchPromises = ids.map((id, i) => limit(async () => {
+      try {
+        const driveId = driveIds.length > i ? driveIds[i] : null;
+        const fetched = await Promise.race([fetchItemStream(token, id, driveId), new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${id}`)), 15000))]);
+        let filename = id.slice(-10);
+        const dispMatch = /filename\*?=(?:UTF-8'')?["']?([^;"']+)/i.exec(fetched.contentDisposition || '');
+        if (dispMatch && dispMatch[1]) { try { filename = decodeURIComponent(dispMatch[1]); } catch (e) { filename = dispMatch[1]; } }
+        archive.append(fetched.stream, { name: filename });
+      } catch (err) { console.warn(`⚠️ Skip ${id}:`, err.message); }
+    }));
     await Promise.all(fetchPromises);
     await archive.finalize();
   } catch (err) {
@@ -1770,14 +2361,12 @@ app.get("/attachments/:fileId", async (req, res) => {
     const fetched = await fetchItemStream(token, fileId, driveId);
 
     if (fetched.contentType) res.setHeader('Content-Type', fetched.contentType);
-    if (fetched.contentDisposition) {
-      res.setHeader('Content-Disposition', fetched.contentDisposition);
-    } else {
+    if (fetched.contentDisposition) res.setHeader('Content-Disposition', fetched.contentDisposition);
+    else {
       const ct = (fetched.contentType || '').toLowerCase();
       if (ct.startsWith('image/')) res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileId)}"`);
       else res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileId)}"`);
     }
-
     fetched.stream.pipe(res);
   } catch (err) {
     console.error('❌ Attachment proxy error:', err?.response?.data || err?.message || err);
@@ -1785,1341 +2374,63 @@ app.get("/attachments/:fileId", async (req, res) => {
   }
 });
 
-
-// -------- CREATE DISTRIBUTION LIST --------
+// ===================== DL CREATE ROUTE =====================
 app.post("/api/dl/create-dl", async (req, res) => {
   try {
     const { name, email, members = [], owners = [] } = req.body;
+    if (!name || !email) return res.status(400).json({ error: "Name and email required" });
 
-    if (!name || !email) {
-      return res.status(400).json({ error: "Name and email required" });
-    }
-
-    console.log("📥 Creating DL:", name, email);
-
-    // 🔒 sanitize
     const safeName = name.replace(/[^a-zA-Z0-9-_ ]/g, "");
     const safeEmail = email.replace(/[^a-zA-Z0-9@._-]/g, "");
 
-    // 🧠 Build PowerShell script
     let psScript = `
     $env:PSModulePath = "C:\\Users\\AllenJohn\\Documents\\WindowsPowerShell\\Modules;C:\\Program Files\\WindowsPowerShell\\Modules;" + $env:PSModulePath;
 Import-Module ExchangeOnlineManagement;
-
 Connect-ExchangeOnline -AppId '${process.env.AZURE_CLIENT_ID}' -CertificateThumbprint '${process.env.CERT_THUMBPRINT}' -Organization '${process.env.TENANT_DOMAIN}';
-
 $dl = Get-DistributionGroup -Identity '${safeEmail}' -ErrorAction SilentlyContinue;
-if ($dl) {
-  Write-Output "EXISTS";
-  exit;
-}
-
+if ($dl) { Write-Output "EXISTS"; exit; }
 New-DistributionGroup -Name '${safeName}' -PrimarySmtpAddress '${safeEmail}';
 `;
+    members.forEach(m => { if (m.mail) psScript += `Add-DistributionGroupMember -Identity '${safeEmail}' -Member '${m.mail}';\n`; });
+    owners.forEach(o => { if (o.mail) psScript += `Set-DistributionGroup -Identity '${safeEmail}' -ManagedBy @{Add='${o.mail}'};\n`; });
+    psScript += `Disconnect-ExchangeOnline -Confirm:$false;\n`;
 
-    // ✅ Add Members
-    members.forEach(m => {
-      if (m.mail) {
-        psScript += `
-Add-DistributionGroupMember -Identity '${safeEmail}' -Member '${m.mail}';
-`;
-      }
-    });
-
-    // ✅ Add Owners
-    owners.forEach(o => {
-      if (o.mail) {
-        psScript += `
-Set-DistributionGroup -Identity '${safeEmail}' -ManagedBy @{Add='${o.mail}'};
-`;
-      }
-    });
-
-    // ✅ Disconnect AFTER everything
-    psScript += `
-Disconnect-ExchangeOnline -Confirm:$false;
-`;
-
-    // 🔥 Encode script
     const encoded = Buffer.from(psScript, "utf16le").toString("base64");
-
-    // 🔥 Execute using Windows PowerShell
-    exec(
-      `C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -EncodedCommand ${encoded}`,
-      (error, stdout, stderr) => {
-        console.log("🟢 STDOUT:", stdout);
-        console.log("🔴 STDERR:", stderr);
-
-        if (error) {
-          console.error("❌ DL Error:", error);
-          return res.status(500).json({
-            error: stderr || "DL creation failed"
-          });
-        }
-
-        if (stdout.includes("EXISTS")) {
-          return res.status(400).json({
-            error: "Distribution list already exists"
-          });
-        }
-
-        console.log("✅ DL Created Successfully");
-
-        res.json({
-          message: "DL Created Successfully",
-          output: stdout
-        });
-      }
-    );
-
+    exec(`C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -EncodedCommand ${encoded}`, (error, stdout, stderr) => {
+      if (error) return res.status(500).json({ error: stderr || "DL creation failed" });
+      if (stdout.includes("EXISTS")) return res.status(400).json({ error: "Distribution list already exists" });
+      res.json({ message: "DL Created Successfully", output: stdout });
+    });
   } catch (err) {
     console.error("❌ DL Route Error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-const serviceSchema = new mongoose.Schema(
-  {
-    serviceName: { type: String, required: true, trim: true },
- 
-    // Linked category
-    category: {
-      id:   { type: String },
-      name: { type: String },
-    },
- 
-    // Distribution List (who gets notified when a request is raised)
-    distributionList: {
-      id:           { type: String },
-      name:         { type: String },
-      mail:         { type: String },
-      mailNickname: { type: String },
-    },
- 
-    // Assignment group selected
-    assignmentGroup: {
-      groupId:   { type: String },
-      groupName: { type: String },
-      members: [           // ← ADD THIS
-    {
-      id:       { type: String },
-      name:     { type: String },
-      email:    { type: String },
-      isManual: { type: Boolean }
-    }
-  ]
-    },
- 
-    // The specific member assigned to handle requests for this service
-    assignedMember: {
-      memberId:    { type: String },
-      memberName:  { type: String },
-      memberEmail: { type: String },
-    },
- 
-    // DL members snapshot (for email dispatch)
-    dlGroupMembers: [{ id: String, email: String, displayName: String }],
- 
-    createdBy: { id: String, name: String, mail: String },
-  },
-  { timestamps: true }
-);
- 
-const Service = mongoose.model('Service', serviceSchema);
- 
- 
-// ─────────────────────────────────────────────────────────────────────
-// GET /api/services — list all services
-// ─────────────────────────────────────────────────────────────────────
-app.get('/api/services', async (req, res) => {
-  try {
-    const services = await Service.find().sort({ createdAt: -1 });
-    res.json(services);
-  } catch (err) {
-    console.error('❌ Get services error:', err);
-    res.status(500).json({ message: 'Failed to fetch services' });
-  }
-});
- 
- // ─────────────────────────────────────────────────────────────────────
-// POST /api/services — create a new service (improved validation + logging)
-// ─────────────────────────────────────────────────────────────────────
-app.post('/api/services', async (req, res) => {
-  try {
-    const {
-      serviceName,
-      category,
-      distributionList,
-      assignmentGroup,
-      dlGroupMembers = [],
-      createdBy,
-    } = req.body;
-
-    console.log('⬇️ POST /api/services payload:', JSON.stringify(req.body, null, 2));
-
-    // ── Validation ────────────────────────────────────────────────
-    if (!serviceName?.trim()) {
-      return res.status(400).json({ message: 'Service name is required' });
-    }
-
-    if (!category?.name) {
-      return res.status(400).json({ message: 'Category is required' });
-    }
-
-    if (!distributionList?.id) {
-      return res.status(400).json({ message: 'Distribution List is required' });
-    }
-
-    // ❌ REMOVED: assignedMember validation (no longer needed)
-
-    // ── Save ──────────────────────────────────────────────────────
-    const service = await Service.create({
-      serviceName: serviceName.trim(),
-      category,
-      distributionList,
-      assignmentGroup, // ✅ now contains members
-      dlGroupMembers: Array.isArray(dlGroupMembers) ? dlGroupMembers : [],
-      createdBy: createdBy || {},
-    });
-
-    console.log('✅ [CREATE SERVICE] Saved:', serviceName.trim());
-    res.status(201).json(service);
-
-    // ── Background Email Logic ─────────────────────────────────────
-    setImmediate(async () => {
-      try {
-        const prodUrl = process.env.PROD_URL;
-        const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-
-        const commonFields = [
-          { label: 'Service Name', value: serviceName.trim() },
-          { label: 'Category', value: category.name },
-          { label: 'Distribution List', value: distributionList.name || '—' },
-          { label: 'Assignment Group', value: assignmentGroup?.groupName || '—' },
-          { label: 'Created By', value: createdBy?.name || createdBy?.mail || 'Admin' },
-          { label: 'Created At (IST)', value: nowIST },
-        ];
-
-        // ✅ Creator Email
-        if (createdBy?.mail) {
-          const html = buildHtmlEmail({
-            title: `✅ Service Created: ${serviceName.trim()}`,
-            subtitle: 'New service configured successfully',
-            statusColor: '#002060',
-            fields: commonFields,
-            description: `The service "${serviceName.trim()}" has been set up.`,
-            actionLink: `${prodUrl}/settings`,
-            actionText: 'View Settings',
-          });
-
-          await sendEmail(
-            createdBy.mail,
-            `[SERVICE CREATED] ${serviceName.trim()} — Configured Successfully`,
-            html
-          );
-        }
-
-        // ✅ DL Members Email
-        const dlEmails = [
-          ...new Set((dlGroupMembers || []).map(m => m.email).filter(Boolean))
-        ];
-
-        if (dlEmails.length > 0) {
-          const html = buildHtmlEmail({
-            title: `📋 New Service: ${serviceName.trim()}`,
-            subtitle: `A new service has been set up for your distribution list`,
-            statusColor: '#0369a1',
-            fields: [...commonFields, { label: 'Your Role', value: 'DL Group Member' }],
-            description: `The service "${serviceName.trim()}" is now active.`,
-            actionLink: prodUrl,
-            actionText: 'Open Helpdesk',
-          });
-
-          await sendEmail(
-            dlEmails,
-            `[SERVICE CREATED] ${serviceName.trim()} — New Service for Your Group`,
-            html
-          );
-        }
-
-        // ✅ NEW: Assignment Group Members Email
-        const agMembers = assignmentGroup?.members || [];
-
-        const agEmails = [
-          ...new Set(
-            agMembers
-              .map(m => m.email || m.mail || m.id || "")
-              .filter(Boolean)
-          )
-        ];
-
-        if (agEmails.length > 0) {
-          const html = buildHtmlEmail({
-            title: `📢 New Service Assigned to Your Group`,
-            subtitle: `${serviceName.trim()} has been assigned to your group`,
-            statusColor: '#7c3aed',
-            fields: [...commonFields, { label: 'Your Role', value: 'Assignment Group Member' }],
-            description: `This service is assigned to your group. All members are notified.`,
-            actionLink: prodUrl,
-            actionText: 'Open Helpdesk',
-          });
-
-          await sendEmail(
-            agEmails,
-            `[GROUP ASSIGNED] ${serviceName.trim()} — Action Required`,
-            html
-          );
-        }
-
-        console.log(`✅ [SERVICE] All CREATE notifications sent for: ${serviceName.trim()}`);
-
-      } catch (mailErr) {
-        console.error('❌ [SERVICE] CREATE notification error:', mailErr.message);
-      }
-    });
-
-  } catch (err) {
-    console.error('❌ [CREATE SERVICE] Error:', err);
-    return res.status(500).json({ message: 'Failed to create service', error: err.message });
-  }
-});
-// ===================== NEW SCHEMAS =====================
-// -------- Request Schema --------
-
-const requestSchema = new mongoose.Schema(
-  {
-    requestNumber: { type: String, unique: true },
-
-    service: {
-      id:          { type: String, required: true },
-      name:        { type: String, required: true },
-      categoryName:{ type: String },
-    },
-
-    assignmentGroup: {
-      groupId:   { type: String },
-      groupName: { type: String },
-    },
-
-    assignedMember: {
-      memberId:    { type: String },
-      memberName:  { type: String },
-      memberEmail: { type: String },
-    },
-
-    raisedBy: {
-      id:   { type: String, required: true },
-      name: { type: String },
-      mail: { type: String, required: true },
-    },
-
-    onBehalf: {
-      enabled: { type: Boolean, default: false },
-      user: {
-        id:   { type: String },
-        name: { type: String },
-        mail: { type: String },
-      },
-    },
-
-    description: { type: String, default: "" },
-
-    attachments: [
-      {
-        id:       { type: String },
-        driveId:  { type: String },
-        fileName: { type: String },
-        fileType: { type: String },
-        url:      { type: String },
-      },
-    ],
-
-    approval: {
-      required:  { type: Boolean, default: false },
-      status:    { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
-      approvers: [{ id: String, name: String, email: String }],
-      approvedBy:{ id: String, name: String, email: String },
-      approvedAt:{ type: Date },
-      comments:  { type: String },
-    },
-
-    status: {
-      type: String,
-      enum: ["open", "in_progress", "pending_approval", "resolved", "closed", "cancelled"],
-      default: "open",
-    },
-
-    priority: {
-      type: String,
-      enum: ["low", "medium", "high"],
-      default: "medium",
-    },
-
-    resolvedAt:  { type: Date },
-    closedAt:    { type: Date },
-    notes:       { type: String },
-
-    updatedBy: { id: String, name: String, mail: String },
-
-    // ✅ HISTORY ARRAY - Track all events
-    history: [
-      {
-        action:    { type: String },
-        by:        { type: String },
-        at:        { type: Date, default: Date.now },
-        newStatus: { type: String },
-        oldStatus: { type: String },
-        reason:    { type: String },
-        notes:     { type: String },
-      }
-    ],
-  },
-  { timestamps: true }
-);
-
-requestSchema.pre("save", async function (next) {
-  if (!this.requestNumber) {
-    const count = await mongoose.model("Request").countDocuments();
-    this.requestNumber = `REQ-${String(count + 1).padStart(4, "0")}`;
-  }
-  next();
-});
-
-const Request = mongoose.model("Request", requestSchema);
-module.exports = Request;
-
-
-// -------- Incident Schema --------
-
-const messageSchema = new mongoose.Schema({
-  message: {
-    type: String,
-    required: true,
-  },
-  sender: {
-    id: String,
-    name: String,
-    email: String,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  readBy: [{
-    type: String, // User IDs who have read this message
-  }],
-  deleted: {
-    type: Boolean,
-    default: false,
-  },
-  deletedAt: Date,
-  deletedBy: String,
-});
-
-const incidentSchema = new mongoose.Schema(
-  {
-    incidentNumber: { type: String, unique: true }, // e.g. INC-0001
-
-    title:       { type: String, required: true, trim: true },
-    description: { type: String, required: true },
-
-    category: {
-      id:   { type: String },
-      name: { type: String },
-    },
-
-    assignmentGroup: {
-      groupId:   { type: String },
-      groupName: { type: String },
-    },
-
-    assignedMember: {
-      memberId:    { type: String },
-      memberName:  { type: String },
-      memberEmail: { type: String },
-    },
-
-    raisedBy: {
-      id:   { type: String, required: true },
-      name: { type: String },
-      mail: { type: String, required: true },
-    },
-
-    priority: {
-      type: String,
-      enum: ["low", "medium", "high", "critical"],
-      default: "medium",
-    },
-
-    status: {
-      type: String,
-      enum: ["open", "in_progress", "resolved", "closed", "cancelled"],
-      default: "open",
-    },
-
-    // Attachments (SharePoint refs)
-    attachments: [
-      {
-        id:       { type: String },
-        driveId:  { type: String },
-        fileName: { type: String },
-        fileType: { type: String },
-        url:      { type: String },
-      },
-    ],
-
-    resolvedAt: { type: Date },
-    closedAt:   { type: Date },
-    notes:      { type: String },
-
-    updatedBy: { id: String, name: String, mail: String },
-  },
-  { timestamps: true }
-);
-
-incidentSchema.pre("save", async function (next) {
-  if (!this.incidentNumber) {
-    const count = await Incident.countDocuments();
-    this.incidentNumber = `INC-${String(count + 1).padStart(4, "0")}`;
-  }
-  next();
-});
-
-const Incident = mongoose.model("Incident", incidentSchema);
-
-
-// ===================== REQUEST ROUTES =====================
-
-// GET /api/requests — all requests (admin view)
-app.get("/api/requests", async (req, res) => {
-  try {
-    const requests = await Request.find().sort({ createdAt: -1 });
-    res.json(requests);
-  } catch (err) {
-    console.error("❌ Get requests error:", err);
-    res.status(500).json({ message: "Failed to fetch requests" });
-  }
-});
-
-// GET /api/requests/mine — current user's requests
-app.get("/api/requests/mine", async (req, res) => {
-  try {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ message: "Email is required" });
-    const requests = await Request.find({ "raisedBy.mail": email }).sort({ createdAt: -1 });
-    res.json(requests);
-  } catch (err) {
-    console.error("❌ Get my requests error:", err);
-    res.status(500).json({ message: "Failed to fetch your requests" });
-  }
-});
-
-// GET /api/requests/:id — single request
-app.get("/api/requests/:id", async (req, res) => {
-  try {
-    const request = await Request.findById(req.params.id);
-    if (!request) return res.status(404).json({ message: "Request not found" });
-
-    const doc = request.toObject();
-
-    // If members are missing (old requests), live-fetch from AssignmentGroup
-    if (
-      doc.assignmentGroup?.groupId &&
-      (!doc.assignmentGroup.members || doc.assignmentGroup.members.length === 0)
-    ) {
-      try {
-        const fullGroup = await AssignmentGroup.findById(doc.assignmentGroup.groupId).catch(() => null)
-  || await AssignmentGroup.findOne({ name: doc.assignmentGroup.groupName });
-        if (fullGroup) {
-          doc.assignmentGroup.members = fullGroup.members || [];
-          console.log(`✅ [GET REQUEST] Enriched with ${doc.assignmentGroup.members.length} members from DB`);
-        }
-      } catch (e) {
-        console.error("⚠️ [GET REQUEST] Could not enrich assignment group members:", e.message);
-      }
-    }
-
-    res.json(doc);
-  } catch (err) {
-    console.error("❌ Get request error:", err);
-    res.status(500).json({ message: "Failed to fetch request" });
-  }
-});
-
-
-// POST /api/requests — Create new request
-app.post("/api/requests", async (req, res) => {
-  try {
-    const {
-      service,
-      assignmentGroup,
-      assignedMember,
-      raisedBy,
-      onBehalf,
-      description,
-      attachments,
-      approval,
-      priority,
-    } = req.body;
-
-    if (!service?.id)   return res.status(400).json({ message: "Service is required" });
-    if (!raisedBy?.mail) return res.status(400).json({ message: "Requester info is required" });
-
-    // ✅ FIX: Fetch the full assignment group from database to get members
-    let finalAssignmentGroup = assignmentGroup || {};
-    
-    if (finalAssignmentGroup?.groupId) {
-      try {
-        console.log(`🔍 [CREATE REQUEST] Fetching assignment group: ${finalAssignmentGroup.groupId}`);
-        
-        // Fetch the assignment group from your AssignmentGroup collection
-        const fullGroup = await AssignmentGroup.findById(finalAssignmentGroup.groupId).catch(() => null) || await AssignmentGroup.findOne({ name: finalAssignmentGroup.groupName });
-        
-        if (fullGroup) {
-          // ✅ COPY ALL MEMBERS from the assignment group
-          finalAssignmentGroup = {
-            groupId: fullGroup._id.toString(),
-            groupName: fullGroup.name,
-            members: fullGroup.members || []  // ← THIS IS WHAT YOU NEED!
-          };
-          console.log(`✅ [CREATE REQUEST] Copied ${finalAssignmentGroup.members.length} members from group "${fullGroup.name}"`);
-          console.log(`   Members:`, finalAssignmentGroup.members.map(m => ({ name: m.name, email: m.email })));
-        } else {
-          console.log(`⚠️ [CREATE REQUEST] Assignment group not found: ${finalAssignmentGroup.groupId}`);
-        }
-      } catch (err) {
-        console.error(`❌ [CREATE REQUEST] Error fetching assignment group:`, err.message);
-      }
-    }
-
-    // Auto-assign a member from the group members
-    let finalAssignedMember = assignedMember || {};
-    
-    if ((!finalAssignedMember.memberEmail || !finalAssignedMember.memberId) && finalAssignmentGroup?.members?.length > 0) {
-      const firstMember = finalAssignmentGroup.members[0];
-      const memberEmail = firstMember.email || firstMember.mail || '';
-      const memberId = firstMember.id || '';
-      const memberName = firstMember.name || firstMember.displayName || memberEmail || '';
-      
-      finalAssignedMember = {
-        memberId: memberId,
-        memberName: memberName,
-        memberEmail: memberEmail
-      };
-      console.log(`✅ [CREATE REQUEST] Auto-assigned member: ${memberName} (${memberEmail})`);
-    }
-
-    // Determine initial status
-    const initialStatus = approval?.required ? "pending_approval" : "open";
-
-    const request = new Request({
-      service,
-      assignmentGroup: finalAssignmentGroup,  // ← NOW INCLUDES MEMBERS!
-      assignedMember: finalAssignedMember,
-      raisedBy,
-      onBehalf: onBehalf || { enabled: false },
-      description: description || "",
-      attachments: Array.isArray(attachments) ? attachments : [],
-      approval: approval || { required: false },
-      priority: priority || "medium",
-      status: initialStatus,
-      
-      history: [
-        {
-          action: 'created',
-          by: raisedBy?.name || raisedBy?.mail || 'System',
-          at: new Date(),
-          notes: `Request created by ${raisedBy?.name || raisedBy?.mail}`
-        }
-      ]
-    });
-
-    await request.save();
-    
-    console.log("✅ [CREATE REQUEST] Saved:", request.requestNumber);
-    console.log("   Group members count:", request.assignmentGroup?.members?.length || 0);
-
-    res.status(201).json(request);
-
-    // ... rest of your email notification code ...
-
-  } catch (err) {
-    console.error("❌ [CREATE REQUEST] Error:", err);
-    res.status(500).json({ message: "Failed to create request", error: err.message });
-  }
-});
-
-app.patch("/api/requests/:id", async (req, res) => {
-  try {
-    const { status, assignedMember, assignmentGroup, notes, updatedBy, priority } = req.body;
-
-    const request = await Request.findById(req.params.id);
-    if (!request) return res.status(404).json({ message: "Request not found" });
-
-    // Track old values for history
-    const oldStatus = request.status;
-    const oldPriority = request.priority;
-
-    // Update fields
-    if (status)          request.status = status;
-    if (priority)        request.priority = priority;
-    if (assignedMember)  request.assignedMember = assignedMember;
-    if (assignmentGroup) request.assignmentGroup = assignmentGroup;
-    if (notes)           request.notes = notes;
-    if (updatedBy)       request.updatedBy = updatedBy;
-
-    // Set timestamps
-    if (status === "resolved") request.resolvedAt = new Date();
-    if (status === "closed")   request.closedAt = new Date();
-
-    // ✅ Add history for status change (for ALL requests)
-    if (status && status !== oldStatus) {
-      request.history = request.history || [];
-      request.history.push({
-        action: 'status_updated',
-        by: updatedBy?.name || updatedBy?.mail || 'System',
-        at: new Date(),
-        oldStatus: oldStatus,
-        newStatus: status,
-        notes: notes || `Status changed from ${oldStatus} to ${status} by ${updatedBy?.name || 'Admin'}`
-      });
-    }
-
-    // ✅ Add special history for resolved
-    if (status === 'resolved' && oldStatus !== 'resolved') {
-      request.history.push({
-        action: 'resolved',
-        by: updatedBy?.name || updatedBy?.mail || 'System',
-        at: new Date(),
-        notes: notes || 'Request marked as resolved'
-      });
-    }
-
-    // ✅ Add special history for closed
-    if (status === 'closed' && oldStatus !== 'closed') {
-      request.history.push({
-        action: 'closed',
-        by: updatedBy?.name || updatedBy?.mail || 'System',
-        at: new Date(),
-        notes: notes || 'Request closed'
-      });
-    }
-
-    await request.save();
-    console.log("✅ [UPDATE REQUEST]", request.requestNumber, "→", status || "updated");
-
-    res.json(request);
-
-    // Send email notification (background)
-    if (status && status !== oldStatus) {
-      setImmediate(async () => {
-        try {
-          const prodUrl = process.env.PROD_URL;
-          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-          
-          const statusColors = {
-            open: "#0369a1", in_progress: "#d97706", pending_approval: "#7c3aed",
-            resolved: "#16a34a", closed: "#6b7280", cancelled: "#dc2626",
-          };
-
-          if (request.raisedBy?.mail) {
-            const html = buildHtmlEmail({
-              title: `Request ${request.requestNumber} — Status Updated`,
-              subtitle: `Your request status has changed to ${status.replace(/_/g, " ").toUpperCase()}`,
-              statusColor: statusColors[status] || "#002060",
-              fields: [
-                { label: "Request No.", value: request.requestNumber },
-                { label: "Service", value: request.service?.name },
-                { label: "New Status", value: status.replace(/_/g, " ").toUpperCase() },
-                { label: "Updated By", value: updatedBy?.name || "Admin" },
-                { label: "Updated At", value: nowIST },
-              ],
-              description: notes || "",
-              actionLink: `${prodUrl}/requests/${request._id}`,
-              actionText: "View Request",
-            });
-            await sendEmail(request.raisedBy.mail, `[REQUEST] ${request.requestNumber} — Status: ${status.toUpperCase()}`, html);
-          }
-        } catch (mailErr) {
-          console.error("❌ [UPDATE] Email error:", mailErr.message);
-        }
-      });
-    }
-
-  } catch (err) {
-    console.error("❌ [UPDATE REQUEST] Error:", err);
-    res.status(500).json({ message: "Failed to update request" });
-  }
-});
-
-
-// ===================== INCIDENT ROUTES =====================
-
-// GET /api/incidents — all incidents (admin)
-app.get("/api/incidents", async (req, res) => {
-  try {
-    const incidents = await Incident.find().sort({ createdAt: -1 });
-    res.json(incidents);
-  } catch (err) {
-    console.error("❌ Get incidents error:", err);
-    res.status(500).json({ message: "Failed to fetch incidents" });
-  }
-});
-
-// GET /api/incidents/mine — current user's incidents
-app.get("/api/incidents/mine", async (req, res) => {
-  try {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ message: "Email is required" });
-    const incidents = await Incident.find({ "raisedBy.mail": email }).sort({ createdAt: -1 });
-    res.json(incidents);
-  } catch (err) {
-    console.error("❌ Get my incidents error:", err);
-    res.status(500).json({ message: "Failed to fetch your incidents" });
-  }
-});
-
-// GET /api/incidents/:id — single incident
-app.get("/api/incidents/:id", async (req, res) => {
-  try {
-    const incident = await Incident.findById(req.params.id);
-    if (!incident) return res.status(404).json({ message: "Incident not found" });
-    res.json(incident);
-  } catch (err) {
-    console.error("❌ Get incident error:", err);
-    res.status(500).json({ message: "Failed to fetch incident" });
-  }
-});
-
-// POST /api/incidents — user raises an incident
-app.post("/api/incidents", async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      category,
-      assignmentGroup,
-      assignedMember,
-      raisedBy,
-      priority,
-      attachments,
-    } = req.body;
-
-    if (!title?.trim())   return res.status(400).json({ message: "Title is required" });
-    if (!description?.trim()) return res.status(400).json({ message: "Description is required" });
-    if (!raisedBy?.mail)  return res.status(400).json({ message: "Requester info is required" });
-
-    const incident = new Incident({
-      title:           title.trim(),
-      description:     description.trim(),
-      category:        category        || {},
-      assignmentGroup: assignmentGroup || {},
-      assignedMember:  assignedMember  || {},
-      raisedBy,
-      priority:    priority || "medium",
-      attachments: Array.isArray(attachments) ? attachments : [],
-      status: "open",
-    });
-
-    await incident.save();
-    console.log("✅ [CREATE INCIDENT] Saved:", incident.incidentNumber);
-
-    res.status(201).json(incident);
-
-    // Background email
-    setImmediate(async () => {
-      try {
-        const nowIST  = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-        const prodUrl = process.env.PROD_URL;
-
-        const priorityColors = {
-          low:      "#16a34a",
-          medium:   "#0369a1",
-          high:     "#d97706",
-          critical: "#dc2626",
-        };
-
-        // Notify requester
-        if (raisedBy?.mail) {
-          const html = buildHtmlEmail({
-            title:       `✅ Incident Raised: ${incident.incidentNumber}`,
-            subtitle:    `Your incident has been logged`,
-            statusColor: priorityColors[priority] || "#0369a1",
-            fields: [
-              { label: "Incident No.", value: incident.incidentNumber },
-              { label: "Title",        value: title.trim() },
-              { label: "Category",     value: category?.name || "—" },
-              { label: "Priority",     value: priority || "medium" },
-              { label: "Status",       value: "Open" },
-              { label: "Raised At",    value: nowIST },
-            ],
-            description: description.trim(),
-            actionLink:  `${prodUrl}/incidents/${incident._id}`,
-            actionText:  "View Incident",
-          });
-          await sendEmail(raisedBy.mail, `[INCIDENT] ${incident.incidentNumber} — Logged Successfully`, html);
-        }
-
-        // Notify assigned member
-        if (assignedMember?.memberEmail) {
-          const html = buildHtmlEmail({
-            title:       `🚨 Incident Assigned: ${incident.incidentNumber}`,
-            subtitle:    `A new incident has been assigned to you`,
-            statusColor: priorityColors[priority] || "#0369a1",
-            fields: [
-              { label: "Incident No.", value: incident.incidentNumber },
-              { label: "Title",        value: title.trim() },
-              { label: "Priority",     value: priority || "medium" },
-              { label: "Raised By",    value: `${raisedBy.name} (${raisedBy.mail})` },
-              { label: "Raised At",    value: nowIST },
-            ],
-            description: description.trim(),
-            actionLink:  `${prodUrl}/incidents/${incident._id}`,
-            actionText:  "View Incident",
-          });
-          await sendEmail(assignedMember.memberEmail, `[INCIDENT ASSIGNED] ${incident.incidentNumber} — Action Required`, html);
-        }
-
-        console.log(`✅ [INCIDENT] Notifications sent for: ${incident.incidentNumber}`);
-      } catch (mailErr) {
-        console.error("❌ [INCIDENT] Notification error:", mailErr.message);
-      }
-    });
-
-  } catch (err) {
-    console.error("❌ [CREATE INCIDENT] Error:", err);
-    res.status(500).json({ message: "Failed to raise incident", error: err.message });
-  }
-});
-
-// PATCH /api/incidents/:id — admin updates status / assignment
-app.patch("/api/incidents/:id", async (req, res) => {
-  try {
-    const { status, assignedMember, assignmentGroup, notes, updatedBy, priority } = req.body;
-
-    const incident = await Incident.findById(req.params.id);
-    if (!incident) return res.status(404).json({ message: "Incident not found" });
-
-    if (status)          incident.status          = status;
-    if (priority)        incident.priority        = priority;
-    if (assignedMember)  incident.assignedMember  = assignedMember;
-    if (assignmentGroup) incident.assignmentGroup = assignmentGroup;
-    if (notes)           incident.notes           = notes;
-    if (updatedBy)       incident.updatedBy       = updatedBy;
-
-    if (status === "resolved") incident.resolvedAt = new Date();
-    if (status === "closed")   incident.closedAt   = new Date();
-
-    await incident.save();
-    console.log("✅ [UPDATE INCIDENT]", incident.incidentNumber, "→", status);
-
-    res.json(incident);
-
-    // Notify requester of status change
-    setImmediate(async () => {
-      try {
-        if (!status) return;
-        const nowIST  = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-        const prodUrl = process.env.PROD_URL;
-
-        const statusColors = {
-          open:        "#0369a1",
-          in_progress: "#d97706",
-          resolved:    "#16a34a",
-          closed:      "#6b7280",
-          cancelled:   "#dc2626",
-        };
-
-        if (incident.raisedBy?.mail) {
-          const html = buildHtmlEmail({
-            title:       `Incident ${incident.incidentNumber} — Status Updated`,
-            subtitle:    `Your incident status has changed`,
-            statusColor: statusColors[status] || "#002060",
-            fields: [
-              { label: "Incident No.", value: incident.incidentNumber },
-              { label: "Title",        value: incident.title },
-              { label: "New Status",   value: status.replace(/_/g, " ").toUpperCase() },
-              { label: "Updated By",   value: updatedBy?.name || "Admin" },
-              { label: "Updated At",   value: nowIST },
-            ],
-            description: notes || "",
-            actionLink:  `${prodUrl}/incidents/${incident._id}`,
-            actionText:  "View Incident",
-          });
-          await sendEmail(incident.raisedBy.mail, `[INCIDENT] ${incident.incidentNumber} — Status: ${status.toUpperCase()}`, html);
-        }
-      } catch (mailErr) {
-        console.error("❌ [INCIDENT] Status notification error:", mailErr.message);
-      }
-    });
-
-  } catch (err) {
-    console.error("❌ [UPDATE INCIDENT] Error:", err);
-    res.status(500).json({ message: "Failed to update incident" });
-  }
-});
-
-
-// ===================== EXTENDED SERVICE ROUTES =====================
-
-// GET /api/services/:id — single service
-app.get("/api/services/:id", async (req, res) => {
-  try {
-    const service = await Service.findById(req.params.id);
-    if (!service) return res.status(404).json({ message: "Service not found" });
-    res.json(service);
-  } catch (err) {
-    console.error("❌ Get service error:", err);
-    res.status(500).json({ message: "Failed to fetch service" });
-  }
-});
-
-// PUT /api/services/:id — edit a service
-app.put("/api/services/:id", async (req, res) => {
-  try {
-    const {
-      serviceName,
-      category,
-      distributionList,
-      assignmentGroup,
-      assignedMember,
-      dlGroupMembers,
-    } = req.body;
-
-    if (!serviceName?.trim())
-      return res.status(400).json({ message: "Service name is required" });
-
-    const updated = await Service.findByIdAndUpdate(
-      req.params.id,
-      {
-        serviceName:     serviceName.trim(),
-        category,
-        distributionList,
-        assignmentGroup,
-        assignedMember,
-        dlGroupMembers: Array.isArray(dlGroupMembers) ? dlGroupMembers : [],
-      },
-      { new: true }
-    );
-
-    if (!updated) return res.status(404).json({ message: "Service not found" });
-
-    console.log("✅ [UPDATE SERVICE] Saved:", serviceName.trim());
-    res.json(updated);
-  } catch (err) {
-    console.error("❌ [UPDATE SERVICE] Error:", err);
-    res.status(500).json({ message: "Failed to update service" });
-  }
-});
-
-// DELETE /api/services/:id — delete a service
-app.delete("/api/services/:id", async (req, res) => {
-  try {
-    const deleted = await Service.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Service not found" });
-    console.log("✅ [DELETE SERVICE] Deleted:", deleted.serviceName);
-    res.json({ message: "Service deleted successfully" });
-  } catch (err) {
-    console.error("❌ [DELETE SERVICE] Error:", err);
-    res.status(500).json({ message: "Failed to delete service" });
-  }
-});
-
-// =====================================================================
-// ASSIGNMENT GROUP SCHEMA
-// =====================================================================
-const assignmentGroupSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    description: { type: String },
-    members: [{
-      id: { type: String },
-      name: { type: String },
-      email: { type: String },
-      isManual: { type: Boolean, default: false }
-    }],
-    manualMembers: [{
-      id: { type: String },
-      name: { type: String },
-      email: { type: String }
-    }],
-    distributionList: {
-      id: { type: String },
-      name: { type: String },
-      mail: { type: String },
-      members: [{ id: String, name: String, email: String }]
-    },
-    createdBy: {
-      id: { type: String },
-      name: { type: String },
-      email: { type: String }
-    }
-  },
-  { timestamps: true }
-);
-
-const AssignmentGroup = mongoose.model('AssignmentGroup', assignmentGroupSchema);
-
-// =====================================================================
-// ASSIGNMENT GROUP ROUTES
-// =====================================================================
-
-// GET /api/assignment-groups - Get all assignment groups
-app.get('/api/assignment-groups', async (req, res) => {
-  try {
-    const groups = await AssignmentGroup.find().sort({ createdAt: -1 });
-    res.json(groups);
-  } catch (err) {
-    console.error('❌ Get assignment groups error:', err);
-    res.status(500).json({ message: 'Failed to fetch assignment groups' });
-  }
-});
-
-// GET /api/assignment-groups/:id - Get single assignment group
-app.get('/api/assignment-groups/:id', async (req, res) => {
-  try {
-    const group = await AssignmentGroup.findById(req.params.id);
-    if (!group) {
-      return res.status(404).json({ message: 'Assignment group not found' });
-    }
-    res.json(group);
-  } catch (err) {
-    console.error('❌ Get assignment group error:', err);
-    res.status(500).json({ message: 'Failed to fetch assignment group' });
-  }
-});
-
-// POST /api/assignment-groups - Create assignment group
-app.post('/api/assignment-groups', async (req, res) => {
-  try {
-    const { name, description, members, distributionList, manualMembers, createdBy } = req.body;
-
-    if (!name?.trim()) {
-      return res.status(400).json({ message: 'Group name is required' });
-    }
-
-    if (!members || members.length === 0) {
-      return res.status(400).json({ message: 'At least one member is required' });
-    }
-
-    const group = await AssignmentGroup.create({
-      name: name.trim(),
-      description: description || '',
-      members,
-      manualMembers: manualMembers || [],
-      distributionList: distributionList || null,
-      createdBy: createdBy || {}
-    });
-
-    console.log(`✅ Assignment group created: ${name}`);
-    res.status(201).json(group);
-  } catch (err) {
-    console.error('❌ Create assignment group error:', err);
-    res.status(500).json({ message: 'Failed to create assignment group', error: err.message });
-  }
-});
-
-// PUT /api/assignment-groups/:id - Update assignment group
-app.put('/api/assignment-groups/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, description, members, distributionList, manualMembers } = req.body;
-
-    if (!name?.trim()) {
-      return res.status(400).json({ message: 'Group name is required' });
-    }
-
-    if (!members || members.length === 0) {
-      return res.status(400).json({ message: 'At least one member is required' });
-    }
-
-    const group = await AssignmentGroup.findByIdAndUpdate(
-      id,
-      {
-        name: name.trim(),
-        description: description || '',
-        members,
-        manualMembers: manualMembers || [],
-        distributionList: distributionList || null
-      },
-      { new: true, runValidators: true }
-    );
-
-    if (!group) {
-      return res.status(404).json({ message: 'Assignment group not found' });
-    }
-
-    console.log(`✅ Assignment group updated: ${name}`);
-    res.json(group);
-  } catch (err) {
-    console.error('❌ Update assignment group error:', err);
-    res.status(500).json({ message: 'Failed to update assignment group', error: err.message });
-  }
-});
-
-// DELETE /api/assignment-groups/:id - Delete assignment group
-app.delete('/api/assignment-groups/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const group = await AssignmentGroup.findByIdAndDelete(id);
-
-    if (!group) {
-      return res.status(404).json({ message: 'Assignment group not found' });
-    }
-
-    console.log(`✅ Assignment group deleted: ${group.name}`);
-    res.json({ message: 'Assignment group deleted successfully', group: group.name });
-  } catch (err) {
-    console.error('❌ Delete assignment group error:', err);
-    res.status(500).json({ message: 'Failed to delete assignment group', error: err.message });
-  }
-});
-
-// ===================== INCIDENT MESSAGE ROUTES =====================
-
-// ===================== INCIDENT MESSAGE ROUTES =====================
-
-// GET /api/incidents/:id/messages - Fetch all messages for an incident
-app.get('/api/incidents/:id/messages', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const incident = await Incident.findById(id);
-    if (!incident) {
-      return res.status(404).json({ message: 'Incident not found' });
-    }
-    
-    const messages = incident.messages || [];
-    messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    
-    res.json(messages);
-    
-  } catch (error) {
-    console.error('❌ Error fetching messages:', error);
-    res.status(500).json({ message: 'Failed to fetch messages' });
-  }
-});
-
-// POST /api/incidents/:id/messages - Send a new message
-app.post('/api/incidents/:id/messages', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { message, sender } = req.body;
-    
-    if (!message || !message.trim()) {
-      return res.status(400).json({ message: 'Message is required' });
-    }
-    
-    if (!sender || !sender.email) {
-      return res.status(400).json({ message: 'Sender information is required' });
-    }
-    
-    const incident = await Incident.findById(id);
-    if (!incident) {
-      return res.status(404).json({ message: 'Incident not found' });
-    }
-    
-    // BOTH raised person AND assigned person can chat
-    const raisedEmail = incident.raisedBy?.mail?.toLowerCase();
-    const assignedEmail = incident.assignedMember?.memberEmail?.toLowerCase();
-    const senderEmail = sender.email.toLowerCase();
-    
-    if (senderEmail !== raisedEmail && senderEmail !== assignedEmail) {
-      return res.status(403).json({ 
-        message: 'Only the person who raised this incident and the assigned person can chat' 
-      });
-    }
-    
-    const newMessage = {
-      message: message.trim(),
-      sender: {
-        id: sender.id || '',
-        name: sender.name || 'Unknown',
-        email: sender.email,
-      },
-      createdAt: new Date(),
-    };
-    
-    if (!incident.messages) {
-      incident.messages = [];
-    }
-    
-    incident.messages.push(newMessage);
-    await incident.save();
-    
-    res.status(201).json(newMessage);
-    
-  } catch (error) {
-    console.error('❌ Error sending message:', error);
-    res.status(500).json({ message: 'Failed to send message' });
-  }
-});
-
-// ===================== KB ARTICLE SCHEMA =====================
-const kbArticleSchema = new mongoose.Schema(
-  {
-    title: { type: String, required: true, trim: true },
-    description: { type: String, default: "" },
-    content: { type: String, required: true }, // HTML content from rich text editor
-    
-    // Category from CategoryConfig
-    category: {
-      id: { type: String },
-      name: { type: String }
-    },
-    
-    // Assignment Group from AssignmentGroup collection
-    assignmentGroup: {
-      groupId: { type: String },
-      groupName: { type: String }
-    },
-    
-    status: {
-      type: String,
-      enum: ["draft", "published"],
-      default: "draft"
-    },
-    
-    createdBy: {
-      id: { type: String },
-      name: { type: String },
-      email: { type: String }
-    },
-    
-    updatedBy: {
-      id: { type: String },
-      name: { type: String },
-      email: { type: String }
-    },
-    
-    viewCount: { type: Number, default: 0 },
-    tags: [{ type: String }], // Optional: for search
-  },
-  { timestamps: true }
-);
+// ===================== KB ARTICLE SCHEMA & ROUTES =====================
+const kbArticleSchema = new mongoose.Schema({
+  title: { type: String, required: true, trim: true },
+  description: { type: String, default: "" },
+  content: { type: String, required: true },
+  category: { id: String, name: String },
+  assignmentGroup: { groupId: String, groupName: String },
+  status: { type: String, enum: ["draft", "published"], default: "draft" },
+  createdBy: { id: String, name: String, email: String },
+  updatedBy: { id: String, name: String, email: String },
+  viewCount: { type: Number, default: 0 },
+  tags: [{ type: String }],
+}, { timestamps: true });
 
 const KBArticle = mongoose.model("KBArticle", kbArticleSchema);
 
-// ===================== KB ARTICLE ROUTES =====================
-
-// GET /api/kb/articles - Get all articles (filter by status, category, group)
 app.get("/api/kb/articles", async (req, res) => {
   try {
     const { status, categoryId, groupId, search } = req.query;
     let filter = {};
-    
     if (status) filter.status = status;
     if (categoryId) filter["category.id"] = categoryId;
     if (groupId) filter["assignmentGroup.groupId"] = groupId;
-    
-    if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { content: { $regex: search, $options: "i" } }
-      ];
-    }
-    
+    if (search) filter.$or = [{ title: { $regex: search, $options: "i" } }, { description: { $regex: search, $options: "i" } }, { content: { $regex: search, $options: "i" } }];
     const articles = await KBArticle.find(filter).sort({ createdAt: -1 });
     res.json(articles);
   } catch (err) {
@@ -3128,23 +2439,13 @@ app.get("/api/kb/articles", async (req, res) => {
   }
 });
 
-// GET /api/kb/articles/published - Get all published articles (for regular users)
 app.get("/api/kb/articles/published", async (req, res) => {
   try {
     const { categoryId, groupId, search } = req.query;
     let filter = { status: "published" };
-    
     if (categoryId) filter["category.id"] = categoryId;
     if (groupId) filter["assignmentGroup.groupId"] = groupId;
-    
-    if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { content: { $regex: search, $options: "i" } }
-      ];
-    }
-    
+    if (search) filter.$or = [{ title: { $regex: search, $options: "i" } }, { description: { $regex: search, $options: "i" } }, { content: { $regex: search, $options: "i" } }];
     const articles = await KBArticle.find(filter).sort({ createdAt: -1 });
     res.json(articles);
   } catch (err) {
@@ -3153,18 +2454,12 @@ app.get("/api/kb/articles/published", async (req, res) => {
   }
 });
 
-// GET /api/kb/articles/:id - Get single article
 app.get("/api/kb/articles/:id", async (req, res) => {
   try {
     const article = await KBArticle.findById(req.params.id);
-    if (!article) {
-      return res.status(404).json({ message: "Article not found" });
-    }
-    
-    // Increment view count (don't await, do in background)
+    if (!article) return res.status(404).json({ message: "Article not found" });
     article.viewCount += 1;
-    article.save().catch(err => console.error("View count update error:", err));
-    
+    article.save().catch(err => console.error("View count error:", err));
     res.json(article);
   } catch (err) {
     console.error("❌ Get KB article error:", err);
@@ -3172,44 +2467,18 @@ app.get("/api/kb/articles/:id", async (req, res) => {
   }
 });
 
-// POST /api/kb/articles - Create new article (draft or published)
 app.post("/api/kb/articles", async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      content,
-      category,
-      assignmentGroup,
-      status,
-      createdBy,
-      tags
-    } = req.body;
-    
-    if (!title?.trim()) {
-      return res.status(400).json({ message: "Title is required" });
-    }
-    
-    if (!content?.trim()) {
-      return res.status(400).json({ message: "Content is required" });
-    }
-    
+    const { title, description, content, category, assignmentGroup, status, createdBy, tags } = req.body;
+    if (!title?.trim()) return res.status(400).json({ message: "Title is required" });
+    if (!content?.trim()) return res.status(400).json({ message: "Content is required" });
     const article = new KBArticle({
-      title: title.trim(),
-      description: description || "",
-      content,
-      category: category || {},
-      assignmentGroup: assignmentGroup || {},
-      status: status === "published" ? "published" : "draft",
-      createdBy: createdBy || {},
-      updatedBy: createdBy || {},
-      tags: tags || []
+      title: title.trim(), description: description || "", content, category: category || {},
+      assignmentGroup: assignmentGroup || {}, status: status === "published" ? "published" : "draft",
+      createdBy: createdBy || {}, updatedBy: createdBy || {}, tags: tags || []
     });
-    
     await article.save();
-    
     console.log(`✅ [KB ARTICLE] ${status === "published" ? "Published" : "Saved as draft"}: ${title}`);
-    
     res.status(201).json(article);
   } catch (err) {
     console.error("❌ Create KB article error:", err);
@@ -3217,25 +2486,11 @@ app.post("/api/kb/articles", async (req, res) => {
   }
 });
 
-// PUT /api/kb/articles/:id - Update article
 app.put("/api/kb/articles/:id", async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      content,
-      category,
-      assignmentGroup,
-      status,
-      updatedBy,
-      tags
-    } = req.body;
-    
+    const { title, description, content, category, assignmentGroup, status, updatedBy, tags } = req.body;
     const article = await KBArticle.findById(req.params.id);
-    if (!article) {
-      return res.status(404).json({ message: "Article not found" });
-    }
-    
+    if (!article) return res.status(404).json({ message: "Article not found" });
     if (title) article.title = title.trim();
     if (description !== undefined) article.description = description;
     if (content) article.content = content;
@@ -3244,11 +2499,8 @@ app.put("/api/kb/articles/:id", async (req, res) => {
     if (status) article.status = status;
     if (updatedBy) article.updatedBy = updatedBy;
     if (tags) article.tags = tags;
-    
     await article.save();
-    
-    console.log(`✅ [KB ARTICLE] Updated: ${article.title} (Status: ${article.status})`);
-    
+    console.log(`✅ [KB ARTICLE] Updated: ${article.title}`);
     res.json(article);
   } catch (err) {
     console.error("❌ Update KB article error:", err);
@@ -3256,14 +2508,10 @@ app.put("/api/kb/articles/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/kb/articles/:id - Delete article
 app.delete("/api/kb/articles/:id", async (req, res) => {
   try {
     const article = await KBArticle.findByIdAndDelete(req.params.id);
-    if (!article) {
-      return res.status(404).json({ message: "Article not found" });
-    }
-    
+    if (!article) return res.status(404).json({ message: "Article not found" });
     console.log(`✅ [KB ARTICLE] Deleted: ${article.title}`);
     res.json({ message: "Article deleted successfully" });
   } catch (err) {
@@ -3272,14 +2520,9 @@ app.delete("/api/kb/articles/:id", async (req, res) => {
   }
 });
 
-// GET /api/kb/articles/categories - Get all categories with article counts
 app.get("/api/kb/articles/categories/stats", async (req, res) => {
   try {
-    const stats = await KBArticle.aggregate([
-      { $match: { status: "published" } },
-      { $group: { _id: "$category.name", count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
-    ]);
+    const stats = await KBArticle.aggregate([{ $match: { status: "published" } }, { $group: { _id: "$category.name", count: { $sum: 1 } } }, { $sort: { count: -1 } }]);
     res.json(stats);
   } catch (err) {
     console.error("❌ Get category stats error:", err);
@@ -3287,8 +2530,49 @@ app.get("/api/kb/articles/categories/stats", async (req, res) => {
   }
 });
 
+// ===================== INCIDENT MESSAGE ROUTES =====================
+app.get('/api/incidents/:id/messages', async (req, res) => {
+  try {
+    const incident = await Incident.findById(req.params.id);
+    if (!incident) return res.status(404).json({ message: 'Incident not found' });
+    const messages = incident.messages || [];
+    messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    res.json(messages);
+  } catch (error) {
+    console.error('❌ Error fetching messages:', error);
+    res.status(500).json({ message: 'Failed to fetch messages' });
+  }
+});
+
+app.post('/api/incidents/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message, sender } = req.body;
+    if (!message?.trim()) return res.status(400).json({ message: 'Message is required' });
+    if (!sender?.email) return res.status(400).json({ message: 'Sender information is required' });
+
+    const incident = await Incident.findById(id);
+    if (!incident) return res.status(404).json({ message: 'Incident not found' });
+
+    const raisedEmail = incident.raisedBy?.mail?.toLowerCase();
+    const assignedEmail = incident.assignedMember?.memberEmail?.toLowerCase();
+    const senderEmail = sender.email.toLowerCase();
+
+    if (senderEmail !== raisedEmail && senderEmail !== assignedEmail) {
+      return res.status(403).json({ message: 'Only the requester and assigned person can chat' });
+    }
+
+    const newMessage = { message: message.trim(), sender: { id: sender.id || '', name: sender.name || 'Unknown', email: sender.email }, createdAt: new Date() };
+    if (!incident.messages) incident.messages = [];
+    incident.messages.push(newMessage);
+    await incident.save();
+    res.status(201).json(newMessage);
+  } catch (error) {
+    console.error('❌ Error sending message:', error);
+    res.status(500).json({ message: 'Failed to send message' });
+  }
+});
+
 // ===================== START SERVER =====================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`✅ Server running on port ${PORT}`)
-);
+app.listen(PORT, "0.0.0.0", () => console.log(`✅ Server running on port ${PORT}`));
