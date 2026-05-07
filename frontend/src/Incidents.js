@@ -1,4 +1,3 @@
-// Incidents.js - Redesigned to match Home.js styling
 import React, { useState, useEffect, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
@@ -30,7 +29,7 @@ function StatusBadge({ status }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+      padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
       background: cfg.bg, border: `1.5px solid ${cfg.border}`, color: cfg.color,
       letterSpacing: '0.02em', whiteSpace: 'nowrap',
       fontFamily: "'Sora', sans-serif",
@@ -46,12 +45,120 @@ function PriorityBadge({ priority }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+      padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
       background: cfg.bg, color: cfg.color, whiteSpace: 'nowrap',
       fontFamily: "'Sora', sans-serif",
     }}>
       {cfg.icon} {cfg.label}
     </span>
+  );
+}
+
+function MemberTooltip({ members }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  if (!members || members.length === 0) return null;
+
+  return (
+    <div 
+      style={{ position: 'relative', cursor: 'pointer', display: 'inline-block' }}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '6px 10px',
+        background: 'rgba(59, 130, 246, 0.08)',
+        borderRadius: 8,
+        fontSize: 12,
+        fontWeight: 600,
+        color: '#3b82f6',
+        fontFamily: "'Sora', sans-serif",
+      }}>
+        👥 {members.length}
+      </div>
+
+      {showTooltip && (
+        <div style={{
+          position: 'fixed',
+          background: '#ffffff',
+          border: '1.5px solid #e2e8f0',
+          borderRadius: 12,
+          minWidth: '220px',
+          maxWidth: '300px',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+          zIndex: 9999,
+          padding: 12,
+          pointerEvents: 'auto',
+          bottom: 'auto',
+          left: 'auto',
+          right: 'auto',
+          top: 'auto',
+          transform: 'translateY(-12px)',
+        }}>
+          <div style={{
+            fontSize: 10,
+            fontWeight: 800,
+            color: '#002060',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            marginBottom: 10,
+            paddingBottom: 8,
+            borderBottom: '1px solid #e2e8f0',
+          }}>
+            Team Members ({members.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '300px', overflowY: 'auto' }}>
+            {members.map((member, idx) => (
+              <div key={idx} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+              }}>
+                <div style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: '#3b82f6',
+                  flexShrink: 0,
+                }}>
+                  {(member.name || member.email || '?').charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#0f172a',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {member.name || '—'}
+                  </div>
+                  <div style={{
+                    fontSize: 11,
+                    color: '#64748b',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {member.email || member.mail || ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -86,6 +193,63 @@ function formatRelative(iso) {
   return formatDate(iso);
 }
 
+// Delete Confirmation Modal Component
+function DeleteModal({ incident, onClose, onConfirm, deleting }) {
+  if (!incident) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-icon">⚠️</div>
+          <h3>Delete Incident</h3>
+        </div>
+        <div className="modal-body">
+          <p>Are you sure you want to delete this incident?</p>
+          <div className="modal-request-info">
+            <div className="modal-info-row">
+              <span className="modal-label">Incident #</span>
+              <span className="modal-value">{incident.incidentNumber || '—'}</span>
+            </div>
+            <div className="modal-info-row">
+              <span className="modal-label">Title</span>
+              <span className="modal-value">{incident.title || '—'}</span>
+            </div>
+            <div className="modal-info-row">
+              <span className="modal-label">Status</span>
+              <StatusBadge status={incident.status} />
+            </div>
+          </div>
+          <p className="modal-warning">This action cannot be undone.</p>
+        </div>
+        <div className="modal-footer">
+          <button 
+            className="modal-btn-cancel" 
+            onClick={onClose}
+            disabled={deleting}
+          >
+            Cancel
+          </button>
+          <button 
+            className="modal-btn-delete" 
+            onClick={() => onConfirm(incident._id)}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <>
+                <span className="modal-spinner" />
+                Deleting...
+              </>
+            ) : (
+              'Delete Incident'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Incidents() {
   const { accounts } = useMsal();
   const navigate = useNavigate();
@@ -103,6 +267,11 @@ export default function Incidents() {
   // Pagination
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
+
+  // Dropdown & Delete state
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchIncidents = async () => {
@@ -123,6 +292,17 @@ export default function Incidents() {
 
   useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter, sortBy]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (openMenuId && !e.target.closest('.inc-menu-wrapper')) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openMenuId]);
+
   const filtered = useMemo(() => {
     let list = [...incidents];
 
@@ -134,8 +314,8 @@ export default function Incidents() {
         i.category?.name?.toLowerCase().includes(q) ||
         i.raisedBy?.name?.toLowerCase().includes(q) ||
         i.raisedBy?.mail?.toLowerCase().includes(q) ||
-        i.assignmentGroup?.groupName?.toLowerCase().includes(q) ||  // ✅ Search by group name
-        i.assignmentGroup?.members?.some(m => m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q)) // ✅ Search by member name
+        i.assignmentGroup?.groupName?.toLowerCase().includes(q) ||
+        i.assignmentGroup?.members?.some(m => m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q))
       );
     }
 
@@ -170,6 +350,22 @@ export default function Incidents() {
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
+  // Handle Delete
+  const handleDelete = async (incidentId) => {
+    setDeleting(true);
+    try {
+      await axios.delete(`${BACKEND}/api/incidents/${incidentId}`);
+      setIncidents(prev => prev.filter(i => i._id !== incidentId));
+      setDeleteTarget(null);
+      setOpenMenuId(null);
+    } catch (err) {
+      console.error('❌ Delete incident:', err);
+      alert('Failed to delete incident. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const sharedCSS = `
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Lato:wght@300;400;700&display=swap');
 
@@ -198,6 +394,14 @@ export default function Incidents() {
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(10px); }
+      to { opacity: 1; transform: translateX(0); }
     }
 
     .inc-page {
@@ -388,7 +592,7 @@ export default function Incidents() {
     }
 
     .inc-clear-btn {
-      padding: 6px 14px;
+      padding: 8px 16px;
       font-size: 12px; font-weight: 600;
       background: var(--white);
       border: 1.5px solid var(--border);
@@ -401,6 +605,7 @@ export default function Incidents() {
     .inc-clear-btn:hover {
       border-color: var(--navy);
       color: var(--navy);
+      background: var(--light);
     }
 
     /* Table */
@@ -410,6 +615,7 @@ export default function Incidents() {
       border-radius: 18px;
       overflow: hidden;
       animation: fadeUp 0.5s 0.15s ease both;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
 
     .inc-table {
@@ -418,17 +624,17 @@ export default function Incidents() {
     }
 
     .inc-thead-row {
-      background: var(--light);
+      background: linear-gradient(to right, var(--light), rgba(0, 32, 96, 0.02));
       border-bottom: 1.5px solid var(--border);
     }
 
     .inc-th {
-      padding: 14px 16px;
+      padding: 16px 18px;
       font-family: 'Sora', sans-serif;
-      font-size: 11px; font-weight: 700;
+      font-size: 10px; font-weight: 800;
       color: var(--navy);
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
       text-align: left;
       white-space: nowrap;
     }
@@ -436,16 +642,30 @@ export default function Incidents() {
     .inc-tbody-row {
       border-bottom: 1.5px solid var(--border);
       cursor: pointer;
-      transition: background 0.15s;
+      transition: all 0.15s ease;
       animation: fadeUp 0.3s ease both;
+      position: relative;
     }
+
+    .inc-tbody-row:nth-child(even) {
+      background: rgba(0, 32, 96, 0.01);
+    }
+
     .inc-tbody-row:hover {
-      background: var(--bg);
+      background: rgba(0, 32, 96, 0.05);
+      box-shadow: inset 0 0 0 1px rgba(0, 32, 96, 0.08);
+    }
+
+    .inc-tbody-row:hover .inc-menu-btn {
+      opacity: 1;
+      visibility: visible;
     }
 
     .inc-td {
-      padding: 14px 16px;
+      padding: 16px 18px;
       vertical-align: middle;
+      font-size: 13px;
+      position: relative;
     }
 
     .inc-number {
@@ -456,12 +676,12 @@ export default function Incidents() {
     }
 
     .inc-title-cell {
-      display: flex; flex-direction: column; gap: 3px;
+      display: flex; flex-direction: column; gap: 4px;
       max-width: 240px;
     }
     .inc-title-main {
       font-size: 14px; font-weight: 600;
-      color: var(--text);
+      color: var(--navy);
       line-height: 1.3;
       overflow: hidden; text-overflow: ellipsis;
       white-space: nowrap;
@@ -472,7 +692,8 @@ export default function Incidents() {
     }
 
     .inc-category {
-      font-size: 13px; color: var(--muted);
+      font-size: 13px; color: var(--text);
+      font-weight: 500;
       max-width: 140px;
       display: block;
       overflow: hidden; text-overflow: ellipsis;
@@ -483,8 +704,8 @@ export default function Incidents() {
       display: flex; align-items: center; gap: 10px;
     }
     .inc-user-avatar {
-      width: 32px; height: 32px; border-radius: 10px;
-      background: rgba(0,32,96,0.1);
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, rgba(0,32,96,0.15), rgba(0,32,96,0.08));
       display: flex; align-items: center; justify-content: center;
       font-size: 13px; font-weight: 700;
       color: var(--navy);
@@ -502,35 +723,27 @@ export default function Incidents() {
       font-size: 11px; color: var(--muted);
     }
 
-    /* ✅ NEW: Assignment Group styling */
+    /* Assignment Group styling */
     .inc-group-cell {
-      display: flex; align-items: center; gap: 10px;
+      display: flex; align-items: center; gap: 12px;
+      position: relative;
+      z-index: 10;
     }
     .inc-group-avatar {
-      width: 32px; height: 32px; border-radius: 10px;
-      background: rgba(59,130,246,0.1);
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.08));
       display: flex; align-items: center; justify-content: center;
       font-size: 13px; font-weight: 700;
       color: #3b82f6;
       flex-shrink: 0;
     }
     .inc-group-info {
-      display: flex; flex-direction: column; gap: 2px;
+      display: flex; flex-direction: column; gap: 3px;
     }
     .inc-group-name {
       font-size: 13px; font-weight: 600;
       color: var(--text);
       line-height: 1.3;
-    }
-    .inc-group-members {
-      font-size: 10px; color: var(--muted);
-      display: flex; align-items: center; gap: 4px;
-    }
-    .inc-group-member-count {
-      background: var(--bg);
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-weight: 600;
     }
 
     .inc-unassigned {
@@ -539,28 +752,266 @@ export default function Incidents() {
     }
 
     .inc-date-cell {
-      display: flex; flex-direction: column; gap: 3px;
+      display: flex; flex-direction: column; gap: 2px;
+      white-space: nowrap;
     }
     .inc-date-main {
       font-size: 13px; font-weight: 600;
       color: var(--text);
     }
     .inc-date-rel {
-      font-size: 11px; color: var(--muted);
+      font-size: 10px; color: var(--muted);
+    }
+
+    /* Three-dot Menu */
+    .inc-menu-wrapper {
+      position: relative;
+      display: inline-block;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .inc-menu-btn {
+      width: 36px; height: 36px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--muted);
+      transition: all 0.2s ease;
+      font-weight: 700;
+      letter-spacing: 1px;
+      opacity: 0.6;
+      visibility: visible;
+    }
+
+    .inc-menu-btn:hover {
+      background: var(--light);
+      color: var(--navy);
+      opacity: 1;
+    }
+
+    /* Dropdown Menu - REPLACES three dots button */
+    .inc-menu-dropdown {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+      min-width: 160px;
+      z-index: 100;
+      overflow: hidden;
+      animation: slideInLeft 0.2s ease;
+      padding: 4px;
+    }
+
+    .inc-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 11px 16px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.15s;
+      border-radius: 8px;
+    }
+
+    .inc-menu-item:hover {
+      background: var(--light);
+      color: var(--navy);
+    }
+
+    .inc-menu-item-delete {
+      color: #ef4444;
+    }
+    .inc-menu-item-delete:hover {
+      background: rgba(239, 68, 68, 0.08);
+      color: #dc2626;
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: var(--white);
+      border-radius: 20px;
+      max-width: 480px;
+      width: 100%;
+      animation: modalIn 0.25s ease;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+      padding: 24px 28px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .modal-icon {
+      font-size: 28px;
+    }
+
+    .modal-header h3 {
+      font-family: 'Sora', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .modal-body {
+      padding: 16px 28px 24px;
+    }
+
+    .modal-body p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .modal-request-info {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .modal-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .modal-info-row + .modal-info-row {
+      border-top: 1px solid var(--border);
+    }
+
+    .modal-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .modal-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .modal-warning {
+      font-size: 12px;
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .modal-footer {
+      padding: 20px 28px;
+      border-top: 1.5px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    .modal-btn-cancel {
+      padding: 10px 20px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--white);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.2s;
+    }
+
+    .modal-btn-cancel:hover {
+      border-color: var(--navy);
+      color: var(--navy);
+      background: var(--light);
+    }
+
+    .modal-btn-delete {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 10px;
+      background: #ef4444;
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .modal-btn-delete:hover:not(:disabled) {
+      background: #dc2626;
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    }
+
+    .modal-btn-delete:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .modal-spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    /* Actions column */
+    .inc-th-actions {
+      width: 60px;
+      text-align: center;
     }
 
     /* Empty State */
     .inc-empty {
-      text-align: center; padding: 60px 20px;
+      text-align: center; padding: 80px 20px;
     }
     .inc-empty-icon {
-      font-size: 48px; margin-bottom: 16px;
+      font-size: 56px; margin-bottom: 16px;
     }
     .inc-empty-title {
       font-family: 'Sora', sans-serif;
       font-size: 18px; font-weight: 700;
       color: var(--navy);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
     .inc-empty-sub {
       font-size: 14px; color: var(--muted);
@@ -568,19 +1019,19 @@ export default function Incidents() {
 
     /* Error State */
     .inc-error {
-      text-align: center; padding: 60px 20px;
+      text-align: center; padding: 80px 20px;
     }
     .inc-error-icon {
-      font-size: 48px; margin-bottom: 16px;
+      font-size: 56px; margin-bottom: 16px;
     }
     .inc-error-title {
       font-family: 'Sora', sans-serif;
       font-size: 16px; font-weight: 700;
-      color: '#ef4444';
+      color: #ef4444;
       margin-bottom: 12px;
     }
     .inc-retry-btn {
-      padding: 10px 24px;
+      padding: 11px 24px;
       background: var(--navy);
       border: none;
       border-radius: 12px;
@@ -588,15 +1039,21 @@ export default function Incidents() {
       color: white;
       cursor: pointer;
       font-family: 'Sora', sans-serif;
+      transition: all 0.2s;
+    }
+    .inc-retry-btn:hover {
+      background: var(--navy2);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,32,96,0.2);
     }
 
     /* Pagination */
     .inc-pagination {
       display: flex; align-items: center; justify-content: center;
-      gap: 8px; margin-top: 28px;
+      gap: 8px; margin-top: 32px;
     }
     .inc-page-btn {
-      padding: 9px 16px;
+      padding: 10px 16px;
       background: var(--white);
       border: 1.5px solid var(--border);
       border-radius: 10px;
@@ -609,6 +1066,7 @@ export default function Incidents() {
     .inc-page-btn:hover:not(:disabled) {
       border-color: var(--navy);
       color: var(--navy);
+      background: var(--light);
     }
     .inc-page-btn:disabled {
       opacity: 0.4;
@@ -635,7 +1093,7 @@ export default function Incidents() {
       color: white;
       cursor: pointer;
       font-family: 'Sora', sans-serif;
-      transition: all 0.3s;
+      transition: all 0.3s ease;
       box-shadow: 0 4px 12px rgba(239,68,68,0.2);
     }
     .inc-new-btn:hover {
@@ -651,7 +1109,7 @@ export default function Incidents() {
       display: flex; align-items: center; justify-content: center;
     }
     .inc-spinner {
-      width: 40px; height: 40px; border-radius: 50%;
+      width: 48px; height: 48px; border-radius: 50%;
       border: 3px solid var(--border);
       border-top-color: var(--navy);
       animation: spin 0.9s linear infinite;
@@ -659,12 +1117,19 @@ export default function Incidents() {
 
     @media (max-width: 1200px) {
       .inc-stats { grid-template-columns: repeat(3, 1fr); }
+      .inc-td { padding: 14px 14px; }
+      .inc-th { padding: 14px 14px; }
     }
     @media (max-width: 768px) {
       .inc-hero { padding: 40px 24px; }
       .inc-content { padding: 24px 20px 40px; }
       .inc-stats { grid-template-columns: repeat(2, 1fr); }
       .inc-table-wrapper { overflow-x: auto; }
+      .inc-filters { flex-direction: column; }
+      .inc-search-wrapper { min-width: 100%; }
+      .inc-select { width: 100%; }
+      .inc-td { padding: 12px 12px; font-size: 12px; }
+      .inc-th { padding: 12px 12px; font-size: 9px; }
     }
   `;
 
@@ -686,6 +1151,16 @@ export default function Incidents() {
     <div className="inc-page">
       <style>{sharedCSS}</style>
 
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <DeleteModal
+          incident={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          deleting={deleting}
+        />
+      )}
+
       {/* Hero Section */}
       <div className="inc-hero">
         <div className="inc-hero-inner">
@@ -693,7 +1168,7 @@ export default function Incidents() {
             <div className="inc-hero-eyebrow-line" />
             Incident Management
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
             <div>
               <h1>All <em>Incidents</em></h1>
               <p className="inc-hero-sub">{today} — Track and manage incidents across the helpdesk</p>
@@ -790,15 +1265,15 @@ export default function Incidents() {
             <table className="inc-table">
               <thead>
                 <tr className="inc-thead-row">
-                  {['Incident #', 'Title', 'Category', 'Priority', 'Raised By', 'Assigned Group', 'Status', 'Created'].map(h => (
-                    <th key={h} className="inc-th">{h}</th>
+                  {['Incident #', 'Title', 'Category', 'Priority', 'Raised By', 'Assigned Group', 'Status', 'Created', ''].map(h => (
+                    <th key={h} className={`inc-th ${h === '' ? 'inc-th-actions' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {paginated.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: 0 }}>
+                    <td colSpan={9} style={{ padding: 0 }}>
                       <div className="inc-empty">
                         <div className="inc-empty-icon">🚨</div>
                         <div className="inc-empty-title">No incidents found</div>
@@ -844,7 +1319,6 @@ export default function Incidents() {
                           </div>
                         </div>
                       </td>
-                      {/* ✅ UPDATED: Show Assignment Group instead of individual member */}
                       <td className="inc-td">
                         {inc.assignmentGroup?.groupName ? (
                           <div className="inc-group-cell">
@@ -853,11 +1327,7 @@ export default function Incidents() {
                             </div>
                             <div className="inc-group-info">
                               <div className="inc-group-name">{inc.assignmentGroup.groupName}</div>
-                              <div className="inc-group-members">
-                                <span className="inc-group-member-count">
-                                  {inc.assignmentGroup.members?.length || 0} members
-                                </span>
-                              </div>
+                              <MemberTooltip members={inc.assignmentGroup.members} />
                             </div>
                           </div>
                         ) : (
@@ -873,6 +1343,31 @@ export default function Incidents() {
                           <span className="inc-date-rel">{formatRelative(inc.createdAt)}</span>
                         </div>
                        </td>
+                      <td className="inc-td" onClick={e => e.stopPropagation()}>
+                        <div className="inc-menu-wrapper">
+                          {openMenuId === inc._id ? (
+                            <div className="inc-menu-dropdown">
+                              <button
+                                className="inc-menu-item inc-menu-item-delete"
+                                onClick={() => {
+                                  setDeleteTarget(inc);
+                                  setOpenMenuId(null);
+                                }}
+                                disabled={deleting}
+                              >
+                                🗑️ Delete
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              className="inc-menu-btn"
+                              onClick={() => setOpenMenuId(inc._id)}
+                            >
+                              ⋮
+                            </button>
+                          )}
+                        </div>
+                      </td>
                      </tr>
                   ))
                 )}

@@ -347,7 +347,7 @@ function CreateIncident() {
 
   const handleCancel = () => {
     resetForm();
-    navigate('/incidents');
+    navigate('/');
   };
 
   const sharedCSS = `
@@ -772,7 +772,7 @@ function CreateIncident() {
       {/* Form Content */}
       <div className="ci-content ci-form-container">
         <button className="ci-back-btn" onClick={handleCancel}>
-          ← Back to Tickets
+          ← Back to Home
         </button>
 
         <div className="ci-form-card">

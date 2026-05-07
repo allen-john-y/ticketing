@@ -86,6 +86,63 @@ function formatRelative(iso) {
   return formatDate(iso);
 }
 
+// Delete Confirmation Modal Component
+function DeleteModal({ request, onClose, onConfirm, deleting }) {
+  if (!request) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-icon">⚠️</div>
+          <h3>Delete Request</h3>
+        </div>
+        <div className="modal-body">
+          <p>Are you sure you want to delete this request?</p>
+          <div className="modal-request-info">
+            <div className="modal-info-row">
+              <span className="modal-label">Request #</span>
+              <span className="modal-value">{request.requestNumber || '—'}</span>
+            </div>
+            <div className="modal-info-row">
+              <span className="modal-label">Service</span>
+              <span className="modal-value">{request.service?.name || '—'}</span>
+            </div>
+            <div className="modal-info-row">
+              <span className="modal-label">Status</span>
+              <StatusBadge status={request.status} />
+            </div>
+          </div>
+          <p className="modal-warning">This action cannot be undone.</p>
+        </div>
+        <div className="modal-footer">
+          <button 
+            className="modal-btn-cancel" 
+            onClick={onClose}
+            disabled={deleting}
+          >
+            Cancel
+          </button>
+          <button 
+            className="modal-btn-delete" 
+            onClick={() => onConfirm(request._id)}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <>
+                <span className="modal-spinner" />
+                Deleting...
+              </>
+            ) : (
+              'Delete Request'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Requests() {
   const { accounts } = useMsal();
   const navigate = useNavigate();
@@ -98,14 +155,20 @@ export default function Requests() {
   // Filters
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(
-  location.state?.filterStatus || 'all'
-);
+    location.state?.filterStatus || 'all'
+  );
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
   // Pagination
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
+
+  // Dropdown & Delete state
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -125,6 +188,17 @@ export default function Requests() {
   }, []);
 
   useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter, sortBy]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (openMenuId && !e.target.closest('.req-menu-wrapper')) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openMenuId]);
 
   const filtered = useMemo(() => {
     let list = [...requests];
@@ -172,6 +246,23 @@ export default function Requests() {
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
+  // Handle Delete
+  const handleDelete = async (requestId) => {
+    setDeleting(true);
+    try {
+      await axios.delete(`${BACKEND}/api/requests/${requestId}`);
+      // Remove from local state for immediate UI update
+      setRequests(prev => prev.filter(r => r._id !== requestId));
+      setDeleteTarget(null);
+      setOpenMenuId(null);
+    } catch (err) {
+      console.error('❌ Delete request:', err);
+      alert('Failed to delete request. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const sharedCSS = `
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Lato:wght@300;400;700&display=swap');
 
@@ -200,6 +291,14 @@ export default function Requests() {
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes dropdownIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .req-page {
@@ -536,6 +635,226 @@ export default function Requests() {
       font-size: 11px; color: var(--muted);
     }
 
+    /* Three-dot Menu */
+    .req-menu-wrapper {
+      position: relative;
+      display: inline-flex;
+      justify-content: center;
+    }
+
+    .req-menu-btn {
+      width: 32px; height: 32px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--muted);
+      transition: all 0.2s;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .req-menu-btn:hover {
+      background: var(--bg);
+      color: var(--navy);
+    }
+
+    .req-menu-dropdown {
+      position: fixed;   /* ← change from absolute to fixed */
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      min-width: 160px;
+      z-index: 9999;
+      overflow: hidden;
+      animation: dropdownIn 0.2s ease;
+    }
+
+    .req-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.15s;
+    }
+
+    .req-menu-item:hover {
+      background: var(--bg);
+    }
+
+    .req-menu-item-delete {
+      color: #ef4444;
+    }
+    .req-menu-item-delete:hover {
+      background: #fef2f2;
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: var(--white);
+      border-radius: 20px;
+      max-width: 480px;
+      width: 100%;
+      animation: modalIn 0.25s ease;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+      padding: 24px 28px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .modal-icon {
+      font-size: 28px;
+    }
+
+    .modal-header h3 {
+      font-family: 'Sora', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .modal-body {
+      padding: 16px 28px 24px;
+    }
+
+    .modal-body p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .modal-request-info {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .modal-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .modal-info-row + .modal-info-row {
+      border-top: 1px solid var(--border);
+    }
+
+    .modal-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .modal-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .modal-warning {
+      font-size: 12px;
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .modal-footer {
+      padding: 20px 28px;
+      border-top: 1.5px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    .modal-btn-cancel {
+      padding: 10px 20px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--white);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.2s;
+    }
+
+    .modal-btn-cancel:hover {
+      border-color: var(--navy);
+      color: var(--navy);
+    }
+
+    .modal-btn-delete {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 10px;
+      background: #ef4444;
+      font-size: 13px;
+      font-weight: 600;
+      color: white;
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .modal-btn-delete:hover:not(:disabled) {
+      background: #dc2626;
+    }
+
+    .modal-btn-delete:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .modal-spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    /* Actions column */
+    .req-th-actions {
+      width: 60px;
+    }
+
     /* Empty State */
     .req-empty {
       text-align: center; padding: 60px 20px;
@@ -673,6 +992,16 @@ export default function Requests() {
     <div className="req-page">
       <style>{sharedCSS}</style>
 
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <DeleteModal
+          request={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          deleting={deleting}
+        />
+      )}
+
       {/* Hero Section */}
       <div className="req-hero">
         <div className="req-hero-inner">
@@ -776,15 +1105,15 @@ export default function Requests() {
             <table className="req-table">
               <thead>
                 <tr className="req-thead-row">
-                  {['Request #', 'Service', 'Category', 'Priority', 'Raised By', 'Assigned Team', 'Status', 'Created'].map(h => (
-                    <th key={h} className="req-th">{h}</th>
+                  {['Request #', 'Service', 'Category', 'Priority', 'Raised By', 'Assigned Team', 'Status', 'Created', ''].map(h => (
+                    <th key={h} className={`req-th ${h === '' ? 'req-th-actions' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {paginated.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: 0 }}>
+                    <td colSpan={9} style={{ padding: 0 }}>
                       <div className="req-empty">
                         <div className="req-empty-icon">📋</div>
                         <div className="req-empty-title">No requests found</div>
@@ -850,6 +1179,30 @@ export default function Requests() {
                         <div className="req-date-cell">
                           <span className="req-date-main">{formatDate(req.createdAt)}</span>
                           <span className="req-date-rel">{formatRelative(req.createdAt)}</span>
+                        </div>
+                      </td>
+                      {/* ACTIONS - Three dot menu */}
+                      <td className="req-td" onClick={e => e.stopPropagation()}>
+                        <div className="req-menu-wrapper">
+                          <button
+                            className="req-menu-btn"
+                            onClick={() => setOpenMenuId(openMenuId === req._id ? null : req._id)}
+                          >
+                            ⋮
+                          </button>
+                          {openMenuId === req._id && (
+                            <div className="req-menu-dropdown">
+                              <button
+                                className="req-menu-item req-menu-item-delete"
+                                onClick={() => {
+                                  setDeleteTarget(req);
+                                  setOpenMenuId(null);
+                                }}
+                              >
+                                🗑️ Delete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>

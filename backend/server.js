@@ -1191,6 +1191,66 @@ app.post('/api/services', async (req, res) => {
   }
 });
 
+// DELETE /api/requests/:id
+app.delete("/api/requests/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const request = await Request.findById(id);
+    
+    if (!request) {
+      return res.status(404).json({ message: "Request not found" });
+    }
+
+    const requestNumber = request.requestNumber;
+    const requestName = request.service?.name || "Unknown Service";
+    
+    await Request.findByIdAndDelete(id);
+    
+    console.log(`✅ [DELETE REQUEST] Deleted: ${requestNumber}`);
+    res.json({ 
+      message: "Request deleted successfully", 
+      requestNumber,
+      requestName
+    });
+  } catch (err) {
+    console.error("❌ [DELETE REQUEST] Error:", err);
+    res.status(500).json({ 
+      message: "Failed to delete request", 
+      error: err.message 
+    });
+  }
+});
+
+// DELETE /api/incidents/:id
+app.delete("/api/incidents/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const incident = await Incident.findById(id);
+    
+    if (!incident) {
+      return res.status(404).json({ message: "Incident not found" });
+    }
+
+    const incidentNumber = incident.incidentNumber;
+    const incidentTitle = incident.title || "Unknown Incident";
+    
+    await Incident.findByIdAndDelete(id);
+    
+    console.log(`✅ [DELETE INCIDENT] Deleted: ${incidentNumber}`);
+    res.json({ 
+      message: "Incident deleted successfully", 
+      incidentNumber,
+      incidentTitle
+    });
+  } catch (err) {
+    console.error("❌ [DELETE INCIDENT] Error:", err);
+    res.status(500).json({ 
+      message: "Failed to delete incident", 
+      error: err.message 
+    });
+  }
+});
+
 app.get('/api/services/:id', async (req, res) => {
   try {
     const service = await Service.findById(req.params.id);
