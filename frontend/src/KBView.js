@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
@@ -40,6 +41,8 @@ function KBView() {
       setLoading(false);
     }
   };
+  const location = useLocation();
+const returnTo = location.state?.returnTo || '/kb';
 
   const formatDate = (dateString) => {
     if (!dateString) return '—';
@@ -416,7 +419,7 @@ function KBView() {
           <div className="kbv-error-icon">📖</div>
           <h2>Article Not Found</h2>
           <p style={{ color: '#64748b', marginBottom: 24 }}>The article you're looking for doesn't exist or has been removed.</p>
-          <button className="kbv-btn kbv-btn-back" onClick={() => navigate('/kb')}>
+          <button className="kbv-btn kbv-btn-back" onClick={() => navigate(returnTo)}>
             ← Back to Knowledge Base
           </button>
         </div>
@@ -431,7 +434,7 @@ function KBView() {
       {/* Hero Section */}
       <div className="kbv-hero">
         <div className="kbv-hero-inner">
-          <div className="kbv-back-link" onClick={() => navigate('/kb')}>
+          <div className="kbv-back-link" onClick={() => navigate(returnTo)}>
             <span>←</span> Back to Knowledge Base
           </div>
           <h1 className="kbv-title">{article.title}</h1>
@@ -470,11 +473,11 @@ function KBView() {
               <span>📅 Last updated: {formatDate(article.updatedAt)}</span>
               <span>👁️ {article.viewCount || 0} people found this helpful</span>
             </div>
-            <button className="kbv-btn kbv-btn-back" onClick={() => navigate('/kb')}>
+            <button className="kbv-btn kbv-btn-back" onClick={() => navigate(returnTo)}>
               ← Browse More Articles
             </button>
           </div>
-        </div>
+        </div>  
       </div>
     </div>
   );

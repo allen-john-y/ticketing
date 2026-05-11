@@ -72,7 +72,14 @@ function KBListView() {
     .kb-list-hero h1 em { font-style: normal; color: var(--orange); }
     .kb-list-hero-sub { font-size: 15px; color: rgba(255,255,255,0.62); font-weight: 400; line-height: 1.6; }
     .kb-list-content { max-width: 1320px; margin: 0 auto; padding: 32px 48px 56px; }
-    .kb-search-bar { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+    
+    /* Create KB Button Container */
+    .kb-header-actions { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 32px; flex-wrap: wrap; gap: 16px; }
+    .kb-create-btn { background: #e98404; color: white; border: none; padding: 12px 24px; border-radius: 12px; cursor: pointer; font-weight: 700; font-family: 'Sora', sans-serif; font-size: 14px; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .kb-create-btn:hover { background: #d97706; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(233,132,4,0.25); }
+    .kb-create-btn:active { transform: translateY(0); }
+    
+    .kb-search-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
     .kb-search-input { flex: 1; padding: 12px 18px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 14px; background: var(--white); }
     .kb-search-input:focus { outline: none; border-color: var(--navy); }
     .kb-category-select { padding: 12px 18px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 14px; background: var(--white); min-width: 180px; cursor: pointer; }
@@ -95,6 +102,7 @@ function KBListView() {
       .kb-list-content { padding: 24px 20px 40px; }
       .kb-search-bar { flex-direction: column; }
       .kb-grid { grid-template-columns: 1fr; }
+      .kb-header-actions { justify-content: center; }
     }
   `;
 
@@ -114,17 +122,41 @@ function KBListView() {
       </div>
       
       <div className="kb-list-content">
+        {/* Create KB Button - Pass returnTo state so published articles come back to /kb */}
+        <div className="kb-header-actions">
+          <button 
+            className="kb-create-btn"
+            onClick={() => navigate('/settings/create-kb/new', { state: { returnTo: '/kb' } })}
+          >
+            <span style={{ fontSize: '18px' }}>+</span> Create KB Article
+          </button>
+        </div>
+
         <div className="kb-search-bar">
-          <input type="text" className="kb-search-input" placeholder="Search articles..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-          <select className="kb-category-select" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+          <input 
+            type="text" 
+            className="kb-search-input" 
+            placeholder="Search articles..." 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+          />
+          <select 
+            className="kb-category-select" 
+            value={selectedCategory} 
+            onChange={(e) => setSelectedCategory(e.target.value)}
+          >
             <option value="">All Categories</option>
             {categories.map(cat => (
-              <option key={cat._id || cat.id} value={cat._id || cat.id}>{cat.categoryName || cat.name}</option>
+              <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                {cat.categoryName || cat.name}
+              </option>
             ))}
           </select>
         </div>
         
-        <div className="kb-stats">Showing {filteredArticles.length} published articles</div>
+        <div className="kb-stats">
+          Showing {filteredArticles.length} published {filteredArticles.length === 1 ? 'article' : 'articles'}
+        </div>
         
         {loading ? (
           <div className="kb-loading">
@@ -135,18 +167,28 @@ function KBListView() {
           <div className="kb-empty">
             <div className="kb-empty-icon">📚</div>
             <div className="kb-empty-title">No articles found</div>
-            <div style={{ fontSize: 14, color: '#64748b' }}>Check back later for new articles</div>
+            <div style={{ fontSize: 14, color: '#64748b' }}>Click "Create KB Article" to add your first article</div>
           </div>
         ) : (
           <div className="kb-grid">
             {filteredArticles.map(article => (
-              <div key={article._id} className="kb-card" onClick={() => navigate(`/kb/${article._id}`)}>
-                <div className="kb-card-badge">{article.category?.name || 'General'}</div>
+              <div 
+                key={article._id} 
+                className="kb-card" 
+                onClick={() => navigate(`/kb/${article._id}`)}
+              >
+                <div className="kb-card-badge">
+                  {article.category?.name || article.category?.categoryName || 'General'}
+                </div>
                 <div className="kb-card-title">{article.title}</div>
-                <div className="kb-card-desc">{article.description || 'No description provided'}</div>
+                <div className="kb-card-desc">
+                  {article.description || 'No description provided'}
+                </div>
                 <div className="kb-card-footer">
                   <span>{formatDate(article.createdAt)}</span>
-                  <div className="kb-card-views">👁️ {article.viewCount || 0} views</div>
+                  <div className="kb-card-views">
+                    👁️ {article.viewCount || 0} views
+                  </div>
                 </div>
               </div>
             ))}

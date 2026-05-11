@@ -125,7 +125,7 @@ function CreateKB() {
     .kb-manage-content { max-width: 1320px; margin: 0 auto; padding: 32px 48px 56px; }
     .kb-manage-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .kb-manage-title { font-family: 'Sora', sans-serif; font-size: 24px; font-weight: 700; color: var(--navy); }
-    .kb-create-btn { padding: 12px 24px; background: var(--navy); color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Sora', sans-serif; }
+    .kb-create-btn { padding: 12px 24px; background: #e98404; color: white; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Sora', sans-serif; }
     .kb-create-btn:hover { background: var(--navy2); }
     .kb-search-bar { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
     .kb-search-input { flex: 1; padding: 12px 18px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 14px; background: var(--white); }
@@ -294,7 +294,7 @@ function CreateKB() {
                 <div className={`kb-card-badge ${article.status === 'draft' ? 'draft' : 'published'}`}>
                   {article.category?.name || 'General'} • {article.status === 'draft' ? 'Draft' : 'Published'}
                 </div>
-                <div className="kb-card-title" onClick={() => navigate(`/kb/${article._id}`)}>
+                <div className="kb-card-title" onClick={() => navigate(`/kb/${article._id}`, { state: { returnTo: '/settings/create-kb' } })}>
                   {article.title}
                 </div>
                 <div className="kb-card-desc">{article.description || 'No description provided'}</div>

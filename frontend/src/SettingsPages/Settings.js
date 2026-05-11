@@ -10,7 +10,8 @@ import AddRequest from './AddRequest';
 import AssignmentGroups from './AssignmentGroup';
 import CreateKB from './CreateKB';
 
-const settingsOptions = [
+// Full settings options (admin only)
+const adminSettingsOptions = [
   {
     id: 'add-admin',
     path: 'add-admin',
@@ -85,8 +86,24 @@ const settingsOptions = [
   }
 ];
 
+// KB only options (for non-admin users)
+const kbOnlySettingsOptions = [
+  {
+    id: 'create-kb',
+    path: 'create-kb',
+    title: 'Knowledge Base Articles',
+    description: 'Create, edit, and manage knowledge base articles for your team. Write documentation with rich text editor.',
+    icon: '📚',
+    accent: '#8b5cf6',
+    accentBg: 'rgba(139, 92, 246, 0.08)',
+  }
+];
+
 // Main settings landing page
-function SettingsLanding({ navigate }) {
+function SettingsLanding({ navigate, isAdmin }) {
+  // Choose which settings to show based on user role
+  const settingsOptions = isAdmin ? adminSettingsOptions : kbOnlySettingsOptions;
+
   const sharedCSS = `
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Lato:wght@300;400;700&display=swap');
 
@@ -261,6 +278,30 @@ function SettingsLanding({ navigate }) {
     }
     .set-card:hover .set-card-arrow { opacity: 1; }
 
+    /* Non-admin message banner */
+    .non-admin-info {
+      background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+      border-left: 4px solid #8b5cf6;
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: fadeUp 0.4s ease both;
+    }
+    .non-admin-info-icon {
+      font-size: 24px;
+    }
+    .non-admin-info-text {
+      font-size: 14px;
+      color: #1e1b4b;
+      font-weight: 500;
+    }
+    .non-admin-info-text strong {
+      color: #8b5cf6;
+    }
+
     @media (max-width: 768px) {
       .set-hero { padding: 40px 24px; }
       .set-content { padding: 24px 20px 40px; }
@@ -277,10 +318,14 @@ function SettingsLanding({ navigate }) {
         <div className="set-hero-inner">
           <div className="set-hero-eyebrow">
             <div className="set-hero-eyebrow-line" />
-            System Configuration
+            {isAdmin ? 'System Configuration' : 'Knowledge Management'}
           </div>
-          <h1>Admin <em>Settings</em></h1>
-          <p className="set-hero-sub">Manage users, categories, groups, knowledge base, and system configuration</p>
+          <h1>{isAdmin ? 'Admin <em>Settings</em>' : 'Knowledge <em>Base</em>'}</h1>
+          <p className="set-hero-sub">
+            {isAdmin 
+              ? 'Manage users, categories, groups, knowledge base, and system configuration'
+              : 'Create and manage knowledge base articles to help your team'}
+          </p>
         </div>
       </div>
 
@@ -290,7 +335,20 @@ function SettingsLanding({ navigate }) {
           ← Back to Dashboard
         </button>
 
-        <div className="set-section-label">Available Settings</div>
+        {/* Show info banner for non-admin users */}
+        {!isAdmin && (
+          <div className="non-admin-info">
+            <div className="non-admin-info-icon">ℹ️</div>
+            <div className="non-admin-info-text">
+              You have <strong>read/write access</strong> to Knowledge Base articles. 
+              Contact your administrator for full settings access.
+            </div>
+          </div>
+        )}
+
+        <div className="set-section-label">
+          {isAdmin ? 'Available Settings' : 'Knowledge Base Tools'}
+        </div>
 
         {/* Settings Grid */}
         <div className="set-grid">
@@ -315,7 +373,7 @@ function SettingsLanding({ navigate }) {
               <div className="set-card-desc">{opt.description}</div>
 
               <div className="set-card-arrow" style={{ color: opt.accent }}>
-                Configure
+                {isAdmin ? 'Configure' : 'Manage'}
                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
@@ -328,7 +386,7 @@ function SettingsLanding({ navigate }) {
   );
 }
 
-export default function Settings() {
+export default function Settings({ isAdmin = false }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -345,16 +403,88 @@ export default function Settings() {
       `}</style>
 
       <Routes>
-        <Route index element={<SettingsLanding navigate={navigate} />} />
-        <Route path="add-admin" element={<AddAdmin />} />
-        <Route path="remove-admin" element={<RemoveAdmin />} />
-        <Route path="add-field" element={<AddField />} />
-        <Route path="edit-field" element={<EditField />} />
-        <Route path="remove-field" element={<RemoveField />} />
-        <Route path="add-request" element={<AddRequest />} />
-        <Route path="assignment-groups" element={<AssignmentGroups />} />
+        {/* Pass isAdmin to the landing page */}
+        <Route index element={<SettingsLanding navigate={navigate} isAdmin={isAdmin} />} />
+        
+        {/* Always allow KB routes for all users */}
         <Route path="create-kb" element={<CreateKB />} />
+        
+        {/* Admin-only routes - these won't be accessible to non-admins via UI, but adding protection */}
+        {isAdmin && (
+          <>
+            <Route path="add-admin" element={<AddAdmin />} />
+            <Route path="remove-admin" element={<RemoveAdmin />} />
+            <Route path="add-field" element={<AddField />} />
+            <Route path="edit-field" element={<EditField />} />
+            <Route path="remove-field" element={<RemoveField />} />
+            <Route path="add-request" element={<AddRequest />} />
+            <Route path="assignment-groups" element={<AssignmentGroups />} />
+          </>
+        )}
+        
+        {/* Optional: Add a catch-all route for non-admins trying to access admin routes */}
+        {!isAdmin && (
+          <>
+            <Route path="add-admin" element={<AccessDenied />} />
+            <Route path="remove-admin" element={<AccessDenied />} />
+            <Route path="add-field" element={<AccessDenied />} />
+            <Route path="edit-field" element={<AccessDenied />} />
+            <Route path="remove-field" element={<AccessDenied />} />
+            <Route path="add-request" element={<AccessDenied />} />
+            <Route path="assignment-groups" element={<AccessDenied />} />
+          </>
+        )}
       </Routes>
+    </div>
+  );
+}
+
+// Access denied component for non-admins who try to access admin routes
+function AccessDenied() {
+  const navigate = useNavigate();
+  
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '60vh',
+      textAlign: 'center',
+      padding: '2rem'
+    }}>
+      <div style={{
+        fontSize: '64px',
+        marginBottom: '24px'
+      }}>🔒</div>
+      <h2 style={{
+        fontSize: '24px',
+        fontWeight: '700',
+        color: '#002060',
+        marginBottom: '12px'
+      }}>Access Denied</h2>
+      <p style={{
+        color: '#64748b',
+        marginBottom: '24px',
+        maxWidth: '400px'
+      }}>
+        You don't have permission to access this page. This feature is only available to administrators.
+      </p>
+      <button
+        onClick={() => navigate('/settings')}
+        style={{
+          background: '#e98404',
+          color: 'white',
+          border: 'none',
+          padding: '10px 24px',
+          borderRadius: '10px',
+          cursor: 'pointer',
+          fontWeight: '600',
+          fontFamily: 'inherit'
+        }}
+      >
+        Return to Settings
+      </button>
     </div>
   );
 }

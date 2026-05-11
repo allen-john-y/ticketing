@@ -563,12 +563,14 @@ function CreateKBForm() {
     setTimeout(() => setToast(p => ({ ...p, open: false })), 3500);
   };
 
+  const returnTo = location.state?.returnTo || '/settings/create-kb';
+
   const handleCancel = () => {
     setConfirmModal({
       open: true,
       title: '↩ Leave Page?',
       message: 'You have unsaved changes. Are you sure you want to go back? All progress will be lost.',
-      onConfirm: () => navigate('/settings/create-kb'),
+      onConfirm: () => navigate(returnTo),
     });
   };
 
@@ -600,7 +602,7 @@ function CreateKBForm() {
       if (isEditMode && articleId) { url = `${BACKEND}/api/kb/articles/${articleId}`; method = 'put'; }
       await axios({ method, url, data: payload });
       showToast(`Article ${status === 'published' ? 'published' : 'saved as draft'} successfully!`, 'success');
-      setTimeout(() => navigate('/settings/create-kb'), 1500);
+      setTimeout(() => navigate(returnTo), 1500);
     } catch (err) {
       showToast(err?.response?.data?.message || 'Failed to save article', 'error');
     } finally { setLoading(false); }

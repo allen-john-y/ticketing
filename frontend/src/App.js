@@ -62,6 +62,7 @@ function LeftNav({ isAdmin, onExpandChange }) {
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
+  // Settings is now available to ALL users (no isAdmin check)
   const navItems = [
     {
       id: 'incidents',
@@ -106,10 +107,7 @@ function LeftNav({ isAdmin, onExpandChange }) {
       color: '#8b5cf6',
       activeColor: 'rgba(139,92,246,0.15)',
     },
-  ];
-
-  if (isAdmin) {
-    navItems.push({
+    {
       id: 'settings',
       label: 'Settings',
       path: '/settings',
@@ -121,8 +119,8 @@ function LeftNav({ isAdmin, onExpandChange }) {
       ),
       color: '#e98404',
       activeColor: 'rgba(233,132,4,0.15)',
-    });
-  }
+    },
+  ];
 
   return (
     <>
@@ -1086,7 +1084,7 @@ function Header({ logout }) {
   const [navExpanded, setNavExpanded]         = useState(false);
   const [searchQuery, setSearchQuery]         = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]); // Empty array - no hardcoded notifications
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1221,7 +1219,6 @@ function Header({ logout }) {
     e.preventDefault();
     if (searchQuery.trim()) {
       console.log('Searching for:', searchQuery);
-      // Navigate to search results or perform search
       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
     }
   };
@@ -1264,7 +1261,6 @@ function Header({ logout }) {
           margin-left: 220px;
         }
 
-        /* Modern Header Bar */
         .app-header {
           background: #ffffff;
           padding: 0 2rem;
@@ -1279,12 +1275,10 @@ function Header({ logout }) {
           box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
         }
 
-        /* Left spacer */
         .header-left {
           width: 40px;
         }
 
-        /* Centered Search Bar */
         .header-center {
           flex: 1;
           display: flex;
@@ -1350,14 +1344,12 @@ function Header({ logout }) {
           font-family: monospace;
         }
 
-        /* Right side actions */
         .header-right {
           display: flex;
           align-items: center;
           gap: 8px;
         }
 
-        /* Notification Button */
         .notif-btn {
           position: relative;
           width: 40px;
@@ -1391,7 +1383,6 @@ function Header({ logout }) {
           line-height: 1;
         }
 
-        /* Notification Dropdown */
         .notif-dropdown {
           position: absolute;
           top: 50px;
@@ -1455,7 +1446,6 @@ function Header({ logout }) {
           font-size: 12px;
         }
 
-        /* Profile Button */
         .profile-btn {
           display: flex;
           align-items: center;
@@ -1513,7 +1503,6 @@ function Header({ logout }) {
           color: #6b7280;
         }
 
-        /* Profile Dropdown */
         .profile-dropdown {
           position: absolute;
           right: 0;
@@ -1640,7 +1629,6 @@ function Header({ logout }) {
           <LeftNav isAdmin={isAdmin} onExpandChange={setNavExpanded} />
 
           <div className={`main-wrapper${navExpanded ? ' nav-open' : ''}`}>
-            {/* Modern Header with Search and Notifications */}
             <header className="app-header">
               <div className="header-left" />
 
@@ -1661,7 +1649,7 @@ function Header({ logout }) {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
-                      <span className="search-shortcut">⌘K</span>
+                      <span className="search-shortcut">⌘</span>
                     </div>
                   </form>
                 </div>
@@ -1670,7 +1658,6 @@ function Header({ logout }) {
               <div className="header-right">
                 {isAdmin && <span className="admin-badge">ADMIN</span>}
 
-                {/* Notifications - Empty state */}
                 <div style={{ position: 'relative' }}>
                   <button 
                     className="notif-btn" 
@@ -1701,7 +1688,6 @@ function Header({ logout }) {
                   )}
                 </div>
 
-                {/* Profile */}
                 <div ref={profileRef} style={{ position: 'relative' }}>
                   <button onClick={() => setProfileOpen(prev => !prev)} className="profile-btn">
                     <div className="profile-avatar">
@@ -1750,7 +1736,6 @@ function Header({ logout }) {
               </div>
             </header>
 
-            {/* Page routes */}
             <div className="page-content">
               <Routes>
                 <Route path="/"                   element={<Home />} />
@@ -1761,7 +1746,8 @@ function Header({ logout }) {
                 <Route path="/incidents/:id"      element={<IncidentDetails />} />
                 <Route path="/requests/:id"       element={<RequestDetails />} />
                 <Route path="/dashboard"          element={<Dashboard />} />
-                <Route path="/settings/*"         element={<Settings />} />
+                {/* Settings route - passes isAdmin to the Settings component */}
+                <Route path="/settings/*"         element={<Settings isAdmin={isAdmin} />} />
                 <Route path="/settings/create-kb" element={<CreateKB />} />
                 <Route path="/settings/create-kb/new" element={<CreateKBForm />} />
                 <Route path="/kb"                 element={<KBListView />} />

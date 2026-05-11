@@ -2518,8 +2518,13 @@ app.get("/api/kb/articles/:id", async (req, res) => {
   try {
     const article = await KBArticle.findById(req.params.id);
     if (!article) return res.status(404).json({ message: "Article not found" });
-    article.viewCount += 1;
-    article.save().catch(err => console.error("View count error:", err));
+
+    // Only increment view count for published articles
+    if (article.status === "published") {
+      article.viewCount += 1;
+      article.save().catch(err => console.error("View count error:", err));
+    }
+
     res.json(article);
   } catch (err) {
     console.error("❌ Get KB article error:", err);
