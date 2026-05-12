@@ -1324,6 +1324,9 @@ const requestSchema = new mongoose.Schema({
   },
   status: { type: String, enum: ["open", "in_progress", "pending_approval", "resolved", "closed", "cancelled"], default: "open" },
   priority: { type: String, enum: ["low", "medium", "high"], default: "medium" },
+  pwOnBehalf: { type: String, enum: ['Self', 'Other'], default: 'Self' },
+  pwTargetEmail: { type: String, default: '' },
+  pwDeliveryEmail: { type: String, default: '' },
   resolvedAt: Date,
   closedAt: Date,
   notes: String,
@@ -1694,13 +1697,17 @@ app.get("/api/requests/:id", async (req, res) => {
 // POST /api/requests - CREATE with FULL email notifications
 app.post("/api/requests", async (req, res) => {
   try {
-    const { service, assignmentGroup, assignedMember, raisedBy, onBehalf, description, attachments, approval, priority } = req.body;
+    const {
+      service, assignmentGroup, assignedMember, raisedBy, onBehalf,
+      description, attachments, approval, priority,
+      pwOnBehalf, pwTargetEmail, pwDeliveryEmail
+    } = req.body;
 
     if (!service?.id) return res.status(400).json({ message: "Service is required" });
     if (!raisedBy?.mail) return res.status(400).json({ message: "Requester info is required" });
 
     let finalAssignmentGroup = assignmentGroup || {};
-    
+
     if (finalAssignmentGroup?.groupId) {
       try {
         const fullGroup = await AssignmentGroup.findById(finalAssignmentGroup.groupId).catch(() => null) ||
@@ -1739,6 +1746,9 @@ app.post("/api/requests", async (req, res) => {
       attachments: Array.isArray(attachments) ? attachments : [],
       approval: approval || { required: false },
       priority: priority || "medium",
+      pwOnBehalf: pwOnBehalf || 'Self',
+      pwTargetEmail: pwTargetEmail || '',
+      pwDeliveryEmail: pwDeliveryEmail || '',
       status: initialStatus,
       history: [{ action: 'created', by: raisedBy?.name || raisedBy?.mail || 'System', at: new Date() }]
     });
@@ -1747,22 +1757,21 @@ app.post("/api/requests", async (req, res) => {
     console.log("✅ [CREATE REQUEST] Saved:", request.requestNumber);
     res.status(201).json(request);
 
-    // Send email notifications to ALL recipients
     setImmediate(async () => {
       try {
         const allRecipients = await getAllRequestRecipients(request);
         const prodUrl = process.env.PROD_URL;
         const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-        
+
         const isPasswordReset = service?.name?.toLowerCase().includes("password reset");
         const isAdminAccess = service?.name?.toLowerCase().includes("admin access") || service?.name?.toLowerCase().includes("device admin");
-        
+
         let title = `📋 New Request: ${request.requestNumber}`;
         let subtitle = `${service?.name || 'Request'} has been submitted`;
-        
+
         if (isPasswordReset) title = `🔑 Password Reset Request: ${request.requestNumber}`;
         if (isAdminAccess) title = `👑 Admin Access Request: ${request.requestNumber}`;
-        
+
         const fields = [
           { label: "Request No.", value: request.requestNumber },
           { label: "Service", value: service?.name || "—" },
@@ -1771,11 +1780,17 @@ app.post("/api/requests", async (req, res) => {
           { label: "Priority", value: priority || "medium" },
           { label: "Submitted At", value: nowIST },
         ];
-        
+
+        if (isPasswordReset && pwOnBehalf === 'Other' && pwTargetEmail) {
+          fields.push({ label: "Reset For", value: pwTargetEmail });
+        }
+        if (isPasswordReset && pwDeliveryEmail) {
+          fields.push({ label: "Delivery Email", value: pwDeliveryEmail });
+        }
         if (request.assignedMember?.memberName) {
           fields.push({ label: "Assigned To", value: request.assignedMember.memberName });
         }
-        
+
         const html = buildHtmlEmail({
           title,
           subtitle,
@@ -1785,7 +1800,7 @@ app.post("/api/requests", async (req, res) => {
           actionLink: `${prodUrl}/requests/${request._id}`,
           actionText: "View Request",
         });
-        
+
         await sendEmail(allRecipients, `${title}`, html);
         console.log(`✅ [REQUEST] CREATE notifications sent to ${allRecipients.length} recipients`);
       } catch (mailErr) {
@@ -2101,8 +2116,9 @@ app.post("/api/requests/:id/approve", async (req, res) => {
     let targetEmail = null;
 
     if (isPasswordReset) {
-      targetEmail = request.onBehalf?.enabled && request.onBehalf?.user?.mail
-        ? request.onBehalf.user.mail
+      // ✅ FIXED: use pwTargetEmail stored on the request, not onBehalf
+      targetEmail = (request.pwOnBehalf === 'Other' && request.pwTargetEmail?.trim())
+        ? request.pwTargetEmail.trim()
         : request.raisedBy.mail;
 
       if (!targetEmail) {
@@ -2120,7 +2136,7 @@ app.post("/api/requests/:id/approve", async (req, res) => {
         action: 'approved',
         by: actorName || actorEmail,
         at: new Date(),
-        notes: `Password reset approved by ${actorName || actorEmail}. Temporary password sent.`
+        notes: `Password reset approved by ${actorName || actorEmail}. Temporary password sent to ${request.pwDeliveryEmail || targetEmail}.`
       });
       request.status = "resolved";
       request.resolvedAt = new Date();
@@ -2132,38 +2148,58 @@ app.post("/api/requests/:id/approve", async (req, res) => {
 
       res.json({ message: "Password reset approved successfully", requestNumber: request.requestNumber, targetEmail, tempPassword });
 
-      // Send notifications to ALL recipients with password
       setImmediate(async () => {
         try {
-          const allRecipients = await getAllRequestRecipients(request);
-          const prodUrl = process.env.PROD_URL;
-          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          const deliveryEmail = request.pwDeliveryEmail?.trim() || targetEmail;
           
-          const fields = [
-            { label: "Request No.", value: request.requestNumber },
-            { label: "Action", value: "APPROVED" },
-            { label: "Approved By", value: actorName || actorEmail },
-            { label: "Approved At", value: nowIST },
-            { label: "Temporary Password", value: `<strong style="font-size:16px; background:#fef3c7; padding:4px 8px; border-radius:4px;">${tempPassword}</strong>` },
-          ];
-          
-          const html = buildHtmlEmail({
-            title: `🔑 Password Reset Approved: ${request.requestNumber}`,
-            subtitle: `Temporary password has been generated`,
+          // Send temp password ONLY to delivery email
+          const passwordHtml = buildHtmlEmail({
+            title: `🔑 Your Temporary Password`,
+            subtitle: `Password reset for ${targetEmail} has been approved`,
             statusColor: "#16a34a",
-            fields,
-            description: `The password for ${targetEmail} has been reset. The temporary password is shown above. The user will be required to change it on next sign-in.`,
-            actionLink: `${prodUrl}/requests/${request._id}`,
-            actionText: "View Request",
+            fields: [
+              { label: "Request No.", value: request.requestNumber },
+              { label: "Account", value: targetEmail },
+              { label: "Temporary Password", value: `<strong style="font-size:16px; background:#fef3c7; padding:4px 8px; border-radius:4px;">${tempPassword}</strong>` },
+              { label: "Approved By", value: actorName || actorEmail },
+              { label: "Approved At", value: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) },
+            ],
+            description: `Please sign in using this temporary password. You will be required to change it on next sign-in.`,
+            actionLink: `https://portal.office.com`,
+            actionText: "Sign In",
           });
-          
-          await sendEmail(allRecipients, `[PASSWORD RESET] ${request.requestNumber} — Approved`, html);
-          console.log(`✅ [PASSWORD RESET] APPROVE notifications sent to ${allRecipients.length} recipients`);
+          await sendEmail(deliveryEmail, `[PASSWORD RESET] Your temporary password — ${request.requestNumber}`, passwordHtml);
+
+          // Send approval notification (WITHOUT password) to all other recipients
+          const allRecipients = await getAllRequestRecipients(request);
+          const otherRecipients = allRecipients.filter(e => e.toLowerCase() !== deliveryEmail.toLowerCase());
+
+          if (otherRecipients.length > 0) {
+            const notifyHtml = buildHtmlEmail({
+              title: `🔑 Password Reset Approved: ${request.requestNumber}`,
+              subtitle: `Temporary password has been sent to delivery email`,
+              statusColor: "#16a34a",
+              fields: [
+                { label: "Request No.", value: request.requestNumber },
+                { label: "Action", value: "APPROVED" },
+                { label: "Reset For", value: targetEmail },
+                { label: "Delivery Email", value: deliveryEmail },
+                { label: "Approved By", value: actorName || actorEmail },
+                { label: "Approved At", value: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) },
+              ],
+              description: `The password has been reset and the temporary password has been sent to the delivery email.`,
+              actionLink: `${process.env.PROD_URL}/requests/${request._id}`,
+              actionText: "View Request",
+            });
+            await sendEmail(otherRecipients, `[PASSWORD RESET] ${request.requestNumber} — Approved`, notifyHtml);
+          }
+
+          console.log(`✅ [PASSWORD RESET] APPROVE notifications sent. Password delivered to: ${deliveryEmail}`);
         } catch (mailErr) {
           console.error("❌ [PASSWORD RESET] Email error:", mailErr.message);
         }
       });
-    } 
+    }
     else if (isAdminAccess) {
       targetEmail = request.raisedBy?.mail;
       if (!targetEmail) {
@@ -2206,13 +2242,12 @@ app.post("/api/requests/:id/approve", async (req, res) => {
 
       res.json({ message: "Admin access approved successfully", requestNumber: request.requestNumber, targetEmail, groupId });
 
-      // Send notifications to ALL recipients
       setImmediate(async () => {
         try {
           const allRecipients = await getAllRequestRecipients(request);
           const prodUrl = process.env.PROD_URL;
           const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-          
+
           const fields = [
             { label: "Request No.", value: request.requestNumber },
             { label: "Action", value: "APPROVED" },
@@ -2220,7 +2255,7 @@ app.post("/api/requests/:id/approve", async (req, res) => {
             { label: "Approved At", value: nowIST },
             { label: "User Granted Access", value: `${request.raisedBy?.name || ''} (${targetEmail})` },
           ];
-          
+
           const html = buildHtmlEmail({
             title: `👑 Admin Access Approved: ${request.requestNumber}`,
             subtitle: `User has been granted Device Administrator access`,
@@ -2230,7 +2265,7 @@ app.post("/api/requests/:id/approve", async (req, res) => {
             actionLink: `${prodUrl}/requests/${request._id}`,
             actionText: "View Request",
           });
-          
+
           await sendEmail(allRecipients, `[ADMIN ACCESS] ${request.requestNumber} — Approved`, html);
           console.log(`✅ [ADMIN ACCESS] APPROVE notifications sent to ${allRecipients.length} recipients`);
         } catch (mailErr) {
