@@ -1,4 +1,4 @@
-// AssignmentGroups.js - Redesigned to match Home.js styling
+// AssignmentGroups.js - Updated with card click preview modal
 import { useEffect, useState, useRef } from 'react';
 import { useMsal } from '@azure/msal-react';
 import axios from 'axios';
@@ -16,6 +16,10 @@ function AssignmentGroups() {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({ open: false, message: '', type: 'success' });
+  
+  // Preview modal state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewGroup, setPreviewGroup] = useState(null);
 
   // Form fields
   const [groupName, setGroupName] = useState('');
@@ -132,6 +136,16 @@ function AssignmentGroups() {
     setShowUserDropdown(false);
   };
 
+  // Card click handler - opens preview modal
+  const handleCardClick = (group, e) => {
+    // Don't open preview if clicking on Edit/Delete buttons
+    if (e.target.closest('.ag-edit-btn') || e.target.closest('.ag-delete-btn')) {
+      return;
+    }
+    setPreviewGroup(group);
+    setShowPreviewModal(true);
+  };
+
   const openCreate = () => {
     resetForm();
     setModalMode('create');
@@ -155,12 +169,14 @@ function AssignmentGroups() {
     }
     
     setShowModal(true);
+    setShowPreviewModal(false);
   };
 
   const openDelete = (group) => {
     setModalMode('delete');
     setSelectedGroup(group);
     setShowModal(true);
+    setShowPreviewModal(false);
   };
 
   const searchUsers = async (query) => {
@@ -337,6 +353,10 @@ function AssignmentGroups() {
       from { opacity: 0; transform: translateY(-8px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    @keyframes zoomIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
 
     .ag-page {
       min-height: 100vh;
@@ -436,7 +456,7 @@ function AssignmentGroups() {
       box-shadow: 0 4px 12px rgba(0,32,96,0.2);
     }
     .ag-btn-primary:hover {
-      background: var(--navy2);
+      background: #e98404;
       transform: translateY(-2px);
       box-shadow: 0 8px 20px rgba(0,32,96,0.25);
     }
@@ -487,6 +507,7 @@ function AssignmentGroups() {
       border-radius: 20px;
       overflow: hidden;
       transition: all 0.22s;
+      cursor: pointer;
     }
     .ag-card:hover {
       transform: translateY(-5px);
@@ -534,63 +555,6 @@ function AssignmentGroups() {
       font-weight: 500;
     }
 
-    .ag-members-section {
-      margin-top: 16px;
-    }
-
-    .ag-members-label {
-      font-family: 'Sora', sans-serif;
-      font-size: 11px; font-weight: 700;
-      color: var(--navy);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 10px;
-    }
-
-    .ag-member-row {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .ag-member-row:last-child {
-      border-bottom: none;
-    }
-
-    .ag-avatar {
-      width: 32px; height: 32px; border-radius: 10px;
-      background: var(--navy);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 700;
-      color: white;
-      flex-shrink: 0;
-    }
-
-    .ag-member-info {
-      flex: 1;
-    }
-
-    .ag-member-name {
-      font-size: 13px; font-weight: 600;
-      color: var(--text);
-      margin-bottom: 2px;
-    }
-
-    .ag-member-email {
-      font-size: 11px; color: var(--muted);
-    }
-
-    .ag-manual-badge {
-      font-size: 9px; font-weight: 700;
-      padding: 2px 8px; border-radius: 12px;
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .ag-more-members {
-      font-size: 12px; color: var(--muted);
-      text-align: center; margin-top: 8px;
-    }
-
     .ag-card-footer {
       padding: 16px 24px;
       background: var(--light);
@@ -627,13 +591,197 @@ function AssignmentGroups() {
       margin: 0 auto 20px;
     }
 
-    /* Modal */
+    /* Preview Modal - All Members View */
+    .ag-preview-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10000;
+      padding: 24px;
+      animation: fadeUp 0.2s ease;
+    }
+
+    .ag-preview-modal {
+      background: var(--white);
+      border-radius: 28px;
+      width: 100%; max-width: 720px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      border: 1.5px solid var(--border);
+      animation: zoomIn 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+      box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+    }
+
+    .ag-preview-header {
+      padding: 28px 32px;
+      border-bottom: 2px solid var(--border);
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%);
+      border-radius: 28px 28px 0 0;
+    }
+
+    .ag-preview-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 24px; font-weight: 700;
+      color: white;
+      margin-bottom: 8px;
+    }
+
+    .ag-preview-sub {
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .ag-preview-sub span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ag-preview-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 32px;
+    }
+
+    .ag-preview-section {
+      margin-bottom: 28px;
+    }
+
+    .ag-preview-section-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ag-preview-section-title span {
+      background: var(--orange);
+      width: 4px;
+      height: 20px;
+      border-radius: 2px;
+    }
+
+    .ag-preview-description {
+      background: var(--bg);
+      padding: 16px;
+      border-radius: 16px;
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* Members Grid in Preview */
+    .ag-members-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+
+    .ag-members-grid::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .ag-members-grid::-webkit-scrollbar-track {
+      background: var(--border);
+      border-radius: 10px;
+    }
+
+    .ag-members-grid::-webkit-scrollbar-thumb {
+      background: var(--navy);
+      border-radius: 10px;
+    }
+
+    .ag-preview-member {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--light);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      transition: all 0.2s;
+    }
+
+    .ag-preview-member:hover {
+      background: white;
+      border-color: var(--navy);
+      transform: translateX(4px);
+    }
+
+    .ag-preview-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: var(--navy);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .ag-preview-member-info {
+      flex: 1;
+    }
+
+    .ag-preview-member-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .ag-preview-member-email {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .ag-preview-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .ag-preview-footer {
+      padding: 20px 32px;
+      border-top: 1.5px solid var(--border);
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      background: var(--light);
+      border-radius: 0 0 28px 28px;
+    }
+
+    /* Modal (Create/Edit/Delete) - same as before */
     .ag-modal-overlay {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.4);
       backdrop-filter: blur(4px);
       display: flex; align-items: center; justify-content: center;
-      z-index: 10000;
+      z-index: 10001;
       padding: 24px;
     }
 
@@ -714,7 +862,6 @@ function AssignmentGroups() {
       min-height: 80px;
     }
 
-    /* Source Buttons */
     .ag-source-row {
       display: flex; gap: 12px;
       margin-bottom: 20px;
@@ -741,7 +888,6 @@ function AssignmentGroups() {
       color: var(--navy);
     }
 
-    /* DL List */
     .ag-dl-list {
       max-height: 250px;
       overflow-y: auto;
@@ -789,7 +935,6 @@ function AssignmentGroups() {
       margin-bottom: 16px;
     }
 
-    /* User Dropdown */
     .ag-user-search-wrapper {
       position: relative;
     }
@@ -842,7 +987,6 @@ function AssignmentGroups() {
       padding: 2px 8px; border-radius: 12px;
     }
 
-    /* Manual Members */
     .ag-manual-list {
       margin-top: 16px;
       display: flex; flex-direction: column; gap: 8px;
@@ -864,7 +1008,6 @@ function AssignmentGroups() {
     }
     .ag-remove-btn:hover { color: #ef4444; }
 
-    /* Summary */
     .ag-summary {
       padding: 14px 18px;
       background: rgba(0,32,96,0.04);
@@ -874,9 +1017,8 @@ function AssignmentGroups() {
       margin-top: 20px;
     }
 
-    /* Toast */
     .ag-toast {
-      position: fixed; bottom: 32px; right: 32px; z-index: 10001;
+      position: fixed; bottom: 32px; right: 32px; z-index: 10002;
       padding: 14px 24px; border-radius: 14px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.15);
       font-size: 14px; font-weight: 600;
@@ -899,6 +1041,9 @@ function AssignmentGroups() {
       .ag-content { padding: 24px 20px 40px; }
       .ag-grid { grid-template-columns: 1fr; }
       .ag-source-row { flex-direction: column; }
+      .ag-preview-modal { max-width: 95%; }
+      .ag-preview-header { padding: 20px; }
+      .ag-preview-body { padding: 20px; }
     }
   `;
 
@@ -913,7 +1058,7 @@ function AssignmentGroups() {
             <div className="ag-hero-eyebrow-line" />
             Team Management
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
             <div>
               <h1>Assignment <em>Groups</em></h1>
               <p className="ag-hero-sub">Manage groups and their members for request & incident assignment</p>
@@ -941,7 +1086,11 @@ function AssignmentGroups() {
         ) : (
           <div className="ag-grid">
             {groups.map(group => (
-              <div key={group._id} className="ag-card">
+              <div 
+                key={group._id} 
+                className="ag-card"
+                onClick={(e) => handleCardClick(group, e)}
+              >
                 <div className="ag-card-header">
                   <span className="ag-card-title">{group.name}</span>
                   <span className="ag-card-badge">{group.members?.length || 0} members</span>
@@ -964,32 +1113,27 @@ function AssignmentGroups() {
                     <span className="ag-info-label">Created</span>
                     <span className="ag-info-value">{new Date(group.createdAt).toLocaleDateString()}</span>
                   </div>
-
-                  <div className="ag-members-section">
-                    <div className="ag-members-label">Members</div>
-                    {(group.members || []).slice(0, 4).map(m => (
-                      <div key={m.id} className="ag-member-row">
-                        <div className="ag-avatar">{(m.name || '?').charAt(0).toUpperCase()}</div>
-                        <div className="ag-member-info">
-                          <div className="ag-member-name">{m.name}</div>
-                          <div className="ag-member-email">{m.mail}</div>
-                        </div>
-                        {m.isManual && <span className="ag-manual-badge">Manual</span>}
-                      </div>
-                    ))}
-                    {(group.members || []).length > 4 && (
-                      <div className="ag-more-members">
-                        +{group.members.length - 4} more members
-                      </div>
-                    )}
-                  </div>
                 </div>
 
                 <div className="ag-card-footer">
-                  <button className="ag-btn-secondary" style={{ flex: 1 }} onClick={() => openEdit(group)}>
+                  <button 
+                    className="ag-btn-secondary ag-edit-btn" 
+                    style={{ flex: 1 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEdit(group);
+                    }}
+                  >
                     ✏️ Edit
                   </button>
-                  <button className="ag-btn-danger" style={{ flex: 1 }} onClick={() => openDelete(group)}>
+                  <button 
+                    className="ag-btn-danger ag-delete-btn" 
+                    style={{ flex: 1 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDelete(group);
+                    }}
+                  >
                     🗑️ Delete
                   </button>
                 </div>
@@ -999,7 +1143,97 @@ function AssignmentGroups() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Preview Modal - Shows ALL Members */}
+      {showPreviewModal && previewGroup && (
+        <div className="ag-preview-overlay" onClick={() => setShowPreviewModal(false)}>
+          <div className="ag-preview-modal" onClick={e => e.stopPropagation()}>
+            <div className="ag-preview-header">
+              <div className="ag-preview-title">{previewGroup.name}</div>
+              <div className="ag-preview-sub">
+                <span>📋 {previewGroup.members?.length || 0} members</span>
+                <span>📅 Created {new Date(previewGroup.createdAt).toLocaleDateString()}</span>
+                <span>
+                  {previewGroup.distributionList?.id ? '📧 Distribution List' : '✏️ Manual Group'}
+                </span>
+              </div>
+            </div>
+
+            <div className="ag-preview-body">
+              {previewGroup.description && (
+                <div className="ag-preview-section">
+                  <div className="ag-preview-section-title">
+                    <span></span> Description
+                  </div>
+                  <div className="ag-preview-description">
+                    {previewGroup.description}
+                  </div>
+                </div>
+              )}
+
+              <div className="ag-preview-section">
+                <div className="ag-preview-section-title">
+                  <span></span> All Members ({previewGroup.members?.length || 0})
+                </div>
+                
+                <div className="ag-members-grid">
+                  {(previewGroup.members || []).map((member, idx) => (
+                    <div key={member.id || idx} className="ag-preview-member">
+                      <div className="ag-preview-avatar">
+                        {(member.name || '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="ag-preview-member-info">
+                        <div className="ag-preview-member-name">
+                          {member.name || 'Unknown'}
+                          {member.isManual && (
+                            <span className="ag-preview-badge">Manual</span>
+                          )}
+                          {previewGroup.distributionList?.id && !member.isManual && (
+                            <span className="ag-preview-badge" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                              📧 From DL
+                            </span>
+                          )}
+                        </div>
+                        <div className="ag-preview-member-email">
+                          {member.mail || member.email || 'No email'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {(previewGroup.members || []).length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                      No members in this group yet
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="ag-preview-footer">
+              <button 
+                className="ag-btn-secondary"
+                onClick={() => setShowPreviewModal(false)}
+              >
+                Close
+              </button>
+              <button 
+                className="ag-btn-secondary ag-edit-btn"
+                onClick={() => openEdit(previewGroup)}
+              >
+                ✏️ Edit Group
+              </button>
+              <button 
+                className="ag-btn-danger ag-delete-btn"
+                onClick={() => openDelete(previewGroup)}
+              >
+                🗑️ Delete Group
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Create/Edit/Delete */}
       {showModal && (
         <div className="ag-modal-overlay" onClick={() => setShowModal(false)}>
           <div className="ag-modal" onClick={e => e.stopPropagation()}>

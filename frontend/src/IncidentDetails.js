@@ -1,4 +1,4 @@
-// IncidentDetails.js - Fixed modal closing issues
+// IncidentDetails.js - COMPLETE FIXED VERSION
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -99,6 +99,12 @@ function IncidentDetails() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [assigning, setAssigning] = useState(false);
 
+  // Assign to Group Modal state
+  const [assignGroupModalOpen, setAssignGroupModalOpen] = useState(false);
+  const [allAssignmentGroups, setAllAssignmentGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
   // Chat state
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -107,26 +113,26 @@ function IncidentDetails() {
   const [canChat, setCanChat] = useState(false);
   const [chatExpanded, setChatExpanded] = useState(true);
 
-  // ---- Custom modal state ----
+  // Custom modal state
   const [alertModal, setAlertModal] = useState({ open: false, type: 'success', title: '', message: '' });
-  const [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', danger: false, onConfirm: null });
+  const [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', danger: false, onConfirm: null, onCancel: null });
 
   const showAlert = (message, type = 'success', title = '') =>
     setAlertModal({ open: true, type, title, message });
 
   const closeAlert = () => setAlertModal(s => ({ ...s, open: false }));
 
-  const showConfirm = ({ title, message, confirmLabel, cancelLabel, danger, onConfirm }) =>
-    setConfirmModal({ open: true, title, message, confirmLabel: confirmLabel || 'Confirm', cancelLabel: cancelLabel || 'Cancel', danger: !!danger, onConfirm });
+  const showConfirm = ({ title, message, confirmLabel, cancelLabel, danger, onConfirm, onCancel }) =>
+    setConfirmModal({ open: true, title, message, confirmLabel: confirmLabel || 'Confirm', cancelLabel: cancelLabel || 'Cancel', danger: !!danger, onConfirm, onCancel });
 
-  const closeConfirm = () => setConfirmModal(s => ({ ...s, open: false, onConfirm: null }));
+  const closeConfirm = () => setConfirmModal(s => ({ ...s, open: false, onConfirm: null, onCancel: null }));
 
   const TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed', 'cancelled'];
 
   const currentUserEmail = accounts?.[0]?.username || '';
   const currentUserName = accounts?.[0]?.name || '';
 
-  // Robust helpers for member identification
+  // Helper functions for member identification
   const getMemberEmail = (member) => {
     if (!member) return '';
     const raw =
@@ -145,6 +151,63 @@ function IncidentDetails() {
     return member.id || member._id || member.objectId || member.userId || member.azureObjectId || '';
   };
 
+  // Fetch all assignment groups
+  const fetchAllAssignmentGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const res = await axios.get(`${BACKEND}/api/assignment-groups`);
+      setAllAssignmentGroups(res.data || []);
+      console.log('🔍 [FETCH_GROUPS] Loaded groups:', res.data.length);
+    } catch (err) {
+      console.error('Failed to fetch assignment groups:', err);
+      showAlert('Failed to load assignment groups', 'error');
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  // Check if current user is in the ORIGINAL group (before any reassign)
+  const isInOriginalGroup = () => {
+    if (!incident || !currentUserEmail) return false;
+    
+    const originalGroupId = incident.originalAssignmentGroupId || incident.assignmentGroup?.groupId || incident.assignmentGroup?._id;
+    const groupMembers = incident.originalGroupMembers || incident.assignmentGroup?.members || [];
+    const userEmailLower = currentUserEmail.toLowerCase();
+    const userId = accounts?.[0]?.localAccountId || '';
+    
+    return groupMembers.some((member) => {
+      const memberEmail = getMemberEmail(member);
+      const memberId = getMemberId(member);
+      return (memberEmail && memberEmail === userEmailLower) || (memberId && userId && String(memberId) === String(userId));
+    });
+  };
+
+  // Check if current user is in the CURRENT assignment group
+  const isInCurrentGroup = () => {
+    if (!incident || !currentUserEmail) return false;
+    const groupMembers = incident.assignmentGroup?.members || [];
+    const userEmailLower = currentUserEmail.toLowerCase();
+    const userId = accounts?.[0]?.localAccountId || '';
+    return groupMembers.some((member) => {
+      const memberEmail = getMemberEmail(member);
+      const memberId = getMemberId(member);
+      return (memberEmail && memberEmail === userEmailLower) || (memberId && userId && String(memberId) === String(userId));
+    });
+  };
+
+  // Check if user has FULL access
+  const hasFullAccess = () => {
+    if (authority === 'admin') return true;
+    if (!incident?.originalAssignmentGroupId) return isInCurrentGroup();
+    return isInCurrentGroup() && !isInOriginalGroup();
+  };
+
+  // Check if user has VIEW ONLY access
+  const hasViewOnlyAccess = () => {
+    if (authority === 'admin') return false;
+    return isInOriginalGroup() && !isInCurrentGroup();
+  };
+
   // Check authority (admin/basic)
   useEffect(() => {
     const checkAuthority = async () => {
@@ -161,12 +224,13 @@ function IncidentDetails() {
         const groups = (json.value || []).map((g) => g.displayName);
         const isAdmin = groups.includes('Helpdesk_Admin');
         setAuthority(isAdmin ? 'admin' : 'basic');
+        console.log('🔍 [AUTH] Authority set to:', isAdmin ? 'admin' : 'basic');
       } catch (e) {
         setAuthority('basic');
+        console.log('🔍 [AUTH] Authority set to basic (default)');
       }
     };
     checkAuthority();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, instance]);
 
   const checkCanChat = (incidentData) => {
@@ -184,18 +248,7 @@ function IncidentDetails() {
     return isGroupMember || authority === 'admin';
   };
 
-  const isCurrentUserGroupMember = () => {
-    if (!incident || !currentUserEmail) return false;
-    const groupMembers = incident.assignmentGroup?.members || [];
-    const userEmailLower = currentUserEmail.toLowerCase();
-    const userId = accounts?.[0]?.localAccountId || '';
-    return groupMembers.some((member) => {
-      const memberEmail = getMemberEmail(member);
-      const memberId = getMemberId(member);
-      return (memberEmail && memberEmail === userEmailLower) || (memberId && userId && String(memberId) === String(userId));
-    });
-  };
-
+  const isCurrentUserGroupMember = () => isInCurrentGroup();
   const isAssignedToMe = () => {
     if (!incident || !currentUserEmail) return false;
     const assignedMemberEmail = (incident.assignedMember?.memberEmail || '').toString().toLowerCase();
@@ -228,16 +281,25 @@ function IncidentDetails() {
     return normalized;
   };
 
+  // Fetch incident with logs
   useEffect(() => {
     const fetchIncident = async () => {
       setIsLoading(true);
       try {
+        console.log('🔍 [FETCH] Fetching incident with ID:', id);
         const res = await axios.get(`${BACKEND}/api/incidents/${id}`);
+        console.log('🔍 [FETCH] Raw incident data:', res.data);
+        console.log('🔍 [FETCH] assignedMember in raw data:', res.data.assignedMember);
+        
         const normalized = normalizeIncidentAssignedMember(res.data);
+        console.log('🔍 [FETCH] Normalized incident data:', normalized);
+        console.log('🔍 [FETCH] assignedMember after normalization:', normalized.assignedMember);
+        
         setIncident(normalized);
         setSelectedStatus(normalized.status || '');
         const canUserChat = checkCanChat(normalized);
         setCanChat(canUserChat);
+        
         const list = [];
         if (normalized.attachments && Array.isArray(normalized.attachments)) {
           normalized.attachments.forEach((a) => {
@@ -325,30 +387,115 @@ function IncidentDetails() {
     a.remove();
   };
 
-  // Assign to current user - FIXED: closes modal first, then assigns, then shows alert
+  // ==================== UNASSIGN WITH LOGS ====================
+  const handleUnassign = async () => {
+    console.log('🔍 [UNASSIGN] Function called');
+    console.log('🔍 [UNASSIGN] Incident ID:', id);
+    console.log('🔍 [UNASSIGN] Current incident state:', incident);
+    console.log('🔍 [UNASSIGN] Current assignedMember:', incident?.assignedMember);
+    
+    if (!incident?.assignedMember) {
+      console.log('⚠️ [UNASSIGN] No assigned member found, showing warning');
+      showAlert('Incident is not assigned.', 'warning');
+      return;
+    }
+    
+    const assigned = incident.assignedMember;
+    console.log('🔍 [UNASSIGN] Assigned member details:', {
+      memberId: assigned.memberId,
+      memberName: assigned.memberName,
+      memberEmail: assigned.memberEmail
+    });
+
+    showConfirm({
+      title: 'Remove Assignment',
+      message: `Remove assignment from ${assigned.memberName || assigned.memberEmail || 'assigned user'}?`,
+      confirmLabel: 'Remove',
+      danger: true,
+      onConfirm: async () => {
+        console.log('✅ [UNASSIGN] User confirmed, proceeding with unassign');
+        closeConfirm();
+        try {
+          setAssigning(true);
+          console.log('🔄 [UNASSIGN] Sending PATCH request to:', `${BACKEND}/api/incidents/${id}`);
+          
+          const payload = {
+            assignedMember: null,
+            notes: `Unassigned ${assigned.memberName || assigned.memberEmail || ''} by ${currentUserName}`,
+            updatedBy: { 
+              id: accounts[0]?.localAccountId, 
+              name: currentUserName, 
+              mail: currentUserEmail 
+            },
+          };
+          console.log('📤 [UNASSIGN] Payload being sent:', JSON.stringify(payload, null, 2));
+          
+          const response = await axios.patch(`${BACKEND}/api/incidents/${id}`, payload);
+          console.log('✅ [UNASSIGN] PATCH response status:', response.status);
+          console.log('✅ [UNASSIGN] PATCH response data:', response.data);
+          
+          setIncident((prev) => ({ ...prev, assignedMember: null, updatedAt: new Date().toISOString() }));
+          console.log('🔄 [UNASSIGN] Local state updated - assignedMember set to null');
+          
+          console.log('🔄 [UNASSIGN] Refreshing incident from backend...');
+          const refreshed = await axios.get(`${BACKEND}/api/incidents/${id}`);
+          console.log('🔄 [UNASSIGN] Refreshed incident data:', refreshed.data);
+          console.log('🔄 [UNASSIGN] Refreshed assignedMember:', refreshed.data.assignedMember);
+          
+          const normalized = normalizeIncidentAssignedMember(refreshed.data);
+          setIncident(normalized);
+          
+          showAlert('Assignment has been removed successfully.', 'success', 'Unassigned');
+          console.log('✅ [UNASSIGN] Unassign completed successfully');
+        } catch (err) {
+          console.error('❌ [UNASSIGN] Error occurred:', err);
+          console.error('❌ [UNASSIGN] Error response:', err?.response?.data);
+          console.error('❌ [UNASSIGN] Error message:', err?.response?.data?.message || err.message);
+          showAlert('Failed to remove assignment. ' + (err?.response?.data?.message || err.message), 'error', 'Unassign Failed');
+        } finally {
+          setAssigning(false);
+          console.log('🔒 [UNASSIGN] assigning state set to false');
+        }
+      },
+    });
+  };
+
+  // ==================== ASSIGN TO ME WITH LOGS ====================
   const handleAssignToMe = async () => {
-    // Close the assignment modal immediately
+    console.log('🔍 [ASSIGN_TO_ME] Function called');
+    console.log('🔍 [ASSIGN_TO_ME] Incident ID:', id);
+    
     setAssignmentModalOpen(false);
     setSelectedMember(null);
     
     if (!incident) { 
+      console.log('⚠️ [ASSIGN_TO_ME] No incident data');
       showAlert('No incident data', 'error');
       return; 
     }
     
     const groupMembers = incident.assignmentGroup?.members || [];
+    console.log('🔍 [ASSIGN_TO_ME] Group members count:', groupMembers.length);
+    console.log('🔍 [ASSIGN_TO_ME] Current user email:', currentUserEmail);
+    console.log('🔍 [ASSIGN_TO_ME] Current user ID:', accounts?.[0]?.localAccountId);
+    
     const userId = accounts?.[0]?.localAccountId || '';
     const currentUserMember = groupMembers.find((member) => {
       const memberEmail = getMemberEmail(member);
       const matchByEmail = memberEmail === currentUserEmail.toLowerCase();
-      const matchById = getMemberId(member) && userId && String(getMemberId(member)) === String(userId);
+      const memberId = getMemberId(member);
+      const matchById = memberId && userId && String(memberId) === String(userId);
+      console.log(`🔍 [ASSIGN_TO_ME] Checking member: ${member.name}, email: ${memberEmail}, matchByEmail: ${matchByEmail}, matchById: ${matchById}`);
       return matchByEmail || matchById;
     });
 
     if (!currentUserMember) {
-      showAlert('You are not a member of the assignment group for this incident.', 'error', 'Not a Group Member');
+      console.log('⚠️ [ASSIGN_TO_ME] Current user not found in group members');
+      showAlert('You are not a member of the current assignment group.', 'error', 'Not a Group Member');
       return;
     }
+
+    console.log('✅ [ASSIGN_TO_ME] Found current user in group:', currentUserMember);
 
     const payloadAssigned = {
       memberId: getMemberId(currentUserMember) || currentUserMember.id || currentUserMember._id,
@@ -362,28 +509,35 @@ function IncidentDetails() {
       updatedBy: { id: accounts[0]?.localAccountId, name: currentUserName, mail: currentUserEmail },
     };
 
+    console.log('📤 [ASSIGN_TO_ME] Payload:', payload);
+
     try {
       setAssigning(true);
-      await axios.patch(`${BACKEND}/api/incidents/${id}`, payload);
+      const response = await axios.patch(`${BACKEND}/api/incidents/${id}`, payload);
+      console.log('✅ [ASSIGN_TO_ME] Response:', response.data);
+      
       setIncident((prev) => ({
         ...prev,
         assignedMember: { memberId: payloadAssigned.memberId, memberName: payloadAssigned.memberName, memberEmail: payloadAssigned.memberEmail },
         updatedAt: new Date().toISOString(),
       }));
+      
       try {
         const refreshed = await axios.get(`${BACKEND}/api/incidents/${id}`);
         const normalized = normalizeIncidentAssignedMember(refreshed.data);
         setIncident((prev) => ({ ...prev, ...(normalized || {}), assignedMember: normalized.assignedMember ?? prev.assignedMember }));
       } catch (_) {}
+      
       showAlert(`Incident has been assigned to you (${currentUserName}).`, 'success', 'Assigned Successfully');
     } catch (err) {
+      console.error('❌ [ASSIGN_TO_ME] Error:', err);
       showAlert('Failed to assign incident to yourself. ' + (err?.response?.data?.message || err.message), 'error', 'Assignment Failed');
     } finally {
       setAssigning(false);
     }
   };
 
-  // Assign to selected member - FIXED: proper modal flow
+  // ==================== ASSIGN TO MEMBER WITH LOGS ====================
   const handleAssignToMember = async () => {
     if (!selectedMember) { 
       showAlert('Please select a member to assign.', 'warning');
@@ -396,10 +550,10 @@ function IncidentDetails() {
       memberEmail: selectedMember.email || selectedMember.mail || selectedMember.userPrincipalName || '',
     };
 
-    // First close the assignment modal
+    console.log('🔍 [ASSIGN_TO_MEMBER] Assigning to:', payloadAssigned);
+
     setAssignmentModalOpen(false);
     
-    // Then show confirmation modal
     showConfirm({
       title: 'Confirm Assignment',
       message: `Assign this incident to ${selectedMember.name} (${selectedMember.email || selectedMember.mail || 'unknown email'})?`,
@@ -416,7 +570,9 @@ function IncidentDetails() {
             updatedBy: { id: accounts[0]?.localAccountId, name: currentUserName, mail: currentUserEmail },
           };
           
-          await axios.patch(`${BACKEND}/api/incidents/${id}`, payload);
+          const response = await axios.patch(`${BACKEND}/api/incidents/${id}`, payload);
+          console.log('✅ [ASSIGN_TO_MEMBER] Response:', response.data);
+          
           setIncident((prev) => ({
             ...prev,
             assignedMember: { memberId: payloadAssigned.memberId, memberName: payloadAssigned.memberName, memberEmail: payloadAssigned.memberEmail },
@@ -429,10 +585,10 @@ function IncidentDetails() {
             setIncident((prev) => ({ ...prev, ...(normalized || {}), assignedMember: normalized.assignedMember ?? prev.assignedMember }));
           } catch (_) {}
           
-          // Clear selected member after successful assignment
           setSelectedMember(null);
           showAlert(`Incident has been assigned to ${payloadAssigned.memberName}.`, 'success', 'Assigned Successfully');
         } catch (err) {
+          console.error('❌ [ASSIGN_TO_MEMBER] Error:', err);
           showAlert('Failed to assign incident. ' + (err?.response?.data?.message || err.message), 'error', 'Assignment Failed');
         } finally {
           setAssigning(false);
@@ -441,42 +597,117 @@ function IncidentDetails() {
     });
   };
 
-  // Unassign - FIXED: proper modal flow
-  const handleUnassign = async () => {
-    if (!incident?.assignedMember) {
-      showAlert('Incident is not assigned.', 'warning');
+  // ==================== ASSIGN TO GROUP (FIXED) ====================
+  const handleAssignToGroup = async () => {
+    console.log('🔍 [ASSIGN_TO_GROUP] Function called');
+    console.log('🔍 [ASSIGN_TO_GROUP] Selected group:', selectedGroup);
+    
+    if (!selectedGroup) {
+      showAlert('Please select a group to assign.', 'warning');
       return;
     }
-    const assigned = incident.assignedMember;
 
-    showConfirm({
-      title: 'Remove Assignment',
-      message: `Remove assignment from ${assigned.memberName || assigned.memberEmail || 'assigned user'}?`,
-      confirmLabel: 'Remove',
-      danger: true,
-      onConfirm: async () => {
-        closeConfirm();
-        try {
-          setAssigning(true);
-          await axios.patch(`${BACKEND}/api/incidents/${id}`, {
-            assignedMember: null,
-            notes: `Unassigned ${assigned.memberName || assigned.memberEmail || ''} by ${currentUserName}`,
-            updatedBy: { id: accounts[0]?.localAccountId, name: currentUserName, mail: currentUserEmail },
-          });
-          setIncident((prev) => ({ ...prev, assignedMember: null, updatedAt: new Date().toISOString() }));
+    const originalGroupId = incident.originalAssignmentGroupId || incident.assignmentGroup?.groupId || incident.assignmentGroup?._id;
+    const originalGroupMembers = incident.assignmentGroup?.members || [];
+
+    // Find a default assignee from the new group
+    const newGroupMembers = selectedGroup.members || [];
+    let defaultAssignee = null;
+    
+    console.log('🔍 [ASSIGN_TO_GROUP] New group members:', newGroupMembers.length);
+    
+    if (newGroupMembers.length > 0) {
+      // Try to find current user in new group first
+      const currentUserInNewGroup = newGroupMembers.find(member => {
+        const memberEmail = getMemberEmail(member);
+        const memberId = getMemberId(member);
+        const match = (memberEmail && memberEmail === currentUserEmail.toLowerCase()) || 
+               (memberId && accounts?.[0]?.localAccountId && String(memberId) === String(accounts[0]?.localAccountId));
+        if (match) console.log('🔍 [ASSIGN_TO_GROUP] Found current user in new group:', member.name);
+        return match;
+      });
+      
+      if (currentUserInNewGroup) {
+        defaultAssignee = {
+          memberId: getMemberId(currentUserInNewGroup) || currentUserInNewGroup.id,
+          memberName: currentUserInNewGroup.name,
+          memberEmail: currentUserInNewGroup.email || currentUserInNewGroup.mail || currentUserEmail,
+        };
+      } else if (newGroupMembers.length > 0) {
+        const firstMember = newGroupMembers[0];
+        defaultAssignee = {
+          memberId: getMemberId(firstMember) || firstMember.id,
+          memberName: firstMember.name,
+          memberEmail: firstMember.email || firstMember.mail,
+        };
+        console.log('🔍 [ASSIGN_TO_GROUP] Using first member as assignee:', firstMember.name);
+      }
+    }
+
+    console.log('🔍 [ASSIGN_TO_GROUP] Original group ID:', originalGroupId);
+    console.log('🔍 [ASSIGN_TO_GROUP] Default assignee:', defaultAssignee);
+
+    // Close the group selection modal FIRST
+    setAssignGroupModalOpen(false);
+    
+    // Show confirmation modal after a short delay
+    setTimeout(() => {
+      showConfirm({
+        title: 'Confirm Group Reassignment',
+        message: `Assign this incident to "${selectedGroup.name}"?\n\nMembers of the previous group will have view-only access. Members of the new group will have full access.\n\n${defaultAssignee ? `The incident will be assigned to: ${defaultAssignee.memberName}` : ''}`,
+        confirmLabel: 'Assign to Group',
+        danger: false,
+        onConfirm: async () => {
+          console.log('✅ [ASSIGN_TO_GROUP] User confirmed');
+          closeConfirm();
+          
           try {
+            setAssigning(true);
+            
+            const payload = {
+              assignmentGroup: {
+                _id: selectedGroup._id,
+                id: selectedGroup._id,
+                groupName: selectedGroup.name,
+                groupId: selectedGroup._id,
+                members: selectedGroup.members || [],
+              },
+              assignedMember: null,
+              originalAssignmentGroupId: originalGroupId || incident.assignmentGroup?.groupId || incident.assignmentGroup?._id,
+              originalGroupMembers: originalGroupMembers,
+              notes: `Incident reassigned to group "${selectedGroup.name}" by ${currentUserName}`,
+              updatedBy: { id: accounts[0]?.localAccountId, name: currentUserName, mail: currentUserEmail },
+            };
+            
+            console.log('📤 [ASSIGN_TO_GROUP] Payload:', JSON.stringify(payload, null, 2));
+            
+            const response = await axios.patch(`${BACKEND}/api/incidents/${id}`, payload);
+            console.log('✅ [ASSIGN_TO_GROUP] Response status:', response.status);
+            console.log('✅ [ASSIGN_TO_GROUP] Response data:', response.data);
+            
             const refreshed = await axios.get(`${BACKEND}/api/incidents/${id}`);
             const normalized = normalizeIncidentAssignedMember(refreshed.data);
             setIncident(normalized);
-          } catch (_) {}
-          showAlert('Assignment has been removed successfully.', 'success', 'Unassigned');
-        } catch (err) {
-          showAlert('Failed to remove assignment. ' + (err?.response?.data?.message || err.message), 'error', 'Unassign Failed');
-        } finally {
-          setAssigning(false);
+            
+            setSelectedGroup(null);
+            showAlert(`Incident has been reassigned to "${selectedGroup.name}".`, 'success', 'Group Reassigned');
+            console.log('✅ [ASSIGN_TO_GROUP] Group reassignment completed');
+          } catch (err) {
+            console.error('❌ [ASSIGN_TO_GROUP] Error:', err);
+            console.error('❌ [ASSIGN_TO_GROUP] Error response:', err?.response?.data);
+            showAlert('Failed to reassign group. ' + (err?.response?.data?.message || err.message), 'error', 'Assignment Failed');
+          } finally {
+            setAssigning(false);
+          }
+        },
+        onCancel: () => {
+          console.log('❌ [ASSIGN_TO_GROUP] User cancelled');
+          closeConfirm();
+          // Reopen the group selection modal
+          setAssignGroupModalOpen(true);
         }
-      },
-    });
+      });
+    }, 100);
   };
 
   // Send message
@@ -523,9 +754,11 @@ function IncidentDetails() {
 
   const isCurrentUser = (email) => email?.toLowerCase() === currentUserEmail?.toLowerCase();
 
-  const isGroupMember = isCurrentUserGroupMember();
+  const isGroupMember = isInCurrentGroup();
   const assignedToMe = isAssignedToMe();
   const assignedMember = getAssignedMember();
+  const fullAccess = hasFullAccess();
+  const viewOnly = hasViewOnlyAccess();
 
   if (isLoading) {
     return (
@@ -562,7 +795,6 @@ function IncidentDetails() {
     <div className="id-page">
       <style>{sharedCSS}</style>
 
-      {/* Custom modals */}
       <AlertModal
         open={alertModal.open}
         type={alertModal.type}
@@ -578,7 +810,7 @@ function IncidentDetails() {
         cancelLabel={confirmModal.cancelLabel}
         danger={confirmModal.danger}
         onConfirm={confirmModal.onConfirm}
-        onCancel={closeConfirm}
+        onCancel={confirmModal.onCancel}
       />
 
       <div className="id-hero">
@@ -635,32 +867,41 @@ function IncidentDetails() {
                         <div className="id-assignment-value">{assignedMember.memberName}</div>
                         <div className="id-assignment-email">{assignedMember.memberEmail}</div>
 
-                        <div style={{ marginTop: 12, display: 'flex', gap: 12 }}>
-                          {assignedToMe ? (
+                        <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {fullAccess && assignedToMe && (
                             <button className="id-assign-btn id-assign-btn-primary" onClick={handleUnassign} disabled={assigning}>
                               {assigning ? 'Working…' : '↩️ Deassign from me'}
                             </button>
-                          ) : (
+                          )}
+                          {fullAccess && authority === 'admin' && !assignedToMe && (
+                            <button className="id-assign-btn id-assign-btn-primary" onClick={handleUnassign} disabled={assigning}>
+                              {assigning ? 'Working…' : '✖ Unassign'}
+                            </button>
+                          )}
+                          {fullAccess && (isGroupMember || authority === 'admin') && (
                             <>
-                              {authority === 'admin' && (
-                                <button className="id-assign-btn id-assign-btn-primary" onClick={handleUnassign} disabled={assigning}>
-                                  {assigning ? 'Working…' : '✖ Unassign'}
-                                </button>
-                              )}
-                              {(isGroupMember || authority === 'admin') && (
-                                <button
-                                  className="id-assign-btn"
-                                  onClick={() => {
-                                    setAssignmentModalOpen(true);
-                                    const groupMembers = incident.assignmentGroup?.members || [];
-                                    const assignedInGroup = groupMembers.find(m => String(getMemberId(m)) === String(assignedMember.memberId));
-                                    setSelectedMember(assignedInGroup || null);
-                                  }}
-                                  disabled={assigning}
-                                >
-                                  👥 Reassign
-                                </button>
-                              )}
+                              <button
+                                className="id-assign-btn"
+                                onClick={() => {
+                                  setAssignmentModalOpen(true);
+                                  const groupMembers = incident.assignmentGroup?.members || [];
+                                  const assignedInGroup = groupMembers.find(m => String(getMemberId(m)) === String(assignedMember.memberId));
+                                  setSelectedMember(assignedInGroup || null);
+                                }}
+                                disabled={assigning}
+                              >
+                                👥 Reassign
+                              </button>
+                              <button
+                                className="id-assign-btn"
+                                onClick={() => {
+                                  setAssignGroupModalOpen(true);
+                                  fetchAllAssignmentGroups();
+                                }}
+                                disabled={assigning}
+                              >
+                                🏷️ Assign to Group
+                              </button>
                             </>
                           )}
                         </div>
@@ -669,8 +910,8 @@ function IncidentDetails() {
                       <>
                         <div className="id-assignment-value" style={{ color: '#64748b' }}>Not assigned</div>
 
-                        <div className="id-assign-buttons" style={{ marginTop: 12 }}>
-                          {(isGroupMember || authority === 'admin') && (
+                        <div className="id-assign-buttons" style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {fullAccess && (isGroupMember || authority === 'admin') && (
                             <>
                               <button className="id-assign-btn id-assign-btn-primary" onClick={handleAssignToMe} disabled={assigning}>
                                 {assigning ? 'Assigning...' : '📌 Assign to Me'}
@@ -678,13 +919,37 @@ function IncidentDetails() {
                               <button className="id-assign-btn" onClick={() => setAssignmentModalOpen(true)} disabled={assigning}>
                                 👥 Assign to Member
                               </button>
+                              <button
+                                className="id-assign-btn"
+                                onClick={() => {
+                                  setAssignGroupModalOpen(true);
+                                  fetchAllAssignmentGroups();
+                                }}
+                                disabled={assigning}
+                              >
+                                🏷️ Assign to Group
+                              </button>
                             </>
                           )}
-                          {!isGroupMember && authority !== 'admin' && (
-                            <div style={{ fontSize: 12, color: '#64748b' }}>You are not a member of this group.</div>
+                          {!fullAccess && !authority === 'admin' && (
+                            <div style={{ fontSize: 12, color: '#64748b' }}>
+                              {viewOnly ? 'You have view-only access (original group member after reassignment).' : 'You are not a member of the current group.'}
+                            </div>
                           )}
                         </div>
                       </>
+                    )}
+
+                    {/* View Only Warning */}
+                    {viewOnly && (
+                      <div style={{ marginTop: 16, padding: 12, background: '#fef3c7', borderRadius: 10, borderLeft: '3px solid #f59e0b' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>🔒</span> View-Only Access
+                        </div>
+                        <div style={{ fontSize: 12, color: '#92400e', marginTop: 4 }}>
+                          You were a member of the original assignment group. After reassignment, you can only view this incident. Contact an admin for updates.
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -724,7 +989,7 @@ function IncidentDetails() {
 
                 {incident.assignmentGroup?.groupName && (
                   <div className="id-meta-item">
-                    <div className="id-meta-key">Assigned Group</div>
+                    <div className="id-meta-key">Current Group</div>
                     <div className="id-meta-value">{incident.assignmentGroup.groupName}</div>
                     <div className="id-meta-sub">{incident.assignmentGroup.members?.length || 0} members</div>
                     {incident.assignmentGroup.members?.length > 0 && (
@@ -739,6 +1004,14 @@ function IncidentDetails() {
                         </div>
                       </details>
                     )}
+                  </div>
+                )}
+
+                {incident.originalAssignmentGroupId && (
+                  <div className="id-meta-item">
+                    <div className="id-meta-key">Original Group</div>
+                    <div className="id-meta-value" style={{ color: '#92400e' }}>Previously Assigned Group</div>
+                    <div className="id-meta-sub">Members of original group have view-only access</div>
                   </div>
                 )}
 
@@ -759,10 +1032,10 @@ function IncidentDetails() {
               {/* Full Member List */}
               {incident.assignmentGroup?.members?.length > 0 && (
                 <div className="id-section">
-                  <div className="id-section-title"><span>👥</span> Group Members ({incident.assignmentGroup.members.length})</div>
+                  <div className="id-section-title"><span>👥</span> Current Group Members ({incident.assignmentGroup.members.length})</div>
                   <div className="id-members-list">
                     {incident.assignmentGroup.members.map((member, idx) => (
-                      <div key={idx} className="id-member-chip" onClick={() => { setSelectedMember(member); setAssignmentModalOpen(true); }}>
+                      <div key={idx} className="id-member-chip" onClick={() => { if (fullAccess) { setSelectedMember(member); setAssignmentModalOpen(true); } }}>
                         <span className="id-member-avatar">{member.name?.charAt(0)?.toUpperCase() || '?'}</span>
                         <span>{member.name}</span>
                         <span style={{ fontSize: 10, color: '#64748b' }}>({member.email || member.mail || member.userPrincipalName || ''})</span>
@@ -832,7 +1105,7 @@ function IncidentDetails() {
               )}
             </div>
 
-            {/* Enhanced Timeline */}
+            {/* Timeline */}
             <div className="id-timeline">
               <div className="id-timeline-header">
                 <span>📋</span> Incident Timeline
@@ -920,7 +1193,7 @@ function IncidentDetails() {
                 </div>
                 {incident.assignmentGroup?.groupName && (
                   <div className="id-info-row">
-                    <span className="id-info-label">Assigned Group</span>
+                    <span className="id-info-label">Current Group</span>
                     <span className="id-info-value">{incident.assignmentGroup.groupName}</span>
                     <span style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{incident.assignmentGroup.members?.length || 0} member(s)</span>
                   </div>
@@ -932,10 +1205,25 @@ function IncidentDetails() {
                     <span style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{assignedMember.memberEmail}</span>
                   </div>
                 )}
+                {viewOnly && (
+                  <div className="id-info-row">
+                    <span className="id-info-label">Access Level</span>
+                    <span className="id-info-value" style={{ color: '#92400e' }}>🔒 View Only</span>
+                    <span style={{ fontSize: 12, color: '#92400e', marginTop: 4 }}>Original group member after reassignment</span>
+                  </div>
+                )}
+                {fullAccess && authority !== 'admin' && (
+                  <div className="id-info-row">
+                    <span className="id-info-label">Access Level</span>
+                    <span className="id-info-value" style={{ color: '#10b981' }}>✅ Full Access</span>
+                    <span style={{ fontSize: 12, color: '#065f46', marginTop: 4 }}>You can update status and assign</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {authority === 'admin' && (
+            {/* Status Update - Only show for users with FULL ACCESS */}
+            {(fullAccess || authority === 'admin') && (
               <div className="id-status-card">
                 <div className="id-status-header"><span className="id-status-header-title"><span>🔄</span> Update Status</span></div>
                 <div className="id-status-body">
@@ -984,11 +1272,29 @@ function IncidentDetails() {
                 </div>
               </div>
             )}
+
+            {/* View Only Message */}
+            {viewOnly && (
+              <div className="id-status-card">
+                <div className="id-status-header" style={{ background: '#fef3c7' }}>
+                  <span className="id-status-header-title" style={{ color: '#92400e' }}><span>🔒</span> Status Updates Disabled</span>
+                </div>
+                <div className="id-status-body">
+                  <div style={{ textAlign: 'center', padding: '20px' }}>
+                    <div style={{ fontSize: 24, marginBottom: 12 }}>🔒</div>
+                    <div style={{ fontSize: 14, color: '#92400e', fontWeight: 500, marginBottom: 8 }}>View-Only Access</div>
+                    <div style={{ fontSize: 13, color: '#64748b' }}>
+                      You were a member of the original assignment group. After reassignment, you can only view this incident.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Assignment Modal */}
+      {/* Assignment Modal (Assign to Member) */}
       {assignmentModalOpen && (
         <div className="id-modal-overlay" onClick={() => { setAssignmentModalOpen(false); setSelectedMember(null); }}>
           <div className="id-modal" onClick={(e) => e.stopPropagation()}>
@@ -1035,6 +1341,75 @@ function IncidentDetails() {
         </div>
       )}
 
+      {/* Assign to Group Modal - FIXED */}
+      {assignGroupModalOpen && (
+        <div className="id-modal-overlay" onClick={() => { setAssignGroupModalOpen(false); setSelectedGroup(null); }}>
+          <div className="id-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 550 }}>
+            <div className="id-modal-header">
+              <span className="id-modal-title">🏷️ Assign to Different Group</span>
+              <button className="id-modal-close" onClick={() => { setAssignGroupModalOpen(false); setSelectedGroup(null); }}>✕</button>
+            </div>
+            <div className="id-modal-body">
+              <p style={{ marginBottom: 16, color: '#64748b' }}>
+                Select an assignment group to reassign this incident.
+              </p>
+              <p style={{ marginBottom: 20, fontSize: 13, background: '#fef3c7', padding: 10, borderRadius: 10, color: '#92400e' }}>
+                ⚠️ After reassignment, members of the original group will have <strong>view-only access</strong>. Members of the new group will have <strong>full access</strong> (can update status and assign).
+              </p>
+
+              {loadingGroups ? (
+                <div style={{ textAlign: 'center', padding: 20 }}>
+                  <div className="id-spinner" style={{ width: 30, height: 30 }} />
+                </div>
+              ) : (
+                <div className="id-modal-member-list" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                  {allAssignmentGroups.map((group) => {
+                    // Get the current group ID correctly from incident
+                    const currentGroupId = incident.assignmentGroup?.groupId || incident.assignmentGroup?._id || incident.assignmentGroup?.id;
+                    const groupId = group._id || group.id;
+                    const isCurrentGroup = String(groupId) === String(currentGroupId);
+                    
+                    console.log('🔍 [GROUP_MODAL]', { groupName: group.name, groupId, currentGroupId, isCurrentGroup });
+                    
+                    return (
+                      <div
+                        key={groupId}
+                        className={`id-modal-member-item ${selectedGroup?._id === groupId ? 'selected' : ''} ${isCurrentGroup ? 'disabled' : ''}`}
+                        onClick={() => {
+                          if (!isCurrentGroup) {
+                            console.log('🔍 [GROUP_MODAL] Selected group:', group.name);
+                            setSelectedGroup(group);
+                          }
+                        }}
+                        style={{ opacity: isCurrentGroup ? 0.5 : 1, cursor: isCurrentGroup ? 'not-allowed' : 'pointer' }}
+                      >
+                        <div className="id-modal-member-info">
+                          <div className="id-modal-member-name">
+                            {group.name}
+                            {isCurrentGroup && <span style={{ marginLeft: 8, fontSize: 11, color: '#10b981' }}>(Current Group)</span>}
+                          </div>
+                          <div className="id-modal-member-email">{group.members?.length || 0} members</div>
+                        </div>
+                        {!isCurrentGroup && (
+                          <input type="radio" className="id-modal-radio" checked={selectedGroup?._id === groupId} onChange={() => setSelectedGroup(group)} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                <button className="id-btn id-btn-secondary" onClick={() => { setAssignGroupModalOpen(false); setSelectedGroup(null); }} style={{ flex: 1 }}>Cancel</button>
+                <button className="id-btn id-btn-primary" onClick={handleAssignToGroup} disabled={!selectedGroup || assigning} style={{ flex: 1 }}>
+                  {assigning ? 'Assigning...' : `Assign to ${selectedGroup?.name || 'Group'}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Attachment Modal */}
       {activeAttachment && attachmentModalOpen && (
         <div className="id-modal-overlay" onClick={() => setAttachmentModalOpen(false)}>
@@ -1055,7 +1430,7 @@ function IncidentDetails() {
   );
 }
 
-// ==================== ENHANCED CSS ====================
+// CSS (same as your existing file)
 const sharedCSS = `
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Lato:wght@300;400;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1138,6 +1513,7 @@ const sharedCSS = `
   .id-modal-member-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
   .id-modal-member-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s; }
   .id-modal-member-item.selected { border-color: var(--navy); background: rgba(0,32,96,0.05); }
+  .id-modal-member-item.disabled { opacity: 0.5; cursor: not-allowed; }
   .id-modal-title { font-family: 'Sora', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); }
   .id-modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); padding: 4px; line-height: 1; }
   .id-modal-member-name { font-size: 14px; font-weight: 600; color: var(--text); }
@@ -1159,7 +1535,6 @@ const sharedCSS = `
   .id-status-arrow { font-size: 18px; color: var(--muted); flex-shrink: 0; }
   .id-status-current, .id-status-new { display: flex; flex-direction: column; align-items: flex-start; }
 
-  /* ===== Alert / Confirm Modal Styles ===== */
   .id-alert-modal { max-width: 400px !important; }
   .id-confirm-modal { max-width: 420px !important; }
   .id-alert-modal-inner { padding: 32px 28px 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -1167,7 +1542,6 @@ const sharedCSS = `
   .id-alert-title { font-family: 'Sora', sans-serif; font-size: 17px; font-weight: 700; text-align: center; }
   .id-alert-message { font-size: 14px; color: var(--muted); text-align: center; line-height: 1.6; }
 
-  /* Enhanced Timeline Styles */
   .id-timeline { background: var(--white); border: 1.5px solid var(--border); border-radius: 20px; overflow: hidden; margin-top: 24px; animation: fadeUp 0.4s ease both; transition: all 0.3s ease; }
   .id-timeline-header { padding: 20px 28px; background: linear-gradient(135deg, var(--light) 0%, var(--white) 100%); border-bottom: 2px solid var(--border); font-family: 'Sora', sans-serif; font-size: 15px; font-weight: 700; color: var(--navy); letter-spacing: 0.02em; display: flex; align-items: center; gap: 10px; position: relative; overflow: hidden; }
   .id-timeline-header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--orange), var(--navy), var(--orange)); animation: gradientShift 3s ease infinite; }

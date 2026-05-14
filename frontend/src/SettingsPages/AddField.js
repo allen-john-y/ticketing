@@ -760,6 +760,30 @@ export default function AddField() {
       padding-right: 4px;
     }
 
+    /* New Add Category Button - Orange #e98404 */
+    .af-add-category-btn {
+      width: 80;
+      padding: 14px 24px;
+      background: #e98404;
+      border: none;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      color: white;
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(233,132,4,0.3);
+    }
+    .af-add-category-btn:hover {
+      background: #d07a03;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(233,132,4,0.35);
+    }
+
     .af-dl-card {
       display: flex; align-items: center; gap: 14px;
       padding: 16px;
@@ -1017,21 +1041,80 @@ export default function AddField() {
             <h2 className="af-card-title">Create New Category</h2>
             <p className="af-card-sub">Or select an existing category to edit</p>
 
-            <div className="af-mb-4 af-row af-gap-2">
-              <div className="af-flex-1">
-                <label className="af-label">New Category Name</label>
-                <input
-                  className="af-input"
-                  value={newCategoryName}
-                  onChange={e => setNewCategoryName(e.target.value)}
-                  placeholder="e.g. IT Support, HR Request..."
-                />
-              </div>
-              <div className="af-actions">
-                <button className="af-btn-primary" onClick={handleCreateNew}>
-                  Create New
-                </button>
-              </div>
+            {/* NEW: Add Category Button - Orange color */}
+            <div className="af-mb-4">
+              <button
+                className="af-add-category-btn"
+                onClick={() => {
+                  setNewCategoryName('');
+                  // Open modal logic
+                  const modal = document.createElement('div');
+                  modal.className = 'af-modal-overlay';
+                  modal.innerHTML = `
+                    <div class="af-modal" style="max-width: 480px;">
+                      <h2 class="af-modal-title" style="display: flex; align-items: center; gap: 10px;">
+                        <span>➕</span> Create New Category
+                      </h2>
+                      <div style="margin-bottom: 20px;">
+                        <label class="af-label">Category Name</label>
+                        <input id="af-category-input" class="af-input" placeholder="e.g. IT Support, HR Request..." autocomplete="off">
+                      </div>
+                      <div class="af-modal-actions">
+                        <button id="af-cancel-modal" class="af-btn-secondary">Cancel</button>
+                        <button id="af-create-modal" class="af-btn-primary" style="background: #e98404;">Create</button>
+                      </div>
+                    </div>
+                  `;
+                  document.body.appendChild(modal);
+                  
+                  const input = modal.querySelector('#af-category-input');
+                  input?.focus();
+                  
+                  const createBtn = modal.querySelector('#af-create-modal');
+                  const cancelBtn = modal.querySelector('#af-cancel-modal');
+                  
+                  const handleCreate = () => {
+                    const catName = input?.value.trim();
+                    if (!catName) {
+                      alert('Category name is required');
+                      return;
+                    }
+                    setNewCategoryName(catName);
+                    modal.remove();
+                    // Trigger the create handler
+                    setTimeout(() => handleCreateNew(), 10);
+                  };
+                  
+                  createBtn?.addEventListener('click', handleCreate);
+                  cancelBtn?.addEventListener('click', () => modal.remove());
+                  
+                  // Close on overlay click
+                  modal.addEventListener('click', (e) => {
+                    if (e.target === modal) modal.remove();
+                  });
+                  
+                  // Enter key support
+                  input?.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleCreate();
+                  });
+                }}
+              >
+                <span style={{ fontSize: '18px', marginRight: '8px' }}>+</span> Add Category
+              </button>
+            </div>
+
+            {/* NEW: Search Bar for filtering existing categories */}
+            <div className="af-mb-4">
+              <label className="af-label" style={{ marginBottom: '8px' }}>
+                🔍 Search Existing Categories
+              </label>
+              <input
+                type="text"
+                className="af-search-input"
+                placeholder="Type to filter categories..."
+                value={dlSearchQuery} // Reusing dlSearchQuery state for search
+                onChange={(e) => setDlSearchQuery(e.target.value)}
+              />
             </div>
 
             <div className="af-divider" />
@@ -1045,27 +1128,42 @@ export default function AddField() {
                 <div className="af-spinner" /> Loading...
               </div>
             ) : categories.length === 0 ? (
-              <p className="af-muted">No categories yet. Create one above.</p>
+              <p className="af-muted">No categories yet. Click "+ Add Category" to create one.</p>
             ) : (
               <div className="af-category-grid">
-                {categories.map(cat => (
-                  <div key={cat._id || cat.id} className="af-category-card" onClick={() => handleSelectCategory(cat)}>
-                    <div className="af-category-name">{cat.categoryName || cat.name}</div>
-                    <div className="af-category-meta">
-                      {cat.subCategories?.length || 0} sub-categor{cat.subCategories?.length === 1 ? 'y' : 'ies'}
+                {categories
+                  .filter(cat => {
+                    const searchTerm = dlSearchQuery.trim().toLowerCase();
+                    if (!searchTerm) return true;
+                    const catName = (cat.categoryName || cat.name || '').toLowerCase();
+                    return catName.includes(searchTerm);
+                  })
+                  .map(cat => (
+                    <div key={cat._id || cat.id} className="af-category-card" onClick={() => handleSelectCategory(cat)}>
+                      <div className="af-category-name">{cat.categoryName || cat.name}</div>
+                      <div className="af-category-meta">
+                        {cat.subCategories?.length || 0} sub-categor{cat.subCategories?.length === 1 ? 'y' : 'ies'}
+                      </div>
+                      <div className="af-category-subs">
+                        {cat.subCategories?.slice(0, 3).map((sub, i) => (
+                          <span key={i} className="af-sub-tag">{sub.name || sub.subCategoryName}</span>
+                        ))}
+                        {cat.subCategories?.length > 3 && (
+                          <span className="af-sub-tag">+{cat.subCategories.length - 3}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="af-category-subs">
-                      {cat.subCategories?.slice(0, 3).map((sub, i) => (
-                        <span key={i} className="af-sub-tag">{sub.name || sub.subCategoryName}</span>
-                      ))}
-                      {cat.subCategories?.length > 3 && (
-                        <span className="af-sub-tag">+{cat.subCategories.length - 3}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
+            
+            {/* Show message when no search results */}
+            {!loadingCats && categories.length > 0 && dlSearchQuery.trim() && 
+              categories.filter(cat => (cat.categoryName || cat.name || '').toLowerCase().includes(dlSearchQuery.trim().toLowerCase())).length === 0 && (
+                <p className="af-muted" style={{ textAlign: 'center', padding: '20px' }}>
+                  No categories match "{dlSearchQuery}"
+                </p>
+              )}
           </div>
         )}
 

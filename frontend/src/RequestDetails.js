@@ -1,10 +1,71 @@
-// RequestDetails.js - Complete Working Version with Full Group Member Support
+// RequestDetails.js - Complete Version with Assignment Feature FIXED
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useMsal } from '@azure/msal-react';
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
+
+// ==================== ALERT MODAL ====================
+function AlertModal({ open, type = 'success', title, message, onClose }) {
+  if (!open) return null;
+  const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+  const colors = {
+    success: { bg: '#d1fae5', border: '#10b981', title: '#065f46', btn: '#10b981' },
+    error:   { bg: '#fee2e2', border: '#ef4444', title: '#991b1b', btn: '#ef4444' },
+    warning: { bg: '#fef3c7', border: '#f59e0b', title: '#92400e', btn: '#f59e0b' },
+    info:    { bg: '#dbeafe', border: '#3b82f6', title: '#1e40af', btn: '#3b82f6' },
+  };
+  const c = colors[type] || colors.info;
+  return (
+    <div className="rd-modal-overlay" onClick={onClose}>
+      <div className="rd-modal rd-alert-modal" onClick={e => e.stopPropagation()}>
+        <div className="rd-alert-modal-inner" style={{ borderTop: `4px solid ${c.border}` }}>
+          <div className="rd-alert-icon" style={{ background: c.bg, color: c.title }}>
+            <span style={{ fontSize: 28 }}>{icons[type]}</span>
+          </div>
+          {title && <div className="rd-alert-title" style={{ color: c.title }}>{title}</div>}
+          <div className="rd-alert-message">{message}</div>
+          <button
+            className="rd-btn"
+            style={{ background: c.btn, color: '#fff', border: 'none', width: '100%', marginTop: 4 }}
+            onClick={onClose}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== CONFIRM MODAL ====================
+function ConfirmModal({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, danger }) {
+  if (!open) return null;
+  return (
+    <div className="rd-modal-overlay" onClick={onCancel}>
+      <div className="rd-modal rd-confirm-modal" onClick={e => e.stopPropagation()}>
+        <div className="rd-alert-modal-inner" style={{ borderTop: `4px solid ${danger ? '#ef4444' : '#3b82f6'}` }}>
+          <div className="rd-alert-icon" style={{ background: danger ? '#fee2e2' : '#dbeafe', color: danger ? '#991b1b' : '#1e40af' }}>
+            <span style={{ fontSize: 28 }}>{danger ? '⚠️' : '❓'}</span>
+          </div>
+          {title && <div className="rd-alert-title" style={{ color: danger ? '#991b1b' : '#1e40af' }}>{title}</div>}
+          <div className="rd-alert-message">{message}</div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+            <button className="rd-btn rd-btn-secondary" style={{ flex: 1 }} onClick={onCancel}>{cancelLabel}</button>
+            <button
+              className="rd-btn"
+              style={{ flex: 1, background: danger ? '#ef4444' : '#3b82f6', color: '#fff', border: 'none' }}
+              onClick={onConfirm}
+            >
+              {confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function RequestDetails() {
   const { id } = useParams();
@@ -26,7 +87,7 @@ function RequestDetails() {
   const [statusUpdateSuccess, setStatusUpdateSuccess] = useState('');
   const [statusUpdateError, setStatusUpdateError] = useState('');
 
-  // Modal States
+  // PR/Approval modal states
   const [showPRModal, setShowPRModal] = useState(false);
   const [prAction, setPrAction] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -36,9 +97,144 @@ function RequestDetails() {
   const [prError, setPrError] = useState('');
   const [hasUserCancelled, setHasUserCancelled] = useState(false);
 
+  // Assignment states
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [assigning, setAssigning] = useState(false);
+  const [assignGroupModalOpen, setAssignGroupModalOpen] = useState(false);
+  const [allAssignmentGroups, setAllAssignmentGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
+  // Alert / Confirm modal states
+  const [alertModal, setAlertModal] = useState({ open: false, type: 'success', title: '', message: '' });
+  const [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', danger: false, onConfirm: null, onCancel: null });
+
+  const showAlert = (message, type = 'success', title = '') =>
+    setAlertModal({ open: true, type, title, message });
+  const closeAlert = () => setAlertModal(s => ({ ...s, open: false }));
+  const showConfirm = ({ title, message, confirmLabel, cancelLabel, danger, onConfirm, onCancel }) =>
+    setConfirmModal({ open: true, title, message, confirmLabel: confirmLabel || 'Confirm', cancelLabel: cancelLabel || 'Cancel', danger: !!danger, onConfirm, onCancel });
+  const closeConfirm = () => setConfirmModal(s => ({ ...s, open: false, onConfirm: null, onCancel: null }));
+
   const REQUEST_STATUSES = ["open", "in_progress", "pending_approval", "resolved", "closed", "cancelled"];
 
-  // Check user authority
+  const currentUserEmail = accounts?.[0]?.username || '';
+  const currentUserName = accounts?.[0]?.name || '';
+
+  // ==================== HELPER FUNCTIONS ====================
+  const getMemberEmail = (member) => {
+    if (!member) return '';
+    const raw =
+      member.email || member.mail || member.userPrincipalName ||
+      member.userPrincipalname || member.userPrincipal ||
+      (member.user && (member.user.mail || member.user.userPrincipalName)) || '';
+    return String(raw || '').trim().toLowerCase();
+  };
+
+  const getMemberId = (member) => {
+    if (!member) return '';
+    return member.id || member._id || member.objectId || member.userId || member.azureObjectId || '';
+  };
+
+  const normalizeRequestAssignedMember = (data) => {
+    if (!data) return data;
+    const normalized = { ...data };
+    const assigned = normalized.assignedMember ?? normalized.assignee ?? normalized.assignedTo ?? null;
+    normalized.assignedMember = assigned;
+    return normalized;
+  };
+
+  // ==================== FIXED ACCESS FUNCTIONS ====================
+  const isInOriginalGroup = () => {
+    if (!request || !currentUserEmail) return false;
+    const originalMembers = request.originalGroupMembers || [];
+    const userEmailLower = currentUserEmail.toLowerCase();
+    const userId = accounts?.[0]?.localAccountId || '';
+    return originalMembers.some((member) => {
+      const memberEmail = getMemberEmail(member);
+      const memberId = getMemberId(member);
+      return (memberEmail && memberEmail === userEmailLower) || 
+             (memberId && userId && String(memberId) === String(userId));
+    });
+  };
+
+  const isInCurrentGroup = () => {
+    if (!request || !currentUserEmail) return false;
+    const groupMembers = request.assignmentGroup?.members || [];
+    const userEmailLower = currentUserEmail.toLowerCase();
+    const userId = accounts?.[0]?.localAccountId || '';
+    return groupMembers.some((member) => {
+      const memberEmail = getMemberEmail(member);
+      const memberId = getMemberId(member);
+      return (memberEmail && memberEmail === userEmailLower) || 
+             (memberId && userId && String(memberId) === String(userId));
+    });
+  };
+
+  // FIXED: Full access = Admin OR (in current group AND not just an original member after reassignment)
+  const hasFullAccess = () => {
+  // Admin is ONLY in original group? NO assignment buttons
+  if (authority === 'admin') {
+    const inCurrent = isInCurrentGroup();
+    const inOriginal = isInOriginalGroup();
+    
+    // If request was reassigned and admin is NOT in current group
+    if (request?.originalAssignmentGroupId && !inCurrent) {
+      return false; // Admin loses full access if not in current group
+    }
+    
+    // Admin gets full access only if they are in current group
+    return inCurrent;
+  }
+  
+  const inCurrent = isInCurrentGroup();
+  const inOriginal = isInOriginalGroup();
+  
+  if (request?.originalAssignmentGroupId && inOriginal && !inCurrent) {
+    return false;
+  }
+  
+  return inCurrent;
+};
+
+  // View only = In original group BUT not in current group (after reassignment)
+  const hasViewOnlyAccess = () => {
+    if (authority === 'admin') return false;
+    const inOriginal = isInOriginalGroup();
+    const inCurrent = isInCurrentGroup();
+    
+    // Only view-only if they're in original group AND not in current group
+    return inOriginal && !inCurrent;
+  };
+
+  const isCurrentUserGroupMember = () => isInCurrentGroup();
+
+  const isAssignedToMe = () => {
+    if (!request || !currentUserEmail) return false;
+    const assignedMemberEmail = (request.assignedMember?.memberEmail || '').toString().toLowerCase();
+    const assignedMemberId = (request.assignedMember?.memberId || '').toString();
+    const userId = accounts?.[0]?.localAccountId || '';
+    return assignedMemberEmail === currentUserEmail.toLowerCase() ||
+      (assignedMemberId && userId && String(assignedMemberId) === String(userId));
+  };
+
+  const getAssignedMember = () => request?.assignedMember || null;
+
+  // ==================== FETCH ALL ASSIGNMENT GROUPS ====================
+  const fetchAllAssignmentGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const res = await axios.get(`${BACKEND}/api/assignment-groups`);
+      setAllAssignmentGroups(res.data || []);
+    } catch (err) {
+      showAlert('Failed to load assignment groups', 'error');
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  // ==================== CHECK AUTHORITY ====================
   useEffect(() => {
     const checkAuthority = async () => {
       if (!accounts?.[0]) return;
@@ -83,12 +279,13 @@ function RequestDetails() {
       setIsLoading(true);
       try {
         const res = await axios.get(`${BACKEND}/api/requests/${id}`);
-        setRequest(res.data);
-        setSelectedStatus(res.data.status || '');
-        
+        const normalized = normalizeRequestAssignedMember(res.data);
+        setRequest(normalized);
+        setSelectedStatus(normalized.status || '');
+
         const list = [];
-        if (res.data.attachments && Array.isArray(res.data.attachments)) {
-          res.data.attachments.forEach(a => {
+        if (normalized.attachments && Array.isArray(normalized.attachments)) {
+          normalized.attachments.forEach(a => {
             const driveId = a.driveId || a.parentReference?.driveId || null;
             const driveItemId = a.id || a.fileId || null;
             const proxyUrl = driveItemId
@@ -107,96 +304,46 @@ function RequestDetails() {
     fetchRequest();
   }, [id]);
 
-  // ✅ Check if current user is in assignment group (works for both password reset and admin access)
+  // ✅ Check if current user is in assignment group
   const isUserInAssignmentGroup = () => {
     if (!request || !accounts?.[0]) return false;
-    
     const email = (accounts[0]?.username || '').toLowerCase();
     const userId = (accounts[0]?.localAccountId || '').toLowerCase();
     const members = request.assignmentGroup?.members || [];
-    
-    console.log('🔍 [GROUP CHECK] Checking assignment group members:', {
-      userEmail: email,
-      userId: userId,
-      membersCount: members.length,
-      members: members.map(m => ({ email: m.email || m.mail, id: m.id }))
-    });
-    
-    const isInGroup = members.some(member => {
+    return members.some(member => {
       const memberEmail = (member.email || member.mail || '').toLowerCase();
       const memberId = (member.id || member.memberId || '').toLowerCase();
       return memberEmail === email || memberEmail === userId || memberId === userId;
     });
-    
-    console.log('🔍 [GROUP CHECK] Is user in assignment group?', isInGroup);
-    return isInGroup;
   };
 
-  // ✅ UPDATED: Auto-open modal for assigned member OR any group member (for BOTH types)
+  // Auto-open PR/approval modal
   useEffect(() => {
-    console.log('🔍 [MODAL CHECK] Running auto-open check...');
-    if (!request || !accounts?.[0] || hasUserCancelled) {
-      console.log('  ❌ Early exit');
-      return;
-    }
-    
+    if (!request || !accounts?.[0] || hasUserCancelled) return;
     const email = (accounts[0]?.username || '').toLowerCase();
     const userId = (accounts[0]?.localAccountId || '').toLowerCase();
     const serviceName = request.service?.name || '';
-    
     const isPR = serviceName.toLowerCase().includes('password reset');
     const isAdminAccess = serviceName.toLowerCase().includes('admin access') ||
                           serviceName.toLowerCase().includes('device admin');
     const needsApproval = isPR || isAdminAccess;
-    
-    // Check assigned member
     const assignedEmail = (request.assignedMember?.memberEmail || '').toLowerCase();
     const assignedMemberId = (request.assignedMember?.memberId || '').toLowerCase();
-    
     const isAssignedMember =
       (assignedEmail && email === assignedEmail) ||
       (assignedMemberId && userId === assignedMemberId) ||
       (assignedEmail && userId === assignedEmail);
-    
-    // ✅ Check if user is in assignment group (for BOTH types)
     const inAssignmentGroup = isUserInAssignmentGroup();
-    
     const terminal = ['resolved', 'closed', 'cancelled'];
     const isTerminal = terminal.includes(request.status);
-    
-    // Authorized if assigned OR in assignment group
     const isAuthorized = isAssignedMember || inAssignmentGroup;
-    
-    console.log('🔍 [MODAL CHECK] Details:', {
-      serviceName,
-      isPR,
-      isAdminAccess,
-      needsApproval,
-      userEmail: email,
-      userId: userId,
-      assignedEmail: assignedEmail,
-      isAssignedMember,
-      inAssignmentGroup,
-      isAuthorized,
-      requestStatus: request.status,
-      isTerminal,
-      hasResult: !!prResult
-    });
-    
     if (needsApproval && isAuthorized && !isTerminal && !prResult) {
-      console.log('🎯 [MODAL CHECK] ✅ OPENING MODAL for:', serviceName);
       setShowPRModal(true);
       setHasUserCancelled(false);
       setPrAction(null);
       setPrError('');
       setRejectReason('');
       setAdminNote('');
-    } else {
-      console.log('  ❌ Conditions not met');
-      if (!needsApproval) console.log('     - Not an approval request');
-      if (!isAuthorized) console.log('     - User not authorized (not assigned nor in group)');
-      if (isTerminal) console.log('     - Request already resolved/closed/cancelled');
-      if (prResult) console.log('     - Already have a result');
     }
   }, [request, accounts, hasUserCancelled, prResult]);
 
@@ -234,7 +381,7 @@ function RequestDetails() {
   const downloadAllAttachments = async () => {
     if (!attachmentList || attachmentList.length === 0) return;
     const downloadable = attachmentList.filter(a => a && a.id);
-    if (!downloadable.length) { alert('No downloadable attachments available.'); return; }
+    if (!downloadable.length) { showAlert('No downloadable attachments available.', 'warning'); return; }
     const ids = downloadable.map(a => a.id).join(',');
     const driveIds = downloadable.map(a => a.driveId || '').join(',');
     const url = `${BACKEND}/attachments/zip?ids=${encodeURIComponent(ids)}${driveIds ? `&driveIds=${encodeURIComponent(driveIds)}` : ''}`;
@@ -260,7 +407,189 @@ function RequestDetails() {
     } finally { setStatusUpdateLoading(false); }
   };
 
-  // Handle Approve Action (works for both)
+  // ==================== UNASSIGN ====================
+  const handleUnassign = async () => {
+    if (!request?.assignedMember) { showAlert('Request is not assigned.', 'warning'); return; }
+    const assigned = request.assignedMember;
+    showConfirm({
+      title: 'Remove Assignment',
+      message: `Remove assignment from ${assigned.memberName || assigned.memberEmail || 'assigned user'}?`,
+      confirmLabel: 'Remove',
+      danger: true,
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          setAssigning(true);
+          const payload = {
+            assignedMember: null,
+            notes: `Unassigned ${assigned.memberName || assigned.memberEmail || ''} by ${currentUserName}`,
+            updatedBy: { id: accounts[0]?.localAccountId, name: currentUserName, mail: currentUserEmail },
+          };
+          await axios.patch(`${BACKEND}/api/requests/${id}`, payload);
+          const refreshed = await axios.get(`${BACKEND}/api/requests/${id}`);
+          const normalized = normalizeRequestAssignedMember(refreshed.data);
+          setRequest(normalized);
+          showAlert('Assignment has been removed successfully.', 'success', 'Unassigned');
+        } catch (err) {
+          showAlert('Failed to remove assignment. ' + (err?.response?.data?.message || err.message), 'error', 'Unassign Failed');
+        } finally {
+          setAssigning(false);
+        }
+      },
+    });
+  };
+
+  // ==================== ASSIGN TO ME ====================
+  const handleAssignToMe = async () => {
+    setAssignmentModalOpen(false);
+    setSelectedMember(null);
+    if (!request) { showAlert('No request data', 'error'); return; }
+    const groupMembers = request.assignmentGroup?.members || [];
+    const userId = accounts?.[0]?.localAccountId || '';
+    const currentUserMember = groupMembers.find((member) => {
+      const memberEmail = getMemberEmail(member);
+      const memberId = getMemberId(member);
+      return memberEmail === currentUserEmail.toLowerCase() || (memberId && userId && String(memberId) === String(userId));
+    });
+    if (!currentUserMember) {
+      showAlert('You are not a member of the current assignment group.', 'error', 'Not a Group Member');
+      return;
+    }
+    const payloadAssigned = {
+      memberId: getMemberId(currentUserMember) || currentUserMember.id || currentUserMember._id,
+      memberName: currentUserMember.name || currentUserName,
+      memberEmail: currentUserMember.email || currentUserMember.mail || currentUserEmail,
+    };
+    try {
+      setAssigning(true);
+      await axios.patch(`${BACKEND}/api/requests/${id}`, {
+        assignedMember: payloadAssigned,
+        notes: `Assigned to myself (${currentUserName})`,
+        updatedBy: { id: accounts[0]?.localAccountId, name: currentUserName, mail: currentUserEmail },
+      });
+      const refreshed = await axios.get(`${BACKEND}/api/requests/${id}`);
+      const normalized = normalizeRequestAssignedMember(refreshed.data);
+      setRequest(normalized);
+      showAlert(`Request has been assigned to you (${currentUserName}).`, 'success', 'Assigned Successfully');
+    } catch (err) {
+      showAlert('Failed to assign request to yourself. ' + (err?.response?.data?.message || err.message), 'error', 'Assignment Failed');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  // ==================== ASSIGN TO MEMBER ====================
+  const handleAssignToMember = async () => {
+    if (!selectedMember) { showAlert('Please select a member to assign.', 'warning'); return; }
+    const payloadAssigned = {
+      memberId: getMemberId(selectedMember) || selectedMember.id || selectedMember._id,
+      memberName: selectedMember.name,
+      memberEmail: selectedMember.email || selectedMember.mail || selectedMember.userPrincipalName || '',
+    };
+    setAssignmentModalOpen(false);
+    showConfirm({
+      title: 'Confirm Assignment',
+      message: `Assign this request to ${selectedMember.name} (${selectedMember.email || selectedMember.mail || 'unknown email'})?`,
+      confirmLabel: 'Assign',
+      danger: false,
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          setAssigning(true);
+          await axios.patch(`${BACKEND}/api/requests/${id}`, {
+            assignedMember: payloadAssigned,
+            notes: `Assigned to ${payloadAssigned.memberName} by ${currentUserName}`,
+            updatedBy: { id: accounts[0]?.localAccountId, name: currentUserName, mail: currentUserEmail },
+          });
+          const refreshed = await axios.get(`${BACKEND}/api/requests/${id}`);
+          const normalized = normalizeRequestAssignedMember(refreshed.data);
+          setRequest(normalized);
+          setSelectedMember(null);
+          showAlert(`Request has been assigned to ${payloadAssigned.memberName}.`, 'success', 'Assigned Successfully');
+        } catch (err) {
+          showAlert('Failed to assign request. ' + (err?.response?.data?.message || err.message), 'error', 'Assignment Failed');
+        } finally {
+          setAssigning(false);
+        }
+      },
+    });
+  };
+
+  // ==================== ASSIGN TO GROUP ====================
+  const handleAssignToGroup = async () => {
+    if (!selectedGroup) { showAlert('Please select a group to assign.', 'warning'); return; }
+    const originalGroupId = request.originalAssignmentGroupId || request.assignmentGroup?.groupId || request.assignmentGroup?._id;
+    const originalGroupMembers = request.assignmentGroup?.members || [];
+    const newGroupMembers = selectedGroup.members || [];
+    let defaultAssignee = null;
+    if (newGroupMembers.length > 0) {
+      const currentUserInNewGroup = newGroupMembers.find(member => {
+        const memberEmail = getMemberEmail(member);
+        const memberId = getMemberId(member);
+        return (memberEmail && memberEmail === currentUserEmail.toLowerCase()) ||
+               (memberId && accounts?.[0]?.localAccountId && String(memberId) === String(accounts[0]?.localAccountId));
+      });
+      if (currentUserInNewGroup) {
+        defaultAssignee = {
+          memberId: getMemberId(currentUserInNewGroup) || currentUserInNewGroup.id,
+          memberName: currentUserInNewGroup.name,
+          memberEmail: currentUserInNewGroup.email || currentUserInNewGroup.mail || currentUserEmail,
+        };
+      } else if (newGroupMembers.length > 0) {
+        const firstMember = newGroupMembers[0];
+        defaultAssignee = {
+          memberId: getMemberId(firstMember) || firstMember.id,
+          memberName: firstMember.name,
+          memberEmail: firstMember.email || firstMember.mail,
+        };
+      }
+    }
+    setAssignGroupModalOpen(false);
+    setTimeout(() => {
+      showConfirm({
+        title: 'Confirm Group Reassignment',
+        message: `Assign this request to "${selectedGroup.name}"?\n\nMembers of the previous group will have view-only access. Members of the new group will have full access.\n\n${defaultAssignee ? `The request will be assigned to: ${defaultAssignee.memberName}` : ''}`,
+        confirmLabel: 'Assign to Group',
+        danger: false,
+        onConfirm: async () => {
+          closeConfirm();
+          try {
+            setAssigning(true);
+            const payload = {
+              assignmentGroup: {
+                _id: selectedGroup._id,
+                id: selectedGroup._id,
+                groupName: selectedGroup.name,
+                groupId: selectedGroup._id,
+                members: selectedGroup.members || [],
+              },
+              assignedMember: null,
+              originalAssignmentGroupId: originalGroupId || request.assignmentGroup?.groupId || request.assignmentGroup?._id,
+              originalGroupMembers: originalGroupMembers,
+              notes: `Request reassigned to group "${selectedGroup.name}" by ${currentUserName}`,
+              updatedBy: { id: accounts[0]?.localAccountId, name: currentUserName, mail: currentUserEmail },
+            };
+            await axios.patch(`${BACKEND}/api/requests/${id}`, payload);
+            const refreshed = await axios.get(`${BACKEND}/api/requests/${id}`);
+            const normalized = normalizeRequestAssignedMember(refreshed.data);
+            setRequest(normalized);
+            setSelectedGroup(null);
+            showAlert(`Request has been reassigned to "${selectedGroup.name}".`, 'success', 'Group Reassigned');
+          } catch (err) {
+            showAlert('Failed to reassign group. ' + (err?.response?.data?.message || err.message), 'error', 'Assignment Failed');
+          } finally {
+            setAssigning(false);
+          }
+        },
+        onCancel: () => {
+          closeConfirm();
+          setAssignGroupModalOpen(true);
+        }
+      });
+    }, 100);
+  };
+
+  // Handle Approve Action
   const handleApprove = async () => {
     setPrLoading(true);
     setPrError('');
@@ -271,69 +600,52 @@ function RequestDetails() {
         actorId: accounts[0]?.localAccountId,
         note: adminNote,
       });
-      
       setShowPRModal(false);
       setPrAction(null);
       setAdminNote('');
-      
       const updated = await axios.get(`${BACKEND}/api/requests/${id}`);
-      setRequest(updated.data);
+      setRequest(normalizeRequestAssignedMember(updated.data));
       setSelectedStatus(updated.data.status);
-      
       if (res.data.tempPassword) {
-        setPrResult({ 
-          type: 'approve', 
-          tempPassword: res.data.tempPassword, 
-          targetEmail: res.data.targetEmail 
-        });
+        setPrResult({ type: 'approve', tempPassword: res.data.tempPassword, targetEmail: res.data.targetEmail });
       } else {
         setPrResult({ type: 'admin_approve' });
       }
     } catch (err) {
-      console.error('Approve error:', err);
       setPrError(err?.response?.data?.message || 'Approval failed. Please try again.');
     } finally {
       setPrLoading(false);
     }
   };
 
-  // Handle Reject Action (works for both)
+  // Handle Reject Action
   const handleReject = async () => {
-    if (!rejectReason.trim()) {
-      setPrError('Please provide a reason for rejection.');
-      return;
-    }
-    
+    if (!rejectReason.trim()) { setPrError('Please provide a reason for rejection.'); return; }
     setPrLoading(true);
     setPrError('');
     try {
-      const response = await axios.post(`${BACKEND}/api/requests/${id}/reject`, {
+      await axios.post(`${BACKEND}/api/requests/${id}/reject`, {
         actorEmail: accounts[0]?.username,
         actorName: accounts[0]?.name,
         actorId: accounts[0]?.localAccountId,
         reason: rejectReason.trim(),
         note: adminNote,
       });
-      
       setShowPRModal(false);
       setPrAction(null);
       setRejectReason('');
       setAdminNote('');
-      
       const updated = await axios.get(`${BACKEND}/api/requests/${id}`);
-      setRequest(updated.data);
+      setRequest(normalizeRequestAssignedMember(updated.data));
       setSelectedStatus(updated.data.status);
-      
       setPrResult({ type: 'reject' });
     } catch (err) {
-      console.error('Reject error:', err);
       setPrError(err?.response?.data?.message || err.message || 'Rejection failed. Please try again.');
     } finally {
       setPrLoading(false);
     }
   };
 
-  // Handle Cancel (just close modal, don't take action)
   const handleCancel = () => {
     setShowPRModal(false);
     setPrAction(null);
@@ -343,7 +655,6 @@ function RequestDetails() {
     setHasUserCancelled(true);
   };
 
-  // Close result modal and redirect
   const closeResultModal = () => {
     setPrResult(null);
     setTimeout(() => navigate('/requests', { state: { refresh: true } }), 100);
@@ -369,22 +680,25 @@ function RequestDetails() {
     };
     return styles[priority] || styles.medium;
   };
+  
 
   const getTargetInfo = () => {
     if (!request) return { name: '', email: '', deliveryEmail: '' };
-    
+    if (request.pwOnBehalf === 'Other' && request.pwTargetEmail) {
+      return { name: request.pwTargetName || request.pwTargetEmail, email: request.pwTargetEmail, deliveryEmail: request.pwDeliveryEmail || request.pwTargetEmail };
+    }
+    if (request.pwOnBehalf === 'Self' || request.pwTargetEmail) {
+      return { name: request.raisedBy?.name || '', email: request.pwTargetEmail || request.raisedBy?.mail || '', deliveryEmail: request.pwDeliveryEmail || request.raisedBy?.mail || '' };
+    }
     const isOnBehalf = request.onBehalf?.enabled && request.onBehalf?.user;
     return {
       name: isOnBehalf ? request.onBehalf.user.name : (request.raisedBy?.name || ''),
       email: isOnBehalf ? request.onBehalf.user.mail : (request.raisedBy?.mail || ''),
-      deliveryEmail: isOnBehalf ? request.onBehalf.user.mail : (request.deliveryEmail || request.raisedBy?.mail || ''),
+      deliveryEmail: isOnBehalf ? request.onBehalf.user.mail : (request.pwDeliveryEmail || request.raisedBy?.mail || ''),
     };
   };
 
-  const targetInfo = getTargetInfo();
-  const isPasswordReset = request?.service?.name?.toLowerCase().includes('password reset');
-  const isAdminAccess = request?.service?.name?.toLowerCase().includes('admin access') ||
-                        request?.service?.name?.toLowerCase().includes('device admin');
+  
 
   const sharedCSS = `
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Lato:wght@300;400;700&display=swap');
@@ -427,9 +741,14 @@ function RequestDetails() {
     .rd-meta-key { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
     .rd-meta-value { font-size: 15px; font-weight: 600; color: var(--text); }
     .rd-meta-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
-    .rd-attachments { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .rd-attachments { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; align-items: center; }
     .rd-attachment-item { padding: 12px 16px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 10px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: all 0.2s; }
     .rd-attachment-item:hover { border-color: var(--navy); background: var(--white); }
+    .rd-attachment-chip { padding: 6px 12px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s; font-size: 12px; font-weight: 600; color: var(--text); max-width: 160px; }
+    .rd-attachment-chip span.chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rd-attachment-chip:hover { border-color: var(--navy); background: var(--white); }
+    .rd-attachment-single-dl { padding: 10px 18px; background: var(--navy); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+    .rd-attachment-single-dl:hover { background: #001540; }
     .rd-btn { padding: 10px 20px; border-radius: 12px; font-size: 13px; font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; transition: all 0.2s; border: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
     .rd-btn-secondary { background: var(--white); border: 1.5px solid var(--border); color: var(--text); }
     .rd-btn-secondary:hover { border-color: var(--navy); }
@@ -467,63 +786,90 @@ function RequestDetails() {
     .rd-timeline-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
     .rd-timeline-note { padding: 10px 14px; background: var(--bg); border-radius: 10px; font-size: 13px; color: var(--text); margin-top: 8px; }
 
-    /* Modal Styles */
+    /* Assignment Card */
+    .rd-assignment-card { background: var(--bg); border: 1.5px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+    .rd-assignment-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
+    .rd-assignment-value { font-size: 15px; font-weight: 700; color: var(--text); }
+    .rd-assignment-email { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .rd-assign-btn { padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; transition: all 0.2s; border: 1.5px solid var(--border); background: var(--white); color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
+    .rd-assign-btn:hover:not(:disabled) { border-color: var(--navy); background: rgba(0,32,96,0.04); transform: translateY(-1px); }
+    .rd-assign-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .rd-assign-btn-primary { background: var(--navy); color: white; border-color: var(--navy); }
+    .rd-assign-btn-primary:hover:not(:disabled) { background: var(--navy2); border-color: var(--navy2); }
+
+    /* Modals */
+    .rd-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 9999; padding: 24px; }
+    .rd-modal { background: var(--white); border-radius: 20px; max-width: 500px; width: 100%; max-height: 90vh; overflow: hidden; animation: slideUp 0.2s; }
+    .rd-modal-header { padding: 24px 28px; border-bottom: 1.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .rd-modal-title { font-family: 'Sora', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); }
+    .rd-modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); padding: 4px; line-height: 1; }
+    .rd-modal-body { padding: 28px; overflow-y: auto; max-height: calc(90vh - 80px); }
+    .rd-modal-member-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .rd-modal-member-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+    .rd-modal-member-item.selected { border-color: var(--navy); background: rgba(0,32,96,0.05); }
+    .rd-modal-member-item.disabled { opacity: 0.5; cursor: not-allowed; }
+    .rd-modal-member-name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .rd-modal-member-email { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .rd-alert-modal { max-width: 400px !important; }
+    .rd-confirm-modal { max-width: 420px !important; }
+    .rd-alert-modal-inner { padding: 32px 28px 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .rd-alert-icon { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .rd-alert-title { font-family: 'Sora', sans-serif; font-size: 17px; font-weight: 700; text-align: center; }
+    .rd-alert-message { font-size: 14px; color: var(--muted); text-align: center; line-height: 1.6; }
+
+    /* PR Modal Styles */
     .pr-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 9999; padding: 24px; backdrop-filter: blur(3px); }
     .pr-modal { background: var(--white); border-radius: 24px; max-width: 600px; width: 100%; overflow: hidden; animation: scaleIn 0.22s ease both; box-shadow: 0 24px 80px rgba(0,0,0,0.25); max-height: 90vh; display: flex; flex-direction: column; }
     .pr-modal-header { padding: 28px 32px; background: linear-gradient(135deg, #002060 0%, #003090 100%); flex-shrink: 0; }
     .pr-modal-header-title { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; color: white; display: flex; align-items: center; gap: 10px; }
     .pr-modal-header-sub { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 8px; line-height: 1.5; }
-    .pr-modal-body { padding: 32px; overflow-y: auto; flex: 1; }
-    .pr-details-section { background: #f8fafc; border: 1.5px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
-    .pr-details-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-    .pr-details-row { display: flex; padding: 8px 0; border-bottom: 1px solid var(--border); }
-    .pr-details-row:last-child { border-bottom: none; }
-    .pr-details-label { font-size: 13px; font-weight: 600; color: var(--text); width: 130px; flex-shrink: 0; }
-    .pr-details-value { font-size: 13px; color: var(--text); flex: 1; word-break: break-word; }
-    .pr-warning-box { background: #fffbeb; border: 1.5px solid #fbbf24; border-radius: 12px; padding: 14px 18px; font-size: 13px; color: #92400e; line-height: 1.6; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start; }
-    .pr-warning-box-admin { background: #eef2ff; border: 1.5px solid #6366f1; border-radius: 12px; padding: 14px 18px; font-size: 13px; color: #4338ca; line-height: 1.6; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start; }
-    .pr-textarea { width: 100%; padding: 12px 16px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 14px; background: var(--white); color: var(--text); font-family: 'Lato', sans-serif; resize: vertical; min-height: 80px; margin-bottom: 8px; }
-    .pr-textarea:focus { outline: none; border-color: #7c3aed; }
-    .pr-error { background: #fee2e2; border: 1.5px solid #ef4444; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #991b1b; margin-bottom: 16px; }
-    .pr-actions { display: flex; gap: 12px; margin-top: 8px; }
-    .pr-btn { flex: 1; padding: 13px 20px; border-radius: 12px; font-size: 14px; font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; transition: all 0.2s; border: none; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .pr-btn-approve { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; }
-    .pr-btn-approve:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16,185,129,0.35); }
-    .pr-btn-reject { background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%); color: white; }
-    .pr-btn-reject:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(220,38,38,0.35); }
-    .pr-btn-cancel { background: var(--white); border: 1.5px solid var(--border); color: var(--text); }
-    .pr-btn-cancel:hover:not(:disabled) { border-color: var(--navy); background: #f8fafc; }
-    .pr-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
-
-    /* Result Modals */
+    .pr-modal-body { padding: 28px 32px; overflow-y: auto; flex: 1; }
+    .pr-details-section { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+    .pr-details-section:last-of-type { border-bottom: none; }
+    .pr-details-title { font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .pr-details-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; gap: 16px; }
+    .pr-details-label { font-size: 13px; color: var(--muted); font-weight: 500; flex-shrink: 0; }
+    .pr-details-value { font-size: 13px; color: var(--text); font-weight: 600; text-align: right; }
+    .pr-warning-box { background: #fef3c7; border: 1px solid #fbbf24; border-radius: 10px; padding: 12px 14px; margin-bottom: 20px; font-size: 13px; color: #92400e; line-height: 1.5; display: flex; gap: 10px; align-items: flex-start; }
+    .pr-warning-box-admin { background: #dbeafe; border: 1px solid #93c5fd; border-radius: 10px; padding: 12px 14px; margin-bottom: 20px; font-size: 13px; color: #1e40af; line-height: 1.5; display: flex; gap: 10px; align-items: flex-start; }
+    .pr-textarea { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; font-family: 'Lato', sans-serif; color: var(--text); resize: vertical; }
+    .pr-textarea:focus { outline: none; border-color: var(--navy); }
+    .pr-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+    .pr-btn { padding: 11px 22px; border-radius: 12px; font-size: 14px; font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+    .pr-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .pr-btn-approve { background: #16a34a; color: white; flex: 1; justify-content: center; }
+    .pr-btn-approve:hover:not(:disabled) { background: #15803d; }
+    .pr-btn-reject { background: #dc2626; color: white; flex: 1; justify-content: center; }
+    .pr-btn-reject:hover:not(:disabled) { background: #b91c1c; }
+    .pr-btn-cancel { background: var(--bg); color: var(--text); border: 1.5px solid var(--border); }
+    .pr-btn-cancel:hover { border-color: var(--navy); }
+    .pr-error { padding: 10px 14px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 10px; font-size: 13px; color: #991b1b; margin-top: 12px; }
     .result-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; justify-content: center; align-items: center; z-index: 10000; padding: 24px; backdrop-filter: blur(3px); }
-    .result-modal { background: var(--white); border-radius: 24px; max-width: 500px; width: 100%; overflow: hidden; animation: scaleIn 0.22s ease both; }
-    .result-modal-header-approve { padding: 28px 32px; background: linear-gradient(135deg, #065f46 0%, #059669 100%); }
+    .result-modal { background: var(--white); border-radius: 24px; max-width: 480px; width: 100%; overflow: hidden; animation: scaleIn 0.22s ease both; box-shadow: 0 24px 80px rgba(0,0,0,0.3); }
+    .result-modal-header-approve { padding: 28px 32px; background: linear-gradient(135deg, #15803d 0%, #16a34a 100%); }
     .result-modal-header-admin { padding: 28px 32px; background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); }
     .result-modal-header-reject { padding: 28px 32px; background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%); }
-    .result-modal-title { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; color: white; }
+    .result-modal-title { font-family: 'Sora', sans-serif; font-size: 22px; font-weight: 800; color: white; }
     .result-modal-sub { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 6px; }
-    .result-modal-body { padding: 32px; }
-    .temp-password-box { background: #f0fdf4; border: 2px dashed #10b981; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 16px; }
-    .temp-password-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #059669; margin-bottom: 10px; }
-    .temp-password-value { font-family: 'Courier New', monospace; font-size: 22px; font-weight: 700; color: #065f46; letter-spacing: 0.12em; background: white; border: 1.5px solid #a7f3d0; border-radius: 10px; padding: 12px 20px; display: inline-block; margin-bottom: 10px; }
-    .result-info { font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px; }
+    .result-modal-body { padding: 28px 32px; }
+    .temp-password-box { background: #f0fdf4; border: 2px solid #86efac; border-radius: 14px; padding: 20px; margin-bottom: 20px; text-align: center; }
+    .temp-password-label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #16a34a; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .temp-password-value { font-family: 'DM Mono', 'Courier New', monospace; font-size: 28px; font-weight: 700; color: #15803d; letter-spacing: 0.1em; }
+    .temp-password-note { font-size: 12px; color: #64748b; }
+    .result-info { font-size: 13px; color: var(--muted); line-height: 2; margin-bottom: 24px; }
     .result-actions { display: flex; gap: 12px; }
-    .result-btn { flex: 1; padding: 13px 20px; border-radius: 12px; font-size: 14px; font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; border: none; }
-    .result-btn-done { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; }
-    .result-btn-copy { background: var(--white); border: 1.5px solid var(--border); color: var(--text); }
-
-    /* Review Button */
-    .review-button-container { background: #fef3c7; border: 1.5px solid #fbbf24; border-radius: 16px; padding: 20px; margin-bottom: 24px; text-align: center; }
-    .review-button-container p { font-size: 14px; color: #92400e; margin-bottom: 12px; }
-    .rd-btn-review { background: #f59e0b; color: white; padding: 12px 24px; font-size: 14px; }
-    .rd-btn-review:hover { background: #d97706; transform: translateY(-2px); }
-
+    .result-btn { flex: 1; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 700; font-family: 'Sora', sans-serif; cursor: pointer; border: none; transition: all 0.2s; }
+    .result-btn-copy { background: var(--bg); color: var(--text); border: 1.5px solid var(--border); }
+    .result-btn-done { background: var(--navy); color: white; }
+    .review-button-container { background: #fef3c7; border: 1.5px solid #fbbf24; border-radius: 14px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+    .review-button-container p { font-size: 13px; color: #92400e; flex: 1; }
+    .rd-btn-review { background: #002060; color: white; border: none; white-space: nowrap; }
+    .rd-btn-review:hover { background: #003090; transform: translateY(-1px); }
     .rd-loading { min-height: 100vh; background: var(--bg); display: flex; align-items: center; justify-content: center; }
     .rd-spinner { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--navy); animation: spin 0.9s linear infinite; }
 
     @media (max-width: 1024px) { .rd-layout { grid-template-columns: 1fr; } .rd-meta-grid { grid-template-columns: 1fr; } }
-    @media (max-width: 640px) { .rd-hero { padding: 32px 20px; } .rd-content { padding: 20px; } .pr-modal-body { padding: 20px; } .pr-actions { flex-direction: column; } .pr-details-row { flex-direction: column; gap: 4px; } .pr-details-label { width: 100%; } }
+    @media (max-width: 768px) { .rd-hero { padding: 40px 24px; } .rd-content { padding: 24px 20px 40px; } }
   `;
 
   if (isLoading) {
@@ -553,18 +899,162 @@ function RequestDetails() {
     );
   }
 
+  const targetInfo = getTargetInfo();
+  const isPasswordReset = request?.service?.name?.toLowerCase().includes('password reset');
+  const isAdminAccess = request?.service?.name?.toLowerCase().includes('admin access') ||
+                        request?.service?.name?.toLowerCase().includes('device admin');
   const statusStyle = getStatusStyles(request.status);
   const priorityStyle = getPriorityStyles(request.priority);
   const historyEvents = request.history?.length > 0
     ? request.history
     : [{ action: 'created', by: request.raisedBy?.name || 'Unknown', at: request.createdAt }];
-
   const isPendingApproval = request.status === 'pending_approval';
   const showReviewButton = hasUserCancelled && isPendingApproval && (isPasswordReset || isAdminAccess);
+
+  // FIXED: Use the corrected access variables
+  const isGroupMember = isInCurrentGroup(); // Current group member
+  const assignedToMe = isAssignedToMe();
+  const assignedMember = getAssignedMember();
+  const fullAccess = hasFullAccess(); // FIXED: Returns false for original group members after reassignment
+  const viewOnly = hasViewOnlyAccess(); // FIXED: Returns true for original group members after reassignment
+
+  // ========== ADD THIS DEBUG LOGS HERE ==========
+console.log('===== ACCESS DEBUG =====');
+console.log('1. User Email:', currentUserEmail);
+console.log('2. Authority (admin?):', authority);
+console.log('3. Is Admin?', authority === 'admin');
+console.log('4. Is in Current Group?:', isGroupMember);
+console.log('5. Is in Original Group?:', isInOriginalGroup());
+console.log('6. Has Full Access?:', fullAccess);
+console.log('7. Has View Only?:', viewOnly);
+console.log('8. Request has originalGroupId?:', request?.originalAssignmentGroupId);
+console.log('9. Current Group Name:', request?.assignmentGroup?.groupName);
+console.log('10. Current Group Members Count:', request?.assignmentGroup?.members?.length);
+console.log('=========================');
 
   return (
     <div className="rd-page">
       <style>{sharedCSS}</style>
+
+      <AlertModal open={alertModal.open} type={alertModal.type} title={alertModal.title} message={alertModal.message} onClose={closeAlert} />
+      <ConfirmModal
+        open={confirmModal.open} title={confirmModal.title} message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel} cancelLabel={confirmModal.cancelLabel}
+        danger={confirmModal.danger} onConfirm={confirmModal.onConfirm} onCancel={confirmModal.onCancel}
+      />
+
+      {/* ==================== ASSIGN TO MEMBER MODAL ==================== */}
+      {assignmentModalOpen && (
+        <div className="rd-modal-overlay" onClick={() => { setAssignmentModalOpen(false); setSelectedMember(null); }}>
+          <div className="rd-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="rd-modal-header">
+              <span className="rd-modal-title">👥 Assign to Member</span>
+              <button className="rd-modal-close" onClick={() => { setAssignmentModalOpen(false); setSelectedMember(null); }}>✕</button>
+            </div>
+            <div className="rd-modal-body">
+              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>
+                Select a member from <strong>{request.assignmentGroup?.groupName || 'the assignment group'}</strong>:
+              </div>
+              <div className="rd-modal-member-list">
+                {(request.assignmentGroup?.members || []).map((member, idx) => {
+                  const memberEmail = getMemberEmail(member);
+                  const memberId = getMemberId(member);
+                  const isSelected = selectedMember && (getMemberId(selectedMember) === memberId || getMemberEmail(selectedMember) === memberEmail);
+                  const isCurrentlyAssigned = assignedMember && (
+                    String(assignedMember.memberId) === String(memberId) ||
+                    (assignedMember.memberEmail || '').toLowerCase() === memberEmail
+                  );
+                  return (
+                    <div
+                      key={idx}
+                      className={`rd-modal-member-item${isSelected ? ' selected' : ''}`}
+                      onClick={() => setSelectedMember(member)}
+                    >
+                      <div>
+                        <div className="rd-modal-member-name">{member.name}</div>
+                        <div className="rd-modal-member-email">{memberEmail}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {isCurrentlyAssigned && (
+                          <span style={{ fontSize: 11, background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: 8, fontWeight: 700 }}>Current</span>
+                        )}
+                        {isSelected && <span style={{ fontSize: 18, color: '#002060' }}>✓</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                <button className="rd-btn rd-btn-secondary" style={{ flex: 1 }} onClick={() => { setAssignmentModalOpen(false); setSelectedMember(null); }}>Cancel</button>
+                <button
+                  className="rd-btn"
+                  style={{ flex: 1, background: selectedMember ? '#002060' : '#9ca3af', color: 'white', border: 'none' }}
+                  disabled={!selectedMember}
+                  onClick={handleAssignToMember}
+                >
+                  Assign
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== ASSIGN TO GROUP MODAL ==================== */}
+      {assignGroupModalOpen && (
+        <div className="rd-modal-overlay" onClick={() => { setAssignGroupModalOpen(false); setSelectedGroup(null); }}>
+          <div className="rd-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="rd-modal-header">
+              <span className="rd-modal-title">🏷️ Assign to Group</span>
+              <button className="rd-modal-close" onClick={() => { setAssignGroupModalOpen(false); setSelectedGroup(null); }}>✕</button>
+            </div>
+            <div className="rd-modal-body">
+              {loadingGroups ? (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: '#64748b' }}>Loading groups…</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>Select a group to reassign this request to:</div>
+                  <div className="rd-modal-member-list">
+                    {allAssignmentGroups.map((group, idx) => {
+                      const isCurrent = String(group._id) === String(request.assignmentGroup?._id || request.assignmentGroup?.groupId);
+                      const isSelected = selectedGroup && String(selectedGroup._id) === String(group._id);
+                      return (
+                        <div
+                          key={idx}
+                          className={`rd-modal-member-item${isSelected ? ' selected' : ''}${isCurrent ? ' disabled' : ''}`}
+                          onClick={() => !isCurrent && setSelectedGroup(group)}
+                        >
+                          <div>
+                            <div className="rd-modal-member-name">{group.name}</div>
+                            <div className="rd-modal-member-email">{group.members?.length || 0} members</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            {isCurrent && (
+                              <span style={{ fontSize: 11, background: '#d1fae5', color: '#065f46', padding: '2px 8px', borderRadius: 8, fontWeight: 700 }}>Current</span>
+                            )}
+                            {isSelected && <span style={{ fontSize: 18, color: '#002060' }}>✓</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                    <button className="rd-btn rd-btn-secondary" style={{ flex: 1 }} onClick={() => { setAssignGroupModalOpen(false); setSelectedGroup(null); }}>Cancel</button>
+                    <button
+                      className="rd-btn"
+                      style={{ flex: 1, background: selectedGroup ? '#002060' : '#9ca3af', color: 'white', border: 'none' }}
+                      disabled={!selectedGroup}
+                      onClick={handleAssignToGroup}
+                    >
+                      Assign to Group
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rd-hero">
         <div className="rd-hero-inner">
@@ -625,6 +1115,104 @@ function RequestDetails() {
                 </div>
               </div>
 
+              {/* ==================== ASSIGNMENT CARD ==================== */}
+              {request.assignmentGroup && (
+                <div className="rd-section">
+                  <div className="rd-section-title"><span>👤</span> Assignment</div>
+                  <div className="rd-assignment-card">
+                    <div className="rd-assignment-label">Currently Assigned To</div>
+
+                    {assignedMember ? (
+                      <>
+                        <div className="rd-assignment-value">{assignedMember.memberName}</div>
+                        <div className="rd-assignment-email">{assignedMember.memberEmail}</div>
+                        <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          {/* FIXED: Only show assignment buttons if fullAccess is true */}
+                          {fullAccess && assignedToMe && (
+                            <button className="rd-assign-btn rd-assign-btn-primary" onClick={handleUnassign} disabled={assigning}>
+                              {assigning ? 'Working…' : '↩️ Deassign from me'}
+                            </button>
+                          )}
+                          {fullAccess && authority === 'admin' && !assignedToMe && (
+                            <button className="rd-assign-btn rd-assign-btn-primary" onClick={handleUnassign} disabled={assigning}>
+                              {assigning ? 'Working…' : '✖ Unassign'}
+                            </button>
+                          )}
+                          {fullAccess && (isGroupMember) && (
+                            <>
+                              <button
+                                className="rd-assign-btn"
+                                onClick={() => {
+                                  setAssignmentModalOpen(true);
+                                  const groupMembers = request.assignmentGroup?.members || [];
+                                  const assignedInGroup = groupMembers.find(m => String(getMemberId(m)) === String(assignedMember.memberId));
+                                  setSelectedMember(assignedInGroup || null);
+                                }}
+                                disabled={assigning}
+                              >
+                                👥 Reassign
+                              </button>
+                              {!viewOnly && (
+                                <button
+                                  className="rd-assign-btn"
+                                  onClick={() => { setAssignGroupModalOpen(true); fetchAllAssignmentGroups(); }}
+                                  disabled={assigning}
+                                >
+                                  🏷️ Assign to Group
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="rd-assignment-value" style={{ color: '#64748b' }}>Not assigned</div>
+                        <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          {/* FIXED: Only show assignment buttons if fullAccess is true */}
+                          {fullAccess && (isGroupMember || authority === 'admin') && (
+                            <>
+                              <button className="rd-assign-btn rd-assign-btn-primary" onClick={handleAssignToMe} disabled={assigning}>
+                                {assigning ? 'Assigning...' : '📌 Assign to Me'}
+                              </button>
+                              <button className="rd-assign-btn" onClick={() => setAssignmentModalOpen(true)} disabled={assigning}>
+                                👥 Assign to Member
+                              </button>
+                              {!viewOnly && (
+                                <button
+                                  className="rd-assign-btn"
+                                  onClick={() => { setAssignGroupModalOpen(true); fetchAllAssignmentGroups(); }}
+                                  disabled={assigning}
+                                >
+                                  🏷️ Assign to Group
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {!fullAccess && authority !== 'admin' && (
+                            <div style={{ fontSize: 12, color: '#64748b' }}>
+                              {viewOnly ? 'You have view-only access (original group member after reassignment).' : 'You are not a member of the current group.'}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {/* FIXED: Show view-only warning for original group members after reassignment */}
+                    {viewOnly && (
+                      <div style={{ marginTop: 16, padding: 12, background: '#fef3c7', borderRadius: 10, borderLeft: '3px solid #f59e0b' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>🔒</span> View-Only Access
+                        </div>
+                        <div style={{ fontSize: 12, color: '#92400e', marginTop: 4 }}>
+                          This request has been reassigned to a different group. You can only view it. Contact an admin if you need to take action.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="rd-section">
                 <div className="rd-section-title"><span>📝</span> Description</div>
                 <div className="rd-description">{request.description}</div>
@@ -636,7 +1224,7 @@ function RequestDetails() {
                       </div>
                     ))}
                     {attachmentList.length > 1 && (
-                      <button className="rd-btn rd-btn-secondary" onClick={downloadAllAttachments}>Download All</button>
+                      <button className="rd-btn rd-btn-secondary" onClick={downloadAllAttachments}>⬇️ Download All</button>
                     )}
                   </div>
                 )}
@@ -662,10 +1250,13 @@ function RequestDetails() {
                     <div className="rd-meta-sub">{targetInfo.email}</div>
                   </div>
                 )}
-                {request.assignmentGroup?.members?.length > 0 && (
+                {/* FIXED: Show assigned group name instead of members list */}
+                {request.assignmentGroup && (
                   <div className="rd-meta-item">
-                    <div className="rd-meta-key">Assigned Group Members</div>
-                    <div className="rd-meta-value">{request.assignmentGroup.members.map(m => m.name || m.email).join(', ')}</div>
+                    <div className="rd-meta-key">Assigned Group</div>
+                    <div className="rd-meta-value">
+                      {request.assignmentGroup.groupName || request.assignmentGroup.name || '—'}
+                    </div>
                   </div>
                 )}
               </div>
@@ -679,24 +1270,24 @@ function RequestDetails() {
                   const isResolved = event.action === 'resolved';
                   const isClosed = event.action === 'closed';
                   const isApproved = event.action === 'approved';
-                  const iconColor = isCreated ? '#002060' : isResolved ? '#10b981' : isClosed ? '#9ca3af' : isApproved ? '#e98404' : '#3b82f6';
+                  const isRejected = event.action === 'rejected' || event.action === 'cancelled';
+                  const isAssigned = event.action === 'assigned';
+                  const dotColor = isCreated ? '#002060' : isResolved ? '#16a34a' : isClosed ? '#6b7280' :
+                    isApproved ? '#16a34a' : isRejected ? '#dc2626' : isAssigned ? '#8b5cf6' : '#e98404';
                   return (
                     <div key={idx} className="rd-timeline-item">
-                      <div className="rd-timeline-icon" style={{ background: iconColor }} />
+                      <div className="rd-timeline-icon" style={{ background: dotColor, marginTop: 6 }} />
                       <div className="rd-timeline-content">
                         <div className="rd-timeline-action">
-                          {event.action === 'created' && '📝 Request Created'}
-                          {event.action === 'status_updated' && '↺ Status Updated'}
-                          {event.action === 'approved' && '✓ Request Approved'}
-                          {event.action === 'resolved' && '✅ Request Resolved'}
-                          {event.action === 'closed' && '🔒 Request Closed'}
-                          {event.action === 'cancelled' && '✕ Request Cancelled'}
-                          {!['created','status_updated','approved','resolved','closed','cancelled'].includes(event.action) && event.action}
+                          {isCreated ? 'Request Created' : isResolved ? 'Request Resolved' : isClosed ? 'Request Closed' :
+                           isApproved ? 'Request Approved' : isRejected ? 'Request Rejected/Cancelled' :
+                           isAssigned ? 'Request Assigned' : event.action?.replace(/_/g, ' ') || 'Updated'}
                         </div>
-                        <div className="rd-timeline-meta">{formatDate(event.at)} · {event.by || 'System'}</div>
-                        {(event.reason || event.notes) && (
-                          <div className="rd-timeline-note">{event.reason || event.notes}</div>
-                        )}
+                        <div className="rd-timeline-meta">
+                          by {event.by} · {formatDate(event.at)}
+                          {event.oldStatus && event.newStatus && ` · ${event.oldStatus} → ${event.newStatus}`}
+                        </div>
+                        {event.notes && <div className="rd-timeline-note">{event.notes}</div>}
                       </div>
                     </div>
                   );
@@ -709,21 +1300,12 @@ function RequestDetails() {
           <div className="rd-sidebar">
             <div className="rd-sidebar-card">
               <div className="rd-sidebar-header">
-                <span className="rd-sidebar-header-title">ℹ️ Request Information</span>
+                <div className="rd-sidebar-header-title">REQUEST INFO</div>
               </div>
               <div className="rd-sidebar-body">
                 <div className="rd-info-row">
-                  <span className="rd-info-label">Status</span>
-                  <span className="rd-pill" style={{ background: statusStyle.bg, color: statusStyle.color, borderColor: statusStyle.border, width: 'fit-content' }}>
-                    <span className="rd-pill-dot" style={{ background: statusStyle.color }} />
-                    {request.status?.replace(/_/g, ' ').toUpperCase()}
-                  </span>
-                </div>
-                <div className="rd-info-row">
-                  <span className="rd-info-label">Priority</span>
-                  <span className="rd-pill" style={{ background: priorityStyle.bg, color: priorityStyle.color, borderColor: priorityStyle.border, width: 'fit-content' }}>
-                    {priorityStyle.icon} {request.priority?.toUpperCase()}
-                  </span>
+                  <span className="rd-info-label">Request Number</span>
+                  <span className="rd-info-value">{request.requestNumber}</span>
                 </div>
                 <div className="rd-info-row">
                   <span className="rd-info-label">Service</span>
@@ -733,6 +1315,20 @@ function RequestDetails() {
                   <span className="rd-info-label">Category</span>
                   <span className="rd-info-value">{request.service?.categoryName || '—'}</span>
                 </div>
+                <div className="rd-info-row">
+                  <span className="rd-info-label">Priority</span>
+                  <span className="rd-info-value">{request.priority?.toUpperCase() || '—'}</span>
+                </div>
+                <div className="rd-info-row">
+                  <span className="rd-info-label">Created</span>
+                  <span className="rd-info-value">{formatDate(request.createdAt)}</span>
+                </div>
+                {request.resolvedAt && (
+                  <div className="rd-info-row">
+                    <span className="rd-info-label">Resolved</span>
+                    <span className="rd-info-value">{formatDate(request.resolvedAt)}</span>
+                  </div>
+                )}
                 {isPasswordReset && targetInfo.deliveryEmail && (
                   <div className="rd-info-row">
                     <span className="rd-info-label">Delivery Email</span>
@@ -742,8 +1338,8 @@ function RequestDetails() {
               </div>
             </div>
 
-            {/* Status Update Card */}
-            {authority === 'admin' && (!isPendingApproval || !(isPasswordReset || isAdminAccess) || hasUserCancelled) && (
+            {/* FIXED: Status Update Card - Hide for view-only users */}
+            {!viewOnly && (authority === 'admin' || isGroupMember) && (!isPendingApproval || !(isPasswordReset || isAdminAccess) || hasUserCancelled) && (
               <div className="rd-status-card">
                 <div className="rd-status-header">
                   <span className="rd-status-header-title"><span>🔄</span> Update Status</span>
@@ -767,13 +1363,13 @@ function RequestDetails() {
             )}
 
             {/* Awaiting Decision Message */}
-            {authority === 'admin' && isPendingApproval && (isPasswordReset || isAdminAccess) && !hasUserCancelled && (
+            {(authority === 'admin' || isGroupMember) && isPendingApproval && (isPasswordReset || isAdminAccess) && !hasUserCancelled && (
               <div className="rd-status-card">
                 <div className="rd-status-body" style={{ textAlign: 'center', padding: '24px' }}>
                   <div style={{ fontSize: 32, marginBottom: 12 }}>{isPasswordReset ? '🔐' : '🛡️'}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#6b21a8', marginBottom: 8 }}>Awaiting Your Decision</div>
                   <div style={{ fontSize: 12, color: '#64748b' }}>
-                    {isPasswordReset 
+                    {isPasswordReset
                       ? 'Please review and approve/reject the password reset request before updating status.'
                       : 'Please review and approve/reject the admin access request before updating status.'}
                   </div>
@@ -940,7 +1536,7 @@ function RequestDetails() {
               </div>
               <div className="result-info">✓ Password has been reset successfully<br />✓ Request status updated to "Resolved"</div>
               <div className="result-actions">
-                <button className="result-btn result-btn-copy" onClick={() => { navigator.clipboard.writeText(prResult.tempPassword); alert('Copied!'); }}>📋 Copy</button>
+                <button className="result-btn result-btn-copy" onClick={() => { navigator.clipboard.writeText(prResult.tempPassword); }}>📋 Copy</button>
                 <button className="result-btn result-btn-done" onClick={closeResultModal}>Done</button>
               </div>
             </div>
@@ -994,7 +1590,12 @@ function RequestDetails() {
             </div>
             <div className="pr-modal-body" style={{ textAlign: 'center' }}>
               {isImageType(activeAttachment.fileType) ? (
-                <img src={imagePreviewUrl} alt={activeAttachment.fileName} style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: '8px' }} />
+                <div>
+                  <img src={imagePreviewUrl} alt={activeAttachment.fileName} style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: '8px' }} />
+                  <div style={{ marginTop: 16 }}>
+                    <button className="rd-btn rd-btn-primary" style={{ width: 'auto', padding: '10px 24px' }} onClick={() => downloadAttachment(activeAttachment)}>⬇️ Download</button>
+                  </div>
+                </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: 40 }}>
                   <div style={{ marginBottom: 20, color: '#64748b' }}>This file type cannot be previewed</div>

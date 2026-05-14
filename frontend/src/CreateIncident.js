@@ -32,7 +32,7 @@ function CreateIncident() {
   const userDropdownRef = useRef(null);
   const userInputRef = useRef(null);
   
-  // Attachments
+  // Attachments - ALWAYS available
   const [attachments, setAttachments] = useState([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
@@ -270,10 +270,8 @@ function CreateIncident() {
       return;
     }
 
-    if (subCategoryDetails?.attachments?.enabled && subCategoryDetails.attachments.required && attachments.length === 0) {
-      showToast('Please attach at least one file', 'error');
-      return;
-    }
+    // ✅ REMOVED: Attachment requirement based on category
+    // Attachments are now optional for ALL incidents
 
     const category = getSelectedCategoryData();
     const { assignmentGroup } = getAssignmentDetails();
@@ -312,7 +310,7 @@ function CreateIncident() {
           user: onBehalfEnabled ? onBehalfUser : null
         },
         priority: priority,
-        attachments: attachments
+        attachments: attachments  // Always include attachments (can be empty array)
       };
 
       console.log('🚀 Submitting incident with GROUP:', {
@@ -907,6 +905,35 @@ function CreateIncident() {
                 </div>
               )}
 
+              {/* ✅ MOVED: Attachments - Now always visible in left column */}
+              <div className="ci-form-group">
+                <label className="ci-form-label">
+                  Attachments <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '400' }}>(optional)</span>
+                </label>
+                <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
+                <button
+                  type="button"
+                  className="ci-attach-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  📎 {uploading ? 'Uploading...' : 'Add Attachments'}
+                </button>
+                {attachments.length > 0 && (
+                  <div style={{ marginTop: '16px' }}>
+                    {attachments.map(att => (
+                      <div key={att.id} className="ci-attachment-item">
+                        <span>📄 {att.fileName}</span>
+                        <button className="ci-attachment-remove" onClick={() => removeAttachment(att.id)}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>
+                  💡 Attach screenshots or relevant files to help us understand the issue better
+                </div>
+              </div>
+
               {/* Description */}
               <div className="ci-form-group">
                 <label className="ci-form-label">
@@ -940,34 +967,6 @@ function CreateIncident() {
                   ))}
                 </div>
               </div>
-
-              {/* Attachments */}
-              {subCategoryDetails?.attachments?.enabled && (
-                <div className="ci-form-group">
-                  <label className="ci-form-label">
-                    Attachments {subCategoryDetails.attachments.required && <span className="required">*</span>}
-                  </label>
-                  <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
-                  <button
-                    type="button"
-                    className="ci-attach-btn"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                  >
-                    📎 {uploading ? 'Uploading...' : 'Add Attachments'}
-                  </button>
-                  {attachments.length > 0 && (
-                    <div style={{ marginTop: '16px' }}>
-                      {attachments.map(att => (
-                        <div key={att.id} className="ci-attachment-item">
-                          <span>📄 {att.fileName}</span>
-                          <button className="ci-attachment-remove" onClick={() => removeAttachment(att.id)}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* ✅ UPDATED: Assignment Preview - Shows GROUP not individual */}
               <div className="ci-form-group">

@@ -1,4 +1,4 @@
-// AddRequest.js - DEBUG-CONSOLES ONLY
+// AddRequest.js - UPDATED with Preview Modal (No Features/Approval)
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import { useNavigate } from "react-router-dom";
@@ -103,6 +103,197 @@ const useUserSearch = (acquireToken) => {
   return { query, setQuery, results, loading };
 };
 
+// Preview Modal Component - Shows ONLY Service Details (No Features/Approval)
+const PreviewModal = ({ service, onClose, onEdit, onDelete, setShowDeleteConfirm, setDeletingId }) => {
+  const [membersExpanded, setMembersExpanded] = useState(false);
+  
+  if (!service) return null;
+  
+  const pTypeInfo = getServiceTypeInfo(getCategoryType(service.category?.name || ''));
+  const members = service.assignmentGroup?.members || service.assignmentGroups?.[0]?.members || [];
+  const agName = service.assignmentGroup?.groupName || service.assignmentGroups?.[0]?.name || '';
+  const dl = service.distributionList;
+  
+  const getMemberEmail = (member) => {
+    return member.email || member.mail || member.userPrincipalName || 'No email';
+  };
+
+  const getInitials = (name = '') =>
+    name.split(' ').slice(0, 2).map(n => n[0] || '').join('').toUpperCase() || '?';
+
+  return (
+    <div className="ar-preview-overlay" onClick={onClose}>
+      <div className="ar-preview-modal" onClick={e => e.stopPropagation()}>
+        
+        {/* Header - NO close button here */}
+        <div className="ar-preview-header">
+          <div className="ar-preview-icon" style={{ background: pTypeInfo.color + '15' }}>
+            {pTypeInfo.icon}
+          </div>
+          <div className="ar-preview-header-text">
+            <div className="ar-preview-title">{service.serviceName}</div>
+            <span className="ar-card-badge" style={{ background: pTypeInfo.color + '15', color: pTypeInfo.color }}>
+              {pTypeInfo.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="ar-preview-body">
+
+          {/* Description */}
+          {service.description && (
+            <div className="ar-preview-section">
+              <div className="ar-preview-section-title">Description</div>
+              <div className="ar-preview-desc">{service.description}</div>
+            </div>
+          )}
+
+          {/* Distribution List */}
+          {dl && (
+            <div className="ar-preview-section">
+              <div className="ar-preview-section-title">Distribution List</div>
+              <div className="ar-preview-info-row">
+                <div className="ar-preview-info-icon">📧</div>
+                <div>
+                  <div className="ar-preview-info-label">DL Name</div>
+                  <div className="ar-preview-info-value">{dl.name || dl.displayName}</div>
+                  {dl.mail && <div className="ar-preview-info-sub">{dl.mail}</div>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Assignment Group + Members WITH COLLAPSIBLE SECTION */}
+          {agName && (
+            <div className="ar-preview-section">
+              <div className="ar-preview-section-title">Assignment Group</div>
+              
+              {/* Clickable header with down arrow */}
+              <div 
+                className="ar-preview-group-header" 
+                onClick={() => setMembersExpanded(!membersExpanded)}
+              >
+                <div className="ar-preview-info-icon">🏷️</div>
+                <div style={{ flex: 1 }}>
+                  <div className="ar-preview-info-label">Group Name</div>
+                  <div className="ar-preview-info-value">{agName}</div>
+                  <div className="ar-preview-info-sub">{members.length} member{members.length !== 1 ? 's' : ''}</div>
+                </div>
+                <span className={`ar-preview-arrow ${membersExpanded ? 'expanded' : ''}`}>▼</span>
+              </div>
+              
+              {/* Members list - shown only when expanded */}
+              {membersExpanded && members.length > 0 && (
+                <div className="ar-preview-members">
+                  {members.map((m, i) => (
+                    <div key={m.id || i} className="ar-preview-member-row">
+                      <div className="ar-preview-member-avatar">
+                        {getInitials(m.name)}
+                      </div>
+                      <div>
+                        <div className="ar-preview-member-name">{m.name || '—'}</div>
+                        <div className="ar-preview-member-email">{getMemberEmail(m)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FEATURES SECTION - COMMENTED OUT (NOT SHOWN IN PREVIEW) */}
+          {/*
+          <div className="ar-preview-section">
+            <div className="ar-preview-section-title">Features</div>
+            <div className="ar-preview-pills">
+              {service.onBehalf?.enabled ? (
+                <span className="ar-preview-pill" style={{ background: 'rgba(139,92,246,0.1)', color: '#7c3aed' }}>
+                  👤 On Behalf {service.onBehalf?.required ? '(Required)' : '(Optional)'}
+                </span>
+              ) : (
+                <span className="ar-preview-pill" style={{ background: 'var(--bg)', color: 'var(--muted)' }}>
+                  👤 On Behalf: Off
+                </span>
+              )}
+              {service.attachmentsEnabled ? (
+                <span className="ar-preview-pill" style={{ background: 'rgba(16,185,129,0.1)', color: '#065f46' }}>
+                  📎 Attachments {service.attachmentsRequired ? '(Required)' : '(Optional)'}
+                </span>
+              ) : (
+                <span className="ar-preview-pill" style={{ background: 'var(--bg)', color: 'var(--muted)' }}>
+                  📎 Attachments: Off
+                </span>
+              )}
+            </div>
+          </div>
+          */}
+
+          {/* APPROVAL SECTION - COMMENTED OUT (NOT SHOWN IN PREVIEW) */}
+          {/*
+          <div className="ar-preview-section">
+            <div className="ar-preview-section-title">Approval</div>
+            {service.approval?.required ? (
+              <div className="ar-preview-info-row">
+                <div className="ar-preview-info-icon">✅</div>
+                <div>
+                  <div className="ar-preview-info-label">Approval Required</div>
+                  <div className="ar-preview-info-value">
+                    {service.approval?.reportingManager && 'Reporting Manager'}
+                    {service.approval?.dlMembers && 'All DL Group Members'}
+                    {!service.approval?.reportingManager && !service.approval?.dlMembers && 'Custom Approvers'}
+                  </div>
+                  {service.approval?.requireAll && (
+                    <div className="ar-preview-info-sub">All approvers must approve</div>
+                  )}
+                  {service.approval?.otherApprovers?.length > 0 && (
+                    <div className="ar-preview-info-sub">
+                      {service.approval.otherApprovers.map(a => a.displayName || a.name).join(', ')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="ar-preview-info-row">
+                <div className="ar-preview-info-icon">⭕</div>
+                <div>
+                  <div className="ar-preview-info-label">Approval</div>
+                  <div className="ar-preview-info-value" style={{ color: 'var(--muted)' }}>Not required</div>
+                </div>
+              </div>
+            )}
+          </div>
+          */}
+
+        </div>
+
+        {/* Footer with Close, Delete, and Edit buttons */}
+        <div className="ar-preview-footer">
+          <button
+            className="ar-btn-secondary"
+            onClick={onClose}
+          >
+            ✕ Close
+          </button>
+          <button
+            className="ar-btn-secondary"
+            style={{ borderColor: '#fee2e2', color: '#991b1b' }}
+            onClick={() => { onClose(); setDeletingId(service._id); setShowDeleteConfirm(true); }}
+          >
+            🗑️ Delete
+          </button>
+          <button
+            className="ar-btn-primary"
+            onClick={() => { onClose(); onEdit(service); }}
+          >
+            ✏️ Edit Service
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function AddRequest() {
   const { accounts, instance } = useMsal();
   const navigate = useNavigate();
@@ -157,6 +348,8 @@ export default function AddRequest() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
+  const [previewService, setPreviewService] = useState(null);
+
   useEffect(() => {
     fetchServices();
     fetchAssignmentGroups();
@@ -206,9 +399,6 @@ export default function AddRequest() {
       const normalized = embeddedMembers.map(normalizeMember);
       console.log('[debug] AG has embedded members normalized:', normalized);
       setSelectedAGMembers(normalized);
-      if (normalized.length === 1) {
-        console.log('[debug] single AG member auto-selected:', normalized[0]);
-      }
       return;
     }
 
@@ -226,9 +416,6 @@ export default function AddRequest() {
         const normalized = mems.map(normalizeMember);
         console.log('[debug] fetched AG members normalized:', normalized);
         setSelectedAGMembers(normalized);
-        if (normalized.length === 1) {
-          console.log('[debug] single fetched AG member auto-selected:', normalized[0]);
-        }
       } else {
         setSelectedAGMembers([]);
       }
@@ -282,7 +469,6 @@ export default function AddRequest() {
     setTimeout(() => setToast({ open: false, message: "", type: "success" }), 3000);
   };
 
-  // ✅ FIXED: handleEdit function
   const handleEdit = (service) => {
     console.log('[debug] handleEdit called for service:', service);
     setEditingId(service._id);
@@ -293,17 +479,22 @@ export default function AddRequest() {
     setSelectedDL(service.distributionList || null);
     if (service.distributionList) handleSelectDL(service.distributionList);
 
-    const ag = service.assignmentGroups?.[0] || service.assignmentGroup || null;
-    if (ag) {
-      setSelectedAG(ag);
-      const members = ag.members || [];
-      if (members && members.length > 0) {
+    const savedAG = service.assignmentGroups?.[0] || service.assignmentGroup || null;
+    if (savedAG) {
+      const savedId = savedAG.groupId || savedAG._id || savedAG.id;
+      const matchedAG = assignmentGroups.find(g => (g._id || g.id) === savedId);
+      const agToUse = matchedAG || savedAG;
+
+      console.log('[debug] handleEdit resolvedAG:', agToUse);
+      setSelectedAG(agToUse);
+
+      const members = savedAG.members || agToUse.members || [];
+      if (members.length > 0) {
         const normalized = members.map(normalizeMember);
-        console.log('[debug] handleEdit AG members from service:', normalized);
+        console.log('[debug] handleEdit AG members normalized:', normalized);
         setSelectedAGMembers(normalized);
       } else {
-        setSelectedAG(null);
-        setSelectedAGMembers([]);
+        handleSelectAG(agToUse);
       }
     } else {
       setSelectedAG(null);
@@ -331,16 +522,14 @@ export default function AddRequest() {
       fetchServices();
       setShowDeleteConfirm(false);
       setDeletingId(null);
+      setPreviewService(null);
     } catch (err) {
       showToast('Failed to delete service', 'error');
     }
   };
 
   const handleSubmit = async () => {
-    console.log('[debug] handleSubmit starting', {
-      selectedAG,
-      selectedAGMembers,
-    });
+    console.log('[debug] handleSubmit starting', { selectedAG, selectedAGMembers });
 
     if (!requestName.trim()) {
       showToast("Request name is required", "error");
@@ -359,16 +548,16 @@ export default function AddRequest() {
         description,
         distributionList: selectedDL ? { id: selectedDL.id, name: selectedDL.displayName, mail: selectedDL.mail } : null,
         assignmentGroup: selectedAG
-            ? {
-                groupId: selectedAG._id || selectedAG.id,
-                groupName: selectedAG.name || selectedAG.groupName,
-                members: selectedAGMembers.map(m => ({
-                  id: m.id,
-                  name: m.name,
-                  email: m.mail || m.id
-                }))
-              }
-            : null,
+          ? {
+              groupId: selectedAG._id || selectedAG.id,
+              groupName: selectedAG.name || selectedAG.groupName,
+              members: selectedAGMembers.map(m => ({
+                id: m.id,
+                name: m.name,
+                email: m.mail || m.id
+              }))
+            }
+          : null,
         onBehalf: { enabled: onBehalfEnabled, required: onBehalfRequired },
         attachmentsEnabled,
         attachmentsRequired,
@@ -466,6 +655,10 @@ export default function AddRequest() {
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.94) translateY(16px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
 
     .ar-page {
       min-height: 100vh;
@@ -475,7 +668,6 @@ export default function AddRequest() {
       color: var(--text);
     }
 
-    /* Hero Section */
     .ar-hero {
       background: var(--navy);
       position: relative;
@@ -523,7 +715,6 @@ export default function AddRequest() {
       font-weight: 400; line-height: 1.6;
     }
 
-    /* Content Area */
     .ar-content {
       max-width: 1320px;
       margin: 0 auto;
@@ -540,7 +731,6 @@ export default function AddRequest() {
     }
     .ar-back-btn:hover { color: var(--orange); }
 
-    /* Header Bar */
     .ar-header-bar {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 28px;
@@ -596,7 +786,6 @@ export default function AddRequest() {
       color: var(--navy);
     }
 
-    /* Service Grid */
     .ar-service-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -610,6 +799,7 @@ export default function AddRequest() {
       border-radius: 20px;
       padding: 28px;
       transition: all 0.22s;
+      cursor: pointer;
     }
     .ar-service-card:hover {
       transform: translateY(-5px);
@@ -675,7 +865,6 @@ export default function AddRequest() {
       border-top: 1.5px solid var(--border);
     }
 
-    /* Form Card */
     .ar-form-card {
       background: var(--white);
       border: 1.5px solid var(--border);
@@ -747,7 +936,6 @@ export default function AddRequest() {
       pointer-events: none;
     }
 
-    /* Type Selector */
     .ar-type-grid {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -769,7 +957,6 @@ export default function AddRequest() {
       border-color: var(--navy);
     }
 
-    /* DL Grid */
     .ar-dl-grid {
       max-height: 250px;
       overflow-y: auto;
@@ -807,7 +994,6 @@ export default function AddRequest() {
       border-radius: 14px;
     }
 
-    /* Features Section */
     .ar-features-section, .ar-approval-section {
       padding: 20px;
       background: var(--bg);
@@ -832,7 +1018,6 @@ export default function AddRequest() {
       color: var(--text);
     }
 
-    /* Toggle Switch */
     .ar-toggle-switch {
       position: relative; width: 44px; height: 24px;
     }
@@ -861,7 +1046,6 @@ export default function AddRequest() {
       transform: translateX(20px);
     }
 
-    /* Radio Group */
     .ar-radio-group {
       display: flex; flex-direction: column; gap: 12px;
       margin: 16px 0;
@@ -876,7 +1060,6 @@ export default function AddRequest() {
       width: 16px; height: 16px;
     }
 
-    /* Dropdown */
     .ar-dropdown {
       position: absolute; top: 100%; left: 0; right: 0;
       background: var(--white);
@@ -911,7 +1094,6 @@ export default function AddRequest() {
       z-index: 1000;
     }
 
-    /* Chips */
     .ar-chip-container {
       display: flex; flex-wrap: wrap; gap: 8px;
       margin-top: 12px;
@@ -931,14 +1113,12 @@ export default function AddRequest() {
     }
     .ar-chip button:hover { color: white; }
 
-    /* Form Actions */
     .ar-form-actions {
       display: flex; justify-content: flex-end; gap: 12px;
       margin-top: 32px; padding-top: 24px;
       border-top: 1.5px solid var(--border);
     }
 
-    /* Empty State */
     .ar-empty {
       text-align: center; padding: 60px;
       background: var(--white);
@@ -955,7 +1135,6 @@ export default function AddRequest() {
       margin-bottom: 8px;
     }
 
-    /* Loading */
     .ar-loading {
       text-align: center; padding: 60px;
     }
@@ -967,7 +1146,6 @@ export default function AddRequest() {
       margin: 0 auto 20px;
     }
 
-    /* Toast */
     .ar-toast {
       position: fixed; bottom: 32px; right: 32px; z-index: 10000;
       padding: 14px 24px; border-radius: 14px;
@@ -987,7 +1165,6 @@ export default function AddRequest() {
       color: #991b1b;
     }
 
-    /* Modal */
     .ar-modal-overlay {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.4);
@@ -1014,11 +1191,259 @@ export default function AddRequest() {
       margin-top: 24px;
     }
 
+    /* Preview Modal Styles */
+    .ar-preview-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10000;
+      padding: 20px;
+    }
+    .ar-preview-modal {
+      background: var(--white);
+      border-radius: 24px;
+      width: 100%;
+      max-width: 620px;
+      max-height: 88vh;
+      overflow-y: auto;
+      border: 1.5px solid var(--border);
+      animation: modalIn 0.28s ease both;
+      box-shadow: 0 24px 60px rgba(0,32,96,0.18);
+    }
+    .ar-preview-header {
+      padding: 28px 28px 20px;
+      border-bottom: 1.5px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      background: var(--white);
+      border-radius: 24px 24px 0 0;
+      z-index: 2;
+    }
+    .ar-preview-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      flex-shrink: 0;
+    }
+    .ar-preview-header-text {
+      flex: 1;
+    }
+    .ar-preview-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+    .ar-preview-body {
+      padding: 24px 28px;
+    }
+    .ar-preview-section {
+      margin-bottom: 24px;
+    }
+    .ar-preview-section-title {
+      font-family: 'Sora', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ar-preview-section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .ar-preview-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+      padding: 14px 18px;
+      background: var(--bg);
+      border-radius: 12px;
+    }
+    .ar-preview-info-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-radius: 12px;
+      margin-bottom: 8px;
+    }
+    .ar-preview-info-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .ar-preview-info-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 2px;
+    }
+    .ar-preview-info-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ar-preview-info-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .ar-preview-group-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      transition: background 0.2s;
+    }
+    .ar-preview-group-header:hover {
+      background: #eef2f6;
+    }
+    .ar-preview-arrow {
+      margin-left: auto;
+      transition: transform 0.2s;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .ar-preview-arrow.expanded {
+      transform: rotate(180deg);
+    }
+
+    .ar-preview-members {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+      margin-left: 32px;
+    }
+    .ar-preview-member-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+    }
+    .ar-preview-member-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+      font-family: 'Sora', sans-serif;
+    }
+    .ar-preview-member-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ar-preview-member-email {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .ar-preview-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ar-preview-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .ar-preview-footer {
+      padding: 20px 28px;
+      border-top: 1.5px solid var(--border);
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      position: sticky;
+      bottom: 0;
+      background: var(--white);
+      border-radius: 0 0 24px 24px;
+    }
+
+    .ar-ag-members-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .ar-ag-member-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.7);
+      border: 1.5px solid rgba(16,185,129,0.3);
+      border-radius: 10px;
+    }
+    .ar-ag-member-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #065f46;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      font-family: 'Sora', sans-serif;
+    }
+    .ar-ag-member-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #065f46;
+    }
+    .ar-ag-member-email {
+      font-size: 11px;
+      color: #047857;
+    }
+
     @media (max-width: 768px) {
       .ar-hero { padding: 40px 24px; }
       .ar-content { padding: 24px 20px 40px; }
       .ar-service-grid { grid-template-columns: 1fr; }
       .ar-type-grid { grid-template-columns: repeat(2, 1fr); }
+      .ar-preview-modal { border-radius: 20px; }
     }
   `;
 
@@ -1031,7 +1456,6 @@ export default function AddRequest() {
       <div className="ar-page">
         <style>{sharedCSS}</style>
 
-        {/* Hero Section */}
         <div className="ar-hero">
           <div className="ar-hero-inner">
             <div className="ar-hero-eyebrow">
@@ -1050,7 +1474,6 @@ export default function AddRequest() {
           </div>
         </div>
 
-        {/* Content */}
         <div className="ar-content">
           <button className="ar-back-btn" onClick={() => navigate('/settings')}>
             ← Back to Settings
@@ -1070,17 +1493,21 @@ export default function AddRequest() {
           ) : (
             <div className="ar-service-grid">
               {services.map(service => {
-                const typeInfo = getServiceTypeInfo(getCategoryType(service.category?.name || ''));
+                const tileTypeInfo = getServiceTypeInfo(getCategoryType(service.category?.name || ''));
                 return (
-                  <div key={service._id} className="ar-service-card">
+                  <div
+                    key={service._id}
+                    className="ar-service-card"
+                    onClick={() => setPreviewService(service)}
+                  >
                     <div className="ar-card-header">
-                      <div className="ar-card-icon" style={{ background: typeInfo.color + '15' }}>
-                        {typeInfo.icon}
+                      <div className="ar-card-icon" style={{ background: tileTypeInfo.color + '15' }}>
+                        {tileTypeInfo.icon}
                       </div>
                       <div>
                         <div className="ar-card-title">{service.serviceName}</div>
-                        <span className="ar-card-badge" style={{ background: typeInfo.color + '15', color: typeInfo.color }}>
-                          {typeInfo.label}
+                        <span className="ar-card-badge" style={{ background: tileTypeInfo.color + '15', color: tileTypeInfo.color }}>
+                          {tileTypeInfo.label}
                         </span>
                       </div>
                     </div>
@@ -1130,11 +1557,18 @@ export default function AddRequest() {
                       )}
                     </div>
 
-                    <div className="ar-card-actions">
+                    <div
+                      className="ar-card-actions"
+                      onClick={e => e.stopPropagation()}
+                    >
                       <button className="ar-btn-secondary" style={{ flex: 1 }} onClick={() => handleEdit(service)}>
                         ✏️ Edit
                       </button>
-                      <button className="ar-btn-secondary" style={{ flex: 1, borderColor: '#fee2e2', color: '#991b1b' }} onClick={() => { setDeletingId(service._id); setShowDeleteConfirm(true); }}>
+                      <button
+                        className="ar-btn-secondary"
+                        style={{ flex: 1, borderColor: '#fee2e2', color: '#991b1b' }}
+                        onClick={() => { setDeletingId(service._id); setShowDeleteConfirm(true); }}
+                      >
                         🗑️ Delete
                       </button>
                     </div>
@@ -1145,7 +1579,17 @@ export default function AddRequest() {
           )}
         </div>
 
-        {/* Delete Modal */}
+        {previewService && (
+          <PreviewModal
+            service={previewService}
+            onClose={() => setPreviewService(null)}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            setShowDeleteConfirm={setShowDeleteConfirm}
+            setDeletingId={setDeletingId}
+          />
+        )}
+
         {showDeleteConfirm && (
           <div className="ar-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
             <div className="ar-modal" onClick={e => e.stopPropagation()}>
@@ -1159,7 +1603,6 @@ export default function AddRequest() {
           </div>
         )}
 
-        {/* Toast */}
         {toast.open && (
           <div className={`ar-toast ${toast.type === 'success' ? 'ar-toast-success' : 'ar-toast-error'}`}>
             {toast.type === 'success' ? '✓' : '✕'} {toast.message}
@@ -1185,7 +1628,6 @@ export default function AddRequest() {
         </div>
 
         <div className="ar-form-card">
-          {/* Service Name */}
           <div className="ar-form-group">
             <label className="ar-form-label">
               Service Name <span className="required">*</span>
@@ -1198,7 +1640,6 @@ export default function AddRequest() {
             />
           </div>
 
-          {/* Service Type */}
           <div className="ar-form-group">
             <label className="ar-form-label">
               Service Type <span className="required">*</span>
@@ -1223,7 +1664,6 @@ export default function AddRequest() {
             </div>
           </div>
 
-          {/* Description */}
           <div className="ar-form-group">
             <label className="ar-form-label">Description</label>
             <textarea
@@ -1234,7 +1674,6 @@ export default function AddRequest() {
             />
           </div>
 
-          {/* Distribution List */}
           <div className="ar-form-group">
             <label className="ar-form-label">Distribution List</label>
 
@@ -1267,7 +1706,7 @@ export default function AddRequest() {
               <div className="ar-selected-dl">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: '#002060' }}>{selectedDL.displayName}</div>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: '#002060' }}>{selectedDL.displayName || selectedDL.name}</div>
                     <div style={{ fontSize: 12, color: '#64748b' }}>{selectedDL.mail}</div>
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{dlMembers.length} members</div>
                   </div>
@@ -1279,17 +1718,18 @@ export default function AddRequest() {
             )}
           </div>
 
-          {/* Assignment Group */}
           <div className="ar-form-group">
-            <label className="ar-form-label">Assignment Group</label>
+            <label className="ar-form-label">
+              Assignment Group <span className="required">*</span>
+            </label>
 
             <div style={{ position: 'relative', marginBottom: 16 }}>
               <select
                 className="ar-select"
-                value={selectedAG?._id || selectedAG?.id || ''}
+                value={selectedAG?._id || selectedAG?.id || selectedAG?.groupId || ''}
                 onChange={e => {
                   const ag = assignmentGroups.find(g => (g._id || g.id) === e.target.value);
-                  handleSelectAG(ag);
+                  handleSelectAG(ag || null);
                 }}
               >
                 <option value="">Select assignment group...</option>
@@ -1304,25 +1744,42 @@ export default function AddRequest() {
 
             {selectedAG && (
               <div style={{ padding: 20, background: '#d1fae5', border: '1.5px solid #10b981', borderRadius: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 18 }}>👥</span>
-                    <span style={{ fontWeight: 600, fontSize: 15, color: '#002060' }}>{selectedAG.name}</span>
-                    <span style={{ fontSize: 12, color: '#065f46', background: 'rgba(16,185,129,0.15)', padding: '2px 10px', borderRadius: 12 }}>
-                      {selectedAGMembers.length} members
-                    </span>
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 18 }}>👥</span>
+                  <span style={{ fontWeight: 700, fontSize: 15, color: '#002060', fontFamily: "'Sora', sans-serif" }}>
+                    {selectedAG.name || selectedAG.groupName}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#065f46', background: 'rgba(16,185,129,0.2)', padding: '2px 10px', borderRadius: 12, fontWeight: 700 }}>
+                    {selectedAGMembers.length} member{selectedAGMembers.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
 
-        
+                {selectedAGMembers.length > 0 ? (
+                  <div className="ar-ag-members-list">
+                    {selectedAGMembers.map((m, i) => {
+                      const initials = (m.name || '?').split(' ').slice(0, 2).map(n => n[0] || '').join('').toUpperCase();
+                      return (
+                        <div key={m.id || i} className="ar-ag-member-row">
+                          <div className="ar-ag-member-avatar">{initials}</div>
+                          <div>
+                            <div className="ar-ag-member-name">{m.name || '—'}</div>
+                            <div className="ar-ag-member-email">{m.mail || m.email || m.id || '—'}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: '#047857' }}>No members found for this group.</div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Features */}
+          {/* FEATURES SECTION - COMMENTED OUT */}
+          {/*
           <div className="ar-features-section">
             <div className="ar-section-title">Features</div>
-
             <div className="ar-toggle-row">
               <span className="ar-toggle-label">Enable On Behalf Requests</span>
               <label className="ar-toggle-switch">
@@ -1338,7 +1795,6 @@ export default function AddRequest() {
                 </label>
               </div>
             )}
-
             <div className="ar-toggle-row">
               <span className="ar-toggle-label">Enable Attachments</span>
               <label className="ar-toggle-switch">
@@ -1355,8 +1811,10 @@ export default function AddRequest() {
               </div>
             )}
           </div>
+          */}
 
-          {/* Approval */}
+          {/* APPROVAL SECTION - COMMENTED OUT */}
+          {/*
           <div className="ar-approval-section">
             <div className="ar-toggle-row">
               <span className="ar-section-title" style={{ marginBottom: 0 }}>Require Approval</span>
@@ -1365,7 +1823,6 @@ export default function AddRequest() {
                 <span className="ar-toggle-slider"></span>
               </label>
             </div>
-
             {requireApproval && (
               <div style={{ marginTop: 16 }}>
                 <div className="ar-radio-group">
@@ -1383,7 +1840,6 @@ export default function AddRequest() {
                     <span>Custom Approvers</span>
                   </label>
                 </div>
-
                 {approvalType === 'custom' && (
                   <div style={{ marginBottom: 16 }}>
                     <UserSearchDropdown hook={approverSearch} selected={customApprovers} onSelect={u => { if (!customApprovers.find(a => a.id === u.id)) setCustomApprovers(prev => [...prev, u]); }} placeholder="Search approvers..." />
@@ -1399,7 +1855,6 @@ export default function AddRequest() {
                     )}
                   </div>
                 )}
-
                 <label className="ar-radio-label">
                   <input type="checkbox" className="ar-radio" checked={requireAllApprovers} onChange={e => setRequireAllApprovers(e.target.checked)} />
                   <span>Require all approvers to approve</span>
@@ -1407,18 +1862,23 @@ export default function AddRequest() {
               </div>
             )}
           </div>
+          */}
 
-          {/* Form Actions */}
           <div className="ar-form-actions">
             <button type="button" className="ar-btn-secondary" onClick={handleCancel}>Cancel</button>
-            <button type="button" className="ar-btn-primary" onClick={handleSubmit} disabled={submitting} style={{ opacity: submitting ? 0.5 : 1 }}>
+            <button
+              type="button"
+              className="ar-btn-primary"
+              onClick={handleSubmit}
+              disabled={submitting}
+              style={{ opacity: submitting ? 0.5 : 1 }}
+            >
               {submitting ? 'Saving...' : (editingId ? 'Update Service' : 'Create Service')}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Toast */}
       {toast.open && (
         <div className={`ar-toast ${toast.type === 'success' ? 'ar-toast-success' : 'ar-toast-error'}`}>
           {toast.type === 'success' ? '✓' : '✕'} {toast.message}

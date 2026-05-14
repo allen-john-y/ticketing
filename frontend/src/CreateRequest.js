@@ -330,9 +330,11 @@ function CreateRequest() {
         attachments: attachments, // ✅ Attachments are optional, will be sent if any
         priority,
         approval: { required: isPasswordReset || isAdminAccess },
+        // ✅ NEW
         ...(isPasswordReset && {
           pwOnBehalf,
           pwTargetEmail: pwOnBehalf === 'Other' ? pwTargetEmail.trim() : currentUser.username || '',
+          pwTargetName: pwOnBehalf === 'Other' ? verifiedName : currentUser.name || '',
           pwDeliveryEmail: pwDeliveryEmail.trim(),
         }),
       };

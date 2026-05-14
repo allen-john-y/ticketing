@@ -239,7 +239,17 @@ const sendEmail = async (to, subject, bodyHtml) => {
   
   try {
     const addresses = Array.isArray(to) ? to : [to];
-    const validAddresses = addresses.filter(addr => addr && addr.trim());
+    const validAddresses = addresses.filter(addr => {
+      if (!addr || typeof addr !== "string") return false;
+
+      const clean = addr.trim().toLowerCase();
+
+      // reject UUIDs / IDs
+      if (!clean.includes("@")) return false;
+
+      // basic email validation
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean);
+    });
     
     if (validAddresses.length === 0) {
       console.log("⚠️ [MAIL] No valid email addresses");
@@ -261,7 +271,7 @@ const sendEmail = async (to, subject, bodyHtml) => {
       message: {
         subject,
         body: { contentType: "HTML", content: bodyHtml.trim() },
-        toRecipients: normalize(validAddresses),
+        toRecipients: normalize([...new Set(validAddresses)]),
       },
       saveToSentItems: "true",
     };
@@ -363,26 +373,45 @@ const getAllIncidentRecipients = async (incident) => {
 // Get all recipients for a Request
 const getAllRequestRecipients = async (request) => {
   const recipients = new Set();
-  
-  // Requester
+
   if (request.raisedBy?.mail) recipients.add(request.raisedBy.mail);
-  
-  // Assigned Member
   if (request.assignedMember?.memberEmail) recipients.add(request.assignedMember.memberEmail);
-  
-  // Group Members (from assignmentGroup)
-  if (request.assignmentGroup?.members && Array.isArray(request.assignmentGroup.members)) {
-    for (const member of request.assignmentGroup.members) {
-      const email = member.email || member.mail;
-      if (email) recipients.add(email);
+
+  const groupId = request.assignmentGroup?.groupId;
+  const groupName = request.assignmentGroup?.groupName;
+  if (groupId || groupName) {
+    try {
+      const fullGroup = groupId
+        ? await AssignmentGroup.findById(groupId)
+        : await AssignmentGroup.findOne({ name: groupName });
+
+      // ✅ ADD THIS
+      console.log(`🔍 [RECIPIENTS] Group found: ${fullGroup?.name}, members:`, JSON.stringify(fullGroup?.members));
+
+      if (fullGroup?.members) {
+        for (const m of fullGroup.members) {
+          const email = m.email || m.mail;
+          // ✅ ADD THIS
+          console.log(`🔍 [RECIPIENTS] Member: ${m.name}, email field: "${m.email}", mail field: "${m.mail}", resolved: "${email}"`);
+          if (email) recipients.add(email);
+        }
+      }
+    } catch (err) {
+      console.error("Failed live group lookup, falling back to snapshot:", err.message);
+      for (const m of (request.assignmentGroup?.members || [])) {
+        const email = m.email || m.mail;
+        if (email) recipients.add(email);
+      }
     }
   }
-  
-  // DL Members (from service or category)
+
+  // ✅ ADD THIS
+  console.log(`🔍 [RECIPIENTS] Final list (${recipients.size}):`, Array.from(recipients));
+
   if (request.service?.id) {
     try {
       const service = await Service.findById(request.service.id);
-      if (service && service.dlGroupMembers) {
+      if (service?.dlGroupMembers) {
         for (const member of service.dlGroupMembers) {
           if (member.email) recipients.add(member.email);
         }
@@ -391,7 +420,7 @@ const getAllRequestRecipients = async (request) => {
       console.error("Failed to get DL members from service:", err.message);
     }
   }
-  
+
   return Array.from(recipients).filter(Boolean);
 };
 
@@ -1697,10 +1726,11 @@ app.get("/api/requests/:id", async (req, res) => {
 // POST /api/requests - CREATE with FULL email notifications
 app.post("/api/requests", async (req, res) => {
   try {
+    // ✅ NEW
     const {
       service, assignmentGroup, assignedMember, raisedBy, onBehalf,
       description, attachments, approval, priority,
-      pwOnBehalf, pwTargetEmail, pwDeliveryEmail
+      pwOnBehalf, pwTargetEmail, pwTargetName, pwDeliveryEmail
     } = req.body;
 
     if (!service?.id) return res.status(400).json({ message: "Service is required" });
@@ -1747,6 +1777,7 @@ app.post("/api/requests", async (req, res) => {
       approval: approval || { required: false },
       priority: priority || "medium",
       pwOnBehalf: pwOnBehalf || 'Self',
+      pwTargetName: pwTargetName || '',
       pwTargetEmail: pwTargetEmail || '',
       pwDeliveryEmail: pwDeliveryEmail || '',
       status: initialStatus,
@@ -1787,9 +1818,6 @@ app.post("/api/requests", async (req, res) => {
         if (isPasswordReset && pwDeliveryEmail) {
           fields.push({ label: "Delivery Email", value: pwDeliveryEmail });
         }
-        if (request.assignedMember?.memberName) {
-          fields.push({ label: "Assigned To", value: request.assignedMember.memberName });
-        }
 
         const html = buildHtmlEmail({
           title,
@@ -1816,7 +1844,16 @@ app.post("/api/requests", async (req, res) => {
 // PATCH /api/requests/:id - UPDATE STATUS with FULL email notifications
 app.patch("/api/requests/:id", async (req, res) => {
   try {
-    const { status, assignedMember, assignmentGroup, notes, updatedBy, priority } = req.body;
+    const {
+      status,
+      assignedMember,
+      assignmentGroup,
+      originalAssignmentGroupId,
+      originalGroupMembers,
+      notes,
+      updatedBy,
+      priority,
+    } = req.body;
 
     const request = await Request.findById(req.params.id);
     if (!request) return res.status(404).json({ message: "Request not found" });
@@ -1826,31 +1863,80 @@ app.patch("/api/requests/:id", async (req, res) => {
 
     if (status) request.status = status;
     if (priority) request.priority = priority;
-    if (assignedMember) request.assignedMember = assignedMember;
-    if (assignmentGroup) request.assignmentGroup = assignmentGroup;
+
+    // Handle assignedMember — allow explicit null to unassign
+    if (Object.prototype.hasOwnProperty.call(req.body, "assignedMember")) {
+      request.assignedMember = assignedMember ?? null;
+    }
+
+    // Handle assignmentGroup reassignment
+    if (assignmentGroup) {
+      request.assignmentGroup = assignmentGroup;
+    }
+
+    // Persist original group info for view-only access logic
+    if (originalAssignmentGroupId) {
+      request.originalAssignmentGroupId = originalAssignmentGroupId;
+    }
+    if (originalGroupMembers) {
+      request.originalGroupMembers = originalGroupMembers;
+    }
+
     if (notes) request.notes = notes;
     if (updatedBy) request.updatedBy = updatedBy;
 
     if (status === "resolved") request.resolvedAt = new Date();
     if (status === "closed") request.closedAt = new Date();
 
+    request.history = request.history || [];
+
+    // Status change history
     if (status && status !== oldStatus) {
-      request.history = request.history || [];
       request.history.push({
-        action: 'status_updated',
-        by: updatedBy?.name || updatedBy?.mail || 'System',
+        action: "status_updated",
+        by: updatedBy?.name || updatedBy?.mail || "System",
         at: new Date(),
         oldStatus,
         newStatus: status,
-        notes: notes || `Status changed from ${oldStatus} to ${status}`
+        notes: notes || `Status changed from ${oldStatus} to ${status}`,
       });
     }
-
-    if (status === 'resolved' && oldStatus !== 'resolved') {
-      request.history.push({ action: 'resolved', by: updatedBy?.name || 'System', at: new Date() });
+    if (status === "resolved" && oldStatus !== "resolved") {
+      request.history.push({ action: "resolved", by: updatedBy?.name || "System", at: new Date() });
     }
-    if (status === 'closed' && oldStatus !== 'closed') {
-      request.history.push({ action: 'closed', by: updatedBy?.name || 'System', at: new Date() });
+    if (status === "closed" && oldStatus !== "closed") {
+      request.history.push({ action: "closed", by: updatedBy?.name || "System", at: new Date() });
+    }
+
+    // Assignment history
+    if (Object.prototype.hasOwnProperty.call(req.body, "assignedMember")) {
+      if (!assignedMember) {
+        // Unassign
+        request.history.push({
+          action: "assigned",
+          by: updatedBy?.name || updatedBy?.mail || "System",
+          at: new Date(),
+          notes: notes || `Assignment removed by ${updatedBy?.name || "System"}`,
+        });
+      } else {
+        // Assign to member
+        request.history.push({
+          action: "assigned",
+          by: updatedBy?.name || updatedBy?.mail || "System",
+          at: new Date(),
+          notes: notes || `Assigned to ${assignedMember.memberName || assignedMember.memberEmail || "a member"}`,
+        });
+      }
+    }
+
+    // Group reassignment history
+    if (assignmentGroup) {
+      request.history.push({
+        action: "assigned",
+        by: updatedBy?.name || updatedBy?.mail || "System",
+        at: new Date(),
+        notes: notes || `Reassigned to group "${assignmentGroup.groupName || assignmentGroup.name}"`,
+      });
     }
 
     await request.save();
@@ -1864,12 +1950,16 @@ app.patch("/api/requests/:id", async (req, res) => {
           const allRecipients = await getAllRequestRecipients(request);
           const prodUrl = process.env.PROD_URL;
           const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-          
+
           const statusColors = {
-            open: "#0369a1", in_progress: "#d97706", pending_approval: "#7c3aed",
-            resolved: "#16a34a", closed: "#6b7280", cancelled: "#dc2626",
+            open: "#0369a1",
+            in_progress: "#d97706",
+            pending_approval: "#7c3aed",
+            resolved: "#16a34a",
+            closed: "#6b7280",
+            cancelled: "#dc2626",
           };
-          
+
           const html = buildHtmlEmail({
             title: `Request ${request.requestNumber} — Status Updated`,
             subtitle: `Status changed to ${status.replace(/_/g, " ").toUpperCase()}`,
@@ -1885,11 +1975,47 @@ app.patch("/api/requests/:id", async (req, res) => {
             actionLink: `${prodUrl}/requests/${request._id}`,
             actionText: "View Request",
           });
-          
-          await sendEmail(allRecipients, `[REQUEST] ${request.requestNumber} — Status: ${status.toUpperCase()}`, html);
+
+          await sendEmail(
+            allRecipients,
+            `[REQUEST] ${request.requestNumber} — Status: ${status.toUpperCase()}`,
+            html
+          );
           console.log(`✅ [REQUEST] STATUS UPDATE notifications sent to ${allRecipients.length} recipients`);
         } catch (mailErr) {
           console.error("❌ [REQUEST] Status notification error:", mailErr.message);
+        }
+      });
+    }
+
+    // Send assignment notification (fire-and-forget)
+    if (Object.prototype.hasOwnProperty.call(req.body, "assignedMember") && assignedMember?.memberEmail) {
+      setImmediate(async () => {
+        try {
+          const prodUrl = process.env.PROD_URL;
+          const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          const html = buildHtmlEmail({
+            title: `Request ${request.requestNumber} — Assigned to You`,
+            subtitle: `You have been assigned to this request`,
+            statusColor: "#002060",
+            fields: [
+              { label: "Request No.", value: request.requestNumber },
+              { label: "Service", value: request.service?.name },
+              { label: "Assigned By", value: updatedBy?.name || "Admin" },
+              { label: "Assigned At", value: nowIST },
+            ],
+            description: notes || "",
+            actionLink: `${prodUrl}/requests/${request._id}`,
+            actionText: "View Request",
+          });
+          await sendEmail(
+            [assignedMember.memberEmail],
+            `[REQUEST] ${request.requestNumber} — Assigned to You`,
+            html
+          );
+          console.log(`✅ [REQUEST] Assignment notification sent to ${assignedMember.memberEmail}`);
+        } catch (mailErr) {
+          console.error("❌ [REQUEST] Assignment notification error:", mailErr.message);
         }
       });
     }
@@ -1983,10 +2109,6 @@ app.post("/api/incidents", async (req, res) => {
           { label: "Raised At", value: nowIST },
         ];
         
-        if (incident.assignedMember?.memberName) {
-          fields.push({ label: "Assigned To", value: incident.assignedMember.memberName });
-        }
-        
         const html = buildHtmlEmail({
           title: `🚨 Incident Raised: ${incident.incidentNumber}`,
           subtitle: `A new incident has been logged`,
@@ -2009,7 +2131,7 @@ app.post("/api/incidents", async (req, res) => {
   }
 });
 
-// PATCH /api/incidents/:id - UPDATE STATUS with FULL email notifications
+// PATCH /api/incidents/:id - UPDATE STATUS with FULL email notifications (FIXED)
 app.patch("/api/incidents/:id", async (req, res) => {
   try {
     const { status, assignedMember, assignmentGroup, notes, updatedBy, priority } = req.body;
@@ -2017,9 +2139,23 @@ app.patch("/api/incidents/:id", async (req, res) => {
     const incident = await Incident.findById(req.params.id);
     if (!incident) return res.status(404).json({ message: "Incident not found" });
 
+    console.log("📥 [PATCH] Received update:", { status, assignedMember, assignmentGroup, notes, updatedBy, priority });
+
     if (status) incident.status = status;
     if (priority) incident.priority = priority;
-    if (assignedMember) incident.assignedMember = assignedMember;
+    
+    // ✅ FIX: Handle assignedMember properly - including null
+    if (assignedMember !== undefined) {
+      // If assignedMember is null, remove it
+      if (assignedMember === null) {
+        incident.assignedMember = null;
+        console.log("🔍 [PATCH] Setting assignedMember to null");
+      } else {
+        incident.assignedMember = assignedMember;
+        console.log("🔍 [PATCH] Setting assignedMember to:", assignedMember);
+      }
+    }
+    
     if (assignmentGroup) incident.assignmentGroup = assignmentGroup;
     if (notes) incident.notes = notes;
     if (updatedBy) incident.updatedBy = updatedBy;
@@ -2028,7 +2164,8 @@ app.patch("/api/incidents/:id", async (req, res) => {
     if (status === "closed") incident.closedAt = new Date();
 
     await incident.save();
-    console.log("✅ [UPDATE INCIDENT]", incident.incidentNumber, "→", status);
+    console.log("✅ [UPDATE INCIDENT]", incident.incidentNumber, "→", status || "updated");
+    console.log("📤 [PATCH] Updated incident assignedMember:", incident.assignedMember);
     res.json(incident);
 
     // Send status update notifications to ALL recipients
@@ -2339,6 +2476,11 @@ app.post("/api/requests/:id/reject", async (req, res) => {
     setImmediate(async () => {
       try {
         const allRecipients = await getAllRequestRecipients(request);
+
+        // ✅ FIXED: Always include the person who rejected
+        if (actorEmail && !allRecipients.map(e => e.toLowerCase()).includes(actorEmail.toLowerCase())) {
+          allRecipients.push(actorEmail);
+        }
         const prodUrl = process.env.PROD_URL;
         const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
         
@@ -2405,8 +2547,6 @@ async function fetchItemStream(token, itemId, driveId) {
   throw new Error('All attempts to fetch item failed');
 }
 
-const pLimit = require('p-limit').default;
-
 app.get("/attachments/zip", async (req, res) => {
   try {
     const idsQuery = req.query.ids;
@@ -2427,8 +2567,7 @@ app.get("/attachments/zip", async (req, res) => {
     res.on('close', () => { try { archive.abort(); } catch(e){} });
     archive.pipe(res);
 
-    const limit = pLimit(2);
-    const fetchPromises = ids.map((id, i) => limit(async () => {
+    const fetchPromises = ids.map((id, i) => (async () => {
       try {
         const driveId = driveIds.length > i ? driveIds[i] : null;
         const fetched = await Promise.race([fetchItemStream(token, id, driveId), new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${id}`)), 15000))]);
@@ -2437,7 +2576,7 @@ app.get("/attachments/zip", async (req, res) => {
         if (dispMatch && dispMatch[1]) { try { filename = decodeURIComponent(dispMatch[1]); } catch (e) { filename = dispMatch[1]; } }
         archive.append(fetched.stream, { name: filename });
       } catch (err) { console.warn(`⚠️ Skip ${id}:`, err.message); }
-    }));
+    })());
     await Promise.all(fetchPromises);
     await archive.finalize();
   } catch (err) {
@@ -2671,6 +2810,50 @@ app.post('/api/incidents/:id/messages', async (req, res) => {
     console.error('❌ Error sending message:', error);
     res.status(500).json({ message: 'Failed to send message' });
   }
+});
+
+// GET /api/requests/search?q=:query
+app.get('/api/requests/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.json([]);
+  
+  const results = await Request.find({
+    $or: [
+      { requestNumber: { $regex: q, $options: 'i' } },
+      { description: { $regex: q, $options: 'i' } },
+      { 'service.name': { $regex: q, $options: 'i' } }
+    ]
+  }).limit(20);
+  
+  res.json(results);
+});
+
+// GET /api/incidents/search?q=:query
+app.get('/api/incidents/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.json([]);
+  
+  const results = await Incident.find({
+    $or: [
+      { incidentNumber: { $regex: q, $options: 'i' } },
+      { description: { $regex: q, $options: 'i' } },
+      { 'service.name': { $regex: q, $options: 'i' } }
+    ]
+  }).limit(20);
+  
+  res.json(results);
+});
+
+// GET /api/services/search?q=:query
+app.get('/api/services/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.json([]);
+  
+  const results = await Service.find({
+    name: { $regex: q, $options: 'i' }
+  }).limit(10);
+  
+  res.json(results);
 });
 
 // ===================== START SERVER =====================

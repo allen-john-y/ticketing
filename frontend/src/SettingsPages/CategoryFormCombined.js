@@ -391,7 +391,7 @@ export function SubCategoryForm({
       </div>
 
       {/* Attachments */}
-      <ToggleBlock
+      {/* <ToggleBlock
         icon="📎" label="File Attachments"
         desc="Let users attach files when submitting"
         checked={value.attachments.enabled}
@@ -401,10 +401,10 @@ export function SubCategoryForm({
           checked={value.attachments.required}
           onChange={v => set({ attachments: { ...value.attachments, required: v } })}
         />
-      </ToggleBlock>
+      </ToggleBlock> */}
 
       {/* On-Behalf */}
-      <ToggleBlock
+      {/* <ToggleBlock
         icon="👤" label="On-Behalf Submission"
         desc="Allow submitting on behalf of another person"
         checked={value.onBehalf.enabled}
@@ -417,7 +417,7 @@ export function SubCategoryForm({
       </ToggleBlock>
 
       {/* Approval */}
-      <ToggleBlock
+      {/* <ToggleBlock
         icon="✅" label="Require Approval"
         desc="Ticket must be approved before processing"
         checked={value.approval.requireApproval}

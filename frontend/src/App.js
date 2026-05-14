@@ -18,6 +18,7 @@ import CreateKB from './SettingsPages/CreateKB';
 import CreateKBForm from './SettingsPages/CreateKBForm';
 import KBListView from './KBListView';
 import KBView from './KBView';
+import SmartSearch from './SmartSearch';
 import logo from './sandeza.jpg';
 
 const HELP_DESK_GROUP_ID = process.env.REACT_APP_HELP_DESK_GROUP_ID;
@@ -62,7 +63,6 @@ function LeftNav({ isAdmin, onExpandChange }) {
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
-  // Settings is now available to ALL users (no isAdmin check)
   const navItems = [
     {
       id: 'incidents',
@@ -991,7 +991,7 @@ function ProfileModal({ isOpen, onClose, profileData, profilePhoto, initials, lo
                     <div className="pm-field">
                       <div className="pm-field-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.38 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
                         </svg>
                       </div>
                       <div className="pm-field-content">
@@ -1067,12 +1067,11 @@ function ProfileModal({ isOpen, onClose, profileData, profilePhoto, initials, lo
   );
 }
 
-/* ─────────────────────────── HEADER WITH SEARCH AND NOTIFICATIONS ─────────────────────────── */
+/* ─────────────────────────── HEADER ─────────────────────────── */
 function Header({ logout }) {
   const { accounts, instance } = useMsal();
   const navigate = useNavigate();
   const profileRef = useRef(null);
-  const searchRef = useRef(null);
 
   const [profileOpen, setProfileOpen]         = useState(false);
   const [fullProfileOpen, setFullProfileOpen] = useState(false);
@@ -1082,9 +1081,8 @@ function Header({ logout }) {
   const [profilePhoto, setProfilePhoto]       = useState(null);
   const [isAdmin, setIsAdmin]                 = useState(false);
   const [navExpanded, setNavExpanded]         = useState(false);
-  const [searchQuery, setSearchQuery]         = useState('');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications] = useState([]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1215,14 +1213,6 @@ function Header({ logout }) {
     fetchFullProfile();
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      console.log('Searching for:', searchQuery);
-      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-    }
-  };
-
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const initials = (accounts?.[0]?.name || accounts?.[0]?.username || 'U')
@@ -1285,63 +1275,6 @@ function Header({ logout }) {
           justify-content: center;
           max-width: 600px;
           margin: 0 auto;
-        }
-
-        .search-container {
-          width: 100%;
-          position: relative;
-        }
-
-        .search-form {
-          width: 100%;
-        }
-
-        .search-input-wrapper {
-          display: flex;
-          align-items: center;
-          background: #f5f7fb;
-          border-radius: 12px;
-          border: 1px solid #e9edf2;
-          transition: all 0.2s ease;
-          padding: 0 16px;
-          height: 44px;
-        }
-
-        .search-input-wrapper:focus-within {
-          background: #ffffff;
-          border-color: #e98404;
-          box-shadow: 0 0 0 3px rgba(233, 132, 4, 0.1);
-        }
-
-        .search-icon {
-          color: #9ca3af;
-          margin-right: 12px;
-          display: flex;
-          align-items: center;
-        }
-
-        .search-input {
-          flex: 1;
-          border: none;
-          background: transparent;
-          font-size: 14px;
-          font-family: 'DM Sans', sans-serif;
-          color: #1f2937;
-          outline: none;
-        }
-
-        .search-input::placeholder {
-          color: #9ca3af;
-          font-weight: 400;
-        }
-
-        .search-shortcut {
-          font-size: 12px;
-          color: #9ca3af;
-          background: #f0f2f5;
-          padding: 4px 8px;
-          border-radius: 8px;
-          font-family: monospace;
         }
 
         .header-right {
@@ -1632,35 +1565,17 @@ function Header({ logout }) {
             <header className="app-header">
               <div className="header-left" />
 
+              {/* ── SmartSearch replaces old search bar ── */}
               <div className="header-center">
-                <div className="search-container" ref={searchRef}>
-                  <form onSubmit={handleSearch} className="search-form">
-                    <div className="search-input-wrapper">
-                      <span className="search-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="11" cy="11" r="8"/>
-                          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                        </svg>
-                      </span>
-                      <input
-                        type="text"
-                        className="search-input"
-                        placeholder="Search tickets, services, KB articles..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
-                      <span className="search-shortcut">⌘</span>
-                    </div>
-                  </form>
-                </div>
+                <SmartSearch />
               </div>
 
               <div className="header-right">
                 {isAdmin && <span className="admin-badge">ADMIN</span>}
 
                 <div style={{ position: 'relative' }}>
-                  <button 
-                    className="notif-btn" 
+                  <button
+                    className="notif-btn"
                     onClick={() => setNotificationsOpen(!notificationsOpen)}
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -1738,20 +1653,19 @@ function Header({ logout }) {
 
             <div className="page-content">
               <Routes>
-                <Route path="/"                   element={<Home />} />
-                <Route path="/requests"           element={<Requests />} />
-                <Route path="/incidents"          element={<Incidents />} />
-                <Route path="/create-request"     element={<CreateRequest />} />
-                <Route path="/create-incident"    element={<CreateIncident />} />
-                <Route path="/incidents/:id"      element={<IncidentDetails />} />
-                <Route path="/requests/:id"       element={<RequestDetails />} />
-                <Route path="/dashboard"          element={<Dashboard />} />
-                {/* Settings route - passes isAdmin to the Settings component */}
-                <Route path="/settings/*"         element={<Settings isAdmin={isAdmin} />} />
-                <Route path="/settings/create-kb" element={<CreateKB />} />
+                <Route path="/"                      element={<Home />} />
+                <Route path="/requests"              element={<Requests />} />
+                <Route path="/incidents"             element={<Incidents />} />
+                <Route path="/create-request"        element={<CreateRequest />} />
+                <Route path="/create-incident"       element={<CreateIncident />} />
+                <Route path="/incidents/:id"         element={<IncidentDetails />} />
+                <Route path="/requests/:id"          element={<RequestDetails />} />
+                <Route path="/dashboard"             element={<Dashboard />} />
+                <Route path="/settings/*"            element={<Settings isAdmin={isAdmin} />} />
+                <Route path="/settings/create-kb"    element={<CreateKB />} />
                 <Route path="/settings/create-kb/new" element={<CreateKBForm />} />
-                <Route path="/kb"                 element={<KBListView />} />
-                <Route path="/kb/:id"             element={<KBView />} />
+                <Route path="/kb"                    element={<KBListView />} />
+                <Route path="/kb/:id"                element={<KBView />} />
               </Routes>
             </div>
           </div>
