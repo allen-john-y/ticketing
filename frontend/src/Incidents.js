@@ -254,6 +254,25 @@ export default function Incidents() {
   const { accounts } = useMsal();
   const navigate = useNavigate();
 
+  // Get current user info
+  const currentUser = accounts[0];
+  const currentUserEmail = currentUser?.username || currentUser?.mail || '';
+  const currentUserName = currentUser?.name || '';
+  const currentUserId = currentUser?.localAccountId || currentUser?.homeAccountId || '';
+  
+  // DEBUG: Log current user info
+  console.log('🔍 CURRENT USER INFO:', {
+    name: currentUserName,
+    username: currentUserEmail,
+    localAccountId: currentUser?.localAccountId,
+    homeAccountId: currentUser?.homeAccountId,
+    allKeys: currentUser ? Object.keys(currentUser) : [],
+    fullObject: currentUser
+  });
+  console.log('📧 Current User Email:', currentUserEmail);
+  console.log('👤 Current User Name:', currentUserName);
+  console.log('🆔 Current User ID:', currentUserId);
+
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -263,6 +282,7 @@ export default function Incidents() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [viewMode, setViewMode] = useState('my-incidents'); // 'my-incidents' or 'assigned-to-me'
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -279,7 +299,37 @@ export default function Incidents() {
       setError('');
       try {
         const res = await axios.get(`${BACKEND}/api/incidents`);
-        setIncidents(Array.isArray(res.data) ? res.data : []);
+        const data = Array.isArray(res.data) ? res.data : [];
+        setIncidents(data);
+        
+        // DEBUG: Log all incidents with FULL member details
+        console.log('📋 ALL INCIDENTS FETCHED:', data.length);
+        data.forEach((inc, index) => {
+          console.log(`\n🔹 Incident #${index + 1}:`);
+          console.log(`  ID: ${inc._id}`);
+          console.log(`  Number: ${inc.incidentNumber}`);
+          console.log(`  Title: ${inc.title}`);
+          console.log(`  Raised By (FULL):`, JSON.stringify(inc.raisedBy, null, 2));
+          console.log(`  Assignment Group Name: ${inc.assignmentGroup?.groupName}`);
+          console.log(`  Assignment Group Members FULL DATA:`);
+          console.log(JSON.stringify(inc.assignmentGroup?.members, null, 2));
+          
+          // Check each member's fields
+          if (inc.assignmentGroup?.members) {
+            inc.assignmentGroup.members.forEach((member, mIdx) => {
+              console.log(`\n  👤 Member ${mIdx + 1} DETAILS:`);
+              console.log(`    - Type: ${typeof member}`);
+              console.log(`    - Keys:`, Object.keys(member));
+              console.log(`    - Values:`, Object.values(member));
+              console.log(`    - Full object:`, member);
+              console.log(`    - Has email: ${!!member.email}`);
+              console.log(`    - Has mail: ${!!member.mail}`);
+              console.log(`    - Has username: ${!!member.username}`);
+              console.log(`    - Has userId: ${!!(member.userId || member._id)}`);
+              console.log(`    - Name: ${member.name}`);
+            });
+          }
+        });
       } catch (err) {
         console.error('❌ Fetch incidents:', err);
         setError('Failed to load incidents. Please try again.');
@@ -290,7 +340,7 @@ export default function Incidents() {
     fetchIncidents();
   }, []);
 
-  useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter, sortBy]);
+  useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter, sortBy, viewMode]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -303,11 +353,144 @@ export default function Incidents() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [openMenuId]);
 
+  // Helper function to check if a member matches the current user
+  const isMemberCurrentUser = (member) => {
+    console.log('  🔎 Checking if member matches current user:', {
+      memberName: member.name,
+      memberKeys: Object.keys(member),
+      currentUserName,
+      currentUserEmail,
+      currentUserId
+    });
+
+    // Match by email (multiple possible fields)
+    const memberEmails = [
+      member.email,
+      member.mail,
+      member.username,
+      member.userPrincipalName,
+      member.upn
+    ].filter(Boolean).map(e => e.toLowerCase().trim());
+
+    if (currentUserEmail && memberEmails.includes(currentUserEmail.toLowerCase().trim())) {
+      console.log('  ✅ MATCHED BY EMAIL');
+      return true;
+    }
+
+    // Match by name
+    if (currentUserName && member.name && 
+        member.name.toLowerCase().trim() === currentUserName.toLowerCase().trim()) {
+      console.log('  ✅ MATCHED BY NAME');
+      return true;
+    }
+
+    // Match by user ID
+    const memberIds = [
+      member.userId,
+      member._id,
+      member.id,
+      member.azureId,
+      member.objectId
+    ].filter(Boolean);
+
+    if (currentUserId && memberIds.includes(currentUserId)) {
+      console.log('  ✅ MATCHED BY USER ID');
+      return true;
+    }
+
+    // If member is a string, compare directly
+    if (typeof member === 'string') {
+      const memberStr = member.toLowerCase().trim();
+      if (currentUserEmail && memberStr === currentUserEmail.toLowerCase().trim()) {
+        console.log('  ✅ MATCHED BY STRING (email)');
+        return true;
+      }
+      if (currentUserName && memberStr === currentUserName.toLowerCase().trim()) {
+        console.log('  ✅ MATCHED BY STRING (name)');
+        return true;
+      }
+    }
+
+    console.log('  ❌ NO MATCH');
+    return false;
+  };
+
+  // Helper function to check if current user is in assignment group
+  const isUserInGroup = (incident) => {
+    if (!incident.assignmentGroup?.members?.length || !currentUserEmail) {
+      console.log(`⚠️ isUserInGroup: Missing data for "${incident.title}"`, {
+        hasMembers: !!incident.assignmentGroup?.members?.length,
+        hasEmail: !!currentUserEmail
+      });
+      return false;
+    }
+    
+    const found = incident.assignmentGroup.members.some(member => {
+      return isMemberCurrentUser(member);
+    });
+    
+    console.log(`📌 isUserInGroup result for "${incident.title}": ${found}`);
+    return found;
+  };
+
+  // Helper function to check if incident is created by current user
+  const isCreatedByUser = (incident) => {
+    if (!currentUserEmail) {
+      console.log('⚠️ No current user email');
+      return false;
+    }
+    const raiserEmail = (incident.raisedBy?.mail || incident.raisedBy?.email || '').toLowerCase().trim();
+    const currentEmail = currentUserEmail.toLowerCase().trim();
+    const match = raiserEmail === currentEmail;
+    
+    console.log('👤 Checking if created by user:', {
+      raiserEmail,
+      currentEmail,
+      match,
+      incidentTitle: incident.title
+    });
+    
+    return match;
+  };
+
   const filtered = useMemo(() => {
+    console.log('\n🔄 ===== FILTERING STARTED =====');
+    console.log('📊 View Mode:', viewMode);
+    console.log('📊 Total incidents before filtering:', incidents.length);
+    
     let list = [...incidents];
 
+    // Apply view mode filter first
+    console.log('\n🎯 APPLYING VIEW MODE FILTER:', viewMode);
+    
+    if (viewMode === 'my-incidents') {
+      console.log('👤 Filtering for MY INCIDENTS...');
+      list.forEach(inc => {
+        console.log(`  Checking: ${inc.title} - isCreatedByUser: ${isCreatedByUser(inc)}`);
+      });
+      list = list.filter(inc => isCreatedByUser(inc));
+      console.log('📊 After My Incidents filter:', list.length);
+    } else if (viewMode === 'assigned-to-me') {
+      console.log('📋 Filtering for ASSIGNED TO ME...');
+      list.forEach(inc => {
+        console.log(`\n  📝 Incident: ${inc.title}`);
+        console.log(`     Assignment Group: ${inc.assignmentGroup?.groupName || 'NO GROUP'}`);
+        console.log(`     Members count: ${inc.assignmentGroup?.members?.length || 0}`);
+        if (inc.assignmentGroup?.members) {
+          inc.assignmentGroup.members.forEach((m, i) => {
+            console.log(`     Member ${i+1}:`, m.name, '| Keys:', Object.keys(m));
+          });
+        }
+        console.log(`     isUserInGroup: ${isUserInGroup(inc)}`);
+      });
+      list = list.filter(inc => isUserInGroup(inc));
+      console.log('📊 After Assigned to Me filter:', list.length);
+    }
+
+    // Apply search filter
     if (search.trim()) {
       const q = search.toLowerCase();
+      const beforeSearch = list.length;
       list = list.filter(i =>
         i.incidentNumber?.toLowerCase().includes(q) ||
         i.title?.toLowerCase().includes(q) ||
@@ -317,11 +500,22 @@ export default function Incidents() {
         i.assignmentGroup?.groupName?.toLowerCase().includes(q) ||
         i.assignmentGroup?.members?.some(m => m.name?.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q))
       );
+      console.log('🔍 After search filter:', `${beforeSearch} → ${list.length}`);
     }
 
-    if (statusFilter !== 'all')   list = list.filter(i => i.status === statusFilter);
-    if (priorityFilter !== 'all') list = list.filter(i => i.priority === priorityFilter);
+    // Apply status and priority filters
+    if (statusFilter !== 'all') {
+      const before = list.length;
+      list = list.filter(i => i.status === statusFilter);
+      console.log('🏷️ After status filter:', `${before} → ${list.length}`);
+    }
+    if (priorityFilter !== 'all') {
+      const before = list.length;
+      list = list.filter(i => i.priority === priorityFilter);
+      console.log('⚡ After priority filter:', `${before} → ${list.length}`);
+    }
 
+    // Apply sorting
     list.sort((a, b) => {
       if (sortBy === 'newest')   return new Date(b.createdAt) - new Date(a.createdAt);
       if (sortBy === 'oldest')   return new Date(a.createdAt) - new Date(b.createdAt);
@@ -332,21 +526,40 @@ export default function Incidents() {
       return 0;
     });
 
+    console.log('\n✅ FINAL FILTERED RESULTS:', list.length);
+    console.log('📋 Final list:', list.map(inc => ({
+      title: inc.title,
+      incidentNumber: inc.incidentNumber,
+      raisedBy: inc.raisedBy?.mail,
+      group: inc.assignmentGroup?.groupName
+    })));
+    console.log('===== FILTERING COMPLETE =====\n');
+
     return list;
-  }, [incidents, search, statusFilter, priorityFilter, sortBy]);
+  }, [incidents, search, statusFilter, priorityFilter, sortBy, viewMode, currentUserEmail]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Stats
-  const stats = useMemo(() => ({
-    total:    incidents.length,
-    open:     incidents.filter(i => i.status === 'open').length,
-    active:   incidents.filter(i => i.status === 'in_progress').length,
-    resolved: incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length,
-    critical: incidents.filter(i => i.priority === 'critical' && i.status !== 'closed').length,
-    high:     incidents.filter(i => i.priority === 'high' && i.status !== 'closed').length,
-  }), [incidents]);
+  // Stats based on current view
+  const stats = useMemo(() => {
+    let baseList = [...incidents];
+    
+    if (viewMode === 'my-incidents') {
+      baseList = baseList.filter(inc => isCreatedByUser(inc));
+    } else if (viewMode === 'assigned-to-me') {
+      baseList = baseList.filter(inc => isUserInGroup(inc));
+    }
+
+    return {
+      total:    baseList.length,
+      open:     baseList.filter(i => i.status === 'open').length,
+      active:   baseList.filter(i => i.status === 'in_progress').length,
+      resolved: baseList.filter(i => i.status === 'resolved' || i.status === 'closed').length,
+      critical: baseList.filter(i => i.priority === 'critical' && i.status !== 'closed').length,
+      high:     baseList.filter(i => i.priority === 'high' && i.status !== 'closed').length,
+    };
+  }, [incidents, viewMode, currentUserEmail]);
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -473,13 +686,52 @@ export default function Incidents() {
       padding: 32px 48px 56px;
     }
 
+    /* View Toggle */
+    .inc-view-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 28px;
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 5px;
+      width: fit-content;
+      animation: fadeUp 0.45s 0.05s ease both;
+    }
+
+    .inc-toggle-btn {
+      padding: 12px 28px;
+      border: none;
+      background: transparent;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      position: relative;
+    }
+
+    .inc-toggle-btn-active {
+      background: var(--navy);
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 32, 96, 0.2);
+    }
+
+    .inc-toggle-btn:hover:not(.inc-toggle-btn-active) {
+      color: var(--navy);
+      background: rgba(0, 32, 96, 0.05);
+    }
+
     /* Stats Row */
     .inc-stats {
       display: grid;
       grid-template-columns: repeat(6, 1fr);
       gap: 16px;
       margin-bottom: 28px;
-      animation: fadeUp 0.45s 0.05s ease both;
+      animation: fadeUp 0.45s 0.1s ease both;
     }
 
     .inc-stat-card {
@@ -527,7 +779,7 @@ export default function Incidents() {
       background: var(--white);
       border: 1.5px solid var(--border);
       border-radius: 16px;
-      animation: fadeUp 0.45s 0.1s ease both;
+      animation: fadeUp 0.45s 0.15s ease both;
     }
 
     .inc-search-wrapper {
@@ -614,7 +866,7 @@ export default function Incidents() {
       border: 1.5px solid var(--border);
       border-radius: 18px;
       overflow: hidden;
-      animation: fadeUp 0.5s 0.15s ease both;
+      animation: fadeUp 0.5s 0.2s ease both;
       box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
 
@@ -797,7 +1049,7 @@ export default function Incidents() {
       opacity: 1;
     }
 
-    /* Dropdown Menu - REPLACES three dots button */
+    /* Dropdown Menu */
     .inc-menu-dropdown {
       position: absolute;
       left: 50%;
@@ -1130,6 +1382,8 @@ export default function Incidents() {
       .inc-select { width: 100%; }
       .inc-td { padding: 12px 12px; font-size: 12px; }
       .inc-th { padding: 12px 12px; font-size: 9px; }
+      .inc-view-toggle { width: 100%; }
+      .inc-toggle-btn { flex: 1; text-align: center; padding: 12px 16px; }
     }
   `;
 
@@ -1182,6 +1436,28 @@ export default function Incidents() {
 
       {/* Content */}
       <div className="inc-content">
+        {/* View Toggle */}
+        <div className="inc-view-toggle">
+          <button
+            className={`inc-toggle-btn ${viewMode === 'my-incidents' ? 'inc-toggle-btn-active' : ''}`}
+            onClick={() => {
+              console.log('🔄 Switching to MY INCIDENTS view');
+              setViewMode('my-incidents');
+            }}
+          >
+            👤 My Incidents
+          </button>
+          <button
+            className={`inc-toggle-btn ${viewMode === 'assigned-to-me' ? 'inc-toggle-btn-active' : ''}`}
+            onClick={() => {
+              console.log('🔄 Switching to ASSIGNED TO ME view');
+              setViewMode('assigned-to-me');
+            }}
+          >
+            📋 Assigned to Me
+          </button>
+        </div>
+
         {/* Stats */}
         <div className="inc-stats">
           {[
@@ -1238,8 +1514,10 @@ export default function Incidents() {
         {/* Result Meta */}
         <div className="inc-result-meta">
           <span style={{ fontSize: 13, color: '#64748b' }}>
-            Showing <strong style={{ color: '#002060' }}>{filtered.length}</strong> of{' '}
-            <strong style={{ color: '#002060' }}>{incidents.length}</strong> incidents
+            Showing <strong style={{ color: '#002060' }}>{filtered.length}</strong> incidents in{' '}
+            <strong style={{ color: '#002060' }}>
+              {viewMode === 'my-incidents' ? 'My Incidents' : 'Assigned to Me'}
+            </strong>
           </span>
           {(search || statusFilter !== 'all' || priorityFilter !== 'all') && (
             <button
@@ -1277,7 +1555,11 @@ export default function Incidents() {
                       <div className="inc-empty">
                         <div className="inc-empty-icon">🚨</div>
                         <div className="inc-empty-title">No incidents found</div>
-                        <div className="inc-empty-sub">Try adjusting your filters</div>
+                        <div className="inc-empty-sub">
+                          {viewMode === 'my-incidents' 
+                            ? "You haven't created any incidents yet" 
+                            : "No incidents assigned to your groups"}
+                        </div>
                       </div>
                     </td>
                   </tr>

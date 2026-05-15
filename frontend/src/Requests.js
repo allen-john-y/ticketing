@@ -1,4 +1,4 @@
-// Requests.js - Fixed to show Assignment Group instead of individual person
+// Requests.js - With My Requests / Assigned to Me toggle
 import React, { useState, useEffect, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -148,6 +148,12 @@ export default function Requests() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Get current user info
+  const currentUser = accounts[0];
+  const currentUserEmail = currentUser?.username || currentUser?.mail || '';
+  const currentUserName = currentUser?.name || '';
+  const currentUserId = currentUser?.localAccountId || currentUser?.homeAccountId || '';
+
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -159,6 +165,7 @@ export default function Requests() {
   );
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [viewMode, setViewMode] = useState('my-requests'); // 'my-requests' or 'assigned-to-me'
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -168,7 +175,6 @@ export default function Requests() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -187,7 +193,7 @@ export default function Requests() {
     fetchRequests();
   }, []);
 
-  useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter, sortBy]);
+  useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter, sortBy, viewMode]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -200,9 +206,80 @@ export default function Requests() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [openMenuId]);
 
+  // Helper function to check if a member matches the current user
+  const isMemberCurrentUser = (member) => {
+    // Match by email (multiple possible fields)
+    const memberEmails = [
+      member.email,
+      member.mail,
+      member.username,
+      member.userPrincipalName,
+      member.upn
+    ].filter(Boolean).map(e => e.toLowerCase().trim());
+
+    if (currentUserEmail && memberEmails.includes(currentUserEmail.toLowerCase().trim())) {
+      return true;
+    }
+
+    // Match by name
+    if (currentUserName && member.name && 
+        member.name.toLowerCase().trim() === currentUserName.toLowerCase().trim()) {
+      return true;
+    }
+
+    // Match by user ID
+    const memberIds = [
+      member.userId,
+      member._id,
+      member.id,
+      member.azureId,
+      member.objectId
+    ].filter(Boolean);
+
+    if (currentUserId && memberIds.includes(currentUserId)) {
+      return true;
+    }
+
+    // If member is a string, compare directly
+    if (typeof member === 'string') {
+      const memberStr = member.toLowerCase().trim();
+      if (currentUserEmail && memberStr === currentUserEmail.toLowerCase().trim()) {
+        return true;
+      }
+      if (currentUserName && memberStr === currentUserName.toLowerCase().trim()) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Helper function to check if current user is in assignment group
+  const isUserInGroup = (request) => {
+    if (!request.assignmentGroup?.members?.length || !currentUserEmail) {
+      return false;
+    }
+    return request.assignmentGroup.members.some(member => isMemberCurrentUser(member));
+  };
+
+  // Helper function to check if request is created by current user
+  const isCreatedByUser = (request) => {
+    if (!currentUserEmail) return false;
+    const raiserEmail = (request.raisedBy?.mail || request.raisedBy?.email || '').toLowerCase().trim();
+    return raiserEmail === currentUserEmail.toLowerCase().trim();
+  };
+
   const filtered = useMemo(() => {
     let list = [...requests];
 
+    // Apply view mode filter first
+    if (viewMode === 'my-requests') {
+      list = list.filter(r => isCreatedByUser(r));
+    } else if (viewMode === 'assigned-to-me') {
+      list = list.filter(r => isUserInGroup(r));
+    }
+
+    // Apply search filter
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(r =>
@@ -216,9 +293,11 @@ export default function Requests() {
       );
     }
 
+    // Apply status and priority filters
     if (statusFilter !== 'all')   list = list.filter(r => r.status === statusFilter);
     if (priorityFilter !== 'all') list = list.filter(r => r.priority === priorityFilter);
 
+    // Apply sorting
     list.sort((a, b) => {
       if (sortBy === 'newest')   return new Date(b.createdAt) - new Date(a.createdAt);
       if (sortBy === 'oldest')   return new Date(a.createdAt) - new Date(b.createdAt);
@@ -230,19 +309,29 @@ export default function Requests() {
     });
 
     return list;
-  }, [requests, search, statusFilter, priorityFilter, sortBy]);
+  }, [requests, search, statusFilter, priorityFilter, sortBy, viewMode, currentUserEmail]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Stats
-  const stats = useMemo(() => ({
-    total:      requests.length,
-    open:       requests.filter(r => r.status === 'open').length,
-    pending:    requests.filter(r => r.status === 'pending_approval').length,
-    resolved:   requests.filter(r => r.status === 'resolved' || r.status === 'closed').length,
-    high:       requests.filter(r => r.priority === 'high' && r.status !== 'closed').length,
-  }), [requests]);
+  // Stats based on current view
+  const stats = useMemo(() => {
+    let baseList = [...requests];
+    
+    if (viewMode === 'my-requests') {
+      baseList = baseList.filter(r => isCreatedByUser(r));
+    } else if (viewMode === 'assigned-to-me') {
+      baseList = baseList.filter(r => isUserInGroup(r));
+    }
+
+    return {
+      total:      baseList.length,
+      open:       baseList.filter(r => r.status === 'open').length,
+      pending:    baseList.filter(r => r.status === 'pending_approval').length,
+      resolved:   baseList.filter(r => r.status === 'resolved' || r.status === 'closed').length,
+      high:       baseList.filter(r => r.priority === 'high' && r.status !== 'closed').length,
+    };
+  }, [requests, viewMode, currentUserEmail]);
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -251,7 +340,6 @@ export default function Requests() {
     setDeleting(true);
     try {
       await axios.delete(`${BACKEND}/api/requests/${requestId}`);
-      // Remove from local state for immediate UI update
       setRequests(prev => prev.filter(r => r._id !== requestId));
       setDeleteTarget(null);
       setOpenMenuId(null);
@@ -370,13 +458,52 @@ export default function Requests() {
       padding: 32px 48px 56px;
     }
 
+    /* View Toggle */
+    .req-view-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 28px;
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 5px;
+      width: fit-content;
+      animation: fadeUp 0.45s 0.05s ease both;
+    }
+
+    .req-toggle-btn {
+      padding: 12px 28px;
+      border: none;
+      background: transparent;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      position: relative;
+    }
+
+    .req-toggle-btn-active {
+      background: var(--navy);
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 32, 96, 0.2);
+    }
+
+    .req-toggle-btn:hover:not(.req-toggle-btn-active) {
+      color: var(--navy);
+      background: rgba(0, 32, 96, 0.05);
+    }
+
     /* Stats Row */
     .req-stats {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 16px;
       margin-bottom: 28px;
-      animation: fadeUp 0.45s 0.05s ease both;
+      animation: fadeUp 0.45s 0.1s ease both;
     }
 
     .req-stat-card {
@@ -424,7 +551,7 @@ export default function Requests() {
       background: var(--white);
       border: 1.5px solid var(--border);
       border-radius: 16px;
-      animation: fadeUp 0.45s 0.1s ease both;
+      animation: fadeUp 0.45s 0.15s ease both;
     }
 
     .req-search-wrapper {
@@ -510,7 +637,7 @@ export default function Requests() {
       border: 1.5px solid var(--border);
       border-radius: 18px;
       overflow: hidden;
-      animation: fadeUp 0.5s 0.15s ease both;
+      animation: fadeUp 0.5s 0.2s ease both;
     }
 
     .req-table {
@@ -596,7 +723,7 @@ export default function Requests() {
       font-size: 11px; color: var(--muted);
     }
 
-    /* Assignment Group Styles - UPDATED */
+    /* Assignment Group Styles */
     .req-group-cell {
       display: flex; align-items: center; gap: 10px;
     }
@@ -664,7 +791,7 @@ export default function Requests() {
     }
 
     .req-menu-dropdown {
-      position: fixed;   /* ← change from absolute to fixed */
+      position: fixed;
       background: var(--white);
       border: 1.5px solid var(--border);
       border-radius: 12px;
@@ -971,6 +1098,8 @@ export default function Requests() {
       .req-content { padding: 24px 20px 40px; }
       .req-stats { grid-template-columns: repeat(2, 1fr); }
       .req-table-wrapper { overflow-x: auto; }
+      .req-view-toggle { width: 100%; }
+      .req-toggle-btn { flex: 1; text-align: center; padding: 12px 16px; }
     }
   `;
 
@@ -1009,7 +1138,7 @@ export default function Requests() {
             <div className="req-hero-eyebrow-line" />
             Service Catalog
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 24 }}>
             <div>
               <h1>All <em>Requests</em></h1>
               <p className="req-hero-sub">{today} — Browse and manage service requests</p>
@@ -1023,6 +1152,22 @@ export default function Requests() {
 
       {/* Content */}
       <div className="req-content">
+        {/* View Toggle */}
+        <div className="req-view-toggle">
+          <button
+            className={`req-toggle-btn ${viewMode === 'my-requests' ? 'req-toggle-btn-active' : ''}`}
+            onClick={() => setViewMode('my-requests')}
+          >
+            👤 My Requests
+          </button>
+          <button
+            className={`req-toggle-btn ${viewMode === 'assigned-to-me' ? 'req-toggle-btn-active' : ''}`}
+            onClick={() => setViewMode('assigned-to-me')}
+          >
+            📋 Assigned to Me
+          </button>
+        </div>
+
         {/* Stats */}
         <div className="req-stats">
           {[
@@ -1078,8 +1223,10 @@ export default function Requests() {
         {/* Result Meta */}
         <div className="req-result-meta">
           <span style={{ fontSize: 13, color: '#64748b' }}>
-            Showing <strong style={{ color: '#002060' }}>{filtered.length}</strong> of{' '}
-            <strong style={{ color: '#002060' }}>{requests.length}</strong> requests
+            Showing <strong style={{ color: '#002060' }}>{filtered.length}</strong> requests in{' '}
+            <strong style={{ color: '#002060' }}>
+              {viewMode === 'my-requests' ? 'My Requests' : 'Assigned to Me'}
+            </strong>
           </span>
           {(search || statusFilter !== 'all' || priorityFilter !== 'all') && (
             <button
@@ -1117,7 +1264,11 @@ export default function Requests() {
                       <div className="req-empty">
                         <div className="req-empty-icon">📋</div>
                         <div className="req-empty-title">No requests found</div>
-                        <div className="req-empty-sub">Try adjusting your filters</div>
+                        <div className="req-empty-sub">
+                          {viewMode === 'my-requests' 
+                            ? "You haven't created any requests yet" 
+                            : "No requests assigned to your groups"}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1152,7 +1303,6 @@ export default function Requests() {
                           </div>
                         </div>
                       </td>
-                      {/* ASSIGNED TEAM - Shows Group/Team, NOT individual person */}
                       <td className="req-td">
                         {req.assignmentGroup?.groupName ? (
                           <div className="req-group-cell">
@@ -1181,7 +1331,6 @@ export default function Requests() {
                           <span className="req-date-rel">{formatRelative(req.createdAt)}</span>
                         </div>
                       </td>
-                      {/* ACTIONS - Three dot menu */}
                       <td className="req-td" onClick={e => e.stopPropagation()}>
                         <div className="req-menu-wrapper">
                           <button
