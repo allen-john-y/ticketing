@@ -1,33 +1,88 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { InteractionRequiredAuthError } from '@azure/msal-browser';
-import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
-import { useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate, useLocation } from 'react-router-dom';
 import Login from './Login';
 import Home from './Home';
 import Requests from './Requests';
 import Incidents from './Incidents'
+import HrRequest from './HrRequest';
 import CreateRequest from './CreateRequest';
 import CreateIncident from './CreateIncident';
+import OnboardingForm from './OnboardingForm';
 import TicketDetails from './TicketDetails';
 import IncidentDetails from './IncidentDetails';
 import RequestDetails from './RequestDetails';
 import Dashboard from './Dashboard';
 import Settings from './SettingsPages/Settings';
+import Offboarding from './OffboardingForm';
+import OffboardingRequestDetails from './OffboardingRequestDetails';
 import CreateKB from './SettingsPages/CreateKB';
+import OnboardingRequestDetails from './OnboardingRequestDetails';
 import CreateKBForm from './SettingsPages/CreateKBForm';
+import CreateHrRequest from './SettingsPages/CreateHrRequest';
+import Departments from './SettingsPages/Departments';
+import OnboardingSettings from './SettingsPages/OnboardingSettings';
+import OffboardingSettings from './SettingsPages/OffboardingSettings';
 import KBListView from './KBListView';
 import KBView from './KBView';
 import SmartSearch from './SmartSearch';
 import logo from './sandeza.jpg';
 
 const HELP_DESK_GROUP_ID = process.env.REACT_APP_HELP_DESK_GROUP_ID;
+const BACKEND = process.env.REACT_APP_BACKEND_URL;
+
+/* ─────────────────────────── PROTECTED HR ROUTE ─────────────────────────── */
+function ProtectedHrRoute({ children, hasAccess, loading }) {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !hasAccess) {
+      navigate('/', { replace: true });
+    }
+  }, [loading, hasAccess, navigate]);
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '50vh',
+        fontSize: '14px',
+        color: '#64748b'
+      }}>
+        Checking access...
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '50vh',
+        textAlign: 'center',
+        padding: '20px'
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+        <h2 style={{ color: '#0f172a', marginBottom: '8px' }}>Access Denied</h2>
+        <p style={{ color: '#64748b' }}>You don't have permission to access HR requests.</p>
+      </div>
+    );
+  }
+
+  return children;
+}
 
 /* ─────────────────────────── NAV CONTEXT ─────────────────────────── */
 const NavContext = React.createContext({ navExpanded: false });
 
 /* ─────────────────────────── LEFT NAVBAR ─────────────────────────── */
-function LeftNav({ isAdmin, onExpandChange }) {
+function LeftNav({ isAdmin, hasHrAccess, onExpandChange }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [hovered, setHovered]   = useState(false);
@@ -94,6 +149,21 @@ function LeftNav({ isAdmin, onExpandChange }) {
       color: '#3b82f6',
       activeColor: 'rgba(59,130,246,0.15)',
     },
+    // ✅ Conditionally show HR Request based on hasHrAccess
+    ...(hasHrAccess ? [{
+      id: 'onboarding',
+      label: 'HR Request',
+      path: '/hr-request',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+          <path d="M16 7a4 4 0 0 1-8 0"/>
+        </svg>
+      ),
+      color: '#e98404',
+      activeColor: 'rgba(233,132,4,0.15)',
+    }] : []),
     {
       id: 'kb',
       label: 'Knowledge Base',
@@ -107,7 +177,7 @@ function LeftNav({ isAdmin, onExpandChange }) {
       color: '#8b5cf6',
       activeColor: 'rgba(139,92,246,0.15)',
     },
-    {
+    ...(isAdmin ? [{
       id: 'settings',
       label: 'Settings',
       path: '/settings',
@@ -119,7 +189,7 @@ function LeftNav({ isAdmin, onExpandChange }) {
       ),
       color: '#e98404',
       activeColor: 'rgba(233,132,4,0.15)',
-    },
+    }] : []),
   ];
 
   return (
@@ -1080,6 +1150,8 @@ function Header({ logout }) {
   const [profileError, setProfileError]       = useState(null);
   const [profilePhoto, setProfilePhoto]       = useState(null);
   const [isAdmin, setIsAdmin]                 = useState(false);
+  const [hasHrAccess, setHasHrAccess]         = useState(false);
+  const [loadingHrAccess, setLoadingHrAccess] = useState(true);
   const [navExpanded, setNavExpanded]         = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications] = useState([]);
@@ -1121,6 +1193,7 @@ function Header({ logout }) {
     fetchPhotoSilently();
   }, [accounts, instance]);
 
+  // ─── Check Admin Status ───
   useEffect(() => {
     let cancelled = false;
     const checkMembership = async () => {
@@ -1164,6 +1237,33 @@ function Header({ logout }) {
     checkMembership();
     return () => { cancelled = true; };
   }, [accounts, instance]);
+
+  // ─── Check HR Access ───
+  useEffect(() => {
+    let cancelled = false;
+    const checkHrAccess = async () => {
+      if (!accounts || !accounts[0]) {
+        setHasHrAccess(false);
+        setLoadingHrAccess(false);
+        return;
+      }
+      try {
+        const email = accounts[0].username;
+        const res = await fetch(`${BACKEND}/api/hr-access/check?email=${encodeURIComponent(email)}`);
+        const data = await res.json();
+        if (!cancelled) {
+          setHasHrAccess(!!data.hasAccess);
+        }
+      } catch (err) {
+        console.error('Error checking HR access:', err);
+        if (!cancelled) setHasHrAccess(false);
+      } finally {
+        if (!cancelled) setLoadingHrAccess(false);
+      }
+    };
+    checkHrAccess();
+    return () => { cancelled = true; };
+  }, [accounts]);
 
   const fetchFullProfile = async () => {
     if (!accounts || !accounts[0]) return;
@@ -1220,6 +1320,26 @@ function Header({ logout }) {
     .slice(0, 2)
     .map(s => s[0].toUpperCase())
     .join('');
+
+  // Don't render navigation until HR access check is complete
+  if (loadingHrAccess) {
+    return (
+      <div className="app-root">
+        <div className="app-container">
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            minHeight: '100vh',
+            fontSize: '14px',
+            color: '#64748b'
+          }}>
+            Loading...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1559,13 +1679,12 @@ function Header({ logout }) {
       <div className="app-root">
         <div className="app-container">
 
-          <LeftNav isAdmin={isAdmin} onExpandChange={setNavExpanded} />
+          <LeftNav isAdmin={isAdmin} hasHrAccess={hasHrAccess} onExpandChange={setNavExpanded} />
 
           <div className={`main-wrapper${navExpanded ? ' nav-open' : ''}`}>
             <header className="app-header">
               <div className="header-left" />
 
-              {/* ── SmartSearch replaces old search bar ── */}
               <div className="header-center">
                 <SmartSearch />
               </div>
@@ -1653,19 +1772,53 @@ function Header({ logout }) {
 
             <div className="page-content">
               <Routes>
-                <Route path="/"                      element={<Home />} />
-                <Route path="/requests"              element={<Requests />} />
-                <Route path="/incidents"             element={<Incidents />} />
-                <Route path="/create-request"        element={<CreateRequest />} />
-                <Route path="/create-incident"       element={<CreateIncident />} />
-                <Route path="/incidents/:id"         element={<IncidentDetails />} />
-                <Route path="/requests/:id"          element={<RequestDetails />} />
-                <Route path="/dashboard"             element={<Dashboard />} />
-                <Route path="/settings/*"            element={<Settings isAdmin={isAdmin} />} />
-                <Route path="/settings/create-kb"    element={<CreateKB />} />
+                <Route path="/" element={<Home />} />
+                
+                {/* ✅ Protected HR Routes */}
+                <Route 
+                  path="/hr-request" 
+                  element={
+                    <ProtectedHrRoute hasAccess={hasHrAccess} loading={loadingHrAccess}>
+                      <HrRequest />
+                    </ProtectedHrRoute>
+                  } 
+                />
+                <Route 
+                  path="/hr-request/:id" 
+                  element={
+                    <ProtectedHrRoute hasAccess={hasHrAccess} loading={loadingHrAccess}>
+                      <OnboardingRequestDetails />
+                    </ProtectedHrRoute>
+                  } 
+                />
+                <Route 
+                  path="/onboarding/form" 
+                  element={
+                    <ProtectedHrRoute hasAccess={hasHrAccess} loading={loadingHrAccess}>
+                      <OnboardingForm />
+                    </ProtectedHrRoute>
+                  } 
+                />
+                
+                <Route path="/requests" element={<Requests />} />
+                <Route path="/incidents" element={<Incidents />} />
+                <Route path="/create-request" element={<CreateRequest />} />
+                <Route path="/create-request/:type" element={<CreateRequest />} />
+                <Route path="/create-incident" element={<CreateIncident />} />
+                <Route path="/incidents/:id" element={<IncidentDetails />} />
+                <Route path="/requests/:id" element={<RequestDetails />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/settings/*" element={<Settings isAdmin={isAdmin} />} />
+                <Route path="/settings/create-kb" element={<CreateKB />} />
+                <Route path="/offboarding/form" element={<Offboarding />} />
+                <Route path="/offboarding-request/:id" element={<OffboardingRequestDetails />} />
                 <Route path="/settings/create-kb/new" element={<CreateKBForm />} />
-                <Route path="/kb"                    element={<KBListView />} />
-                <Route path="/kb/:id"                element={<KBView />} />
+                {isAdmin && <Route path="/settings/departments" element={<Departments />} />}
+                {isAdmin && <Route path="/settings/onboarding-settings" element={<OnboardingSettings />} />}
+                {isAdmin && <Route path="/settings/offboarding-settings" element={<OffboardingSettings />} />}
+                <Route path="/kb" element={<KBListView />} />
+                <Route path="/settings/hr-request-settings" element={<CreateHrRequest />} />
+                <Route path="/kb/:id" element={<KBView />} />
               </Routes>
             </div>
           </div>

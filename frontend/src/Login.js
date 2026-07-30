@@ -254,13 +254,6 @@ function Login() {
           transform: none;
         }
 
-        /* Microsoft icon inside button */
-        .ln-btn-icon {
-          width: 18px;
-          height: 18px;
-          flex-shrink: 0;
-        }
-
         /* ── Footer note ── */
         .ln-footer-note {
           display: flex;
@@ -302,6 +295,14 @@ function Login() {
           flex-shrink: 0;
         }
 
+        /* ── Organisation icon (replaces Microsoft logo) ── */
+        .ln-org-icon {
+          width: 20px;
+          height: 20px;
+          flex-shrink: 0;
+          color: #fff;
+        }
+
         @media (max-width: 480px) {
           .ln-card {
             margin: 1rem;
@@ -331,11 +332,11 @@ function Login() {
           <div className="ln-body">
             <div className="ln-heading">Sign in to your account</div>
             <div className="ln-subheading">
-              Use your company Microsoft account to access the helpdesk portal.
+              Use your company organisation account to access the portal.
             </div>
           </div>
 
-          {/* Login button */}
+          {/* Login button - Updated without Microsoft logo */}
           <button className="ln-btn" onClick={login} disabled={isLoading}>
             {isLoading ? (
               <>
@@ -344,14 +345,12 @@ function Login() {
               </>
             ) : (
               <>
-                {/* Microsoft logo */}
-                <svg className="ln-btn-icon" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="1"  y="1"  width="9" height="9" fill="#F25022"/>
-                  <rect x="11" y="1"  width="9" height="9" fill="#7FBA00"/>
-                  <rect x="1"  y="11" width="9" height="9" fill="#00A4EF"/>
-                  <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+                {/* Organisation Icon - replaces Microsoft logo */}
+                <svg className="ln-org-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
                 </svg>
-                Sign in with Microsoft
+                Sign in with Organisation Account
               </>
             )}
           </button>
@@ -359,7 +358,7 @@ function Login() {
           {/* Footer note */}
           <div className="ln-footer-note">
             <div className="ln-footer-dot" />
-            Secured by Azure Active Directory
+            Secured by MFA
           </div>
 
         </div>

@@ -8,7 +8,10 @@ import EditField from './EditField';
 import RemoveField from './RemoveField';
 import AddRequest from './AddRequest';
 import AssignmentGroups from './AssignmentGroup';
+import Departments from './Departments';
+import OnboardingSettings from './OnboardingSettings';
 import CreateKB from './CreateKB';
+import EmployeeType from './EmployeeType'; // Import the new component
 
 // Full settings options (admin only)
 const adminSettingsOptions = [
@@ -74,6 +77,51 @@ const adminSettingsOptions = [
     icon: '👔',
     accent: '#8b5cf6',
     accentBg: 'rgba(139, 92, 246, 0.08)',
+  },
+  {
+    id: 'departments',
+    path: 'departments',
+    title: 'Departments',
+    description: 'Manage departments and department-related configuration for the helpdesk system.',
+    icon: '🏢',
+    accent: '#0f766e',
+    accentBg: 'rgba(15, 118, 110, 0.08)',
+  },
+  {
+    id: 'employee-type',
+    path: 'employee-type',
+    title: 'Employee Type',
+    description: 'Configure employee types and classifications for your organization, including categories and permissions.',
+    icon: '💼',
+    accent: '#059669',
+    accentBg: 'rgba(5, 150, 105, 0.08)',
+  },
+  {
+    id: 'onboarding-settings',
+    path: 'onboarding-settings',
+    title: 'Onboarding settings',
+    description: 'Configure onboarding-related settings and department options for new employee requests.',
+    icon: '📝',
+    accent: '#2563eb',
+    accentBg: 'rgba(37, 99, 235, 0.08)',
+  },
+  {
+    id: 'offboarding-settings',
+    path: 'offboarding-settings',
+    title: 'Offboarding settings',
+    description: 'Configure offboarding-related settings and department options for employee departure processes.',
+    icon: '📝',
+    accent: '#2563eb',
+    accentBg: 'rgba(37, 99, 235, 0.08)',
+  },
+  {
+    id: 'hr-request-settings',
+    path: 'hr-request-settings',
+    title: 'Hr Request Settings',
+    description: 'Manage HR request settings and related configuration for employee request workflows.',
+    icon: '📋',
+    accent: '#7c3aed',
+    accentBg: 'rgba(124, 58, 237, 0.08)',
   },
   {
     id: 'create-kb',
@@ -419,6 +467,9 @@ export default function Settings({ isAdmin = false }) {
             <Route path="remove-field" element={<RemoveField />} />
             <Route path="add-request" element={<AddRequest />} />
             <Route path="assignment-groups" element={<AssignmentGroups />} />
+            <Route path="departments" element={<Departments />} />
+            <Route path="employee-type" element={<EmployeeType />} />
+            <Route path="onboarding-settings" element={<OnboardingSettings />} />
           </>
         )}
         
@@ -432,6 +483,9 @@ export default function Settings({ isAdmin = false }) {
             <Route path="remove-field" element={<AccessDenied />} />
             <Route path="add-request" element={<AccessDenied />} />
             <Route path="assignment-groups" element={<AccessDenied />} />
+            <Route path="departments" element={<AccessDenied />} />
+            <Route path="employee-type" element={<AccessDenied />} />
+            <Route path="onboarding-settings" element={<AccessDenied />} />
           </>
         )}
       </Routes>
