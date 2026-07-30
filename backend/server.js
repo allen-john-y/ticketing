@@ -1799,6 +1799,65 @@ app.delete('/api/services/:id', async (req, res) => {
   }
 });
 
+// ===================== ATOMIC ID COUNTERS =====================
+// Auto-incrementing request/incident numbers (REQ-, HRQ-, INC-) using a
+// dedicated "counters" collection. findOneAndUpdate + $inc is a SINGLE
+// atomic Mongo operation, so two simultaneous submits can never receive
+// the same number.
+//
+// Previously each prefix used a "find the highest existing number, then
+// check nobody's taken candidate+1 yet" approach. That has a race window
+// between the read and the write: two requests created a few ms apart can
+// both read the same highest number, both compute the same candidate, and
+// both pass the "is it free" check before either save finishes — producing
+// the E11000 duplicate key error you saw on REQ-0022. The counter below
+// removes that window entirely.
+const counterSchema = new mongoose.Schema({
+  _id: { type: String, required: true }, // counter name: "REQ", "HRQ", "INC"
+  seq: { type: Number, default: 0 },
+});
+const Counter = mongoose.model("Counter", counterSchema);
+
+async function getNextSequence(name) {
+  const counter = await Counter.findOneAndUpdate(
+    { _id: name },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  return counter.seq;
+}
+
+// One-time-per-boot safety net: make sure each counter starts at least as
+// high as the highest number already saved in the matching collection(s).
+// Without this, on the first boot after this change the counter would start
+// at 0/1 and immediately collide with numbers that already exist in the DB
+// from before the switch.
+async function seedCounterFromMax(counterName, sources) {
+  let highest = 0;
+  for (const { model, field } of sources) {
+    try {
+      const last = await model
+        .findOne({ [field]: { $regex: /^[A-Z]+-\d+$/ } })
+        .sort({ [field]: -1 })
+        .collation({ locale: "en_US", numericOrdering: true })
+        .select(field)
+        .lean();
+      const value = last?.[field];
+      if (value) {
+        const num = parseInt(value.split("-").pop(), 10);
+        if (!isNaN(num) && num > highest) highest = num;
+      }
+    } catch (err) {
+      console.error(`❌ [COUNTER SEED] ${counterName} (${model.modelName}):`, err.message);
+    }
+  }
+  await Counter.findOneAndUpdate(
+    { _id: counterName },
+    { $max: { seq: highest } },
+    { upsert: true }
+  );
+}
+
 // ===================== REQUEST SCHEMA =====================
 const requestSchema = new mongoose.Schema({
   requestNumber: { type: String, unique: true },
@@ -1915,25 +1974,11 @@ requestSchema.pre("save", async function (next) {
     // Onboarding requests get an "HRQ-" prefix; everything else keeps "REQ-".
     const isOnboarding = this.service?.categoryName === 'Onboarding';
     const prefix = isOnboarding ? 'HRQ' : 'REQ';
-    const RequestModel = mongoose.model("Request");
-    let attempt = 0;
-    while (attempt < 5) {
-      const last = await RequestModel
-        .findOne({ requestNumber: { $regex: new RegExp(`^${prefix}-\\d+$`) } })
-        .sort({ requestNumber: -1 })
-        .collation({ locale: "en_US", numericOrdering: true })
-        .select("requestNumber")
-        .lean();
-      const lastNum = last?.requestNumber ? parseInt(last.requestNumber.replace(`${prefix}-`, ''), 10) : 0;
-      const candidate = `${prefix}-${String(lastNum + 1).padStart(4, "0")}`;
-      const exists = await RequestModel.exists({ requestNumber: candidate });
-      if (!exists) {
-        this.requestNumber = candidate;
-        break;
-      }
-      attempt++;
-    }
-    if (!this.requestNumber) {
+    try {
+      const seq = await getNextSequence(prefix);
+      this.requestNumber = `${prefix}-${String(seq).padStart(4, "0")}`;
+    } catch (err) {
+      console.error("❌ [REQUEST NUMBER] Counter error, falling back:", err.message);
       // Extremely unlikely fallback to avoid ever failing a save
       this.requestNumber = `${prefix}-${Date.now()}`;
     }
@@ -1957,51 +2002,15 @@ hrRequestDocSchema.pre("save", async function (next) {
     this.requestNumber = undefined;
   }
   if (!this.requestNumber) {
-    const prefix = 'HRQ';
-    const HrRequestModel = mongoose.model("HrRequest");
-    const OffboardingModel = mongoose.model("OffboardingRequest");
-    let attempt = 0;
-    while (attempt < 5) {
-      // Check HrRequest collection
-      const lastHr = await HrRequestModel
-        .findOne({ requestNumber: { $regex: new RegExp(`^${prefix}-\\d+$`) } })
-        .sort({ requestNumber: -1 })
-        .collation({ locale: "en_US", numericOrdering: true })
-        .select("requestNumber")
-        .lean();
-      
-      // Check OffboardingRequest collection
-      const lastOffboarding = await OffboardingModel
-        .findOne({ requestNumber: { $regex: new RegExp(`^${prefix}-\\d+$`) } })
-        .sort({ requestNumber: -1 })
-        .collation({ locale: "en_US", numericOrdering: true })
-        .select("requestNumber")
-        .lean();
-      
-      let highestNum = 0;
-      if (lastHr?.requestNumber) {
-        const num = parseInt(lastHr.requestNumber.replace(`${prefix}-`, ''), 10);
-        if (num > highestNum) highestNum = num;
-      }
-      if (lastOffboarding?.requestNumber) {
-        const num = parseInt(lastOffboarding.requestNumber.replace(`${prefix}-`, ''), 10);
-        if (num > highestNum) highestNum = num;
-      }
-      
-      const candidate = `${prefix}-${String(highestNum + 1).padStart(4, "0")}`;
-      
-      // Check if candidate exists in EITHER collection
-      const existsInHr = await HrRequestModel.exists({ requestNumber: candidate });
-      const existsInOffboarding = await OffboardingModel.exists({ requestNumber: candidate });
-      
-      if (!existsInHr && !existsInOffboarding) {
-        this.requestNumber = candidate;
-        break;
-      }
-      attempt++;
-    }
-    if (!this.requestNumber) {
-      this.requestNumber = `${prefix}-${Date.now()}`;
+    // Shared "HRQ" counter — same one used by onboarding-in-`requests` and
+    // by OffboardingRequest below, so numbers stay unique across all three
+    // collections that can mint an HRQ- number.
+    try {
+      const seq = await getNextSequence('HRQ');
+      this.requestNumber = `HRQ-${String(seq).padStart(4, "0")}`;
+    } catch (err) {
+      console.error("❌ [HR REQUEST NUMBER] Counter error, falling back:", err.message);
+      this.requestNumber = `HRQ-${Date.now()}`;
     }
   }
   next();
@@ -2044,8 +2053,13 @@ const incidentSchema = new mongoose.Schema({
 
 incidentSchema.pre("save", async function (next) {
   if (!this.incidentNumber) {
-    const count = await mongoose.model("Incident").countDocuments();
-    this.incidentNumber = `INC-${String(count + 1).padStart(4, "0")}`;
+    try {
+      const seq = await getNextSequence('INC');
+      this.incidentNumber = `INC-${String(seq).padStart(4, "0")}`;
+    } catch (err) {
+      console.error("❌ [INCIDENT NUMBER] Counter error, falling back:", err.message);
+      this.incidentNumber = `INC-${Date.now()}`;
+    }
   }
   next();
 });
@@ -5166,60 +5180,22 @@ const offboardingRequestSchema = new mongoose.Schema({
   }],
 }, { timestamps: true });
 
-// ---- Atomic requestNumber counter (prefix "OFB"), same pattern as REQ/HRQ:
-// findOneAndUpdate + $inc on a dedicated counters collection is a single
-// atomic Mongo operation, so two simultaneous submits can never collide.
+// ---- Atomic requestNumber counter (shared "HRQ" counter, same one used by
+// HrRequest and by onboarding-in-`requests` above): findOneAndUpdate + $inc
+// on a dedicated counters collection is a single atomic Mongo operation, so
+// two simultaneous submits can never collide.
 
 offboardingRequestSchema.pre("save", async function (next) {
   if (this.isNew) {
     this.requestNumber = undefined;
   }
   if (!this.requestNumber) {
-    const prefix = 'HRQ';
-    const HrRequestModel = mongoose.model("HrRequest");
-    const OffboardingModel = mongoose.model("OffboardingRequest");
-    let attempt = 0;
-    while (attempt < 5) {
-      // Check HrRequest collection
-      const lastHr = await HrRequestModel
-        .findOne({ requestNumber: { $regex: new RegExp(`^${prefix}-\\d+$`) } })
-        .sort({ requestNumber: -1 })
-        .collation({ locale: "en_US", numericOrdering: true })
-        .select("requestNumber")
-        .lean();
-      
-      // Check OffboardingRequest collection
-      const lastOffboarding = await OffboardingModel
-        .findOne({ requestNumber: { $regex: new RegExp(`^${prefix}-\\d+$`) } })
-        .sort({ requestNumber: -1 })
-        .collation({ locale: "en_US", numericOrdering: true })
-        .select("requestNumber")
-        .lean();
-      
-      let highestNum = 0;
-      if (lastHr?.requestNumber) {
-        const num = parseInt(lastHr.requestNumber.replace(`${prefix}-`, ''), 10);
-        if (num > highestNum) highestNum = num;
-      }
-      if (lastOffboarding?.requestNumber) {
-        const num = parseInt(lastOffboarding.requestNumber.replace(`${prefix}-`, ''), 10);
-        if (num > highestNum) highestNum = num;
-      }
-      
-      const candidate = `${prefix}-${String(highestNum + 1).padStart(4, "0")}`;
-      
-      // Check if candidate exists in EITHER collection
-      const existsInHr = await HrRequestModel.exists({ requestNumber: candidate });
-      const existsInOffboarding = await OffboardingModel.exists({ requestNumber: candidate });
-      
-      if (!existsInHr && !existsInOffboarding) {
-        this.requestNumber = candidate;
-        break;
-      }
-      attempt++;
-    }
-    if (!this.requestNumber) {
-      this.requestNumber = `${prefix}-${Date.now()}`;
+    try {
+      const seq = await getNextSequence('HRQ');
+      this.requestNumber = `HRQ-${String(seq).padStart(4, "0")}`;
+    } catch (err) {
+      console.error("❌ [OFFBOARDING REQUEST NUMBER] Counter error, falling back:", err.message);
+      this.requestNumber = `HRQ-${Date.now()}`;
     }
   }
   next();
@@ -6867,4 +6843,21 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running on port ${PORT}`);
   startOffboardingScheduler();
+
+  // One-time-per-boot: make sure the REQ/HRQ/INC counters start at least as
+  // high as whatever's already in the DB, so they never hand out a number
+  // that collides with existing documents from before this fix shipped.
+  seedCounterFromMax('REQ', [
+    { model: Request, field: 'requestNumber' },
+  ])
+    .then(() => seedCounterFromMax('HRQ', [
+      { model: Request, field: 'requestNumber' },
+      { model: HrRequest, field: 'requestNumber' },
+      { model: OffboardingRequest, field: 'requestNumber' },
+    ]))
+    .then(() => seedCounterFromMax('INC', [
+      { model: Incident, field: 'incidentNumber' },
+    ]))
+    .then(() => console.log("✅ Counters seeded (REQ/HRQ/INC)"))
+    .catch(err => console.error("❌ Counter seeding failed:", err.message));
 });
