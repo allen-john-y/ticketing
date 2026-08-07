@@ -27,6 +27,11 @@ import OffboardingSettings from './SettingsPages/OffboardingSettings';
 import KBListView from './KBListView';
 import KBView from './KBView';
 import SmartSearch from './SmartSearch';
+// ✅ Import AssetRegistry from root (not SettingsPages)
+import AssetRegistry from './AssetRegistry';
+import CreateAssetRegistry from './SettingsPages/CreateAssetRegistry';
+// ✅ Import AssetSettings for managing access
+import AssetSettings from './SettingsPages/AssetSettings';
 import logo from './sandeza.jpg';
 
 const HELP_DESK_GROUP_ID = process.env.REACT_APP_HELP_DESK_GROUP_ID;
@@ -82,7 +87,7 @@ function ProtectedHrRoute({ children, hasAccess, loading }) {
 const NavContext = React.createContext({ navExpanded: false });
 
 /* ─────────────────────────── LEFT NAVBAR ─────────────────────────── */
-function LeftNav({ isAdmin, hasHrAccess, onExpandChange }) {
+function LeftNav({ isAdmin, hasHrAccess, hasAssetAccess, onExpandChange }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [hovered, setHovered]   = useState(false);
@@ -149,16 +154,15 @@ function LeftNav({ isAdmin, hasHrAccess, onExpandChange }) {
       color: '#3b82f6',
       activeColor: 'rgba(59,130,246,0.15)',
     },
-    // ✅ Conditionally show HR Request based on hasHrAccess
     ...(hasHrAccess ? [{
       id: 'onboarding',
       label: 'HR Request',
       path: '/hr-request',
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
           <circle cx="12" cy="7" r="4"/>
-          <path d="M16 7a4 4 0 0 1-8 0"/>
+          <path d="M16 7a4 4 0 01-8 0"/>
         </svg>
       ),
       color: '#e98404',
@@ -177,6 +181,23 @@ function LeftNav({ isAdmin, hasHrAccess, onExpandChange }) {
       color: '#8b5cf6',
       activeColor: 'rgba(139,92,246,0.15)',
     },
+    // ✅ Asset Registry - Now shown based on hasAssetAccess (NOT isAdmin)
+    ...(hasAssetAccess ? [{
+      id: 'asset-registry',
+      label: 'Asset Registry',
+      path: '/asset-registry',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+          <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
+          <path d="M8 7h8"/>
+          <path d="M8 11h6"/>
+          <path d="M8 15h4"/>
+        </svg>
+      ),
+      color: '#0ea5e9',
+      activeColor: 'rgba(14,165,233,0.15)',
+    }] : []),
     ...(isAdmin ? [{
       id: 'settings',
       label: 'Settings',
@@ -189,7 +210,7 @@ function LeftNav({ isAdmin, hasHrAccess, onExpandChange }) {
       ),
       color: '#e98404',
       activeColor: 'rgba(233,132,4,0.15)',
-    }] : []),
+    }] : [])
   ];
 
   return (
@@ -1152,10 +1173,14 @@ function Header({ logout }) {
   const [isAdmin, setIsAdmin]                 = useState(false);
   const [hasHrAccess, setHasHrAccess]         = useState(false);
   const [loadingHrAccess, setLoadingHrAccess] = useState(true);
+  // ✅ NEW: Asset Access state
+  const [hasAssetAccess, setHasAssetAccess]   = useState(false);
+  const [loadingAssetAccess, setLoadingAssetAccess] = useState(true);
   const [navExpanded, setNavExpanded]         = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications] = useState([]);
 
+  // ─── Click outside handler ───
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
@@ -1166,6 +1191,7 @@ function Header({ logout }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // ─── Fetch Profile Photo ───
   useEffect(() => {
     const fetchPhotoSilently = async () => {
       if (!accounts || !accounts[0]) return;
@@ -1265,6 +1291,34 @@ function Header({ logout }) {
     return () => { cancelled = true; };
   }, [accounts]);
 
+  // ✅ NEW: Check Asset Registry Access
+  useEffect(() => {
+    let cancelled = false;
+    const checkAssetAccess = async () => {
+      if (!accounts || !accounts[0]) {
+        setHasAssetAccess(false);
+        setLoadingAssetAccess(false);
+        return;
+      }
+      try {
+        const email = accounts[0].username;
+        const res = await fetch(`${BACKEND}/api/asset-access/check?email=${encodeURIComponent(email)}`);
+        const data = await res.json();
+        if (!cancelled) {
+          setHasAssetAccess(!!data.hasAccess);
+        }
+      } catch (err) {
+        console.error('Error checking asset access:', err);
+        if (!cancelled) setHasAssetAccess(false);
+      } finally {
+        if (!cancelled) setLoadingAssetAccess(false);
+      }
+    };
+    checkAssetAccess();
+    return () => { cancelled = true; };
+  }, [accounts]);
+
+  // ─── Fetch Full Profile ───
   const fetchFullProfile = async () => {
     if (!accounts || !accounts[0]) return;
     setLoadingProfile(true);
@@ -1321,8 +1375,8 @@ function Header({ logout }) {
     .map(s => s[0].toUpperCase())
     .join('');
 
-  // Don't render navigation until HR access check is complete
-  if (loadingHrAccess) {
+  // Don't render navigation until access checks are complete
+  if (loadingHrAccess || loadingAssetAccess) {
     return (
       <div className="app-root">
         <div className="app-container">
@@ -1679,7 +1733,12 @@ function Header({ logout }) {
       <div className="app-root">
         <div className="app-container">
 
-          <LeftNav isAdmin={isAdmin} hasHrAccess={hasHrAccess} onExpandChange={setNavExpanded} />
+          <LeftNav 
+            isAdmin={isAdmin} 
+            hasHrAccess={hasHrAccess} 
+            hasAssetAccess={hasAssetAccess}
+            onExpandChange={setNavExpanded} 
+          />
 
           <div className={`main-wrapper${navExpanded ? ' nav-open' : ''}`}>
             <header className="app-header">
@@ -1774,7 +1833,7 @@ function Header({ logout }) {
               <Routes>
                 <Route path="/" element={<Home />} />
                 
-                {/* ✅ Protected HR Routes */}
+                {/* Protected HR Routes */}
                 <Route 
                   path="/hr-request" 
                   element={
@@ -1819,6 +1878,12 @@ function Header({ logout }) {
                 <Route path="/kb" element={<KBListView />} />
                 <Route path="/settings/hr-request-settings" element={<CreateHrRequest />} />
                 <Route path="/kb/:id" element={<KBView />} />
+                {/* ✅ Asset Registry Routes */}
+                <Route path="/asset-registry" element={<AssetRegistry />} />
+                {/* ✅ Asset Registry Access Management - only for admins */}
+                {isAdmin && <Route path="/settings/asset-registry-access" element={<AssetSettings />} />}
+                {/* Add asset - only for admins */}
+                {isAdmin && <Route path="/settings/asset-registry/add" element={<CreateAssetRegistry />} />}
               </Routes>
             </div>
           </div>

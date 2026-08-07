@@ -40,7 +40,17 @@ function HrRequest() {
   const [isAdminOrApprover, setIsAdminOrApprover] = useState(false);
   const [checkingRole, setCheckingRole] = useState(true);
 
-  // Delete modal state
+  // ✅ BULK DELETE STATE
+  const [selectedRequests, setSelectedRequests] = useState(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [selectAllChecked, setSelectAllChecked] = useState(false);
+
+  // ✅ BULK DELETE RESULT MODAL STATE
+  const [showBulkResultModal, setShowBulkResultModal] = useState(false);
+  const [bulkResultData, setBulkResultData] = useState({ successful: [], failed: [] });
+
+  // Delete modal state (single delete)
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteRequestId, setDeleteRequestId] = useState(null);
   const [deleteRequestNumber, setDeleteRequestNumber] = useState('');
@@ -72,6 +82,12 @@ function HrRequest() {
       fetchAllHrRequests();
     }
   }, [requestViewType]);
+
+  // ✅ Reset selections when filtered results change
+  useEffect(() => {
+    setSelectedRequests(new Set());
+    setSelectAllChecked(false);
+  }, [searchTerm, filterStatus, requestViewType, requests]);
 
   // Check if user is admin or approver
   const checkUserRole = async () => {
@@ -137,7 +153,6 @@ function HrRequest() {
         userPrincipalName: req.targetUser?.email || '',
         createdByName: req.createdByName || req.createdBy || '',
         raisedBy: { name: req.createdByName || req.createdBy, mail: req.createdByEmail || '' },
-        // ✅ Preserve action and schedule data
         actionType: req.actionType || req.action?.type || '',
         actionSchedule: req.actionSchedule || req.schedule || '',
         executedAt: req.executedAt || req.actionExecutedAt || null
@@ -231,23 +246,19 @@ function HrRequest() {
     };
   };
 
-  // ✅ NEW: Format action display for offboarding requests with proper logic
+  // ✅ Format action display for offboarding requests with proper logic
   const formatActionDisplay = (req) => {
     if (req._type !== 'offboarding') {
-      return null; // Onboarding shows dash
+      return null;
     }
 
     const actionType = req.actionType || req.action?.type || 'N/A';
     const schedule = req.actionSchedule || req.schedule || '';
     const executedAt = req.executedAt || req.actionExecutedAt || null;
 
-    // Check if schedule is "Immediate" or a date
     const isImmediate = schedule.toLowerCase() === 'immediate';
-    
-    // Check if executedAt exists (action was already performed)
     const hasExecutedAt = executedAt !== null && executedAt !== undefined && executedAt !== '';
     
-    // Check if schedule is a date (future or past)
     let scheduleDate = null;
     let isScheduleDate = false;
     
@@ -263,7 +274,6 @@ function HrRequest() {
       }
     }
 
-    // Format date for display
     const formatActionDate = (date) => {
       if (!date) return '';
       const d = new Date(date);
@@ -281,34 +291,26 @@ function HrRequest() {
     let scheduleDisplay = '';
     let executionDisplay = '';
 
-    // Determine what to show
     if (isImmediate) {
       scheduleDisplay = 'Immediate';
-      // If executed, show executed at
       if (hasExecutedAt) {
         executionDisplay = `Executed at: ${formatActionDate(executedAt)}`;
       }
-      // If not executed yet (shouldn't happen for Immediate but just in case)
-      // No execution display
     } else if (isScheduleDate && scheduleDate) {
       const formattedSchedule = formatActionDate(scheduleDate);
       scheduleDisplay = formattedSchedule;
       
       if (hasExecutedAt) {
-        // Already executed
         executionDisplay = `Executed at: ${formatActionDate(executedAt)}`;
       } else {
-        // Future scheduled - show "Will be executed at"
         executionDisplay = `Will be executed at: ${formattedSchedule}`;
       }
     } else if (schedule) {
-      // Custom schedule text (not "Immediate" and not a date)
       scheduleDisplay = schedule;
       if (hasExecutedAt) {
         executionDisplay = `Executed at: ${formatActionDate(executedAt)}`;
       }
     } else {
-      // No schedule info
       scheduleDisplay = 'Not scheduled';
     }
 
@@ -340,7 +342,6 @@ function HrRequest() {
         handler: () => openDisableModal(req._id, req.requestNumber, req)
       });
     }
-    
     
     return actions;
   };
@@ -385,6 +386,120 @@ function HrRequest() {
     return statuses.map(s => ({ value: s, label: labels[s] || s }));
   };
 
+  // ✅ BULK DELETE FUNCTIONS
+  const getFilteredIds = () => {
+    return filteredRequests.map(req => req._id);
+  };
+
+  const handleSelectAll = () => {
+    if (selectAllChecked) {
+      setSelectedRequests(new Set());
+    } else {
+      const ids = getFilteredIds();
+      setSelectedRequests(new Set(ids));
+    }
+    setSelectAllChecked(!selectAllChecked);
+  };
+
+  const handleSelectOne = (requestId) => {
+    const newSelected = new Set(selectedRequests);
+    if (newSelected.has(requestId)) {
+      newSelected.delete(requestId);
+    } else {
+      newSelected.add(requestId);
+    }
+    setSelectedRequests(newSelected);
+    
+    // Update select all checkbox state
+    const filteredIds = getFilteredIds();
+    if (filteredIds.length > 0 && newSelected.size === filteredIds.length) {
+      setSelectAllChecked(true);
+    } else {
+      setSelectAllChecked(false);
+    }
+  };
+
+  const openBulkDeleteModal = () => {
+    if (selectedRequests.size === 0) return;
+    setShowBulkDeleteModal(true);
+  };
+
+  const closeBulkDeleteModal = () => {
+    setShowBulkDeleteModal(false);
+    setBulkDeleting(false);
+  };
+
+  const closeBulkResultModal = () => {
+    setShowBulkResultModal(false);
+    setBulkResultData({ successful: [], failed: [] });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRequests.size === 0 || bulkDeleting) return;
+    
+    setBulkDeleting(true);
+    
+    try {
+      // Get all selected request details
+      const selectedItems = requests.filter(req => selectedRequests.has(req._id));
+      const deletePromises = selectedItems.map(async (req) => {
+        const endpoint = req._type === 'offboarding' 
+          ? `${BACKEND}/api/offboarding/${req._id}`
+          : `${BACKEND}/api/onboarding/${req._id}`;
+        
+        try {
+          await axios.delete(endpoint);
+          return { 
+            success: true, 
+            id: req._id, 
+            requestNumber: req.requestNumber, 
+            type: req._type, 
+            employee: req.targetUser?.name || `${req.firstName || ''} ${req.lastName || ''}`.trim() || '—' 
+          };
+        } catch (err) {
+          console.error(`Error deleting ${req.requestNumber}:`, err);
+          return { 
+            success: false, 
+            id: req._id, 
+            requestNumber: req.requestNumber, 
+            type: req._type, 
+            employee: req.targetUser?.name || `${req.firstName || ''} ${req.lastName || ''}`.trim() || '—', 
+            error: err.response?.data?.message || err.message || 'Unknown error'
+          };
+        }
+      });
+
+      const results = await Promise.all(deletePromises);
+      
+      const successful = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+      
+      // Update state - remove successfully deleted items
+      const successIds = new Set(successful.map(r => r.id));
+      setRequests(prev => prev.filter(req => !successIds.has(req._id)));
+      setSelectedRequests(new Set());
+      setSelectAllChecked(false);
+      
+      closeBulkDeleteModal();
+      
+      // ✅ Show result in modal instead of alert
+      setBulkResultData({ successful, failed });
+      setShowBulkResultModal(true);
+      
+    } catch (err) {
+      console.error('Bulk delete error:', err);
+      // Show error in modal too
+      setBulkResultData({ 
+        successful: [], 
+        failed: [{ requestNumber: 'Error', error: 'Failed to delete selected requests. Please try again.' }] 
+      });
+      setShowBulkResultModal(true);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  // Single delete handlers
   const openDeleteModal = (requestId, requestNumber, req) => {
     setDeleteRequestId(requestId);
     setDeleteRequestNumber(requestNumber);
@@ -410,6 +525,12 @@ function HrRequest() {
       
       await axios.delete(endpoint);
       setRequests(prev => prev.filter(req => req._id !== deleteRequestId));
+      // Remove from selected if present
+      if (selectedRequests.has(deleteRequestId)) {
+        const newSelected = new Set(selectedRequests);
+        newSelected.delete(deleteRequestId);
+        setSelectedRequests(newSelected);
+      }
       closeDeleteModal();
     } catch (err) {
       console.error('Error deleting request:', err);
@@ -725,6 +846,14 @@ function HrRequest() {
     .onb-list-table tr:hover td {
       background: rgba(0,32,96,0.02);
     }
+    /* ✅ Selected row highlight */
+    .onb-list-table tr.selected td {
+      background: rgba(233, 132, 4, 0.08);
+      border-left: 3px solid var(--orange);
+    }
+    .onb-list-table tr.selected:hover td {
+      background: rgba(233, 132, 4, 0.12);
+    }
 
     .onb-list-request-number {
       font-family: 'Sora', sans-serif;
@@ -759,6 +888,91 @@ function HrRequest() {
     .onb-list-created-by {
       font-size: 12px;
       color: var(--muted);
+    }
+
+    /* ✅ Checkbox styles */
+    .onb-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--orange);
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .onb-checkbox:hover {
+      transform: scale(1.1);
+    }
+    .onb-checkbox-header {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--orange);
+      border-radius: 4px;
+    }
+    .onb-checkbox-header:hover {
+      transform: scale(1.1);
+    }
+
+    /* ✅ Bulk action bar */
+    .onb-bulk-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: var(--white);
+      border-bottom: 1.5px solid var(--border);
+      flex-wrap: wrap;
+      border-radius: 18px 18px 0 0;
+    }
+    .onb-bulk-bar-selected {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--navy);
+      font-family: 'Sora', sans-serif;
+    }
+    .onb-bulk-bar-selected span {
+      color: var(--orange);
+    }
+    .onb-bulk-btn {
+      padding: 8px 20px;
+      background: var(--red);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'Sora', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .onb-bulk-btn:hover:not(:disabled) {
+      background: #dc2626;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+    .onb-bulk-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .onb-bulk-clear-btn {
+      padding: 8px 16px;
+      background: transparent;
+      color: var(--muted);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Sora', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .onb-bulk-clear-btn:hover {
+      border-color: var(--navy);
+      color: var(--navy);
     }
 
     /* ✅ Action cell styles */
@@ -972,10 +1186,12 @@ function HrRequest() {
     .onb-modal {
       background: var(--white);
       border-radius: 20px;
-      max-width: 480px;
+      max-width: 520px;
       width: 90%;
       padding: 36px 40px 32px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      max-height: 80vh;
+      overflow-y: auto;
     }
     .onb-modal-icon {
       font-size: 48px;
@@ -994,9 +1210,98 @@ function HrRequest() {
       font-size: 15px;
       color: var(--muted);
       text-align: center;
-      margin-bottom: 28px;
+      margin-bottom: 20px;
       line-height: 1.6;
     }
+    .onb-modal-list {
+      background: var(--light);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .onb-modal-list-item {
+      padding: 4px 0;
+      font-size: 14px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .onb-modal-list-item:last-child {
+      border-bottom: none;
+    }
+    .onb-modal-list-item .badge {
+      font-size: 11px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .onb-modal-list-item .badge-onboarding {
+      background: rgba(233,132,4,0.1);
+      color: var(--orange);
+    }
+    .onb-modal-list-item .badge-offboarding {
+      background: rgba(124,58,237,0.1);
+      color: #7c3aed;
+    }
+
+    /* ✅ Bulk Result Modal styles */
+    .onb-modal-result-icon {
+      font-size: 48px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .onb-modal-result-success {
+      color: #16a34a;
+    }
+    .onb-modal-result-failed {
+      color: #dc2626;
+    }
+    .onb-modal-result-list {
+      background: var(--light);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .onb-modal-result-item {
+      padding: 4px 0;
+      font-size: 14px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .onb-modal-result-item:last-child {
+      border-bottom: none;
+    }
+    .onb-modal-result-item .status-icon {
+      font-size: 16px;
+    }
+    .onb-modal-result-item .result-badge {
+      font-size: 11px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .onb-modal-result-item .result-badge-success {
+      background: rgba(22,163,74,0.1);
+      color: #16a34a;
+    }
+    .onb-modal-result-item .result-badge-failed {
+      background: rgba(220,38,38,0.1);
+      color: #dc2626;
+    }
+    .onb-modal-result-item .error-text {
+      color: #dc2626;
+      font-size: 12px;
+    }
+
     .onb-modal-actions {
       display: flex;
       gap: 12px;
@@ -1038,6 +1343,22 @@ function HrRequest() {
     .onb-modal-btn-delete:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+    .onb-modal-btn-close {
+      padding: 14px 28px;
+      background: var(--navy);
+      border: none;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Sora', sans-serif;
+      flex: 1;
+    }
+    .onb-modal-btn-close:hover {
+      background: var(--navy2);
     }
 
     .onb-modal-btn-disable {
@@ -1138,6 +1459,8 @@ function HrRequest() {
       .onb-modal-actions { flex-direction: column; }
       .onb-tabs { width: 100%; }
       .onb-tab { flex: 1; text-align: center; }
+      .onb-bulk-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+      .onb-bulk-btn { justify-content: center; }
     }
   `;
 
@@ -1166,6 +1489,8 @@ function HrRequest() {
               onClick={() => {
                 setViewMode('requests');
                 setRequestViewType('my');
+                setSelectedRequests(new Set());
+                setSelectAllChecked(false);
               }}
             >
               📋 My Requests
@@ -1177,6 +1502,8 @@ function HrRequest() {
                 onClick={() => {
                   setViewMode('requests');
                   setRequestViewType('all');
+                  setSelectedRequests(new Set());
+                  setSelectAllChecked(false);
                 }}
                 title="View all HR requests (Admin/Approver only)"
               >
@@ -1189,6 +1516,8 @@ function HrRequest() {
             onClick={() => {
               setViewMode('new');
               setRequestViewType('my');
+              setSelectedRequests(new Set());
+              setSelectAllChecked(false);
             }}
           >
             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -1271,13 +1600,49 @@ function HrRequest() {
                 </div>
               ) : (
                 <>
+                  {/* ✅ Bulk Action Bar */}
+                  <div className="onb-bulk-bar">
+                    <div className="onb-bulk-bar-selected">
+                      Selected: <span>{selectedRequests.size}</span>
+                    </div>
+                    <button
+                      className="onb-bulk-btn"
+                      onClick={openBulkDeleteModal}
+                      disabled={selectedRequests.size === 0 || bulkDeleting}
+                    >
+                      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      {bulkDeleting ? 'Deleting...' : 'Delete Selected'}
+                    </button>
+                    <button
+                      className="onb-bulk-clear-btn"
+                      onClick={() => {
+                        setSelectedRequests(new Set());
+                        setSelectAllChecked(false);
+                      }}
+                      disabled={selectedRequests.size === 0}
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+
                   <div className="onb-list-table-wrap">
                     <table className="onb-list-table">
                       <thead>
                         <tr>
+                          <th style={{ width: '40px' }}>
+                            <input
+                              type="checkbox"
+                              className="onb-checkbox-header"
+                              checked={selectAllChecked}
+                              onChange={handleSelectAll}
+                              disabled={filteredRequests.length === 0}
+                            />
+                          </th>
                           <th>Request ID</th>
                           <th>Service</th>
-                          <th>Action &amp; Schedule</th> {/* ✅ Moved here - between Service and Employee */}
+                          <th>Action &amp; Schedule</th>
                           <th>Employee</th>
                           <th>Email</th>
                           <th>Status</th>
@@ -1300,8 +1665,18 @@ function HrRequest() {
                           const actions = getOffboardingActions(req);
                           const actionDisplay = formatActionDisplay(req);
                           
+                          const isSelected = selectedRequests.has(req._id);
+                          
                           return (
-                            <tr key={req._id}>
+                            <tr key={req._id} className={isSelected ? 'selected' : ''}>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  className="onb-checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleSelectOne(req._id)}
+                                />
+                              </td>
                               <td 
                                 className="onb-list-request-number"
                                 style={{ cursor: 'pointer' }}
@@ -1327,16 +1702,12 @@ function HrRequest() {
                                   <span>{service.icon}</span> {service.label}
                                 </span>
                               </td>
-                              {/* ✅ Action & Schedule column - NOW BETWEEN Service and Employee */}
                               <td>
                                 {req._type === 'offboarding' && actionDisplay ? (
                                   <div className="onb-action-cell">
-                                    {/* Action Type */}
                                     <div className="onb-action-type">
                                       {actionDisplay.actionType}
                                     </div>
-                                    
-                                    {/* Execution display - only show if not Immediate OR if executed */}
                                     {actionDisplay.executionDisplay && (
                                       <div className="onb-action-execution">
                                         <span className="onb-action-execution-value">
@@ -1344,8 +1715,6 @@ function HrRequest() {
                                         </span>
                                       </div>
                                     )}
-                                    
-                                    {/* Action buttons (Disable/Delete) */}
                                     {actions.length > 0 && (
                                       <div className="onb-action-buttons">
                                         {actions.map((action, index) => (
@@ -1487,7 +1856,7 @@ function HrRequest() {
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Single Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="onb-modal-overlay" onClick={closeDeleteModal}>
           <div className="onb-modal" onClick={(e) => e.stopPropagation()}>
@@ -1507,6 +1876,144 @@ function HrRequest() {
                 disabled={deleting}
               >
                 {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Bulk Delete Confirmation Modal */}
+      {showBulkDeleteModal && (
+        <div className="onb-modal-overlay" onClick={closeBulkDeleteModal}>
+          <div className="onb-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="onb-modal-icon">⚠️</div>
+            <div className="onb-modal-title">Delete Selected Requests</div>
+            <div className="onb-modal-desc">
+              Are you sure you want to delete <strong>{selectedRequests.size}</strong> selected request{selectedRequests.size > 1 ? 's' : ''}?<br />
+              This action cannot be undone.
+            </div>
+            <div className="onb-modal-list">
+              {requests
+                .filter(req => selectedRequests.has(req._id))
+                .map(req => (
+                  <div key={req._id} className="onb-modal-list-item">
+                    <span>
+                      <strong>{req.requestNumber}</strong>
+                    </span>
+                    <span className={`badge ${req._type === 'offboarding' ? 'badge-offboarding' : 'badge-onboarding'}`}>
+                      {req._type === 'offboarding' ? 'Offboarding' : 'Onboarding'}
+                    </span>
+                    <span style={{ color: '#64748b', fontSize: '13px' }}>
+                      {req.targetUser?.name || `${req.firstName || ''} ${req.lastName || ''}`.trim() || '—'}
+                    </span>
+                  </div>
+                ))}
+            </div>
+            <div className="onb-modal-actions">
+              <button className="onb-modal-btn-cancel" onClick={closeBulkDeleteModal}>
+                Cancel
+              </button>
+              <button 
+                className="onb-modal-btn-delete" 
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+              >
+                {bulkDeleting ? 'Deleting...' : `Delete ${selectedRequests.size} Request${selectedRequests.size > 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Bulk Delete Result Modal */}
+      {showBulkResultModal && (
+        <div className="onb-modal-overlay" onClick={closeBulkResultModal}>
+          <div className="onb-modal" onClick={(e) => e.stopPropagation()}>
+            {bulkResultData.failed.length === 0 ? (
+              <>
+                <div className="onb-modal-result-icon">✅</div>
+                <div className="onb-modal-title onb-modal-result-success">All Requests Deleted Successfully</div>
+                <div className="onb-modal-desc">
+                  Successfully deleted <strong>{bulkResultData.successful.length}</strong> request{bulkResultData.successful.length > 1 ? 's' : ''}.
+                </div>
+                <div className="onb-modal-result-list">
+                  {bulkResultData.successful.map((item, index) => (
+                    <div key={index} className="onb-modal-result-item">
+                      <span className="status-icon">✅</span>
+                      <span>
+                        <strong>{item.requestNumber}</strong>
+                      </span>
+                      <span className={`result-badge result-badge-success`}>
+                        {item.type === 'offboarding' ? 'Offboarding' : 'Onboarding'}
+                      </span>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>
+                        {item.employee}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : bulkResultData.successful.length === 0 ? (
+              <>
+                <div className="onb-modal-result-icon">❌</div>
+                <div className="onb-modal-title onb-modal-result-failed">Delete Failed</div>
+                <div className="onb-modal-desc">
+                  Failed to delete <strong>{bulkResultData.failed.length}</strong> request{bulkResultData.failed.length > 1 ? 's' : ''}.
+                  Please try again.
+                </div>
+                <div className="onb-modal-result-list">
+                  {bulkResultData.failed.map((item, index) => (
+                    <div key={index} className="onb-modal-result-item">
+                      <span className="status-icon">❌</span>
+                      <span>
+                        <strong>{item.requestNumber}</strong>
+                      </span>
+                      <span className="error-text">{item.error || 'Unknown error'}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="onb-modal-result-icon">⚠️</div>
+                <div className="onb-modal-title">Partial Success</div>
+                <div className="onb-modal-desc">
+                  Successfully deleted <strong>{bulkResultData.successful.length}</strong> request{bulkResultData.successful.length > 1 ? 's' : ''}, 
+                  but <strong>{bulkResultData.failed.length}</strong> failed.
+                </div>
+                <div className="onb-modal-result-list">
+                  {bulkResultData.successful.map((item, index) => (
+                    <div key={index} className="onb-modal-result-item">
+                      <span className="status-icon">✅</span>
+                      <span>
+                        <strong>{item.requestNumber}</strong>
+                      </span>
+                      <span className={`result-badge result-badge-success`}>
+                        {item.type === 'offboarding' ? 'Offboarding' : 'Onboarding'}
+                      </span>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>
+                        {item.employee}
+                      </span>
+                    </div>
+                  ))}
+                  {bulkResultData.failed.map((item, index) => (
+                    <div key={`failed-${index}`} className="onb-modal-result-item">
+                      <span className="status-icon">❌</span>
+                      <span>
+                        <strong>{item.requestNumber}</strong>
+                      </span>
+                      <span className={`result-badge result-badge-failed`}>
+                        {item.type === 'offboarding' ? 'Offboarding' : 'Onboarding'}
+                      </span>
+                      <span className="error-text">{item.error || 'Unknown error'}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="onb-modal-actions">
+              <button className="onb-modal-btn-close" onClick={closeBulkResultModal}>
+                Close
               </button>
             </div>
           </div>

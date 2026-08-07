@@ -6838,6 +6838,729 @@ app.delete('/api/hr-access/email/:email', async (req, res) => {
   }
 });
 
+// ===================== ASSET TYPE SCHEMA =====================
+const assetTypeSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true, trim: true },
+  category: {
+    type: String,
+    enum: ['Hardware', 'Peripheral', 'Networking', 'Furniture', 'Software', 'Other'],
+    default: 'Hardware',
+  },
+  warrantyMonths: { type: Number, default: null },
+}, { timestamps: true });
+
+const AssetType = mongoose.model('AssetType', assetTypeSchema);
+
+// ===================== ASSET SCHEMA =====================
+const assetSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  type: { type: String, required: true, trim: true },
+  assetTag: { type: String, required: true, unique: true, trim: true },
+  serialNumber: { type: String, required: true, unique: true, trim: true },
+  brand: { type: String, default: '' },
+  model: { type: String, default: '' },
+  status: {
+    type: String,
+    enum: ['Assigned', 'Unassigned', 'In Repair', 'Disposed'],
+    default: 'Unassigned',
+  },
+  health: {
+    type: String,
+    enum: ['Healthy', 'Warning', 'Critical'],
+    default: 'Healthy',
+  },
+  assignedTo: {
+    azureObjectId: { type: String, default: null },
+    name: { type: String, default: null },
+    email: { type: String, default: null },
+    department: { type: String, default: null },
+    jobTitle: { type: String, default: null },
+  },
+  assignedDate: { type: Date, default: null },
+  returnedDate: { type: Date, default: null },
+  purchaseDate: { type: Date, default: null },
+  warrantyExpiry: { type: Date, default: null },
+  lastMaintenance: { type: Date, default: null },
+  location: { type: String, default: '' },
+  notes: { type: String, default: '' },
+  issues: [{
+    description: String,
+    priority: { type: String, enum: ['Low', 'Medium', 'High'], default: 'Medium' },
+    reportedAt: { type: Date, default: Date.now },
+    resolvedAt: { type: Date, default: null },
+  }],
+  assignmentHistory: [{
+    action: { type: String, enum: ['assigned', 'unassigned'] },
+    azureObjectId: String,
+    name: String,
+    email: String,
+    date: { type: Date, default: Date.now },
+  }],
+}, { timestamps: true });
+
+const Asset = mongoose.model('Asset', assetSchema);
+
+// ===================== ASSET TYPE ROUTES =====================
+
+// GET /api/asset-types - list all asset types
+app.get('/api/asset-types', async (req, res) => {
+  try {
+    const types = await AssetType.find().sort({ name: 1 });
+    res.json(types);
+  } catch (err) {
+    console.error('❌ Get asset types error:', err);
+    res.status(500).json({ message: 'Failed to fetch asset types', error: err.message });
+  }
+});
+
+// POST /api/asset-types - create a new asset type
+app.post('/api/asset-types', async (req, res) => {
+  try {
+    const { name, category, warrantyMonths } = req.body;
+
+    if (!name?.trim()) {
+      return res.status(400).json({ message: 'Type name is required' });
+    }
+
+    const existing = await AssetType.findOne({
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+    });
+    if (existing) {
+      return res.status(400).json({ message: `"${name.trim()}" already exists` });
+    }
+
+    const assetType = new AssetType({
+      name: name.trim(),
+      category: category || 'Hardware',
+      warrantyMonths: warrantyMonths || null,
+    });
+    await assetType.save();
+
+    console.log(`✅ [ASSET TYPE] Created: ${assetType.name}`);
+    res.status(201).json(assetType);
+  } catch (err) {
+    console.error('❌ Create asset type error:', err);
+    res.status(500).json({ message: 'Failed to create asset type', error: err.message });
+  }
+});
+
+// ===================== ASSET ROUTES =====================
+
+// GET /api/assets - list all assets
+app.get('/api/assets', async (req, res) => {
+  try {
+    const assets = await Asset.find().sort({ createdAt: -1 });
+    res.json(assets);
+  } catch (err) {
+    console.error('❌ Get assets error:', err);
+    res.status(500).json({ message: 'Failed to fetch assets', error: err.message });
+  }
+});
+
+// GET /api/assets/:id - single asset
+app.get('/api/assets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid asset id' });
+    }
+    const asset = await Asset.findById(id);
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+    res.json(asset);
+  } catch (err) {
+    console.error('❌ Get asset error:', err);
+    res.status(500).json({ message: 'Failed to fetch asset', error: err.message });
+  }
+});
+
+// POST /api/assets/bulk - bulk add inventory items
+app.post('/api/assets/bulk', async (req, res) => {
+  try {
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'No items provided' });
+    }
+
+    for (const item of items) {
+      if (!item.serialNumber?.trim()) {
+        return res.status(400).json({ message: 'Every item needs a serial number' });
+      }
+      if (!item.assetTag?.trim()) {
+        return res.status(400).json({ message: 'Every item needs an asset tag' });
+      }
+    }
+
+    // Check for duplicates already in the database
+    const serials = items.map(i => i.serialNumber.trim());
+    const tags = items.map(i => i.assetTag.trim());
+    const existing = await Asset.find({
+      $or: [{ serialNumber: { $in: serials } }, { assetTag: { $in: tags } }],
+    });
+    if (existing.length > 0) {
+      return res.status(400).json({
+        message: 'Some serial numbers or asset tags already exist',
+        conflicts: existing.map(a => ({ serialNumber: a.serialNumber, assetTag: a.assetTag })),
+      });
+    }
+
+    const docs = items.map(item => ({
+      name: item.name,
+      type: item.type,
+      assetTag: item.assetTag.trim(),
+      serialNumber: item.serialNumber.trim(),
+      brand: item.brand || '',
+      model: item.model || '',
+      purchaseDate: item.purchaseDate || null,
+      warrantyExpiry: item.warrantyExpiry || null,
+      location: item.location || '',
+      notes: item.notes || '',
+      status: 'Unassigned',
+      health: 'Healthy',
+    }));
+
+    const created = await Asset.insertMany(docs);
+    console.log(`✅ [ASSETS] Bulk added ${created.length} item(s)`);
+    res.status(201).json({ message: `${created.length} assets added`, items: created });
+  } catch (err) {
+    console.error('❌ Bulk add assets error:', err);
+    res.status(500).json({ message: 'Failed to add assets', error: err.message });
+  }
+});
+
+// PATCH /api/assets/:id/assign - assign an asset to an Azure AD employee
+app.patch('/api/assets/:id/assign', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid asset id' });
+    }
+
+    const { azureObjectId, name, email, department, jobTitle, assignedDate } = req.body;
+    if (!azureObjectId || !name) {
+      return res.status(400).json({ message: 'Employee azureObjectId and name are required' });
+    }
+
+    const asset = await Asset.findById(id);
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+
+    const hasOpenIssues = asset.issues.some(i => !i.resolvedAt);
+    asset.status = hasOpenIssues ? 'In Repair' : 'Assigned';
+    asset.assignedTo = { azureObjectId, name, email: email || null, department: department || null, jobTitle: jobTitle || null };
+    asset.assignedDate = assignedDate || new Date();
+    asset.returnedDate = null;
+    asset.assignmentHistory.push({
+      action: 'assigned',
+      azureObjectId,
+      name,
+      email: email || null,
+      date: new Date(),
+    });
+
+    await asset.save();
+    console.log(`✅ [ASSET] ${asset.assetTag} assigned to ${name}`);
+    res.json(asset);
+  } catch (err) {
+    console.error('❌ Assign asset error:', err);
+    res.status(500).json({ message: 'Failed to assign asset', error: err.message });
+  }
+});
+
+// PATCH /api/assets/:id/unassign - return an asset to available inventory
+app.patch('/api/assets/:id/unassign', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid asset id' });
+    }
+
+    const asset = await Asset.findById(id);
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+
+    const previousAssignee = asset.assignedTo || {};
+    asset.assignmentHistory.push({
+      action: 'unassigned',
+      azureObjectId: previousAssignee.azureObjectId || null,
+      name: previousAssignee.name || null,
+      email: previousAssignee.email || null,
+      date: new Date(),
+    });
+
+    const hasOpenIssues = asset.issues.some(i => !i.resolvedAt);
+    asset.status = hasOpenIssues ? 'In Repair' : 'Unassigned';
+    asset.assignedTo = { azureObjectId: null, name: null, email: null, department: null, jobTitle: null };
+    asset.returnedDate = req.body.returnedDate || new Date();
+
+    await asset.save();
+    console.log(`✅ [ASSET] ${asset.assetTag} unassigned`);
+    res.json(asset);
+  } catch (err) {
+    console.error('❌ Unassign asset error:', err);
+    res.status(500).json({ message: 'Failed to unassign asset', error: err.message });
+  }
+});
+
+// PATCH /api/assets/:id/report-issue - flag a problem and mark the asset In Repair
+app.patch('/api/assets/:id/report-issue', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid asset id' });
+    }
+
+    const { description, priority } = req.body;
+    if (!description?.trim()) {
+      return res.status(400).json({ message: 'Issue description is required' });
+    }
+
+    const asset = await Asset.findById(id);
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+
+    const normalizedPriority = ['Low', 'Medium', 'High'].includes(priority) ? priority : 'Medium';
+
+    asset.issues.push({
+      description: description.trim(),
+      priority: normalizedPriority,
+      reportedAt: new Date(),
+      resolvedAt: null,
+    });
+
+    asset.status = 'In Repair';
+    asset.health = normalizedPriority === 'High' ? 'Critical' : 'Warning';
+
+    await asset.save();
+    console.log(`🛠️ [ASSET] Issue reported on ${asset.assetTag}: ${description.trim()}`);
+    res.json(asset);
+  } catch (err) {
+    console.error('❌ Report issue error:', err);
+    res.status(500).json({ message: 'Failed to report issue', error: err.message });
+  }
+});
+
+// PATCH /api/assets/:id/resolve-issue - clear In Repair status, mark open issues resolved
+app.patch('/api/assets/:id/resolve-issue', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid asset id' });
+    }
+
+    const asset = await Asset.findById(id);
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+
+    asset.issues.forEach(issue => {
+      if (!issue.resolvedAt) issue.resolvedAt = new Date();
+    });
+
+    asset.status = asset.assignedTo?.azureObjectId ? 'Assigned' : 'Unassigned';
+    asset.health = 'Healthy';
+
+    await asset.save();
+    console.log(`✅ [ASSET] Issue(s) resolved on ${asset.assetTag}`);
+    res.json(asset);
+  } catch (err) {
+    console.error('❌ Resolve issue error:', err);
+    res.status(500).json({ message: 'Failed to resolve issue', error: err.message });
+  }
+});
+
+// PATCH /api/assets/recompute-status - one-time data fix for records whose
+// status field was written by the older assign/unassign logic (before it
+// accounted for open issues). Safe to call repeatedly; only rewrites assets
+// that are actually wrong. Consider removing this route once you've run it.
+app.patch('/api/assets/recompute-status', async (req, res) => {
+  try {
+    const assets = await Asset.find();
+    let fixed = 0;
+
+    for (const asset of assets) {
+      const hasOpenIssues = asset.issues.some(i => !i.resolvedAt);
+      const isHeld = !!asset.assignedTo?.azureObjectId;
+
+      let correctStatus;
+      if (asset.status === 'Disposed') {
+        correctStatus = 'Disposed'; // never auto-touch disposed assets
+      } else if (hasOpenIssues) {
+        correctStatus = 'In Repair';
+      } else {
+        correctStatus = isHeld ? 'Assigned' : 'Unassigned';
+      }
+
+      if (asset.status !== correctStatus) {
+        asset.status = correctStatus;
+        await asset.save();
+        fixed++;
+        console.log(`🔧 [RECOMPUTE] ${asset.assetTag}: status corrected to ${correctStatus}`);
+      }
+    }
+
+    res.json({ message: `Checked ${assets.length} assets, fixed ${fixed}`, fixed, total: assets.length });
+  } catch (err) {
+    console.error('❌ Recompute status error:', err);
+    res.status(500).json({ message: 'Failed to recompute asset statuses', error: err.message });
+  }
+});
+// DELETE /api/assets/:id - delete a single asset
+app.delete('/api/assets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid asset id' });
+    }
+    
+    const asset = await Asset.findById(id);
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+    
+    const assetTag = asset.assetTag;
+    const serialNumber = asset.serialNumber;
+    
+    await Asset.findByIdAndDelete(id);
+    
+    console.log(`✅ [ASSET] Deleted: ${assetTag} (${serialNumber})`);
+    res.json({ 
+      message: 'Asset deleted successfully', 
+      assetTag, 
+      serialNumber 
+    });
+  } catch (err) {
+    console.error('❌ Delete asset error:', err);
+    res.status(500).json({ message: 'Failed to delete asset', error: err.message });
+  }
+});
+
+// DELETE /api/assets/bulk - delete multiple assets
+app.delete('/api/assets/bulk', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'No asset IDs provided' });
+    }
+    
+    // Validate all IDs are valid ObjectIds
+    const validIds = ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return res.status(400).json({ message: 'No valid asset IDs provided' });
+    }
+    
+    // Find assets to delete (to log their tags/serials)
+    const assetsToDelete = await Asset.find({ _id: { $in: validIds } });
+    const deletedCount = assetsToDelete.length;
+    const deletedTags = assetsToDelete.map(a => a.assetTag).join(', ');
+    
+    // Delete all matching assets
+    const result = await Asset.deleteMany({ _id: { $in: validIds } });
+    
+    console.log(`✅ [ASSETS] Bulk deleted ${result.deletedCount} asset(s): ${deletedTags}`);
+    res.json({ 
+      message: `${result.deletedCount} asset(s) deleted successfully`,
+      deletedCount: result.deletedCount,
+      deletedTags
+    });
+  } catch (err) {
+    console.error('❌ Bulk delete assets error:', err);
+    res.status(500).json({ message: 'Failed to delete assets', error: err.message });
+  }
+});
+// ===================== ASSET ROUTES - EXTENDED =====================
+
+// PATCH /api/assets/:id - update an asset
+app.patch('/api/assets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid asset id' });
+    }
+
+    const asset = await Asset.findById(id);
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+
+    const {
+      name,
+      type,
+      brand,
+      model,
+      serialNumber,
+      assetTag,
+      location,
+      notes,
+      purchaseDate,
+      warrantyExpiry,
+    } = req.body;
+
+    // Check for duplicate serial number (excluding current)
+    if (serialNumber && serialNumber !== asset.serialNumber) {
+      const existing = await Asset.findOne({ serialNumber });
+      if (existing) {
+        return res.status(400).json({ message: 'Serial number already exists' });
+      }
+    }
+
+    // Check for duplicate asset tag (excluding current)
+    if (assetTag && assetTag !== asset.assetTag) {
+      const existing = await Asset.findOne({ assetTag });
+      if (existing) {
+        return res.status(400).json({ message: 'Asset tag already exists' });
+      }
+    }
+
+    // Update fields
+    if (name) asset.name = name;
+    if (type) asset.type = type;
+    if (brand !== undefined) asset.brand = brand;
+    if (model !== undefined) asset.model = model;
+    if (serialNumber) asset.serialNumber = serialNumber;
+    if (assetTag) asset.assetTag = assetTag;
+    if (location !== undefined) asset.location = location;
+    if (notes !== undefined) asset.notes = notes;
+    
+    // Handle date fields - accept null or valid date
+    if (purchaseDate !== undefined) {
+      asset.purchaseDate = purchaseDate ? new Date(purchaseDate) : null;
+    }
+    if (warrantyExpiry !== undefined) {
+      asset.warrantyExpiry = warrantyExpiry ? new Date(warrantyExpiry) : null;
+    }
+
+    await asset.save();
+    console.log(`✅ [ASSET] Updated: ${asset.assetTag}`);
+    res.json(asset);
+  } catch (err) {
+    console.error('❌ Update asset error:', err);
+    res.status(500).json({ message: 'Failed to update asset', error: err.message });
+  }
+});
+
+// DELETE /api/assets/:id - delete a single asset
+app.delete('/api/assets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid asset id' });
+    }
+
+    const asset = await Asset.findById(id);
+    if (!asset) {
+      return res.status(404).json({ message: 'Asset not found' });
+    }
+
+    const assetTag = asset.assetTag;
+    const serialNumber = asset.serialNumber;
+
+    await Asset.findByIdAndDelete(id);
+
+    console.log(`✅ [ASSET] Deleted: ${assetTag} (${serialNumber})`);
+    res.json({
+      message: 'Asset deleted successfully',
+      assetTag,
+      serialNumber
+    });
+  } catch (err) {
+    console.error('❌ Delete asset error:', err);
+    res.status(500).json({ message: 'Failed to delete asset', error: err.message });
+  }
+});
+
+// DELETE /api/assets/bulk - delete multiple assets
+app.delete('/api/assets/bulk', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'No asset IDs provided' });
+    }
+
+    // Validate all IDs are valid ObjectIds
+    const validIds = ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return res.status(400).json({ message: 'No valid asset IDs provided' });
+    }
+
+    // Find assets to delete (to log their tags/serials)
+    const assetsToDelete = await Asset.find({ _id: { $in: validIds } });
+    const deletedCount = assetsToDelete.length;
+
+    if (deletedCount === 0) {
+      return res.status(404).json({ message: 'No assets found to delete' });
+    }
+
+    const deletedTags = assetsToDelete.map(a => a.assetTag).join(', ');
+
+    // Delete all matching assets
+    const result = await Asset.deleteMany({ _id: { $in: validIds } });
+
+    console.log(`✅ [ASSETS] Bulk deleted ${result.deletedCount} asset(s): ${deletedTags}`);
+    res.json({
+      message: `${result.deletedCount} asset(s) deleted successfully`,
+      deletedCount: result.deletedCount,
+      deletedTags
+    });
+  } catch (err) {
+    console.error('❌ Bulk delete assets error:', err);
+    res.status(500).json({ message: 'Failed to delete assets', error: err.message });
+  }
+});
+
+// ===================== ASSET ACCESS SCHEMA =====================
+const assetAccessSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+  name: { type: String, default: '' },
+  addedBy: {
+    id: { type: String, default: '' },
+    name: { type: String, default: '' },
+    email: { type: String, default: '' }
+  },
+  addedAt: { type: Date, default: Date.now },
+}, { timestamps: true });
+
+const AssetAccess = mongoose.model('AssetAccess', assetAccessSchema);
+
+// ===================== ASSET ACCESS ROUTES =====================
+
+// GET /api/asset-access - List all users with asset registry access
+app.get('/api/asset-access', async (req, res) => {
+  try {
+    const users = await AssetAccess.find().sort({ addedAt: -1 });
+    res.json(users);
+  } catch (err) {
+    console.error('❌ Get asset access users error:', err);
+    res.status(500).json({ message: 'Failed to fetch asset access users', error: err.message });
+  }
+});
+
+// GET /api/asset-access/check - Check if user has asset registry access
+app.get('/api/asset-access/check', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await AssetAccess.findOne({
+      email: { $regex: new RegExp(`^${email.trim()}$`, 'i') }
+    });
+
+    res.json({
+      hasAccess: !!user,
+      user: user ? { id: user._id, email: user.email, name: user.name } : null
+    });
+  } catch (err) {
+    console.error('❌ Check asset access error:', err);
+    res.status(500).json({ message: 'Failed to check asset access', error: err.message });
+  }
+});
+
+// POST /api/asset-access - Grant asset registry access to a user
+app.post('/api/asset-access', async (req, res) => {
+  try {
+    const { email, name, addedBy } = req.body;
+
+    if (!email?.trim()) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    // Check if user already has access
+    const existing = await AssetAccess.findOne({
+      email: { $regex: new RegExp(`^${email.trim()}$`, 'i') }
+    });
+    if (existing) {
+      return res.status(400).json({
+        message: `"${email.trim()}" already has asset registry access`,
+        existing: existing
+      });
+    }
+
+    const user = new AssetAccess({
+      email: email.trim().toLowerCase(),
+      name: name || '',
+      addedBy: addedBy || { id: '', name: '', email: '' },
+    });
+
+    await user.save();
+    console.log(`✅ [ASSET ACCESS] Granted to: ${email.trim()}`);
+    res.status(201).json({
+      message: `Asset registry access granted to "${email.trim()}"`,
+      user: user
+    });
+  } catch (err) {
+    console.error('❌ Grant asset access error:', err);
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'This user already has asset registry access' });
+    }
+    res.status(500).json({ message: 'Failed to grant asset access', error: err.message });
+  }
+});
+
+// DELETE /api/asset-access/:id - Remove asset registry access by ID
+app.delete('/api/asset-access/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid user id' });
+    }
+
+    const user = await AssetAccess.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const email = user.email;
+    await AssetAccess.findByIdAndDelete(id);
+
+    console.log(`✅ [ASSET ACCESS] Removed: ${email}`);
+    res.json({
+      message: `Asset registry access removed for "${email}"`,
+      email: email
+    });
+  } catch (err) {
+    console.error('❌ Remove asset access error:', err);
+    res.status(500).json({ message: 'Failed to remove asset access user', error: err.message });
+  }
+});
+
+// DELETE /api/asset-access/email/:email - Remove asset registry access by email
+app.delete('/api/asset-access/email/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await AssetAccess.findOneAndDelete({
+      email: { $regex: new RegExp(`^${email.trim()}$`, 'i') }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: `User with email "${email}" not found` });
+    }
+
+    console.log(`✅ [ASSET ACCESS] Removed by email: ${email}`);
+    res.json({
+      message: `Asset registry access removed for "${email}"`,
+      email: email
+    });
+  } catch (err) {
+    console.error('❌ Remove asset access by email error:', err);
+    res.status(500).json({ message: 'Failed to remove asset access user', error: err.message });
+  }
+});
+
 // ===================== START SERVER =====================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {

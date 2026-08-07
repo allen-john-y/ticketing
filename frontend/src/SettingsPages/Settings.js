@@ -12,6 +12,7 @@ import Departments from './Departments';
 import OnboardingSettings from './OnboardingSettings';
 import CreateKB from './CreateKB';
 import EmployeeType from './EmployeeType'; // Import the new component
+import AssetSettings from './AssetSettings';
 
 // Full settings options (admin only)
 const adminSettingsOptions = [
@@ -122,6 +123,15 @@ const adminSettingsOptions = [
     icon: '📋',
     accent: '#7c3aed',
     accentBg: 'rgba(124, 58, 237, 0.08)',
+  },
+  {
+    id: 'asset-registry-settings',
+    path: 'asset-registry',
+    title: 'Asset Settings',
+    description: 'Configure asset registry settings and related asset management options.',
+    icon: '🧰',
+    accent: '#0ea5e9',
+    accentBg: 'rgba(14, 165, 233, 0.08)',
   },
   {
     id: 'create-kb',
@@ -470,6 +480,7 @@ export default function Settings({ isAdmin = false }) {
             <Route path="departments" element={<Departments />} />
             <Route path="employee-type" element={<EmployeeType />} />
             <Route path="onboarding-settings" element={<OnboardingSettings />} />
+            <Route path="asset-registry" element={<AssetSettings />} />
           </>
         )}
         
@@ -486,6 +497,7 @@ export default function Settings({ isAdmin = false }) {
             <Route path="departments" element={<AccessDenied />} />
             <Route path="employee-type" element={<AccessDenied />} />
             <Route path="onboarding-settings" element={<AccessDenied />} />
+            <Route path="asset-registry" element={<AccessDenied />} />
           </>
         )}
       </Routes>
