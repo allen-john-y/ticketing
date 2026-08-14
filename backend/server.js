@@ -74,6 +74,38 @@ connectDB();
 
 // Logo URL for emails (served via HTTP for better Outlook compatibility)
 const LOGO_URL = `${process.env.PROD_URL || 'http://localhost:5000'}/static/sandeza.jpg`;
+
+// LOGO_URL relies on the recipient's mail client fetching the image over the
+// public internet at render time — some clients block remote images by
+// default, corporate proxies can interfere, and if PROD_URL is ever
+// unreachable the logo just silently disappears. Attaching the logo as a
+// normal inline file attachment (contentBytes, isInline: true) ships the
+// image inside the email itself, so it always renders regardless of
+// network conditions. Read once off disk and cached in memory — the file
+// doesn't change at runtime, no reason to re-read it on every send.
+const LOGO_PATH = path.join(__dirname, 'sandeza.jpg');
+const LOGO_CONTENT_ID = 'sandezalogo';
+let cachedLogoAttachment = null;
+
+const getCompanyLogoAttachment = () => {
+  if (cachedLogoAttachment) return cachedLogoAttachment;
+  try {
+    const fileBuffer = fs.readFileSync(LOGO_PATH);
+    cachedLogoAttachment = {
+      "@odata.type": "#microsoft.graph.fileAttachment",
+      name: "sandeza.jpg",
+      contentType: "image/jpeg",
+      contentBytes: fileBuffer.toString("base64"),
+      isInline: true,
+      contentId: LOGO_CONTENT_ID,
+    };
+    console.log("✅ [MAIL] Logo loaded for inline attachment:", LOGO_PATH);
+    return cachedLogoAttachment;
+  } catch (err) {
+    console.error("⚠️ [MAIL] Could not read logo file, falling back to LOGO_URL:", err.message);
+    return null;
+  }
+};
 // -------- Category Config Schema --------
 const categoryConfigSchema = new mongoose.Schema(
   {
@@ -252,6 +284,53 @@ const checkIfUserIsAdmin = async (email) => {
 
   } catch (err) {
     console.error('❌ [ADMIN CHECK] Error:', err.message);
+    return false;
+  }
+};
+
+// ===================== HELPDESK ADMIN CHECK HELPER =====================
+// checkIfUserIsAdmin() above checks AZURE_DEVICE_ADMIN_GROUP_ID, a separate,
+// narrower group used for device/asset-specific checks elsewhere in this file.
+// It is NOT the same group that makes someone a general Helpdesk admin — that's
+// HELP_DESK_GROUP_ID (the group the frontend checks client-side to show the
+// ADMIN badge and unlock Settings). Any route gated behind "isAdmin" the way
+// Settings pages are — like License Mapping and License Registry actions —
+// needs to check THIS group, or a real admin gets a false 403.
+const checkIfUserIsHelpdeskAdmin = async (email) => {
+  try {
+    if (!email) return false;
+
+    const helpDeskGroupId = process.env.HELP_DESK_GROUP_ID || process.env.REACT_APP_HELP_DESK_GROUP_ID;
+    if (!helpDeskGroupId) {
+      console.warn('⚠️ [HELPDESK ADMIN CHECK] HELP_DESK_GROUP_ID not set in .env');
+      return false;
+    }
+
+    const token = await getAccessToken();
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}/checkMemberGroups`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ groupIds: [helpDeskGroupId] }),
+      }
+    );
+
+    if (!res.ok) {
+      console.error('❌ [HELPDESK ADMIN CHECK] Failed to check group membership:', await res.text());
+      return false;
+    }
+
+    const data = await res.json();
+    const isAdmin = Array.isArray(data.value) && data.value.includes(helpDeskGroupId);
+
+    console.log(`🔍 [HELPDESK ADMIN CHECK] User ${email} is ${isAdmin ? '' : 'NOT '}a Helpdesk admin`);
+    return isAdmin;
+  } catch (err) {
+    console.error('❌ [HELPDESK ADMIN CHECK] Error:', err.message);
     return false;
   }
 };
@@ -566,6 +645,10 @@ const buildWelcomeEmail = ({
   groups = '',
   messageBody = '',
   signInLink = 'https://outlook.office.com',
+  // When set, the logo is shipped as an inline attachment on this message
+  // and referenced via cid: — pass the attachment's contentId here. When
+  // null/omitted, falls back to the old remotely-fetched LOGO_URL.
+  logoCid = null,
 }) => {
   const fullName = `${firstName} ${lastName}`.trim() || 'there';
 
@@ -624,7 +707,7 @@ const buildWelcomeEmail = ({
                 <v:textbox inset="0,0,0,0">
                 <![endif]-->
                 <div style="padding:40px 32px 32px; text-align:center;">
-                  <img src="${LOGO_URL}" alt="Sandeza" width="72" style="display:block; margin:0 auto 18px; max-width:72px; height:auto; border:0;" />
+                  <img src="${logoCid ? `cid:${logoCid}` : LOGO_URL}" alt="Sandeza" width="72" style="display:block; margin:0 auto 18px; max-width:72px; height:auto; border:0;" />
                   <div style="color:#c7d2fe; font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px;">Welcome to Sandeza</div>
                   <h1 style="margin:0; color:#ffffff; font-size:26px; font-weight:800;">🎉 Welcome , ${firstName} ${lastName}!</h1>
                   <p style="margin:10px 0 0; color:#e0e7ff; font-size:14.5px;">We're thrilled to have you join the team${jobTitle ? ` as ${jobTitle}` : ''}${department ? ` in ${department}` : ''}.</p>
@@ -704,7 +787,121 @@ const buildWelcomeEmail = ({
   `;
 };
 
-const sendEmail = async (to, subject, bodyHtml) => {
+// A dedicated report-style template for the License Registry's "Send
+// Report" action. Distinct from buildHtmlEmail (a single-record
+// notification card) — this renders an actual tabular report: a header
+// banner, summary stat cards, then a proper data table with only the
+// columns the sender chose to include, and a totals row at the bottom.
+const buildLicenseReportEmail = ({ licenses = [], columns = {}, generatedBy = '', logoCid = null }) => {
+  const showTotal = columns.total !== false;
+  const showAssigned = columns.assigned !== false;
+  const showAvailable = columns.available !== false;
+
+  const totalSeats = licenses.reduce((sum, l) => sum + (Number(l.total) || 0), 0);
+  const totalAssigned = licenses.reduce((sum, l) => sum + (Number(l.assigned) || 0), 0);
+  const totalAvailable = licenses.reduce((sum, l) => {
+    const available = l.available != null ? Number(l.available) : Math.max((Number(l.total) || 0) - (Number(l.assigned) || 0), 0);
+    return sum + available;
+  }, 0);
+
+  const generatedDate = new Date().toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+
+  const headerCell = (label, align = 'left') => `
+    <th style="padding:12px 16px; text-align:${align}; font-size:11px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:#e0e7ff; background:#002060;">${label}</th>`;
+
+  const dataRow = (l, idx) => {
+    const available = l.available != null ? Number(l.available) : Math.max((Number(l.total) || 0) - (Number(l.assigned) || 0), 0);
+    const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+    return `
+    <tr style="background:${bg};">
+      <td style="padding:12px 16px; border-bottom:1px solid #eef2f6;">
+        <div style="font-size:13.5px; font-weight:700; color:#0f172a;">${l.displayName || l.skuPartNumber || '—'}</div>
+        <div style="font-size:11px; color:#94a3b8; font-family:'Courier New',monospace; margin-top:2px;">${l.skuPartNumber || ''}</div>
+      </td>
+      ${showTotal ? `<td style="padding:12px 16px; border-bottom:1px solid #eef2f6; text-align:center; font-size:14px; font-weight:700; color:#0f172a;">${l.total ?? '—'}</td>` : ''}
+      ${showAssigned ? `<td style="padding:12px 16px; border-bottom:1px solid #eef2f6; text-align:center; font-size:14px; font-weight:700; color:#002060;">${l.assigned ?? '—'}</td>` : ''}
+      ${showAvailable ? `<td style="padding:12px 16px; border-bottom:1px solid #eef2f6; text-align:center; font-size:14px; font-weight:700; color:${available === 0 ? '#dc2626' : '#16a34a'};">${available}</td>` : ''}
+    </tr>`;
+  };
+
+  const totalsRow = `
+    <tr style="background:#f1f5f9;">
+      <td style="padding:12px 16px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:#334155;">Total (${licenses.length} license${licenses.length !== 1 ? 's' : ''})</td>
+      ${showTotal ? `<td style="padding:12px 16px; text-align:center; font-size:14px; font-weight:800; color:#0f172a;">${totalSeats}</td>` : ''}
+      ${showAssigned ? `<td style="padding:12px 16px; text-align:center; font-size:14px; font-weight:800; color:#002060;">${totalAssigned}</td>` : ''}
+      ${showAvailable ? `<td style="padding:12px 16px; text-align:center; font-size:14px; font-weight:800; color:#16a34a;">${totalAvailable}</td>` : ''}
+    </tr>`;
+
+  const statCard = (label, value, color) => `
+    <td style="padding:0 6px;">
+      <table role="presentation" width="100%" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
+        <tr><td style="padding:14px 16px;">
+          <div style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#94a3b8; margin-bottom:4px;">${label}</div>
+          <div style="font-size:22px; font-weight:800; color:${color};">${value}</div>
+        </td></tr>
+      </table>
+    </td>`;
+
+  return `
+  <html>
+  <body style="font-family: Inter, Roboto, Arial, sans-serif; color:#0f172a; margin:0; padding:0; background:#eef2f7;">
+    <table role="presentation" width="100%" style="background:#eef2f7; padding:36px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="680" style="background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 20px 45px rgba(2,6,23,0.12);">
+
+            <!-- Header -->
+            <tr>
+              <td bgcolor="#002060" style="background:#002060; padding:0;">
+                <div style="padding:32px 32px 26px; text-align:center;">
+                  ${logoCid ? `<img src="cid:${logoCid}" alt="Sandeza" width="56" style="display:block; margin:0 auto 14px; max-width:56px; height:auto; border:0;" />` : ''}
+                  <div style="color:#c7d2fe; font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:6px;">License Registry</div>
+                  <h1 style="margin:0; color:#ffffff; font-size:22px; font-weight:800;">📊 License Usage Report</h1>
+                  <p style="margin:8px 0 0; color:#e0e7ff; font-size:13px;">Generated ${generatedDate}${generatedBy ? ` by ${generatedBy}` : ''}</p>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Report table -->
+            <tr>
+              <td style="padding:20px 26px 8px;">
+                <table role="presentation" width="100%" style="border-collapse:collapse; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">
+                  <tr>
+                    ${headerCell('License')}
+                    ${showTotal ? headerCell('Total', 'center') : ''}
+                    ${showAssigned ? headerCell('Assigned', 'center') : ''}
+                    ${showAvailable ? headerCell('Available', 'center') : ''}
+                  </tr>
+                  ${licenses.map(dataRow).join('')}
+                  ${totalsRow}
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:20px 32px 8px;">
+                <p style="margin:0; color:#94a3b8; font-size:12.5px; text-align:center;">This is an auto-generated report from the License Registry. Please do not reply directly to this message.</p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:18px 24px; background:#0f172a; font-size:12px; color:#94a3b8; text-align:center;">
+                Sandeza Helpdesk · IT Support
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>
+  `;
+};
+
+const sendEmail = async (to, subject, bodyHtml, attachments = []) => {
   if (!to || (Array.isArray(to) && to.length === 0)) {
     console.log("⚠️ [MAIL] No recipients provided, skipping");
     return false;
@@ -745,6 +942,7 @@ const sendEmail = async (to, subject, bodyHtml) => {
         subject,
         body: { contentType: "HTML", content: bodyHtml.trim() },
         toRecipients: normalize([...new Set(validAddresses)]),
+        ...(Array.isArray(attachments) && attachments.length > 0 ? { attachments } : {}),
       },
       saveToSentItems: "true",
     };
@@ -1058,7 +1256,47 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
 // ===================== MAIN ROUTES =====================
 
-app.get("/", (req, res) => res.send("✅ Sandeza Helpdesk API Running"));
+app.get("/", (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Nothing to see here 👀</title>
+        <style>
+          body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0f172a;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            text-align: center;
+          }
+          .card {
+            padding: 40px 50px;
+            border-radius: 16px;
+            background: #1e293b;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+          }
+          h1 { font-size: 2.2rem; margin-bottom: 10px; }
+          p { color: #94a3b8; font-size: 1.1rem; margin: 6px 0; }
+          .emoji { font-size: 3rem; margin-bottom: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="emoji">🕵️‍♂️</div>
+          <h1>Oi, nosy. Why are you here?</h1>
+          <p>This is a backend API, not a website.</p>
+          <p>There's nothing to click, nothing to see — just servers whispering JSON to each other.</p>
+          <p>✅ Sandeza Helpdesk API is alive and well, though. Congrats on finding that out.</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
 
 // -------- Verify User --------
 app.post("/verify-user", async (req, res) => {
@@ -4761,6 +4999,11 @@ app.post("/api/onboarding/:id/approve", async (req, res) => {
             const welcomeSubject = fillPlaceholders(subjectTemplate);
             const welcomeBody = fillPlaceholders(bodyTemplate);
 
+            // Ship the logo as a real inline attachment (contentBytes, cid:)
+            // instead of an <img src="LOGO_URL"> the recipient's client has
+            // to fetch remotely — that's what was silently failing before.
+            const logoAttachment = getCompanyLogoAttachment();
+
             const welcomeHtml = buildWelcomeEmail({
               firstName: onboardingData.firstName,
               lastName: onboardingData.lastName,
@@ -4771,10 +5014,16 @@ app.post("/api/onboarding/:id/approve", async (req, res) => {
               groups: groupNamesJoined,
               messageBody: welcomeBody,
               signInLink: "https://outlook.office.com",
+              logoCid: logoAttachment ? LOGO_CONTENT_ID : null,
             });
 
             const welcomeDestination = onboardingData.personalEmail || onboardingData.userPrincipalName;
-            await sendEmail(welcomeDestination, `🎉 ${welcomeSubject}`, welcomeHtml);
+            await sendEmail(
+              welcomeDestination,
+              `🎉 ${welcomeSubject}`,
+              welcomeHtml,
+              logoAttachment ? [logoAttachment] : []
+            );
             
             // Also notify requester that account is created (if different from welcome destination)
             if (requesterEmail && requesterEmail !== welcomeDestination) {
@@ -7558,6 +7807,530 @@ app.delete('/api/asset-access/email/:email', async (req, res) => {
   } catch (err) {
     console.error('❌ Remove asset access by email error:', err);
     res.status(500).json({ message: 'Failed to remove asset access user', error: err.message });
+  }
+});
+
+// ===================== LICENSE REGISTRY =====================
+// Azure/Microsoft 365 licenses are assigned via GROUP-BASED LICENSING in this
+// tenant: each license SKU (Business Basic, E3, etc.) is tied to a security
+// group, and putting a user in that group is what grants the license. Graph's
+// /subscribedSkus endpoint gives us totals/consumed/available per SKU, but it
+// has no idea which security group maps to which SKU — that mapping is
+// something *we* set up (Settings page, later). LicenseGroupMapping stores it.
+
+// -------- License Group Mapping Schema --------
+const licenseGroupMappingSchema = new mongoose.Schema(
+  {
+    skuId: { type: String, required: true, unique: true, trim: true }, // Azure subscribedSku id
+    skuPartNumber: { type: String, trim: true }, // e.g. "O365_BUSINESS_ESSENTIALS"
+    displayName: { type: String, trim: true }, // friendly name, e.g. "Business Basic"
+    groupId: { type: String, required: true, trim: true }, // Azure AD security group id
+    groupName: { type: String, trim: true },
+    updatedBy: { id: String, name: String, email: String },
+  },
+  { timestamps: true }
+);
+licenseGroupMappingSchema.index({ skuId: 1 }, { unique: true });
+const LicenseGroupMapping = mongoose.model("LicenseGroupMapping", licenseGroupMappingSchema);
+
+// -------- License Access Schema (who can open License Registry) --------
+const licenseAccessSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    name: { type: String, default: "" },
+    addedBy: {
+      id: { type: String, default: "" },
+      name: { type: String, default: "" },
+      email: { type: String, default: "" },
+    },
+    addedAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+);
+const LicenseAccess = mongoose.model("LicenseAccess", licenseAccessSchema);
+
+// ===================== LICENSE ACCESS ROUTES =====================
+
+// GET /api/license-access - list all users with License Registry access
+app.get("/api/license-access", async (req, res) => {
+  try {
+    const users = await LicenseAccess.find().sort({ addedAt: -1 });
+    res.json(users);
+  } catch (err) {
+    console.error("❌ Get license access users error:", err);
+    res.status(500).json({ message: "Failed to fetch license access users", error: err.message });
+  }
+});
+
+// GET /api/license-access/check?email= - does this user have access
+app.get("/api/license-access/check", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    const user = await LicenseAccess.findOne({
+      email: { $regex: new RegExp(`^${email.trim()}$`, "i") },
+    });
+    res.json({
+      hasAccess: !!user,
+      user: user ? { id: user._id, email: user.email, name: user.name } : null,
+    });
+  } catch (err) {
+    console.error("❌ Check license access error:", err);
+    res.status(500).json({ message: "Failed to check license access", error: err.message });
+  }
+});
+
+// POST /api/license-access - grant access (admin only)
+app.post("/api/license-access", async (req, res) => {
+  try {
+    const { email, name, addedBy } = req.body;
+    if (!addedBy?.email || !(await checkIfUserIsHelpdeskAdmin(addedBy.email))) {
+      return res.status(403).json({ message: "Only admins can grant License Registry access" });
+    }
+    if (!email?.trim()) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    const existing = await LicenseAccess.findOne({
+      email: { $regex: new RegExp(`^${email.trim()}$`, "i") },
+    });
+    if (existing) {
+      return res.status(400).json({ message: `"${email.trim()}" already has License Registry access`, existing });
+    }
+    const user = new LicenseAccess({
+      email: email.trim().toLowerCase(),
+      name: name || "",
+      addedBy: addedBy || { id: "", name: "", email: "" },
+    });
+    await user.save();
+    console.log(`✅ [LICENSE ACCESS] Granted to: ${email.trim()}`);
+    res.status(201).json({ message: `License Registry access granted to "${email.trim()}"`, user });
+  } catch (err) {
+    console.error("❌ Grant license access error:", err);
+    if (err.code === 11000) {
+      return res.status(400).json({ message: "This user already has License Registry access" });
+    }
+    res.status(500).json({ message: "Failed to grant license access", error: err.message });
+  }
+});
+
+// DELETE /api/license-access/:id - revoke access by id (admin only, pass ?adminEmail=)
+app.delete("/api/license-access/:id", async (req, res) => {
+  try {
+    const { adminEmail } = req.query;
+    if (!adminEmail || !(await checkIfUserIsHelpdeskAdmin(adminEmail))) {
+      return res.status(403).json({ message: "Only admins can revoke License Registry access" });
+    }
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+    const user = await LicenseAccess.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    await LicenseAccess.findByIdAndDelete(id);
+    console.log(`✅ [LICENSE ACCESS] Removed: ${user.email}`);
+    res.json({ message: `License Registry access removed for "${user.email}"`, email: user.email });
+  } catch (err) {
+    console.error("❌ Remove license access error:", err);
+    res.status(500).json({ message: "Failed to remove license access user", error: err.message });
+  }
+});
+
+// ===================== LICENSE GROUP MAPPING ROUTES =====================
+// These back the future Settings page. Built now so License Registry has
+// something to read from; no dedicated UI for these yet.
+
+// GET /api/license-mappings - list all SKU <-> group mappings
+app.get("/api/license-mappings", async (req, res) => {
+  try {
+    const mappings = await LicenseGroupMapping.find().sort({ displayName: 1 });
+    res.json(mappings);
+  } catch (err) {
+    console.error("❌ Get license mappings error:", err);
+    res.status(500).json({ message: "Failed to fetch license mappings", error: err.message });
+  }
+});
+
+// POST /api/license-mappings - create or update a mapping (admin only)
+// body: { skuId, skuPartNumber, displayName, groupId, groupName, updatedBy }
+app.post("/api/license-mappings", async (req, res) => {
+  try {
+    const { skuId, skuPartNumber, displayName, groupId, groupName, updatedBy } = req.body;
+    if (!updatedBy?.email || !(await checkIfUserIsHelpdeskAdmin(updatedBy.email))) {
+      return res.status(403).json({ message: "Only admins can configure license mappings" });
+    }
+    if (!skuId || !groupId) {
+      return res.status(400).json({ message: "skuId and groupId are required" });
+    }
+    const mapping = await LicenseGroupMapping.findOneAndUpdate(
+      { skuId },
+      { skuId, skuPartNumber, displayName, groupId, groupName, updatedBy },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    console.log(`✅ [LICENSE MAPPING] Saved: ${displayName || skuId} -> group ${groupId}`);
+    res.json({ message: "License mapping saved", mapping });
+  } catch (err) {
+    console.error("❌ Save license mapping error:", err);
+    res.status(500).json({ message: "Failed to save license mapping", error: err.message });
+  }
+});
+
+// DELETE /api/license-mappings/:id - remove a mapping (admin only, pass ?adminEmail=)
+app.delete("/api/license-mappings/:id", async (req, res) => {
+  try {
+    const { adminEmail } = req.query;
+    if (!adminEmail || !(await checkIfUserIsHelpdeskAdmin(adminEmail))) {
+      return res.status(403).json({ message: "Only admins can remove license mappings" });
+    }
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid mapping id" });
+    }
+    await LicenseGroupMapping.findByIdAndDelete(id);
+    res.json({ message: "License mapping removed" });
+  } catch (err) {
+    console.error("❌ Remove license mapping error:", err);
+    res.status(500).json({ message: "Failed to remove license mapping", error: err.message });
+  }
+});
+
+// ===================== LICENSE DATA ROUTES =====================
+
+// Microsoft's Graph /subscribedSkus endpoint returns internal skuPartNumber
+// codes (e.g. "SPB", "O365_BUSINESS_ESSENTIALS") which don't match the
+// friendly names shown in the M365/Azure admin portal ("Business Premium",
+// "Business Basic") — the two have diverged over years of product renames.
+// This is Microsoft's own published mapping (see "Licensing Service Plan
+// Reference"), used purely for display. It's a fallback only: an admin's
+// custom LicenseGroupMapping.displayName always wins if one is set.
+const KNOWN_SKU_DISPLAY_NAMES = {
+  O365_BUSINESS_ESSENTIALS: "Microsoft 365 Business Basic",
+  O365_BUSINESS_PREMIUM: "Microsoft 365 Apps for Business",
+  SPB: "Microsoft 365 Business Premium",
+  SPE_E3: "Microsoft 365 E3",
+  SPE_E5: "Microsoft 365 E5",
+  SPE_F1: "Microsoft 365 F3",
+  ENTERPRISEPACK: "Office 365 E3",
+  ENTERPRISEPREMIUM: "Office 365 E5",
+  STANDARDPACK: "Office 365 E1",
+  EXCHANGESTANDARD: "Exchange Online (Plan 1)",
+  EXCHANGEENTERPRISE: "Exchange Online (Plan 2)",
+  FLOW_FREE: "Microsoft Power Automate Free",
+  POWER_BI_STANDARD: "Microsoft Fabric (Free)",
+  POWER_BI_PRO: "Power BI Pro",
+  POWERAPPS_DEV: "Microsoft Power Apps for Developer",
+  POWERAPPS_VIRAL: "Microsoft Power Apps Plan 2 Trial",
+  RIGHTSMANAGEMENT_ADHOC: "Rights Management Adhoc",
+  TEAMS_EXPLORATORY: "Microsoft Teams Exploratory",
+  MEETING_ROOM: "Microsoft Teams Rooms Standard",
+  MCOMEETADV: "Microsoft 365 Audio Conferencing",
+  PROJECTPREMIUM: "Project Plan 5",
+  PROJECTPROFESSIONAL: "Project Plan 3",
+  VISIOCLIENT: "Visio Plan 2",
+  WIN10_PRO_ENT_SUB: "Windows 10/11 Enterprise",
+  AAD_PREMIUM: "Microsoft Entra ID P1",
+  AAD_PREMIUM_P2: "Microsoft Entra ID P2",
+  EMS: "Enterprise Mobility + Security E3",
+  EMSPREMIUM: "Enterprise Mobility + Security E5",
+  DYN365_ENTERPRISE_PLAN1: "Dynamics 365 Customer Engagement Plan",
+  Microsoft_Teams_Exploratory_Dept: "Microsoft Teams Exploratory (Dept)",
+};
+
+function friendlyLicenseName(skuPartNumber) {
+  if (!skuPartNumber) return skuPartNumber;
+  if (KNOWN_SKU_DISPLAY_NAMES[skuPartNumber]) return KNOWN_SKU_DISPLAY_NAMES[skuPartNumber];
+  // Fallback: turn TEAMS_PREMIUM_(FOR_DEPARTMENTS)-style codes into readable text
+  return skuPartNumber
+    .replace(/_/g, " ")
+    .replace(/\(|\)/g, "")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// GET /api/licenses - list all SKUs in the tenant with total/assigned/available,
+// merged with our group mapping (if one exists for that SKU)
+app.get("/api/licenses", async (req, res) => {
+  try {
+    const token = await getGraphToken();
+    const url = "https://graph.microsoft.com/v1.0/subscribedSkus";
+    const graphRes = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await graphRes.json();
+    if (!graphRes.ok) {
+      console.error("❌ [LICENSES] Graph error:", data);
+      return res.status(graphRes.status).json({ message: "Failed to fetch licenses from Azure", error: data });
+    }
+
+    const mappings = await LicenseGroupMapping.find();
+    const mappingBySkuId = {};
+    mappings.forEach((m) => { mappingBySkuId[m.skuId] = m; });
+
+    const licenses = (data.value || []).map((sku) => {
+      const mapping = mappingBySkuId[sku.skuId];
+      const total = sku.prepaidUnits?.enabled || 0;
+      const consumed = sku.consumedUnits || 0;
+      return {
+        skuId: sku.skuId,
+        skuPartNumber: sku.skuPartNumber,
+        displayName: mapping?.displayName || friendlyLicenseName(sku.skuPartNumber),
+        total,
+        assigned: consumed,
+        available: Math.max(total - consumed, 0),
+        capabilityStatus: sku.capabilityStatus,
+        mapped: !!mapping,
+        groupId: mapping?.groupId || null,
+        groupName: mapping?.groupName || null,
+      };
+    });
+
+    res.json(licenses);
+  } catch (err) {
+    console.error("❌ Get licenses error:", err.message);
+    res.status(500).json({ message: "Failed to fetch licenses", error: err.message });
+  }
+});
+
+// GET /api/licenses/:skuId/users - list users assigned this license (i.e. members
+// of the security group mapped to it)
+app.get("/api/licenses/:skuId/users", async (req, res) => {
+  try {
+    const { skuId } = req.params;
+    const mapping = await LicenseGroupMapping.findOne({ skuId });
+    if (!mapping) {
+      return res.status(404).json({ message: "This license isn't mapped to a security group yet", users: [] });
+    }
+
+    const token = await getGraphToken();
+    let url =
+      `https://graph.microsoft.com/v1.0/groups/${mapping.groupId}/members` +
+      `?$select=id,displayName,mail,userPrincipalName,jobTitle,department&$top=999`;
+    const users = [];
+    while (url) {
+      const graphRes = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await graphRes.json();
+      if (!graphRes.ok) {
+        console.error("❌ [LICENSE USERS] Graph error:", data);
+        return res.status(graphRes.status).json({ message: "Failed to fetch group members", error: data });
+      }
+      users.push(...(data.value || []).map((u) => ({
+        id: u.id,
+        displayName: u.displayName,
+        mail: u.mail || u.userPrincipalName,
+        jobTitle: u.jobTitle,
+        department: u.department,
+      })));
+      url = data["@odata.nextLink"] || null;
+    }
+
+    res.json({ groupId: mapping.groupId, groupName: mapping.groupName, users });
+  } catch (err) {
+    console.error("❌ Get license users error:", err.message);
+    res.status(500).json({ message: "Failed to fetch license users", error: err.message });
+  }
+});
+
+// POST /api/licenses/:skuId/users - assign license to a user (add to mapped group)
+// body: { userId, adminEmail }
+app.post("/api/licenses/:skuId/users", async (req, res) => {
+  try {
+    const { skuId } = req.params;
+    const { userId, adminEmail } = req.body;
+    if (!adminEmail || !(await checkIfUserIsHelpdeskAdmin(adminEmail))) {
+      return res.status(403).json({ message: "Only admins can assign licenses" });
+    }
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
+    }
+    const mapping = await LicenseGroupMapping.findOne({ skuId });
+    if (!mapping) {
+      return res.status(404).json({ message: "This license isn't mapped to a security group yet" });
+    }
+
+    const token = await getGraphToken();
+    const url = `https://graph.microsoft.com/v1.0/groups/${mapping.groupId}/members/$ref`;
+    const graphRes = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ "@odata.id": `https://graph.microsoft.com/v1.0/directoryObjects/${userId}` }),
+    });
+
+    if (graphRes.status === 204 || graphRes.status === 201) {
+      console.log(`✅ [LICENSE] Assigned ${skuId} to user ${userId} (via group ${mapping.groupId})`);
+      return res.json({ message: "License assigned" });
+    }
+    const errorText = await graphRes.text();
+    console.error("❌ [LICENSE] Assign failed:", errorText);
+    let parsed;
+    try { parsed = JSON.parse(errorText); } catch { parsed = errorText; }
+    // Graph returns 400 if the user is already a member — treat as success-ish info
+    if (graphRes.status === 400 && /already exist/i.test(errorText)) {
+      return res.status(400).json({ message: "User already has this license" });
+    }
+    res.status(graphRes.status).json({ message: "Failed to assign license", error: parsed });
+  } catch (err) {
+    console.error("❌ Assign license error:", err.message);
+    res.status(500).json({ message: "Failed to assign license", error: err.message });
+  }
+});
+
+// DELETE /api/licenses/:skuId/users/:userId - remove license from a user (remove
+// from mapped group). Pass ?adminEmail= for the admin check.
+app.delete("/api/licenses/:skuId/users/:userId", async (req, res) => {
+  try {
+    const { skuId, userId } = req.params;
+    const { adminEmail } = req.query;
+    if (!adminEmail || !(await checkIfUserIsHelpdeskAdmin(adminEmail))) {
+      return res.status(403).json({ message: "Only admins can remove licenses" });
+    }
+    const mapping = await LicenseGroupMapping.findOne({ skuId });
+    if (!mapping) {
+      return res.status(404).json({ message: "This license isn't mapped to a security group yet" });
+    }
+
+    const token = await getGraphToken();
+    const url = `https://graph.microsoft.com/v1.0/groups/${mapping.groupId}/members/${userId}/$ref`;
+    const graphRes = await fetch(url, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (graphRes.status === 204) {
+      console.log(`✅ [LICENSE] Removed ${skuId} from user ${userId} (via group ${mapping.groupId})`);
+      return res.json({ message: "License removed" });
+    }
+    const errorText = await graphRes.text();
+    console.error("❌ [LICENSE] Remove failed:", errorText);
+    let parsed;
+    try { parsed = JSON.parse(errorText); } catch { parsed = errorText; }
+    res.status(graphRes.status).json({ message: "Failed to remove license", error: parsed });
+  } catch (err) {
+    console.error("❌ Remove license error:", err.message);
+    res.status(500).json({ message: "Failed to remove license", error: err.message });
+  }
+});
+
+// POST /api/license-report - email a formatted License Registry usage report
+// to the given recipients. This is what the "Send Report" button on the
+// License Registry page calls; it uses buildLicenseReportEmail (a proper
+// tabular report layout), not the generic single-record notification card.
+// body: { recipients: string[], licenses: [{skuId, skuPartNumber, displayName, total, assigned, available}], columns: {total, assigned, available}, sentBy }
+app.post("/api/license-report", async (req, res) => {
+  try {
+    const { recipients, licenses, columns, sentBy } = req.body;
+
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ message: "At least one recipient is required" });
+    }
+    if (!Array.isArray(licenses) || licenses.length === 0) {
+      return res.status(400).json({ message: "At least one license must be selected" });
+    }
+
+    // Same access bar as the rest of the License Registry: helpdesk admins,
+    // or anyone explicitly granted License Registry access.
+    const senderEmail = (sentBy || "").trim();
+    const isAdmin = senderEmail && (await checkIfUserIsHelpdeskAdmin(senderEmail));
+    const hasLicenseAccess = senderEmail && (await LicenseAccess.findOne({
+      email: { $regex: new RegExp(`^${senderEmail}$`, "i") },
+    }));
+    if (!isAdmin && !hasLicenseAccess) {
+      return res.status(403).json({ message: "You don't have permission to send license reports" });
+    }
+
+    const logoAttachment = getCompanyLogoAttachment();
+
+    const reportHtml = buildLicenseReportEmail({
+      licenses,
+      columns: columns || { total: true, assigned: true, available: true },
+      generatedBy: senderEmail,
+      logoCid: logoAttachment ? LOGO_CONTENT_ID : null,
+    });
+
+    const subject = `📊 License Usage Report — ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+    const sent = await sendEmail(recipients, subject, reportHtml, logoAttachment ? [logoAttachment] : []);
+
+    if (!sent) {
+      return res.status(500).json({ message: "Failed to send license report" });
+    }
+
+    console.log(`✅ [LICENSE REPORT] Sent to: ${recipients.join(", ")} by ${senderEmail || "unknown"}`);
+    res.json({ message: "License report sent", recipients });
+  } catch (err) {
+    console.error("❌ Send license report error:", err.message);
+    res.status(500).json({ message: "Failed to send license report", error: err.message });
+  }
+});
+
+// GET /api/azure-users/search?q= - live search of Azure AD users, for the
+// "add user to license" picker
+app.get("/api/azure-users/search", async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) {
+      return res.json([]);
+    }
+    const token = await getGraphToken();
+    const search = encodeURIComponent(`"displayName:${q.trim()}" OR "mail:${q.trim()}"`);
+    const url =
+      `https://graph.microsoft.com/v1.0/users?$search=${search}` +
+      `&$select=id,displayName,mail,userPrincipalName,jobTitle,department&$top=15`;
+    const graphRes = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ConsistencyLevel: "eventual",
+      },
+    });
+    const data = await graphRes.json();
+    if (!graphRes.ok) {
+      console.error("❌ [AZURE USER SEARCH] Graph error:", data);
+      return res.status(graphRes.status).json({ message: "Search failed", error: data });
+    }
+    const users = (data.value || []).map((u) => ({
+      id: u.id,
+      displayName: u.displayName,
+      mail: u.mail || u.userPrincipalName,
+      jobTitle: u.jobTitle,
+      department: u.department,
+    }));
+    res.json(users);
+  } catch (err) {
+    console.error("❌ Azure user search error:", err.message);
+    res.status(500).json({ message: "Failed to search users", error: err.message });
+  }
+});
+
+// GET /api/azure-groups/search?q= - live search of Azure AD security groups,
+// for wiring up a mapping (used by the future Settings page too)
+app.get("/api/azure-groups/search", async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) {
+      return res.json([]);
+    }
+    const token = await getGraphToken();
+    const search = encodeURIComponent(`"displayName:${q.trim()}"`);
+    const url =
+      `https://graph.microsoft.com/v1.0/groups?$search=${search}` +
+      `&$select=id,displayName,securityEnabled,mail&$top=15`;
+    const graphRes = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ConsistencyLevel: "eventual",
+      },
+    });
+    const data = await graphRes.json();
+    if (!graphRes.ok) {
+      console.error("❌ [AZURE GROUP SEARCH] Graph error:", data);
+      return res.status(graphRes.status).json({ message: "Search failed", error: data });
+    }
+    const groups = (data.value || [])
+      .filter((g) => g.securityEnabled)
+      .map((g) => ({ id: g.id, displayName: g.displayName, mail: g.mail }));
+    res.json(groups);
+  } catch (err) {
+    console.error("❌ Azure group search error:", err.message);
+    res.status(500).json({ message: "Failed to search groups", error: err.message });
   }
 });
 

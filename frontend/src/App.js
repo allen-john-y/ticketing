@@ -32,6 +32,8 @@ import AssetRegistry from './AssetRegistry';
 import CreateAssetRegistry from './SettingsPages/CreateAssetRegistry';
 // ✅ Import AssetSettings for managing access
 import AssetSettings from './SettingsPages/AssetSettings';
+// ✅ Import LicenseRegistry
+import LicenseRegistry from './LicenseRegistry';
 import logo from './sandeza.jpg';
 
 const HELP_DESK_GROUP_ID = process.env.REACT_APP_HELP_DESK_GROUP_ID;
@@ -87,7 +89,7 @@ function ProtectedHrRoute({ children, hasAccess, loading }) {
 const NavContext = React.createContext({ navExpanded: false });
 
 /* ─────────────────────────── LEFT NAVBAR ─────────────────────────── */
-function LeftNav({ isAdmin, hasHrAccess, hasAssetAccess, onExpandChange }) {
+function LeftNav({ isAdmin, hasHrAccess, hasAssetAccess, hasLicenseAccess, onExpandChange }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [hovered, setHovered]   = useState(false);
@@ -181,7 +183,7 @@ function LeftNav({ isAdmin, hasHrAccess, hasAssetAccess, onExpandChange }) {
       color: '#8b5cf6',
       activeColor: 'rgba(139,92,246,0.15)',
     },
-    // ✅ Asset Registry - Now shown based on hasAssetAccess (NOT isAdmin)
+    // Asset Registry - Shown based on hasAssetAccess
     ...(hasAssetAccess ? [{
       id: 'asset-registry',
       label: 'Asset Registry',
@@ -197,6 +199,22 @@ function LeftNav({ isAdmin, hasHrAccess, hasAssetAccess, onExpandChange }) {
       ),
       color: '#0ea5e9',
       activeColor: 'rgba(14,165,233,0.15)',
+    }] : []),
+    // ✅ NEW: License Registry - Shown based on hasLicenseAccess
+    ...(hasLicenseAccess ? [{
+      id: 'license-registry',
+      label: 'License Registry',
+      path: '/license-registry',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+          <path d="M12 22V12"/>
+        </svg>
+      ),
+      color: '#10b981',
+      activeColor: 'rgba(16,185,129,0.15)',
     }] : []),
     ...(isAdmin ? [{
       id: 'settings',
@@ -1173,9 +1191,11 @@ function Header({ logout }) {
   const [isAdmin, setIsAdmin]                 = useState(false);
   const [hasHrAccess, setHasHrAccess]         = useState(false);
   const [loadingHrAccess, setLoadingHrAccess] = useState(true);
-  // ✅ NEW: Asset Access state
   const [hasAssetAccess, setHasAssetAccess]   = useState(false);
   const [loadingAssetAccess, setLoadingAssetAccess] = useState(true);
+  // ✅ NEW: License Access state
+  const [hasLicenseAccess, setHasLicenseAccess] = useState(false);
+  const [loadingLicenseAccess, setLoadingLicenseAccess] = useState(true);
   const [navExpanded, setNavExpanded]         = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications] = useState([]);
@@ -1291,7 +1311,7 @@ function Header({ logout }) {
     return () => { cancelled = true; };
   }, [accounts]);
 
-  // ✅ NEW: Check Asset Registry Access
+  // ─── Check Asset Access ───
   useEffect(() => {
     let cancelled = false;
     const checkAssetAccess = async () => {
@@ -1315,6 +1335,33 @@ function Header({ logout }) {
       }
     };
     checkAssetAccess();
+    return () => { cancelled = true; };
+  }, [accounts]);
+
+  // ✅ NEW: Check License Registry Access
+  useEffect(() => {
+    let cancelled = false;
+    const checkLicenseAccess = async () => {
+      if (!accounts || !accounts[0]) {
+        setHasLicenseAccess(false);
+        setLoadingLicenseAccess(false);
+        return;
+      }
+      try {
+        const email = accounts[0].username;
+        const res = await fetch(`${BACKEND}/api/license-access/check?email=${encodeURIComponent(email)}`);
+        const data = await res.json();
+        if (!cancelled) {
+          setHasLicenseAccess(!!data.hasAccess);
+        }
+      } catch (err) {
+        console.error('Error checking license access:', err);
+        if (!cancelled) setHasLicenseAccess(false);
+      } finally {
+        if (!cancelled) setLoadingLicenseAccess(false);
+      }
+    };
+    checkLicenseAccess();
     return () => { cancelled = true; };
   }, [accounts]);
 
@@ -1376,7 +1423,7 @@ function Header({ logout }) {
     .join('');
 
   // Don't render navigation until access checks are complete
-  if (loadingHrAccess || loadingAssetAccess) {
+  if (loadingHrAccess || loadingAssetAccess || loadingLicenseAccess) {
     return (
       <div className="app-root">
         <div className="app-container">
@@ -1737,6 +1784,7 @@ function Header({ logout }) {
             isAdmin={isAdmin} 
             hasHrAccess={hasHrAccess} 
             hasAssetAccess={hasAssetAccess}
+            hasLicenseAccess={hasLicenseAccess}
             onExpandChange={setNavExpanded} 
           />
 
@@ -1878,12 +1926,12 @@ function Header({ logout }) {
                 <Route path="/kb" element={<KBListView />} />
                 <Route path="/settings/hr-request-settings" element={<CreateHrRequest />} />
                 <Route path="/kb/:id" element={<KBView />} />
-                {/* ✅ Asset Registry Routes */}
+                {/* Asset Registry Routes */}
                 <Route path="/asset-registry" element={<AssetRegistry />} />
-                {/* ✅ Asset Registry Access Management - only for admins */}
                 {isAdmin && <Route path="/settings/asset-registry-access" element={<AssetSettings />} />}
-                {/* Add asset - only for admins */}
                 {isAdmin && <Route path="/settings/asset-registry/add" element={<CreateAssetRegistry />} />}
+                {/* ✅ NEW: License Registry Route */}
+                <Route path="/license-registry" element={<LicenseRegistry />} />
               </Routes>
             </div>
           </div>

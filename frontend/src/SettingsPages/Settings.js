@@ -13,6 +13,7 @@ import OnboardingSettings from './OnboardingSettings';
 import CreateKB from './CreateKB';
 import EmployeeType from './EmployeeType'; // Import the new component
 import AssetSettings from './AssetSettings';
+import LicenseMapping from './LicenseMapping';
 
 // Full settings options (admin only)
 const adminSettingsOptions = [
@@ -132,6 +133,16 @@ const adminSettingsOptions = [
     icon: '🧰',
     accent: '#0ea5e9',
     accentBg: 'rgba(14, 165, 233, 0.08)',
+  },
+  ,
+  {
+    id: 'license-mapping',
+    path: 'license-mapping',
+    title: 'License Mapping',
+    description: 'Link each Microsoft 365 license to the security group that grants it, so License Registry can manage assignments.',
+    icon: '🔗',
+    accent: '#0891b2',
+    accentBg: 'rgba(8, 145, 178, 0.08)',
   },
   {
     id: 'create-kb',
@@ -378,7 +389,7 @@ function SettingsLanding({ navigate, isAdmin }) {
             <div className="set-hero-eyebrow-line" />
             {isAdmin ? 'System Configuration' : 'Knowledge Management'}
           </div>
-          <h1>{isAdmin ? 'Admin <em>Settings</em>' : 'Knowledge <em>Base</em>'}</h1>
+          <h1>{isAdmin ? 'Admin Settings' : 'Knowledge <em>Base</em>'}</h1>
           <p className="set-hero-sub">
             {isAdmin 
               ? 'Manage users, categories, groups, knowledge base, and system configuration'
@@ -481,6 +492,7 @@ export default function Settings({ isAdmin = false }) {
             <Route path="employee-type" element={<EmployeeType />} />
             <Route path="onboarding-settings" element={<OnboardingSettings />} />
             <Route path="asset-registry" element={<AssetSettings />} />
+            <Route path="license-mapping" element={<LicenseMapping />} />
           </>
         )}
         
@@ -498,6 +510,7 @@ export default function Settings({ isAdmin = false }) {
             <Route path="employee-type" element={<AccessDenied />} />
             <Route path="onboarding-settings" element={<AccessDenied />} />
             <Route path="asset-registry" element={<AccessDenied />} />
+            <Route path="license-mapping" element={<AccessDenied />} />
           </>
         )}
       </Routes>
