@@ -250,7 +250,7 @@ function DeleteModal({ incident, onClose, onConfirm, deleting }) {
   );
 }
 
-export default function Incidents() {
+export default function Incidents({ isAdmin = false }) {
   const { accounts } = useMsal();
   const navigate = useNavigate();
 
@@ -282,7 +282,7 @@ export default function Incidents() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
-  const [viewMode, setViewMode] = useState('my-incidents'); // 'my-incidents' or 'assigned-to-me'
+  const [viewMode, setViewMode] = useState('my-incidents');
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -341,6 +341,11 @@ export default function Incidents() {
   }, []);
 
   useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter, sortBy, viewMode]);
+  useEffect(() => {
+    if (!isAdmin && viewMode === 'all-incidents') {
+      setViewMode('my-incidents');
+    }
+  }, [isAdmin, viewMode]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -485,6 +490,8 @@ export default function Incidents() {
       });
       list = list.filter(inc => isUserInGroup(inc));
       console.log('📊 After Assigned to Me filter:', list.length);
+    } else if (viewMode === 'all-incidents' && !isAdmin) {
+      list = list.filter(inc => isCreatedByUser(inc));
     }
 
     // Apply search filter
@@ -536,7 +543,7 @@ export default function Incidents() {
     console.log('===== FILTERING COMPLETE =====\n');
 
     return list;
-  }, [incidents, search, statusFilter, priorityFilter, sortBy, viewMode, currentUserEmail]);
+  }, [incidents, search, statusFilter, priorityFilter, sortBy, viewMode, currentUserEmail, isAdmin]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -549,6 +556,8 @@ export default function Incidents() {
       baseList = baseList.filter(inc => isCreatedByUser(inc));
     } else if (viewMode === 'assigned-to-me') {
       baseList = baseList.filter(inc => isUserInGroup(inc));
+    } else if (viewMode === 'all-incidents' && !isAdmin) {
+      baseList = baseList.filter(inc => isCreatedByUser(inc));
     }
 
     return {
@@ -559,7 +568,7 @@ export default function Incidents() {
       critical: baseList.filter(i => i.priority === 'critical' && i.status !== 'closed').length,
       high:     baseList.filter(i => i.priority === 'high' && i.status !== 'closed').length,
     };
-  }, [incidents, viewMode, currentUserEmail]);
+  }, [incidents, viewMode, currentUserEmail, isAdmin]);
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -1456,6 +1465,14 @@ export default function Incidents() {
           >
             📋 Assigned to Me
           </button>
+          {isAdmin && (
+            <button
+              className={`inc-toggle-btn ${viewMode === 'all-incidents' ? 'inc-toggle-btn-active' : ''}`}
+              onClick={() => setViewMode('all-incidents')}
+            >
+              🌐 All Incidents
+            </button>
+          )}
         </div>
 
         {/* Stats */}
@@ -1516,7 +1533,11 @@ export default function Incidents() {
           <span style={{ fontSize: 13, color: '#64748b' }}>
             Showing <strong style={{ color: '#002060' }}>{filtered.length}</strong> incidents in{' '}
             <strong style={{ color: '#002060' }}>
-              {viewMode === 'my-incidents' ? 'My Incidents' : 'Assigned to Me'}
+              {viewMode === 'my-incidents'
+                ? 'My Incidents'
+                : viewMode === 'assigned-to-me'
+                  ? 'Assigned to Me'
+                  : 'All Incidents'}
             </strong>
           </span>
           {(search || statusFilter !== 'all' || priorityFilter !== 'all') && (
@@ -1556,9 +1577,11 @@ export default function Incidents() {
                         <div className="inc-empty-icon">🚨</div>
                         <div className="inc-empty-title">No incidents found</div>
                         <div className="inc-empty-sub">
-                          {viewMode === 'my-incidents' 
-                            ? "You haven't created any incidents yet" 
-                            : "No incidents assigned to your groups"}
+                          {viewMode === 'my-incidents'
+                            ? "You haven't created any incidents yet"
+                            : viewMode === 'assigned-to-me'
+                              ? 'No incidents assigned to your groups'
+                              : 'No incidents have been created yet'}
                         </div>
                       </div>
                     </td>

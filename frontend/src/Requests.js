@@ -143,7 +143,7 @@ function DeleteModal({ request, onClose, onConfirm, deleting }) {
   );
 }
 
-export default function Requests() {
+export default function Requests({ isAdmin = false }) {
   const { accounts } = useMsal();
   const navigate = useNavigate();
   const location = useLocation();
@@ -165,7 +165,7 @@ export default function Requests() {
   );
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
-  const [viewMode, setViewMode] = useState('my-requests'); // 'my-requests' or 'assigned-to-me'
+  const [viewMode, setViewMode] = useState('my-requests');
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -194,6 +194,11 @@ export default function Requests() {
   }, []);
 
   useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter, sortBy, viewMode]);
+  useEffect(() => {
+    if (!isAdmin && viewMode === 'all-requests') {
+      setViewMode('my-requests');
+    }
+  }, [isAdmin, viewMode]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -277,6 +282,8 @@ export default function Requests() {
       list = list.filter(r => isCreatedByUser(r));
     } else if (viewMode === 'assigned-to-me') {
       list = list.filter(r => isUserInGroup(r));
+    } else if (viewMode === 'all-requests' && !isAdmin) {
+      list = list.filter(r => isCreatedByUser(r));
     }
 
     // Apply search filter
@@ -309,7 +316,7 @@ export default function Requests() {
     });
 
     return list;
-  }, [requests, search, statusFilter, priorityFilter, sortBy, viewMode, currentUserEmail]);
+  }, [requests, search, statusFilter, priorityFilter, sortBy, viewMode, currentUserEmail, isAdmin]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -322,6 +329,8 @@ export default function Requests() {
       baseList = baseList.filter(r => isCreatedByUser(r));
     } else if (viewMode === 'assigned-to-me') {
       baseList = baseList.filter(r => isUserInGroup(r));
+    } else if (viewMode === 'all-requests' && !isAdmin) {
+      baseList = baseList.filter(r => isCreatedByUser(r));
     }
 
     return {
@@ -331,7 +340,7 @@ export default function Requests() {
       resolved:   baseList.filter(r => r.status === 'resolved' || r.status === 'closed').length,
       high:       baseList.filter(r => r.priority === 'high' && r.status !== 'closed').length,
     };
-  }, [requests, viewMode, currentUserEmail]);
+  }, [requests, viewMode, currentUserEmail, isAdmin]);
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -1166,6 +1175,14 @@ export default function Requests() {
           >
             📋 Assigned to Me
           </button>
+          {isAdmin && (
+            <button
+              className={`req-toggle-btn ${viewMode === 'all-requests' ? 'req-toggle-btn-active' : ''}`}
+              onClick={() => setViewMode('all-requests')}
+            >
+              🌐 All Requests
+            </button>
+          )}
         </div>
 
         {/* Stats */}
@@ -1225,7 +1242,11 @@ export default function Requests() {
           <span style={{ fontSize: 13, color: '#64748b' }}>
             Showing <strong style={{ color: '#002060' }}>{filtered.length}</strong> requests in{' '}
             <strong style={{ color: '#002060' }}>
-              {viewMode === 'my-requests' ? 'My Requests' : 'Assigned to Me'}
+              {viewMode === 'my-requests'
+                ? 'My Requests'
+                : viewMode === 'assigned-to-me'
+                  ? 'Assigned to Me'
+                  : 'All Requests'}
             </strong>
           </span>
           {(search || statusFilter !== 'all' || priorityFilter !== 'all') && (
@@ -1265,9 +1286,11 @@ export default function Requests() {
                         <div className="req-empty-icon">📋</div>
                         <div className="req-empty-title">No requests found</div>
                         <div className="req-empty-sub">
-                          {viewMode === 'my-requests' 
-                            ? "You haven't created any requests yet" 
-                            : "No requests assigned to your groups"}
+                          {viewMode === 'my-requests'
+                            ? "You haven't created any requests yet"
+                            : viewMode === 'assigned-to-me'
+                              ? 'No requests assigned to your groups'
+                              : 'No requests have been created yet'}
                         </div>
                       </div>
                     </td>

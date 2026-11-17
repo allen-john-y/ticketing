@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import { BrowserRouter as Router, Route, Routes, useNavigate, useLocation } from 'react-router-dom';
+import Snowfall from 'react-snowfall';
 import Login from './Login';
 import Home from './Home';
 import Requests from './Requests';
@@ -1473,17 +1474,44 @@ function Header({ logout }) {
         }
 
         .app-header {
-          background: #ffffff;
+          background: #002060;
           padding: 0 2rem;
           height: 68px;
-          border-bottom: 1px solid #eef2f6;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.14);
           display: flex;
           align-items: center;
           justify-content: space-between;
           position: sticky;
           top: 0;
           z-index: 100;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+          box-shadow: 0 1px 8px rgba(0, 0, 0, 0.18);
+          color: #f8fafc;
+        }
+
+        .app-header .ss-input-box {
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .app-header .ss-input-box:focus-within {
+          background: rgba(255, 255, 255, 0.16);
+        }
+
+        .app-header .ss-icon {
+          color: #dbeafe;
+        }
+
+        .app-header .ss-input {
+          color: #f8fafc;
+        }
+
+        .app-header .ss-input::placeholder {
+          color: #cbd5e1;
+        }
+
+        .app-header .ss-kbd {
+          color: #e2e8f0;
+          background: rgba(255, 255, 255, 0.14);
         }
 
         .header-left {
@@ -1515,12 +1543,12 @@ function Header({ logout }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #5c6b7e;
+          color: #e2e8f0;
           transition: all 0.2s;
         }
 
-        .notif-btn:hover {
-          background: #f5f7fb;
+        .app-header .notif-btn:hover {
+          background: rgba(255, 255, 255, 0.12);
           color: #e98404;
         }
 
@@ -1606,17 +1634,17 @@ function Header({ logout }) {
           gap: 10px;
           padding: 6px 12px 6px 8px;
           border-radius: 40px;
-          border: 1px solid #e9edf2;
-          background: white;
-          color: #111827;
+          border: 1px solid rgba(255, 255, 255, 0.22);
+          background: rgba(255, 255, 255, 0.1);
+          color: #f8fafc;
           cursor: pointer;
           transition: all 0.15s;
           font-family: 'DM Sans', sans-serif;
         }
 
-        .profile-btn:hover {
-          background: #fafbfc;
-          border-color: #d1d8e0;
+        .app-header .profile-btn:hover {
+          background: rgba(255, 255, 255, 0.16);
+          border-color: rgba(255, 255, 255, 0.35);
         }
 
         .profile-avatar {
@@ -1649,12 +1677,12 @@ function Header({ logout }) {
         .profile-name {
           font-size: 13px;
           font-weight: 600;
-          color: #111827;
+          color: #f8fafc;
         }
 
         .profile-email {
           font-size: 10px;
-          color: #6b7280;
+          color: #cbd5e1;
         }
 
         .profile-dropdown {
@@ -1750,13 +1778,16 @@ function Header({ logout }) {
         }
 
         .admin-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
           padding: 4px 10px;
-          background: rgba(0, 32, 96, 0.08);
-          border: 1px solid rgba(0, 32, 96, 0.15);
+          background: rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(255, 255, 255, 0.28);
           border-radius: 20px;
           font-size: 11px;
           font-weight: 600;
-          color: #002060;
+          color: #f8fafc;
           letter-spacing: 0.04em;
         }
 
@@ -1797,7 +1828,12 @@ function Header({ logout }) {
               </div>
 
               <div className="header-right">
-                {isAdmin && <span className="admin-badge">ADMIN</span>}
+                {isAdmin && (
+                  <span className="admin-badge">
+                    <span aria-hidden="true">👑</span>
+                    ADMIN
+                  </span>
+                )}
 
                 <div style={{ position: 'relative' }}>
                   <button
@@ -1907,8 +1943,8 @@ function Header({ logout }) {
                   } 
                 />
                 
-                <Route path="/requests" element={<Requests />} />
-                <Route path="/incidents" element={<Incidents />} />
+                <Route path="/requests" element={<Requests isAdmin={isAdmin} />} />
+                <Route path="/incidents" element={<Incidents isAdmin={isAdmin} />} />
                 <Route path="/create-request" element={<CreateRequest />} />
                 <Route path="/create-request/:type" element={<CreateRequest />} />
                 <Route path="/create-incident" element={<CreateIncident />} />
@@ -1973,6 +2009,10 @@ function AppContent() {
 
   return (
     <Router>
+      <Snowfall
+        snowflakeCount={100}
+        style={{ position: 'fixed', width: '100vw', height: '100vh', zIndex: 1000 }}
+      />
       <AuthenticatedTemplate>
         <Header logout={handleLogout} />
       </AuthenticatedTemplate>
